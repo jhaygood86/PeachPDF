@@ -318,10 +318,11 @@ namespace PeachBrackets.Engine.Tests.Integration
             var naturalRect = PaintedRectOf(FindById(natural, "box")!);
             var grownRect = PaintedRectOf(FindById(grown, "box")!);
 
-            Assert.Equal(naturalRect.Bottom, grownRect.Bottom, 3);
+            // The line is as tall as the box (CSS 2.1 section 10.8.1: a bottom-aligned box taller than the rest makes the line that tall), so the box fills
+            // the line from the line's top, which is where the natural box's line began too; its bottom is the taller line's.
             Assert.Equal(80.0, grownRect.Height, 3);
-            Assert.True(grownRect.Top < naturalRect.Top,
-                $"growth must extend upward, keeping the bottom fixed: natural top {naturalRect.Top}, grown top {grownRect.Top}");
+            Assert.True(grownRect.Top <= naturalRect.Top + 0.001,
+                $"growth must reach the line's top: natural top {naturalRect.Top}, grown top {grownRect.Top}");
         }
 
         /// <summary>

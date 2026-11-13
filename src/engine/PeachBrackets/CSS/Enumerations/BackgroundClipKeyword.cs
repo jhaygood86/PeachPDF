@@ -10,6 +10,7 @@ namespace PeachBrackets.Css
         BorderBox,
         PaddingBox,
         ContentBox,
-        Text
+        Text,
+        BorderArea
     }
 }

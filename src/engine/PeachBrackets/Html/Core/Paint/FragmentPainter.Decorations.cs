@@ -38,7 +38,7 @@ namespace PeachBrackets.Html.Paint
                 root = parent;
 
             PaintBackground(g, box, BoxDecorationGeometry.Unbroken(rect),
-                currentColor: ReferenceEquals(root, box) || root.HtmlTag is null ? null : root.ActualColor);
+                currentColor: ReferenceEquals(root, box) || root.HtmlTag is null ? null : root.ActualColor, isCanvas: true);
         }
 
         /// <summary>
@@ -73,9 +73,10 @@ namespace PeachBrackets.Html.Paint
         /// background covers the area of a cell that originates in it (CSS 2.1 §17.5.1), while
         /// <paramref name="geometry"/> stays the track's own rectangle, which positions its images.
         /// </param>
+        /// <param name="isCanvas">whether this is the page canvas's background (from the root element or the body), which has no border for <c>background-clip: border-area</c> to paint under</param>
         internal static void PaintBackground(
             Canvas g, CssBox box, in BoxDecorationGeometry geometry, CssBox? firstLineStyle = null, BoxFragment? fragment = null,
-            PaintColor? currentColor = null, Rect? paintingArea = null)
+            PaintColor? currentColor = null, Rect? paintingArea = null, bool isCanvas = false)
         {
             // Most boxes have no background at all. The work is in PaintBackgroundCore, whose local functions capture its parameters
             // and so cost a closure allocation on every call, whether or not anything is painted; this is asked of every box first.
@@ -101,11 +102,11 @@ namespace PeachBrackets.Html.Paint
             if (hasImages && ResolveBackgroundBlendModes(box) is { } blendModes)
             {
                 using var group = g.BeginLayer(new LayerOptions(1.0, PaintBlendMode.Normal));
-                PaintBackgroundCore(group?.Canvas ?? g, box, geometry, firstLineStyle, fragment, currentColor, paintingArea, blendModes);
+                PaintBackgroundCore(group?.Canvas ?? g, box, geometry, firstLineStyle, fragment, currentColor, paintingArea, blendModes, isCanvas);
                 return;
             }
 
-            PaintBackgroundCore(g, box, geometry, firstLineStyle, fragment, currentColor, paintingArea, null);
+            PaintBackgroundCore(g, box, geometry, firstLineStyle, fragment, currentColor, paintingArea, null, isCanvas);
         }
 
         /// <summary>
@@ -134,7 +135,7 @@ namespace PeachBrackets.Html.Paint
 
         private static void PaintBackgroundCore(
             Canvas g, CssBox box, in BoxDecorationGeometry geometry, CssBox? firstLineStyle, BoxFragment? fragment, PaintColor? currentColor,
-            Rect? paintingArea, PaintBlendMode[]? blendModes)
+            Rect? paintingArea, PaintBlendMode[]? blendModes, bool isCanvas)
         {
             var rect = geometry.DecorationRect;
 
@@ -214,6 +215,25 @@ namespace PeachBrackets.Html.Paint
                 {
                     if (TextClipPath() is { } textPath) return (rect, textPath, true);
                     clipValue = Keywords.BorderBox;
+                }
+
+                // css-backgrounds-4 background-clip: border-area - where the border is painted: the ring between the border box's edge and the padding
+                // box's, each with its own curve, so a transparent or semi-transparent border shows the background through it and nothing else does.
+                // The canvas has no border to paint under: a background that reaches it from the root element or the body fills it as border-box does.
+                if (clipValue == Keywords.BorderArea && isCanvas) clipValue = Keywords.BorderBox;
+
+                if (clipValue == Keywords.BorderArea)
+                {
+                    var ring = RenderUtils.GetRoundRect(g, rect, box.ComputeRadii(rect));
+                    var paddingRect = BoxModelRect(Keywords.PaddingBox);
+                    if (paddingRect is { Width: > 0, Height: > 0 })
+                    {
+                        using var hole = RenderUtils.GetRoundRect(g, paddingRect, ClipRadii(Keywords.PaddingBox, paddingRect));
+                        ring.AddPath(hole);
+                    }
+
+                    ring.FillMode = FillMode.EvenOdd;
+                    return (rect, ring, false);
                 }
 
                 var clipRect = BoxModelRect(clipValue);

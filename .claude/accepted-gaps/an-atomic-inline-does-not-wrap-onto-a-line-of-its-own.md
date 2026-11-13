@@ -31,9 +31,9 @@ algorithm, or the flex algorithm) actually runs.
 
 ## What remains
 
-The approximated `inline-block` path whose content fits on one line is still flowed into the parent's
-line word-by-word. It can therefore discover that the box's declared width does not fit only after
-placing some of its content, instead of preflighting and moving the opaque box as a unit. Closing this
-needs the same side-effect-free used-width preflight the paths above now get, applied to this
-approximated path too (or a safe re-layout at the new line), not a post-layout translation that would
-preserve line breaking and fragmentation decisions made at the old position.
+The approximated `inline-block` path whose content fits on one line is flowed into the parent's line
+word-by-word. A declared `width` is now preflighted like the paths above (its margin box moves to the
+next line when it does not fit), but an `auto` width still discovers that the box does not fit only
+after placing some of its content. Closing that needs a side-effect-free shrink-to-fit preflight for
+the approximated path too (or a safe re-layout at the new line), not a post-layout translation that
+would preserve line breaking and fragmentation decisions made at the old position.

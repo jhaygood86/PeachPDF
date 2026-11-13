@@ -132,7 +132,10 @@ namespace PeachBrackets.Html.Utils
                         : (containerWidth, fittedHeight);
                 }
 
-                return (Math.Max(0, containerWidth), Math.Max(0, containerHeight));
+                // No ratio and a size in one axis only (an svg with a height and no width): the axis it states keeps it, the other is the default object size,
+                // which for a background is the positioning area (CSS Images 3 section 5.3, CSS Backgrounds 3 section 3.9).
+                return (intrinsicWidth is > 0 ? intrinsicWidth.Value : Math.Max(0, containerWidth),
+                        intrinsicHeight is > 0 ? intrinsicHeight.Value : Math.Max(0, containerHeight));
             }
 
             if (resolvedWidth is not null && resolvedHeight is null)

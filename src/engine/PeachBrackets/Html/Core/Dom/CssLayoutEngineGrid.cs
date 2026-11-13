@@ -254,9 +254,21 @@ namespace PeachBrackets.Html.Dom
                 (explicitColDefs, autoFitRange) = ResolveColumnTemplate(colTemplate, contentWidth, columnGap);
             }
 
-            var explicitRowDefs = rowSubgrid && subgrid is not null
-                ? [.. Enumerable.Repeat(GridTrackSize.Auto, subgrid.RowCount)]
-                : ExpandTemplate(rowTemplate);
+            // A row template's repeat(auto-fill|auto-fit, ...) repeats as often as fits the container's definite block size, and once without one.
+            (int Start, int Length)? rowAutoFitRange = null;
+            List<GridTrackSize> explicitRowDefs;
+            if (rowSubgrid && subgrid is not null)
+            {
+                explicitRowDefs = [.. Enumerable.Repeat(GridTrackSize.Auto, subgrid.RowCount)];
+            }
+            else if (rowTemplate is { AutoRepeat: not GridAutoRepeatKind.None } && !_vertical)
+            {
+                (explicitRowDefs, rowAutoFitRange) = ResolveColumnTemplate(rowTemplate, hasDefiniteBlock ? BlockContentSize : 0, rowGap);
+            }
+            else
+            {
+                explicitRowDefs = ExpandTemplate(rowTemplate);
+            }
             var autoColDefs = ExpandTrackSizes(_gridBox.GridAutoColumns);
             var autoRowDefs = ExpandTrackSizes(_gridBox.GridAutoRows);
 
@@ -430,6 +442,17 @@ namespace PeachBrackets.Html.Dom
                     rows = new Track[rowCount];
                     for (var r = 0; r < rowCount; r++)
                         rows[r] = new Track { Def = rowDefs[r], Size = ResolveFixedRow(rowDefs[r], hasDefiniteBlock) };
+
+                    // auto-fit collapses any repeated row that ended up with no items in it (its size and the gap beside it go).
+                    if (rowAutoFitRange is var (rowRangeStart, rowRangeLength) && rowRangeLength > 0)
+                    {
+                        var usedRow = new bool[rowCount];
+                        foreach (var p in placements)
+                            for (var r = p.RowStart; r < p.RowStart + p.RowSpan && r < rowCount; r++)
+                                usedRow[r] = true;
+                        for (var r = rowRangeStart; r < rowRangeStart + rowRangeLength && r < rowCount; r++)
+                            if (!usedRow[r]) rows[r].Size = 0;
+                    }
 
                     // Subgrid children are measured separately (below) since their per-row content must feed the
                     // parent tracks; skip them in the normal item-height passes.

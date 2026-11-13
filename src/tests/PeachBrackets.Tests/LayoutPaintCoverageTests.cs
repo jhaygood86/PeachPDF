@@ -72,6 +72,185 @@ public class LayoutPaintCoverageTests
     }
 
     [Fact]
+    public async Task EmptyAutoFitRowsAndColumnsCollapse_SoTheContentDistributionSharesTheSpaceAmongTheOthers()
+    {
+        // Five 20px tracks fit the 100px square; only column 3/4 and row 2/3 hold an item, so two tracks are left in each axis and space-evenly puts
+        // 20px before, between and after them.
+        using var canvas = await PageRaster.RenderAsync(
+            "<div style='display:grid;width:100px;height:100px;grid-template-columns:repeat(auto-fit,20px);grid-template-rows:repeat(auto-fit,20px);" +
+            "align-content:space-evenly;justify-content:space-evenly'>" +
+            "<div style='grid-row:2;grid-column:3;background:rgb(0,128,0)'></div><div style='grid-row:3;grid-column:4;background:rgb(0,128,0)'></div></div>");
+
+        Assert.Equal(Green, PageRaster.Rgb(canvas, 30, 30));
+        Assert.Equal(Green, PageRaster.Rgb(canvas, 70, 70));
+        Assert.Equal(White, PageRaster.Rgb(canvas, 10, 10));
+        Assert.Equal(White, PageRaster.Rgb(canvas, 30, 70));
+    }
+
+    private const string SizelessSvg =
+        "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'%3E%3Crect width='100%25' height='50%25' fill='green'/%3E%3C/svg%3E";
+
+    [Fact]
+    public async Task ASvgBackgroundWithNoSizeOrViewBoxFillsThePositioningArea()
+    {
+        // The svg states no size, so its percentages are shares of the 100x60 area it is drawn into: the top half is green.
+        using var canvas = await PageRaster.RenderAsync(
+            $"<div style=\"width:100px;height:60px;background:url({SizelessSvg}) no-repeat\"></div>", loadResources: true);
+
+        Assert.Equal(Green, PageRaster.Rgb(canvas, 90, 20));
+        Assert.Equal(White, PageRaster.Rgb(canvas, 90, 55));
+    }
+
+    private static string SvgUri(string markup) => "data:image/svg+xml," + Uri.EscapeDataString(markup);
+
+    [Theory]
+    [InlineData("<svg xmlns='http://www.w3.org/2000/svg' width='20'><rect width='100%' height='100%' fill='green'/></svg>")]
+    [InlineData("<svg xmlns='http://www.w3.org/2000/svg' height='20'><rect width='100%' height='100%' fill='green'/></svg>")]
+    [InlineData("<svg xmlns='http://www.w3.org/2000/svg' width='20' viewBox='0 0 10 20'><rect width='10' height='20' fill='green'/></svg>")]
+    [InlineData("<svg xmlns='http://www.w3.org/2000/svg' height='20' viewBox='0 0 20 10'><rect width='20' height='10' fill='green'/></svg>")]
+    public async Task ASvgBackgroundThatStatesOneAxisTakesTheOtherFromTheAreaOrItsViewBox(string markup)
+    {
+        // Whatever the missing axis becomes, the painting area (100x60) shows the svg's top-left corner in green and the far corner empty.
+        using var canvas = await PageRaster.RenderAsync(
+            $"<div style=\"width:100px;height:60px;background:url('{SvgUri(markup)}') no-repeat\"></div>", loadResources: true);
+
+        Assert.Equal(Green, PageRaster.Rgb(canvas, 5, 5));
+        Assert.Equal(White, PageRaster.Rgb(canvas, 95, 55));
+    }
+
+    [Theory]
+    [InlineData("full-size-kana", "ぁっゃ", "あつや")]
+    [InlineData("none", "ぁっゃ", "ぁっゃ")]
+    public async Task FullSizeKanaDrawsTheFullSizeForms(string transform, string text, string sameAs)
+    {
+        using var transformed = await PageRaster.RenderAsync($"<div style='font-size:20px;text-transform:{transform}'>{text}</div>");
+        using var plain = await PageRaster.RenderAsync($"<div style='font-size:20px'>{sameAs}</div>");
+
+        Assert.True(transformed.ToPixelBuffer().PremultipliedRgba.Span.SequenceEqual(plain.ToPixelBuffer().PremultipliedRgba.Span));
+    }
+
+    [Fact]
+    public async Task ASvgBackgroundWithNoSizeTakesTheSizeBackgroundSizeGivesIt()
+    {
+        using var canvas = await PageRaster.RenderAsync(
+            $"<div style=\"width:100px;height:60px;background:url({SizelessSvg}) no-repeat;background-size:40px 40px\"></div>", loadResources: true);
+
+        Assert.Equal(Green, PageRaster.Rgb(canvas, 30, 10));
+        Assert.Equal(White, PageRaster.Rgb(canvas, 30, 30));
+        Assert.Equal(White, PageRaster.Rgb(canvas, 70, 10));
+    }
+
+    private static readonly string BluePng = SolidPng(0, 0, 255);
+
+    private static string SolidPng(int r, int g, int b)
+    {
+        var raster = new PeachDrawing.RasterRenderContext();
+        using var canvas = raster.CreateCanvas(8, 8);
+        canvas.DrawRectangle(raster.GetSolidBrush(PeachDrawing.Core.PaintColor.FromArgb(255, r, g, b)), 0, 0, 8, 8);
+        using var stream = new MemoryStream();
+        canvas.Save(stream, "png", new PeachImage.Formats.Png.PngEncoderOptions());
+        return "data:image/png;base64," + Convert.ToBase64String(stream.ToArray());
+    }
+
+    [Fact]
+    public async Task ABackgroundClippedToTheBorderAreaPaintsOnlyUnderTheBorder()
+    {
+        using var canvas = await PageRaster.RenderAsync(
+            "<div style=\"width:60px;height:40px;border:20px solid transparent;background:rgb(0,128,0);background-clip:border-area\"></div>");
+
+        Assert.Equal(Green, PageRaster.Rgb(canvas, 10, 40));
+        Assert.Equal(Green, PageRaster.Rgb(canvas, 90, 40));
+        Assert.Equal(White, PageRaster.Rgb(canvas, 50, 40));
+    }
+
+    [Fact]
+    public async Task AnImageBackgroundClippedToTheBorderAreaLeavesThePaddingBoxEmpty()
+    {
+        using var canvas = await PageRaster.RenderAsync(
+            $"<div style=\"width:60px;height:40px;border:20px solid transparent;background:url({BluePng});background-size:100% 100%;background-clip:border-area\"></div>",
+            loadResources: true);
+
+        Assert.NotEqual(White, PageRaster.Rgb(canvas, 10, 40));
+        Assert.Equal(White, PageRaster.Rgb(canvas, 50, 40));
+    }
+
+    [Fact]
+    public async Task ARepeatedBackgroundFillsTheAreaUnderATransparentBorder()
+    {
+        // The default origin is the padding box and the default clip the border box: the tiles go on outward under the border.
+        using var canvas = await PageRaster.RenderAsync(
+            $"<div style=\"width:60px;height:40px;border:20px solid transparent;background:url({BluePng});background-size:20px 20px\"></div>",
+            loadResources: true);
+
+        Assert.NotEqual(White, PageRaster.Rgb(canvas, 5, 5));
+        Assert.NotEqual(White, PageRaster.Rgb(canvas, 95, 75));
+    }
+
+    [Theory]
+    [InlineData("bottom")]
+    [InlineData("top")]
+    public async Task AnEdgeAlignedInlineBlockWithADeclaredHeightMakesTheLineThatTall(string align)
+    {
+        // The line is 40px tall for the box, so the box fills it from its top edge down, and what follows is below it.
+        using var canvas = await PageRaster.RenderAsync(
+            $"<div style='font-size:0'><div style='display:inline-block;vertical-align:{align};width:30px;height:40px;background:rgb(0,128,0)'>x</div></div>" +
+            "<div style='height:10px;background:rgb(0,0,255)'></div>");
+
+        Assert.Equal(Green, PageRaster.Rgb(canvas, 10, 2));
+        Assert.Equal(Green, PageRaster.Rgb(canvas, 10, 37));
+        Assert.Equal((0, 0, 255), PageRaster.Rgb(canvas, 10, 45));
+    }
+
+    [Theory]
+    [InlineData("break-spaces", true)]
+    [InlineData("pre-wrap", false)]
+    public async Task OnlyBreakSpacesWrapsALongRunOfPreservedSpacesOntoMoreLines(string whiteSpace, bool wraps)
+    {
+        var spaces = new string(' ', 60);
+        using var canvas = await PageRaster.RenderAsync(
+            $"<div style='width:50px;font:10px sans-serif;white-space:{whiteSpace};background:rgb(0,128,0)'>a{spaces}</div>");
+
+        Assert.Equal(Green, PageRaster.Rgb(canvas, 25, 5));
+        Assert.Equal(wraps ? Green : White, PageRaster.Rgb(canvas, 25, 20));
+    }
+
+    [Fact]
+    public async Task ADeclaredWidthInlineBlockThatDoesNotFitTheLineStartsTheNextOne()
+    {
+        // Two 70px boxes in a 100px container: the second cannot share the first's line, so it sits beneath it rather than beside it.
+        using var canvas = await PageRaster.RenderAsync(
+            "<div style='width:100px;font-size:0'><div style='display:inline-block;width:70px;height:20px;background:rgb(0,128,0)'>x</div>" +
+            "<div style='display:inline-block;width:70px;height:20px;background:rgb(0,128,0)'>y</div></div>");
+
+        Assert.Equal(Green, PageRaster.Rgb(canvas, 20, 18));
+        Assert.Equal(Green, PageRaster.Rgb(canvas, 20, 38));
+        Assert.Equal(White, PageRaster.Rgb(canvas, 90, 18));
+    }
+
+    [Fact]
+    public async Task ADeclaredWidthInlineBlockThatFitsStaysOnTheLine()
+    {
+        using var canvas = await PageRaster.RenderAsync(
+            "<div style='width:200px;font-size:0'><div style='display:inline-block;width:70px;height:20px;background:rgb(0,128,0)'>x</div>" +
+            "<div style='display:inline-block;width:70px;height:20px;background:rgb(0,128,0)'>y</div></div>");
+
+        Assert.Equal(Green, PageRaster.Rgb(canvas, 20, 18));
+        Assert.Equal(Green, PageRaster.Rgb(canvas, 90, 18));
+    }
+
+    [Fact]
+    public async Task AutoFillRowsRepeatAsOftenAsTheyFit_AndKeepTheirEmptyTracks()
+    {
+        using var canvas = await PageRaster.RenderAsync(
+            "<div style='display:grid;width:100px;height:100px;grid-template-rows:repeat(auto-fill,20px);grid-template-columns:100px'>" +
+            "<div style='grid-row:4;background:rgb(0,128,0)'></div></div>");
+
+        // Row 4 is 60..80: three empty rows above it are kept.
+        Assert.Equal(Green, PageRaster.Rgb(canvas, 50, 70));
+        Assert.Equal(White, PageRaster.Rgb(canvas, 50, 30));
+    }
+
+    [Fact]
     public async Task AWrappingFlexColumnWithADefiniteHeightIsAsWideAsItsColumns()
     {
         using var canvas = await PageRaster.RenderAsync(

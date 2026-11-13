@@ -125,7 +125,9 @@ namespace PeachBrackets.Html.Handlers
 
             // Bound the repeat loops to the tiles that can actually land in the visible area, not
             // positioningRect's full extent - see visibleRect's own doc comment above.
-            var tileBounds = Rect.Intersect(positioningRect, visibleRect);
+            // Not bounded by the positioning area as well: a tile repeats outward from it as far as the painting area reaches, which is further
+            // than it when background-clip is border-box and background-origin padding-box (the default pair), under a transparent border.
+            var tileBounds = visibleRect;
 
             if (horizontalRepeat is "space" or "round" || verticalRepeat is "space" or "round")
             {
@@ -218,9 +220,17 @@ namespace PeachBrackets.Html.Handlers
                         break;
                     }
 
-                    var gap = (areaSize - count * tileSize) / (count - 1);
-                    for (var i = 0; i < count && i < MaxTilesPerAxis; i++)
-                        positions.Add(areaStart + i * (tileSize + gap));
+                    // The tiles go on at the same pitch past the positioning area, as far as the painting area shows them (a transparent border).
+                    var pitch = tileSize + (areaSize - count * tileSize) / (count - 1);
+                    var first = (int)Math.Floor((visibleStart - areaStart) / pitch);
+                    var last = Math.Max(count - 1, (int)Math.Ceiling((visibleEnd - areaStart) / pitch));
+                    for (var i = Math.Min(0, first); i <= last && i - Math.Min(0, first) < MaxTilesPerAxis; i++)
+                    {
+                        var position = areaStart + i * pitch;
+                        if (position + tileSize > visibleStart && position < visibleEnd || i is >= 0 && i < count)
+                            positions.Add(position);
+                    }
+
                     break;
                 }
                 case "no-repeat":

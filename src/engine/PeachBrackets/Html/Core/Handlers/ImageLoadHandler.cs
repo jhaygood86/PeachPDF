@@ -232,6 +232,21 @@ namespace PeachBrackets.Html.Handlers
                     SvgDocument = SvgTreeBuilder.Build(sourceNode, _htmlContainer.RenderContext, prefetchedImages: prefetchedImages,
                         fontPaletteValues: paletteValues, fontFeatureValues: featureValues);
 
+                    // Without a viewBox and a width and height, the viewport a percentage resolves against is the area the image is drawn into, which
+                    // replaces whatever size the document does state (a document with no viewBox has nothing to scale its content by).
+                    if (SvgDocument.ViewBox is null && (SvgDocument.Width is null || SvgDocument.Height is null))
+                    {
+                        var renderContext = _htmlContainer.RenderContext;
+                        SvgDocument.ViewportRebuilder = (widthPx, heightPx) =>
+                        {
+                            var sizedRoot = new XElement(root);
+                            sizedRoot.SetAttributeValue("width", FormattableString.Invariant($"{widthPx}px"));
+                            sizedRoot.SetAttributeValue("height", FormattableString.Invariant($"{heightPx}px"));
+                            return SvgTreeBuilder.Build(new XElementSvgSourceNode(sizedRoot, sizedRoot, cssData, "print", varContext), renderContext,
+                                prefetchedImages: prefetchedImages, fontPaletteValues: paletteValues, fontFeatureValues: featureValues);
+                        };
+                    }
+
                     // A document a clock plays shows its animations: the image is built again for each moment, as the frames of a GIF are.
                     if (_htmlContainer.AnimationsEnabled)
                     {

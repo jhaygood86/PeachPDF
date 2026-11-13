@@ -7,10 +7,12 @@ namespace PeachBrackets.Tests;
 /// <summary>Renders an HTML body onto a white bitmap at one CSS pixel per device pixel, the way a CSS-pixel host (the WinUI view) does.</summary>
 internal static class PageRaster
 {
-    public static async Task<RasterCanvas> RenderAsync(string body, int width = 200, int height = 100, bool snap = true)
+    public static async Task<RasterCanvas> RenderAsync(string body, int width = 200, int height = 100, bool snap = true, bool loadResources = false)
     {
         var context = await TestDocument.NewContextAsync();
         context.PixelsPerPoint = 96.0 / 72.0;
+        if (loadResources)
+            context.ResourceLoader = uri => HostResourceLoader.LoadAsync(uri);
 
         var options = new HtmlDocumentOptions
         {

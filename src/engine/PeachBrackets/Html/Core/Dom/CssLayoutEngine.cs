@@ -4877,6 +4877,23 @@ namespace PeachBrackets.Html.Dom
                 && ResolveAtomicInlineDeclaredHeight(box) is { } declaredFlowHeight
                 && !TryGrowLineForBaselessAtomic(coordinates, box, blockBox, declaredFlowHeight))
             {
+                // A box aligned to the line's top or bottom does not sit on the baseline, so its declared height cannot grow the line from there (the
+                // baseline-aligned case above): the line has to be at least as tall as the box (CSS 2.1 section 10.8.1), as for an image aligned the same way.
+                if (EffectiveVerticalAlignOf(box, coordinates.Line, out _).Value is { IsValue: false, Keyword: VerticalAlignment.Top or VerticalAlignment.Bottom } edgeAlign)
+                {
+                    var line = coordinates.Line;
+                    var marginBoxHeight = declaredFlowHeight + Math.Max(0, box.ActualMarginTop) + Math.Max(0, box.ActualMarginBottom);
+                    if (edgeAlign.Keyword is VerticalAlignment.Top)
+                        line.TopAlignedAtomicHeight = Math.Max(line.TopAlignedAtomicHeight, marginBoxHeight);
+                    else
+                        line.BottomAlignedAtomicHeight = Math.Max(line.BottomAlignedAtomicHeight, marginBoxHeight);
+
+                    // A line holding nothing else still has its strut (the same floor TryGrowLineForBaselessAtomic gives it).
+                    var held = line.BaselineAlignedExtent ?? line.BaselineExtent
+                               ?? HalfLeadingExtentOf(blockBox.ActualFont, blockBox.ActualLineHeight);
+                    CommitLineExtent(coordinates, held);
+                }
+
                 // A raised box reaches that much further above the line it was placed in. The line holds the box's margin box (§10.8.1), so a vertical margin
                 // adds to what it needs (a negative one is not modelled here).
                 var needed = declaredFlowHeight + Math.Max(0, box.ActualMarginTop) + Math.Max(0, box.ActualMarginBottom)
@@ -7228,6 +7245,29 @@ namespace PeachBrackets.Html.Dom
                 var childContentStartX = coordinates.CurrentX;
                 var childDeclaredContentWidth = ResolveAtomicInlineDeclaredWidth(b, box, coordinates.CurrentY);
 
+                // An inline-block with a declared width is one unbreakable unit on its line (CSS 2.1 section 9.4.2), and its width is known before its
+                // content is flowed: when its margin box does not fit what is left of the line, the line is closed and the box starts the next one. The
+                // block-content path below preflights the same way; this is the path whose content fits one line inside the box.
+                if (childDeclaredContentWidth is { } preflightContentWidth && childOpensHere && !laysOutAsAtomicBox && !excludedFromLineSpacing
+                    && !b.IsFloated)
+                {
+                    var preflightWidth = preflightContentWidth + b.ActualPaddingLeft + b.ActualBorderLeftWidth
+                                         + b.ActualPaddingRight + b.ActualBorderRightWidth;
+                    var preflight = await FitAtomicInlineOnLine(g, blockBox, box, b, preflightWidth, coordinates, lineSpacing, lineStartX,
+                        leftSpacing, clonedTrailing, clonesDecorations, isRtl);
+
+                    if (preflight == AtomicInlineLineFit.ClampedStop) return;
+
+                    if (preflight == AtomicInlineLineFit.Wrapped)
+                    {
+                        childContentStartX = coordinates.CurrentX;
+                        lineBeforeChild = coordinates.Line;
+
+                        // The line the box opened was given the top inset again, as the box's content now starts on it.
+                        if (preShiftedForAtomicInset) coordinates.CurrentY += atomicTopInset;
+                    }
+                }
+
                 // !ReferenceEquals(b, box): a floated box with no children of its own but real words
                 // (a replaced element - <img align="left">'s presentational float is the reachable case,
                 // via DomParser.CorrectReplacedElementBoxes' IsReplacedBlockWrapper) hits FlowBox's own
@@ -9418,8 +9458,36 @@ namespace PeachBrackets.Html.Dom
 
             foreach (var (box, declaredHeight, anchor) in heightening)
             {
-                line.Rectangles[box] = GrowAtomicInlineRectangle(line.Rectangles[box], declaredHeight, anchor);
+                var natural = line.Rectangles[box];
+                var grown = GrowAtomicInlineRectangle(natural, declaredHeight, anchor);
+
+                // The box grew upward from its anchor, and its content stays at the box's top: it moves up with the top edge.
+                var lift = grown.Top - natural.Top;
+                if (lift != 0)
+                {
+                    foreach (var inner in line.Rectangles.Keys.ToList())
+                    {
+                        if (!ReferenceEquals(inner, box) && IsInsideOf(inner, box)) OffsetBoxWithinLine(line, inner, lift);
+                    }
+
+                    foreach (var word in line.Words)
+                    {
+                        if (word.OwnerBox.Equals(box)) word.Top += lift;
+                    }
+                }
+
+                line.Rectangles[box] = grown;
             }
+        }
+
+        private static bool IsInsideOf(CssBox box, CssBox ancestor)
+        {
+            for (var parent = box.ParentBox; parent is not null; parent = parent.ParentBox)
+            {
+                if (ReferenceEquals(parent, ancestor)) return true;
+            }
+
+            return false;
         }
 
         /// <summary>
@@ -10536,9 +10604,46 @@ namespace PeachBrackets.Html.Dom
                 baselineDeltas[box] = BaselineShiftOf(box) ?? 0;
             }
 
+            // What an edge-aligned atomic inline-level box (vertical-align top, bottom, middle, text-top, text-bottom) moves by, from the geometry before any
+            // box moved. Its contents are inside it, in a formatting context of their own: they travel with the box, rather than each being aligned to
+            // this line on its own (which put the text of a bottom-aligned inline-block at the line's bottom, under the box's top).
+            Dictionary<CssBox, double>? edgeAlignedAtomicDeltas = null;
+            foreach (var box in boxes)
+            {
+                if (box.DerivedStyle.ActualDisplay is not (Keywords.InlineBlock or Keywords.InlineFlex or Keywords.InlineGrid)
+                    || ReferenceEquals(box, lineBox.OwnerBox))
+                {
+                    continue;
+                }
+
+                var atomicAlign = EffectiveVerticalAlignOf(box, lineBox, out var atomicStyled);
+                if (atomicAlign.Value.IsValue || atomicAlign.Value.Keyword is VerticalAlignment.Baseline or VerticalAlignment.Sub or VerticalAlignment.Super)
+                    continue;
+
+                (edgeAlignedAtomicDeltas ??= [])[box] = VerticalAlignDeltaOf(lineBox, atomicAlign, atomicStyled, lineBox.Rectangles[box],
+                    baselineDeltas[box], lineTop, lineBottom, flowTop) - EnclosingRaiseOf(atomicStyled, lineBox.OwnerBox);
+            }
+
             foreach (var box in boxes)
             {
                 var rect = lineBox.Rectangles[box];
+
+                if (edgeAlignedAtomicDeltas is not null)
+                {
+                    // The nearest edge-aligned atomic box this one is inside (or is): all of it moves by that box's own delta.
+                    CssBox? atomicOwner = null;
+                    for (var ancestor = box; ancestor is not null && !ReferenceEquals(ancestor, lineBox.OwnerBox); ancestor = ancestor.ParentBox)
+                    {
+                        if (edgeAlignedAtomicDeltas.ContainsKey(ancestor)) atomicOwner = ancestor;
+                    }
+
+                    if (atomicOwner is not null)
+                    {
+                        OffsetBoxWithinLine(lineBox, box, edgeAlignedAtomicDeltas[atomicOwner]);
+                        continue;
+                    }
+                }
+
                 // "box" here may be an anonymous text-node box rather than the real element
                 // vertical-align was declared on (e.g. for "<span style='vertical-align:top'>text
                 // </span>", the word's owner is an anonymous child of the span, which never goes

@@ -3735,7 +3735,7 @@
     },
     {
       "name": "text-transform",
-      "comment": "cssDataType's own Map.TextTransforms includes full-width, mapped to CssBox.cs's ApplyTextTransform which converts characters to their Unicode fullwidth compatibility form. full-size-kana is not implemented (not in the TextTransform enum or Map.TextTransforms) so it's rejected outright and excluded from supportsSupportedValues below, same shape as word-break's keep-all split.",
+      "comment": "cssDataType's own Map.TextTransforms includes full-width, mapped to CssBox.cs's ApplyTextTransform which converts characters to their Unicode fullwidth compatibility form. full-size-kana maps each small kana to its full-size form (TextTransformer.ToFullSizeKana); as a single keyword it does not combine with the case keywords.",
       "inherited": true,
       "cssom": {"converter": "Converters.TextTransformConverter"},
       "initialValue": "none",
@@ -3751,7 +3751,8 @@
         "capitalize",
         "uppercase",
         "lowercase",
-        "full-width"
+        "full-width",
+        "full-size-kana"
       ],
       "html": {
         "propertyPath": "TextTransform",

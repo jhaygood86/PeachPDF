@@ -41,7 +41,8 @@ namespace PeachBrackets.Css
                 {Keywords.Capitalize, TextTransform.Capitalize},
                 {Keywords.Uppercase, TextTransform.Uppercase},
                 {Keywords.Lowercase, TextTransform.Lowercase},
-                {Keywords.FullWidth, TextTransform.FullWidth}
+                {Keywords.FullWidth, TextTransform.FullWidth},
+                {Keywords.FullSizeKana, TextTransform.FullSizeKana}
             }.Freeze();
         public static readonly KeywordMap<TextAlignLast> TextAlignmentsLast =
             new KeywordMap<TextAlignLast>(StringComparer.OrdinalIgnoreCase)
@@ -304,7 +305,8 @@ namespace PeachBrackets.Css
                 {Keywords.BorderBox, BackgroundClipKeyword.BorderBox},
                 {Keywords.PaddingBox, BackgroundClipKeyword.PaddingBox},
                 {Keywords.ContentBox, BackgroundClipKeyword.ContentBox},
-                {Keywords.Text, BackgroundClipKeyword.Text}
+                {Keywords.Text, BackgroundClipKeyword.Text},
+                {Keywords.BorderArea, BackgroundClipKeyword.BorderArea}
             }.Freeze();
         public static readonly KeywordMap<ITimingFunction> TimingFunctions =
             new KeywordMap<ITimingFunction>(StringComparer.OrdinalIgnoreCase)

@@ -2026,7 +2026,22 @@ namespace PeachBrackets.Html.Dom
 
                     if (endIdx > startIdx)
                     {
-                        if (preserveSpaces)
+                        if (preserveSpaces && WhiteSpaceCollapse.Value == PeachBrackets.Css.WhiteSpaceCollapse.BreakSpaces)
+                        {
+                            // break-spaces (css-text-3 section 3): every preserved space is a place a line may end after, and none of them hangs, so each is a
+                            // word of its own with a break before it after another space (the algorithm forbids a break before any space; break-spaces allows one after each) and the algorithm's own before the first.
+                            for (var spaceAt = startIdx; spaceAt < endIdx; spaceAt++)
+                            {
+                                Words.Add(new CssRectWord(this, text.Substring(spaceAt, 1), false, false)
+                                {
+                                    BidiLevel = BidiLevels is { } spaceLevels ? spaceLevels[spaceAt] : fallbackLevel,
+                                    SourceStart = ReferenceEquals(sourceText, _text) ? spaceAt : -1,
+                                    SourceLength = 1,
+                                    UnicodeBreakBefore = spaceAt > startIdx || breakOpportunities[spaceAt] != LineBreakOpportunity.Prohibited,
+                                });
+                            }
+                        }
+                        else if (preserveSpaces)
                         {
                             Words.Add(new CssRectWord(this, text.Substring(startIdx, endIdx - startIdx), false, false)
                             {
