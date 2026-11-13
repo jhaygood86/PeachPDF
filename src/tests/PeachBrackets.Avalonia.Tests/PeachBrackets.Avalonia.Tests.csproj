@@ -19,6 +19,7 @@
     <PackageReference Include="Microsoft.Testing.Extensions.TrxReport" />
     <PackageReference Include="Avalonia.Headless" />
     <PackageReference Include="Avalonia.Skia" />
+    <PackageReference Include="Avalonia.Themes.Fluent" />
     <PackageReference Include="SkiaSharp.NativeAssets.Linux" />
     <PackageReference Include="xunit.analyzers">
       <PrivateAssets>all</PrivateAssets>

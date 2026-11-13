@@ -13,6 +13,9 @@ namespace PeachBrackets.Avalonia.Tests.TestSupport;
 /// <summary>The application the headless platform runs the controls under: Skia drawing, no window system.</summary>
 public sealed class TestApp : Application
 {
+    // A theme gives windows their template, and with it the overlay layer a menu or flyout opens in.
+    public override void Initialize() => Styles.Add(new global::Avalonia.Themes.Fluent.FluentTheme());
+
     public static AppBuilder BuildAvaloniaApp() =>
         AppBuilder.Configure<TestApp>().UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false });
 }

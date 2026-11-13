@@ -139,7 +139,12 @@ public sealed partial class HtmlView
             UpdateTextInputClient();
 
         if (ReferenceEquals(document, _document) && IsEditingField)
-            BuildFieldMenu().ShowAt(this, true);
+        {
+            // A transient flyout does not take the keyboard focus: the view losing it would end the field's editing (and the menu acts on the field).
+            var menu = BuildFieldMenu();
+            menu.ShowMode = FlyoutShowMode.Transient;
+            menu.ShowAt(this, true);
+        }
     }
 
     /// <summary>The cut, copy, paste and select all menu of the focused text field.</summary>

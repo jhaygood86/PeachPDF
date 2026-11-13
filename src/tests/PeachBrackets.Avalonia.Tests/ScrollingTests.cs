@@ -53,7 +53,8 @@ public class ScrollingTests
     {
         await HeadlessSession.Run(async () =>
         {
-            var (window, view) = await HeadlessSession.ShowAsync(Page);
+            // Without overscroll-behavior a box at its end chains the turn to the page; with `contain` the box keeps it.
+            var (window, view) = await HeadlessSession.ShowAsync(Page.Replace("overflow:auto", "overflow:auto;overscroll-behavior:contain"));
             Assert.True(view.SetContainerScroll("box", 0, 100000));
             var end = BoxY(view);
             Assert.True(end > 0);
@@ -61,6 +62,12 @@ public class ScrollingTests
             Assert.Equal(end, BoxY(view));
             Assert.Equal(0, view.ScrollPixels.Y);
             window.Close();
+
+            var (chained, chainedView) = await HeadlessSession.ShowAsync(Page);
+            Assert.True(chainedView.SetContainerScroll("box", 0, 100000));
+            chained.MouseWheel(new Point(50, 40), new Vector(0, -1));
+            Assert.True(chainedView.ScrollPixels.Y > 0, "at its end a plain box passes the turn on to the page");
+            chained.Close();
         });
     }
 

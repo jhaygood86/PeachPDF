@@ -199,7 +199,7 @@ public class TextInputTests
     {
         await HeadlessSession.Run(async () =>
         {
-            var (window, view) = await FocusFieldAsync(new Point(11, 22), "hello");
+            var (window, view) = await FocusFieldAsync(FieldPoint, "hello");
             window.MouseDown(new Point(11, 22), MouseButton.Left);
             await view.PlacementTask;
             Assert.Equal((0, 0), (State(view).SelectionStart, State(view).SelectionEnd));
