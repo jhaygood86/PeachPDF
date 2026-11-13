@@ -37,17 +37,16 @@ namespace PeachBrackets.Html.Parse
         /// <param name="root">the root box (null for document root)</param>
         /// <param name="document">whether the source is a whole document, which gets the <c>html</c>, <c>head</c> and <c>body</c> elements it leaves out,
         /// rather than a fragment whose elements go in as they come</param>
-        /// <param name="noScriptContent">whether the source is the content of the <c>&lt;noscript&gt;</c> element that <paramref name="root"/> is: the
-        /// text at its top level then belongs to it, rather than being content to parse again</param>
         /// <exception cref="ArgumentOutOfRangeException"></exception>
-        public static CssBox ParseDocument(string source, CssBox? root = null, bool document = false, bool noScriptContent = false)
+        public static CssBox ParseDocument(string source, CssBox? root = null, bool document = false)
         {
             root ??= CssBox.CreateBlock();
             var state = new ParserState(root) { IsDocument = document, Phase = document ? DocumentPhase.Initial : DocumentPhase.InBody };
             MathSourceParser? mathParser = null;
 
             using var sourceReader = new StringReader(source);
-            var tokenizer = new HtmlTokenizer(sourceReader);
+            // No scripting in a PDF: <noscript> content is markup, so its children arrive as ordinary tokens.
+            var tokenizer = new HtmlTokenizer(sourceReader) { ScriptingEnabled = false };
 
             while (tokenizer.ReadNextToken(out var token))
             {
@@ -101,21 +100,9 @@ namespace PeachBrackets.Html.Parse
                         {
                             var text = (HtmlDataToken)token;
 
-                            // The content of a <noscript> arrives as one run of text, which is parsed as markup into the element. Inside that parse
-                            // the root is still the <noscript>, so its own top-level text (the whitespace around a tag, say) must be taken as text:
-                            // parsed again it would be the same text with the same root, without end.
-                            if (state.Current.HtmlTag?.Name.Equals(HtmlConstants.NoScript, StringComparison.OrdinalIgnoreCase) == true
-                                && !(noScriptContent && ReferenceEquals(state.Current, root)))
-                            {
-                                ParseDocument(text.Data, state.Current, noScriptContent: true);
-                            }
-                            else
-                            {
-                                if (text.Data is { } data) ProcessText(state, data);
-                            }
+                            if (text.Data is { } data) ProcessText(state, data);
 
                             break;
-
                         }
                     case HtmlTokenKind.CData:
                     case HtmlTokenKind.Comment:
