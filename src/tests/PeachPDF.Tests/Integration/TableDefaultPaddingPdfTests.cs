@@ -132,6 +132,18 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(222.75, fills[Green].Width, 0.05);
         }
 
+        [Fact]
+        public async Task APercentageColumnNarrowerThanItsContentDoesNotWidenTheTable()
+        {
+            var fills = await FillsAsync(
+                "<table style='width:400px;border-spacing:0'><tr><td style='background:#fcc;width:10%;padding:40px'><div style='display:inline-block;width:10px;height:10px'></div></td>" +
+                "<td style='background:#cfc'><div style='display:inline-block;width:10px;height:10px'></div></td></tr></table>");
+
+            // Chrome: the first column is its content (67.5pt) and the second takes the rest of the 300pt table.
+            Assert.Equal(67.5, fills[Red].Width, 0.05);
+            Assert.Equal(232.5, fills[Green].Width, 0.05);
+        }
+
         [Theory]
         [InlineData(20, 61.5)]
         [InlineData(120, 96)]

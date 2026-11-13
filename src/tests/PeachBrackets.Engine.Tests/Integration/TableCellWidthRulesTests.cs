@@ -89,5 +89,39 @@ namespace PeachBrackets.Engine.Tests.Integration
 
             Assert.Equal(96, await WidthOfAsync(body, "o"), 0.05);
         }
+
+        private static string Block(int px) => $"<div style='display:inline-block;width:{px}px;height:10px'></div>";
+
+        [Fact]
+        public async Task APercentageColumnNarrowerThanItsContentTakesTheDifferenceFromTheUnsizedOnesNotTheTable()
+        {
+            // 10% of 400px is 40px, less than the 90px the cell's content and padding need, so the column is raised to that, and the table is still 400px.
+            var body = $"<table id='t' style='width:400px;border-spacing:0'><tr><td id='a' style='width:10%;padding:40px'>{Block(10)}</td><td id='b'>{Block(10)}</td></tr></table>";
+
+            Assert.Equal(300, await WidthOfAsync(body, "t"), 0.05);
+            Assert.Equal(67.5, await WidthOfAsync(body, "a"), 0.05);
+            Assert.Equal(232.5, await WidthOfAsync(body, "b"), 0.05);
+        }
+
+        [Fact]
+        public async Task AColumnThatAskedForAShareKeepsItWhenAnotherIsRaisedToItsContent()
+        {
+            var body = $"<table id='t' style='width:400px;border-spacing:0'><tr><td id='a' style='width:5%;padding:10px'>{Block(20)}</td><td id='b'>{Block(100)}</td><td id='c' style='width:20%'>{Block(20)}</td></tr></table>";
+
+            Assert.Equal(300, await WidthOfAsync(body, "t"), 0.05);
+            Assert.Equal(30, await WidthOfAsync(body, "a"), 0.05);
+            Assert.Equal(210, await WidthOfAsync(body, "b"), 0.05);
+            Assert.Equal(60, await WidthOfAsync(body, "c"), 0.05);
+        }
+
+        [Fact]
+        public async Task AContentColumnWiderThanItsPercentageStillLeavesTheTableItsDeclaredWidth()
+        {
+            var body = $"<table id='t' style='width:400px;border-spacing:0'><tr><td id='a' style='width:5%;padding:0'>{Block(60)}</td><td id='b' style='padding:0'>{Block(10)}</td></tr></table>";
+
+            Assert.Equal(300, await WidthOfAsync(body, "t"), 0.05);
+            Assert.Equal(45, await WidthOfAsync(body, "a"), 0.05);
+            Assert.Equal(255, await WidthOfAsync(body, "b"), 0.05);
+        }
     }
 }
