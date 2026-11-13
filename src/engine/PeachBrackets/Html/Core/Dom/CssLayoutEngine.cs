@@ -5050,9 +5050,7 @@ namespace PeachBrackets.Html.Dom
             coordinates.Line.AtomicInlineRight = Math.Max(coordinates.Line.AtomicInlineRight,
                 startX + Math.Max(usedContentWidth, contentWidth) + trailingSpacing + box.ActualMarginRight);
 
-            // A box that placed words has the rectangle of its words (which overflow a width narrower than they are); one with a declared width
-            // is as wide as that width whatever its words do.
-            if (coordinates.WordOrdinal != startOrdinal && !declaredWidth) return;
+            if (coordinates.WordOrdinal != startOrdinal) return;
 
             coordinates.Line.Rectangles[box] = new Rect(
                 startX - leadingSpacing,
@@ -6340,6 +6338,7 @@ namespace PeachBrackets.Html.Dom
             }
 
             if (available <= 0) return false;
+
 
             // A hair of slack, so a box whose content measures its own width exactly - the overwhelmingly
             // common `width` set to fit its label - is not pushed onto the atomic path by rounding.
@@ -8098,7 +8097,13 @@ namespace PeachBrackets.Html.Dom
                 // inline-flow path instead.
                 if (childDeclaredContentWidth is { } declaredContentWidth)
                 {
-                    coordinates.CurrentX = Math.Max(coordinates.CurrentX, childContentStartX + declaredContentWidth);
+                    // A box that kept to its line advances the line by its declared width exactly: its content wider than that overflows the box
+                    // (css 2.1 section 10.3.9) and does not push what follows it along.
+                    // A box that kept to its line and holds words advances the line by its declared width exactly: its content wider than that
+                    // overflows the box (css 2.1 section 10.3.9) and does not push what follows it along.
+                    coordinates.CurrentX = b.Words.Count > 0 && ReferenceEquals(lineBeforeChild, coordinates.Line)
+                        ? childContentStartX + declaredContentWidth
+                        : Math.Max(coordinates.CurrentX, childContentStartX + declaredContentWidth);
                 }
 
                 // A box whose content was all placed in an earlier fragmentainer is not re-closed here
