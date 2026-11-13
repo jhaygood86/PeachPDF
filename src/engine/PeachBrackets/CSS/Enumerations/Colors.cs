@@ -205,8 +205,39 @@ namespace PeachBrackets.Css
 
         public static IEnumerable<string> Names => NamedColors.Keys;
 
+        // css-color-4 section 6.2: the deprecated system colors are aliases of the current ones, and compute to the same value.
+        private static readonly FrozenDictionary<string, string> DeprecatedSystemColors =
+            new System.Collections.Generic.Dictionary<string, string>
+            {
+                {"activeborder", "buttonborder"},
+                {"activecaption", "canvas"},
+                {"appworkspace", "canvas"},
+                {"background", "canvas"},
+                {"buttonhighlight", "buttonface"},
+                {"buttonshadow", "buttonface"},
+                {"captiontext", "canvastext"},
+                {"inactiveborder", "buttonborder"},
+                {"inactivecaption", "canvas"},
+                {"inactivecaptiontext", "graytext"},
+                {"infobackground", "canvas"},
+                {"infotext", "canvastext"},
+                {"menu", "canvas"},
+                {"menutext", "canvastext"},
+                {"scrollbar", "canvas"},
+                {"threeddarkshadow", "buttonborder"},
+                {"threedface", "buttonface"},
+                {"threedhighlight", "buttonborder"},
+                {"threedlightshadow", "buttonborder"},
+                {"threedshadow", "buttonborder"},
+                {"window", "canvas"},
+                {"windowframe", "buttonborder"},
+                {"windowtext", "canvastext"},
+            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+
         public static Color? GetColor(string name)
         {
+            if (DeprecatedSystemColors.TryGetValue(name, out var current)) name = current;
+
             // A system colour names the palette of the colour scheme being read (see ColorSchemeScope).
             if (ColorSchemeScope.IsDark && ColorSchemeScope.TryGetDarkSystemColor(name, out var dark)) return dark;
 

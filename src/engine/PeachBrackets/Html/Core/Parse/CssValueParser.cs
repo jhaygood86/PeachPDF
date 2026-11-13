@@ -837,7 +837,8 @@ namespace PeachBrackets.Html.Parse
                 {
                     // The quick readers below take numbers only; a missing component (none) and relative colour syntax (from) are the token reader's.
                     var hasNone = length > 5 && (str.AsSpan(idx, length).Contains("none", StringComparison.OrdinalIgnoreCase)
-                        || str.AsSpan(idx, length).Contains("from", StringComparison.OrdinalIgnoreCase));
+                        || str.AsSpan(idx, length).Contains("from", StringComparison.OrdinalIgnoreCase)
+                        || !HasOnlyIntegerRgbComponents(str.AsSpan(idx, length)));
                     return length switch
                     {
                         > 1 when str[idx] == '#' => GetColorByHex(str, idx, length, out color),
@@ -853,6 +854,54 @@ namespace PeachBrackets.Html.Parse
             { }
             color = PaintColor.Black;
             return false;
+        }
+
+        /// <summary>
+        /// Whether an <c>rgb()</c>/<c>rgba()</c> value (anything else answers true) has whole numbers for its three colour components - the one shape the
+        /// quick readers understand. A percentage or a decimal component needs the token reader, which keeps its fraction and rounds it.
+        /// </summary>
+        private static bool HasOnlyIntegerRgbComponents(ReadOnlySpan<char> value)
+        {
+            if (!value.StartsWith("rgb", StringComparison.OrdinalIgnoreCase)) return true;
+
+            var open = value.IndexOf('(');
+            if (open < 0) return true;
+
+            var component = 0;
+            var inNumber = false;
+            var number = 0;
+            for (var i = open + 1; i < value.Length; i++)
+            {
+                var c = value[i];
+                if (char.IsDigit(c))
+                {
+                    inNumber = true;
+                    number = Math.Min(number * 10 + (c - '0'), 1000);
+                    if (component < 3 && number > 255) return false;
+                }
+                else if (c is '+' or '-')
+                {
+                    // A sign on a colour component is out of range or redundant: the token reader clamps it.
+                    if (component < 3) return false;
+                    inNumber = true;
+                }
+                else if (c is '%')
+                {
+                    return false;
+                }
+                else if (c is '.' && component < 3)
+                {
+                    return false;
+                }
+                else if (c is ',' or ' ' or '/' or ')')
+                {
+                    if (inNumber) component++;
+                    inNumber = false;
+                    number = 0;
+                }
+            }
+
+            return true;
         }
 
         /// <summary>
