@@ -1248,26 +1248,52 @@ namespace PeachBrackets.Html
         {
             get
             {
-                // Root is only assigned once SetHtml returns, so a <link>/@import stylesheet - loaded from
-                // inside DomParser.GenerateCssTree - resolves with no document base and falls back to the
-                // adapter's. Long-standing behaviour, kept as-is. (An <img> is not in that group: images
-                // are resolved during layout, via CssBoxImage.MeasureWordsSize, by which point Root is
-                // assigned and <base> is honoured.) The early return is only a fast path - the memo key
-                // already handles a null root, since the next read against a real tree fails
-                // ReferenceEquals and re-walks.
-                if (Root is null) return RenderContext.BaseUri;
+                // While the stylesheets are collected Root is not assigned yet, so the tree being built is ParsingRoot: a
+                // <link>/@import stylesheet then resolves against the document's <base href> too.
+                var tree = Root ?? ParsingRoot;
+                if (tree is null) return RenderContext.BaseUri;
 
-                if (!ReferenceEquals(_documentBaseRoot, Root))
+                if (!ReferenceEquals(_documentBaseRoot, tree))
                 {
-                    var href = DomUtils.GetBoxByTagName(Root, "base")?.HtmlTag?.TryGetAttribute("href", "");
-                    // A malformed href still throws from exactly where it did before - and, since the key
-                    // is only committed afterwards, from every later read too rather than just the first.
-                    _documentBase = string.IsNullOrWhiteSpace(href) ? null : new RUri(href);
-                    _documentBaseRoot = Root;
+                    // HTML "document base URL": the first <base> that has an href, resolved against the host's own base address. A href
+                    // that does not make an absolute address is ignored rather than failing the render.
+                    var href = FirstBaseHref(tree);
+                    RUri? resolved = null;
+
+                    if (href is not null)
+                    {
+                        try
+                        {
+                            resolved = RenderContext.BaseUri is { } hostBase ? new RUri(hostBase, href) : new RUri(href, UriKind.RelativeOrAbsolute);
+                        }
+                        catch (Exception ex) when (ex is UriFormatException or ArgumentException)
+                        {
+                        }
+                    }
+
+                    _documentBase = resolved is { IsAbsoluteUri: true } ? resolved : null;
+                    _documentBaseRoot = tree;
                 }
 
                 return _documentBase ?? RenderContext.BaseUri;
             }
+        }
+
+        /// <summary>The tree <see cref="DomParser.GenerateCssTree"/> is building while it collects the stylesheets, or null; see <see cref="DocumentBaseUri"/>.</summary>
+        internal CssBox? ParsingRoot { get; set; }
+
+        private static string? FirstBaseHref(CssBox box)
+        {
+            if (box.HtmlTag is { } tag && tag.Name == "base" && tag.TryGetAttribute("href", "") is { } href && !string.IsNullOrWhiteSpace(href))
+                return href;
+
+            foreach (var child in box.Boxes)
+            {
+                if (FirstBaseHref(child) is { } found)
+                    return found;
+            }
+
+            return null;
         }
 
         /// <summary>
@@ -3418,13 +3444,12 @@ namespace PeachBrackets.Html
         /// How many passes in a row may resume exactly where the one before did (see <see cref="IsSameProgress"/>) before the
         /// driver stops walking and lays the remainder out in one piece.
         /// </summary>
-        private const int MaxStalledPasses = 16;
+        internal const int MaxStalledPasses = 16;
 
         /// <summary>
         /// Whether two tokens name the same point in the content and differ only in which fragmentainer they resume in: the
         /// comparison <c>==</c> cannot make, because every token carries the slot index it resumes in. The block, inline and table
-        /// kinds are compared (the chains a stall through ordinary flow or a table produces); any other kind is never "the same",
-        /// so the existing exact checks stay the only ones for flex and grid.
+        /// kinds, and the flex (row and column) and grid kinds, are compared; any other kind is never "the same".
         /// </summary>
         internal static bool IsSameProgress(BreakToken a, BreakToken b) =>
             SlotNeutral(a) is { } left && SlotNeutral(b) is { } right && left == right;
@@ -3434,8 +3459,9 @@ namespace PeachBrackets.Html
             switch (token)
             {
                 case BlockBreakToken block:
-                    if (block.ChildToken is null) return block with { ResumeSlotIndex = 0 };
-                    return SlotNeutral(block.ChildToken) is { } child ? block with { ResumeSlotIndex = 0, ChildToken = child } : null;
+                    // ResumeTopOverride is the top of the fragmentainer it resumes in, as much a function of the slot as the slot is.
+                    if (block.ChildToken is null) return block with { ResumeSlotIndex = 0, ResumeTopOverride = null };
+                    return SlotNeutral(block.ChildToken) is { } child ? block with { ResumeSlotIndex = 0, ResumeTopOverride = null, ChildToken = child } : null;
 
                 case InlineBreakToken inline:
                     return inline with { ResumeSlotIndex = 0 };
@@ -3450,6 +3476,39 @@ namespace PeachBrackets.Html
                     }
 
                     return table with { ResumeSlotIndex = 0, UnfinishedCells = cells };
+
+                case FlexBreakToken flex:
+                    var flexItems = new List<UnfinishedFlexItem>(flex.UnfinishedItems.Count);
+
+                    foreach (var item in flex.UnfinishedItems)
+                    {
+                        if (SlotNeutral(item.Token) is not { } neutral) return null;
+                        flexItems.Add(item with { Token = neutral });
+                    }
+
+                    return flex with { ResumeSlotIndex = 0, UnfinishedItems = flexItems };
+
+                case GridBreakToken grid:
+                    var gridItems = new List<UnfinishedGridItem>(grid.UnfinishedItems.Count);
+
+                    foreach (var item in grid.UnfinishedItems)
+                    {
+                        if (SlotNeutral(item.Token) is not { } neutral) return null;
+                        gridItems.Add(item with { Token = neutral });
+                    }
+
+                    return grid with { ResumeSlotIndex = 0, UnfinishedItems = gridItems };
+
+                case FlexColumnBreakToken column:
+                    var columnLines = new List<ColumnLineCursor>(column.UnfinishedLines.Count);
+
+                    foreach (var line in column.UnfinishedLines)
+                    {
+                        if (SlotNeutral(line.ItemToken) is not { } neutral) return null;
+                        columnLines.Add(line with { ItemToken = neutral });
+                    }
+
+                    return column with { ResumeSlotIndex = 0, UnfinishedLines = columnLines };
 
                 default:
                     return null;

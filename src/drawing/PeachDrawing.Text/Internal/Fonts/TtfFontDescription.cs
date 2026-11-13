@@ -116,6 +116,7 @@ namespace PeachDrawing.Text.Internal.Fonts
             long os2TableOffset = -1;
             long fvarTableOffset = -1;
             long fvarTableLength = 0;
+            var isBitmapFont = false;
             for (int i = 0; i < numTables; i++)
             {
                 stream.ReadExactly(buf4);
@@ -126,7 +127,9 @@ namespace PeachDrawing.Text.Internal.Fonts
                 stream.ReadExactly(buf4);
                 uint tableLength = ReadUInt32BE(buf4);
 
-                if (tag == "name")
+                if (tag == "bhed")
+                    isBitmapFont = true;
+                else if (tag == "name")
                     nameTableOffset = tableOffset;
                 else if (tag == "OS/2")
                     os2TableOffset = tableOffset;
@@ -136,6 +139,11 @@ namespace PeachDrawing.Text.Internal.Fonts
                     fvarTableLength = tableLength;
                 }
             }
+
+            // A bitmap-only font (an Apple 'bhed' table in place of 'head') cannot be loaded for drawing, so it is never described:
+            // an installed face is one a request can be answered with, and the last-resort pick would otherwise be able to land on it.
+            if (isBitmapFont)
+                throw new InvalidDataException("Bitmap fonts are not supported.");
 
             if (nameTableOffset < 0)
                 throw new InvalidOperationException("Font file does not contain a name table.");

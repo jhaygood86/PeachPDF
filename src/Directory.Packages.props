@@ -1,7 +1,6 @@
 <Project>
   <PropertyGroup>
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
-    <!-- Lets a PackageVersion below also pin a transitive dependency (e.g. System.Security.Cryptography.Pkcs via MimeKit). -->
     <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
   </PropertyGroup>
   <ItemGroup>
@@ -14,11 +13,10 @@
     <PackageVersion Include="Microsoft.CodeAnalysis.CSharp" Version="5.9.0" />
     <PackageVersion Include="Microsoft.Testing.Extensions.TrxReport" Version="2.5.2" />
     <PackageVersion Include="Microsoft.Playwright" Version="1.64.1" />
-    <PackageVersion Include="MimeKit" Version="4.18.2" />
+    <PackageVersion Include="MimeKit.Core" Version="5.0.0" />
     <PackageVersion Include="PeachImage" Version="0.7.3" />
     <PackageVersion Include="ScottPlot" Version="5.1.59" />
     <PackageVersion Include="System.IO.Pipelines" Version="10.0.14" />
-    <PackageVersion Include="System.Security.Cryptography.Pkcs" Version="10.0.14" />
     <PackageVersion Include="System.Text.Encoding.CodePages" Version="10.0.14" />
     <PackageVersion Include="System.Text.Json" Version="10.0.14" />
     <PackageVersion Include="xunit.analyzers" Version="2.2.0" />

@@ -45,7 +45,8 @@ namespace PeachBrackets.Html.Parse
             MathSourceParser? mathParser = null;
 
             using var sourceReader = new StringReader(source);
-            var tokenizer = new HtmlTokenizer(sourceReader);
+            // No scripting in a PDF: <noscript> content is markup, so its children arrive as ordinary tokens.
+            var tokenizer = new HtmlTokenizer(sourceReader) { ScriptingEnabled = false };
 
             while (tokenizer.ReadNextToken(out var token))
             {
@@ -99,17 +100,9 @@ namespace PeachBrackets.Html.Parse
                         {
                             var text = (HtmlDataToken)token;
 
-                            if (state.Current.HtmlTag?.Name.Equals(HtmlConstants.NoScript, StringComparison.OrdinalIgnoreCase) == true)
-                            {
-                                ParseDocument(text.Data, state.Current);
-                            }
-                            else
-                            {
-                                if (text.Data is { } data) ProcessText(state, data);
-                            }
+                            if (text.Data is { } data) ProcessText(state, data);
 
                             break;
-
                         }
                     case HtmlTokenKind.CData:
                     case HtmlTokenKind.Comment:
