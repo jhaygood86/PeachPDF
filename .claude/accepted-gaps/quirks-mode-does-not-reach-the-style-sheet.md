@@ -1,0 +1,3 @@
+# Quirks mode does not reach the style sheet
+
+The parser decides quirks mode from the DOCTYPE (`ParserState.IsQuirksMode`) and uses it only for the `<table>`-closes-`<p>` rule. The user-agent sheet is one constant parsed once and cached (`DefaultCssDataCache`), so a document without a DOCTYPE is laid out with the standards-mode sheet. In Chrome 157 the same document differs: a `form` has `margin-bottom: 1em`, the first block of a `body`, `td` or `th` has no top margin, and text in a table does not inherit the body's font. Carrying the flag to the document and layering a quirks sheet over the default one is the way, and it changes every doctype-less document's layout, so it is a decision rather than a one-line fix. Tracking issue #2400.

@@ -80,8 +80,9 @@ namespace PeachBrackets.Engine.Tests.Html.Core.Fragments
         // top of slot 1. (It used to collapse up into the document root, which that truncation never sees, and the margin was applied whole, landing the
         // content in slot 5.)
         [InlineData("<div style='margin-top:900pt'>far below</div>", 200, "1", "160")]
-        // Real content either side of a tall empty gap: the gap's own slots are never materialized.
-        [InlineData("<p>top</p><div style='height:900pt'></div><p>far below</p>", 200, "0,6", "0,960")]
+        // Real content either side of a tall empty gap: the gap's own slots are never materialized. The paragraphs' margins are written out, because
+        // where the last one falls against a 160pt slot is a matter of a point or two and is not what this pins (the default margin moved it).
+        [InlineData("<p style='margin:1.12em 0'>top</p><div style='height:900pt'></div><p style='margin:1.12em 0'>far below</p>", 200, "0,6", "0,960")]
         public async Task MaterializedPages_MatchThePrePagedFragmentTreeBehaviour(
             string body, double pageHeight, string expectedSlots, string expectedOrigins)
         {
@@ -305,7 +306,7 @@ namespace PeachBrackets.Engine.Tests.Html.Core.Fragments
         public async Task ContentEmptySlots_AreNotMaterialized()
         {
             var (_, container) = await LayoutHarness.LayoutAsync(
-                LayoutHarness.Wrap("<p>top</p><div style='height:900pt'></div><p>far below</p>"),
+                LayoutHarness.Wrap("<p style='margin:1.12em 0'>top</p><div style='height:900pt'></div><p style='margin:1.12em 0'>far below</p>"),
                 pageHeight: 200);
 
             var slots = container.FragmentTree!.Fragmentainers.Select(f => f.SlotIndex).ToList();
@@ -327,7 +328,7 @@ namespace PeachBrackets.Engine.Tests.Html.Core.Fragments
             // it; resolving it afterwards silently reinstated every skipped page.
             var (_, container) = await LayoutHarness.LayoutAsync(
                 "<!DOCTYPE html><html><head><style>html { background: white }</style></head>"
-                + "<body style='margin:0'><p>top</p><div style='height:900pt'></div><p>far below</p></body></html>",
+                + "<body style='margin:0'><p style='margin:1.12em 0'>top</p><div style='height:900pt'></div><p style='margin:1.12em 0'>far below</p></body></html>",
                 pageHeight: 200);
 
             Assert.NotNull(container.CanvasBackgroundBox);
@@ -664,7 +665,7 @@ namespace PeachBrackets.Engine.Tests.Html.Core.Fragments
         public async Task ContentThatOverflowsWithoutBreaking_StillReachesEveryBandItTouches()
         {
             var (_, container) = await LayoutHarness.LayoutAsync(
-                LayoutHarness.Wrap("<p>top</p><div style='height:900pt'></div><p>far below</p>"),
+                LayoutHarness.Wrap("<p style='margin:1.12em 0'>top</p><div style='height:900pt'></div><p style='margin:1.12em 0'>far below</p>"),
                 pageHeight: 200);
 
             Assert.Equal("0,6", string.Join(",", container.FragmentTree!.Fragmentainers.Select(f => f.SlotIndex)));

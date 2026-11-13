@@ -1,0 +1,10 @@
+# Default block margins follow the HTML Standard
+
+The margins were the HTML 4 sample sheet's. The fix is the stylesheet in `CssDefaults.cs` only (HTML Standard 15.3.3, 15.3.6, 15.3.7), no code.
+
+- **Found by measuring, not reading.** The issue's table was reproduced in Chrome 157 for every element, then the rules were written from the standard and `DefaultBlockMarginTests` pins Chrome's figure for each (gap between a 5px block and the element, 14px font). All but `h1` and the nested-list rows fail on the old sheet.
+- **The nesting rule is the standard's `:is(dir, dl, menu, ol, ul) :is(dir, dl, menu, ol, ul)`.** The old one covered `ol`/`ul` only, so a `ul` in a `dd` or a `dl` in a `menu` kept its margin. A test that only looked at where the nested list's box starts passed on both sheets (the margin collapses through its parent), so the tests measure the gap to the previous sibling instead.
+- **`h6` text size is `0.67em` too** (it was `0.75em`); it is the same rule in the standard and left alone it would not have matched Chrome's heading height.
+- **`pre` keeps `font-size: 10pt`** (not the standard's: it is in the "not in the specification but necessary" block) and gets `margin: 1em 0` of that size; the old `15px` top and no bottom was a guess.
+- **Not done: quirks mode.** Chrome also changes the margins in quirks mode (`form` gets `margin-bottom: 1em`, the first block of a `body`/`td`/`th` loses its top margin), and PeachPDF's parser knows the mode but the style sheet does not. Measured against Chrome 157 and tracked in issue 2400; see the accepted gap [quirks mode does not reach the style sheet](../accepted-gaps/quirks-mode-does-not-reach-the-style-sheet.md).
+- **Evidence.** Engine suite (19,831 tests; one file-lock flake in `SlicedMonolithLinesTests` on a shared temp file, which passes alone), `PeachPDF.Tests` (1,978), `PeachBrackets.Tests` (1,212) and the CLI tests pass; no existing test asserted the old margins. The change is a string constant, so it adds no executable lines to cover.
