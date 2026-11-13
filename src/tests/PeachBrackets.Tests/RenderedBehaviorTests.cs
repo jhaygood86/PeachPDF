@@ -74,6 +74,11 @@ public class RenderedBehaviorTests
         $"<div style='font-size:16px'>a<{tag} style='margin:{margin} 0;font-size:{size}'>x</{tag}>b</div>");
 
     [Fact]
+    public Task AFixedLayoutColumnIsItsFirstRowCellsWidthPlusItsPadding() => AssertSameAsync(
+        "<table style='border-spacing:0;table-layout:fixed;width:120px'><tr><td style='padding:0 0 0 20px;width:40px;background:rgb(0,128,0)'></td><td></td></tr></table>",
+        "<table style='border-spacing:0;table-layout:fixed;width:120px'><tr><td style='padding:0;width:60px;background:rgb(0,128,0)'></td><td></td></tr></table>");
+
+    [Fact]
     public Task AFormHasNoDefaultMargin() => AssertSameAsync(
         "<div style='font-size:16px'>a<form>x</form>b</div>",
         "<div style='font-size:16px'>a<form style='margin:0'>x</form>b</div>");

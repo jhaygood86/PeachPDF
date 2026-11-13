@@ -2523,6 +2523,9 @@ namespace PeachBrackets.Html.Dom
                     var len = CssValueParser.ParseLength(cellInlineSize, availCellSpace, cell);
                     if (!(len > 0)) continue;
 
+                    // A content-box cell's width is its content: the column is that plus the cell's own padding and border.
+                    len += cell.ActualBoxSizeIncludedWidth;
+
                     var colspan = GetColSpan(cell);
                     var col = GetCellRealColumnIndex(cell);
                     var share = len / colspan;
