@@ -1,8 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <!--
-    The peachpdf command-line tool. Single-TFM net10.0 (NativeAOT publishes one framework/RID at a
-    time), overriding the net10.0 default from src/Directory.Build.props. PublishAot only takes
+    The peachpdf command-line tool. Single-TFM net11.0 (NativeAOT publishes one framework/RID at a
+    time), overriding the multi-target default from src/Directory.Build.props. PublishAot only takes
     effect on `dotnet publish -r <rid>`; plain `dotnet build`/`dotnet run` stay non-AOT. This project
     also serves as the library's AOT smoke test - a successful `dotnet publish -p:PublishAot=true`
     proves the whole render pipeline AOT-compiles and runs.
@@ -15,11 +15,17 @@
       with the referenced 'PeachPDF' library and breaks project-reference restore.
     -->
     <TargetFrameworks></TargetFrameworks>
-    <TargetFramework>net10.0</TargetFramework>
+    <TargetFramework>net11.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <IsAotCompatible>true</IsAotCompatible>
     <PublishAot>true</PublishAot>
+    <!--
+      The .NET 11.0.0 ILCompiler crashes with an access violation in its dependency analyzer (a List<T>
+      enumerator, on win-x64) when it compiles in parallel - 3 of 3 publishes failed, each with a different exit
+      code - and succeeds single-threaded. Remove once a fixed ILCompiler ships.
+    -->
+    <IlcDegreeOfParallelism>1</IlcDegreeOfParallelism>
     <IsPackable>false</IsPackable>
     <InvariantGlobalization>true</InvariantGlobalization>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
