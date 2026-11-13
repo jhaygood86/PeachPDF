@@ -2155,6 +2155,7 @@ namespace PeachBrackets.Html
             // "actualTransformComputed" cache in DerivedStyle.ActualTransformMatrix). It reads the computed
             // value (HasTransform) now, but the flag is only consumed after layout, so it stays deferred.
             (HasFloatedBoxes, HasOutOfFlowBoxes, _) = ComputeFlowFlags(Root, includeStackingHoistCandidates: false);
+            if (HasFloatedBoxes) CssBox.MarkFloatFreeSubtrees(Root);
 
             // Depends on cascaded style only, and layout itself consults it, so it has to be settled before
             // the first pass rather than alongside the post-layout flags below.
@@ -5958,8 +5959,8 @@ namespace PeachBrackets.Html
         /// <summary>Paints only the animated boxes that are drawn apart from the page (<see cref="DocumentPaintLayer.Animated"/>), each with everything under it.</summary>
         /// <param name="g">the device to use</param>
         /// <param name="fragmentainer">the page to paint</param>
-        /// <param name="roots">the fragments of the boxes to draw, in paint order</param>
-        public void PerformPaintAnimated(Canvas g, FragmentainerFragment fragmentainer, IReadOnlyList<BoxFragment> roots)
+        /// <param name="roots">the boxes to draw, in paint order, each with the ancestors whose overflow clip applies to it</param>
+        public void PerformPaintAnimated(Canvas g, FragmentainerFragment fragmentainer, IReadOnlyList<StackingOrder.StackingParticipant> roots)
         {
             ArgumentNullException.ThrowIfNull(g);
             ArgumentNullException.ThrowIfNull(fragmentainer);

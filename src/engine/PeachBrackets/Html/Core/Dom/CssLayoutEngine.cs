@@ -6126,6 +6126,10 @@ namespace PeachBrackets.Html.Dom
         /// </summary>
         internal static (double Left, double Right, double? FloatsBottom) ExtentBesideFloatsWithBottom(CssBox block, double top, double left, double right)
         {
+            // No float anywhere in the document: nothing can narrow the extent, so skip the transient line box.
+            if (block.HtmlContainer is { HasFloatedBoxes: false })
+                return (left, right, null);
+
             // The line box only carries the coordinates the lookups read, but its constructor adds it to the owner's
             // line boxes, so it is taken off again: a container left with a line box of its own was read as holding
             // inline content and its children's words were emitted a second time.
@@ -6879,6 +6883,10 @@ namespace PeachBrackets.Html.Dom
             // Without the second call a line whose only word arrived by wrapping contributes no height at
             // all - the common "paragraph's last line holds one word" shape, which came out one whole
             // line-height short.
+            // A lambda written inline in the word loop captures the loop's own variable, so the compiler allocates its closure on every
+            // iteration whether or not the branch that uses it runs; building it here allocates only when it is asked for.
+            Action GrowLineAfter(CssRect w) => () => GrowLineToItsExtent(w);
+
             void GrowLineToItsExtent(CssRect word)
             {
                 var line = coordinates.Line;
@@ -7334,7 +7342,7 @@ namespace PeachBrackets.Html.Dom
                             && IsAtLineStart(coordinates))
                         {
                             ShiftEmptyLineBelowCrowdingFloats(blockBox, box, coordinates, WidthThatCannotBeBrokenFrom(b, wordIndex, word), word.Height,
-                                rightSpacing, clonedTrailing, isRtl, () => GrowLineToItsExtent(word));
+                                rightSpacing, clonedTrailing, isRtl, GrowLineAfter(word));
 
                             // The run was to move to a new line because the cursor had been pushed past a float; the line is empty, so a new one
                             // could not help, and the shift has already put it where the run fits.
@@ -7520,7 +7528,7 @@ namespace PeachBrackets.Html.Dom
                                 if (blockBoxPermitsWrap && !word.IsLineBreak && (b.WhiteSpacePermitsWrapping || shiftsWordsThatCannotWrap))
                                 {
                                     ShiftEmptyLineBelowCrowdingFloats(blockBox, box, coordinates, WidthThatCannotBeBrokenFrom(b, wordIndex, word), word.Height,
-                                        rightSpacing, clonedTrailing, isRtl, () => GrowLineToItsExtent(word));
+                                        rightSpacing, clonedTrailing, isRtl, GrowLineAfter(word));
                                 }
                             }
 
