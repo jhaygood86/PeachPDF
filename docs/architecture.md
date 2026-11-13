@@ -1325,7 +1325,7 @@ package exposes so a caller with no HTML can write the same annotations.
 
 **Guide:** [Command-line tool](cli.md) · **Source:** [src/PeachPDF.Cli/](https://github.com/jhaygood86/PeachPDF/tree/main/src/PeachPDF.Cli/)
 
-The `peachpdf` tool: a thin front end (`ArgumentParser` with a conventional command-line grammar, `CliOptions`, `CliRunner`, `CliNetworkLoader`, `CliLogger`) over `PdfGenerator`, published as per-platform Native AOT binaries (`net10.0` only). It doubles as the library's AOT smoke test: a successful `dotnet publish -p:PublishAot=true` proves the whole pipeline — HTML parsing, CSS cascade, layout and PDF writing — compiles ahead of time and runs. The published binary's assembly name stays `PeachPDF.Cli` (a name differing only in case from `PeachPDF` collides in project-reference restore); the release workflow renames it to `peachpdf` when packaging.
+The `peachpdf` tool: a thin front end (`ArgumentParser` with a conventional command-line grammar, `CliOptions`, `CliRunner`, `CliNetworkLoader`, `CliLogger`) over `PdfGenerator`, published as per-platform Native AOT binaries (`net11.0` only). It doubles as the library's AOT smoke test: a successful `dotnet publish -p:PublishAot=true` proves the whole pipeline — HTML parsing, CSS cascade, layout and PDF writing — compiles ahead of time and runs. The published binary's assembly name stays `PeachPDF.Cli` (a name differing only in case from `PeachPDF` collides in project-reference restore); the release workflow renames it to `peachpdf` when packaging.
 
 ## Testing
 

@@ -1,8 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <!--
-    The peachpdf command-line tool. Single-TFM net10.0 (NativeAOT publishes one framework/RID at a
-    time), overriding the net10.0 default from src/Directory.Build.props. PublishAot only takes
+    The peachpdf command-line tool. Single-TFM net11.0 (NativeAOT publishes one framework/RID at a
+    time), overriding the multi-target default from src/Directory.Build.props. PublishAot only takes
     effect on `dotnet publish -r <rid>`; plain `dotnet build`/`dotnet run` stay non-AOT. This project
     also serves as the library's AOT smoke test - a successful `dotnet publish -p:PublishAot=true`
     proves the whole render pipeline AOT-compiles and runs.
@@ -15,7 +15,7 @@
       with the referenced 'PeachPDF' library and breaks project-reference restore.
     -->
     <TargetFrameworks></TargetFrameworks>
-    <TargetFramework>net10.0</TargetFramework>
+    <TargetFramework>net11.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <IsAotCompatible>true</IsAotCompatible>

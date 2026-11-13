@@ -1,9 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!-- Single-TFM net10.0 to reference the net10-only CLI (overrides the repo default). -->
+  <!-- Single-TFM net11.0 to reference the net11-only CLI (overrides the repo default). -->
   <PropertyGroup>
     <TargetFrameworks></TargetFrameworks>
-    <TargetFramework>net10.0</TargetFramework>
+    <TargetFramework>net11.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>

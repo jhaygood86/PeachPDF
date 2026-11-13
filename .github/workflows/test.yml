@@ -441,7 +441,7 @@ jobs:
       run: >
         ./.github/scripts/Test-PdfConformance.ps1
         -VeraPdf (Join-Path $env:RUNNER_TEMP 'verapdf/verapdf')
-        -CliDll (Join-Path $PWD 'src/PeachPDF.Cli/bin/Release/net10.0/PeachPDF.Cli.dll')
+        -CliDll (Join-Path $PWD 'src/PeachPDF.Cli/bin/Release/net11.0/PeachPDF.Cli.dll')
         -OutDir (Join-Path $env:RUNNER_TEMP 'conformance')
 
     - name: Upload PDFs and veraPDF reports

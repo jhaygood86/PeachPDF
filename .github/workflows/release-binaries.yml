@@ -65,7 +65,7 @@ jobs:
         if: runner.os != 'Windows'
         shell: bash
         run: |
-          PUBLISH_DIR="src/PeachPDF.Cli/bin/Release/net10.0/${{ matrix.rid }}/publish"
+          PUBLISH_DIR="src/PeachPDF.Cli/bin/Release/net11.0/${{ matrix.rid }}/publish"
           STAGE="stage"
           mkdir -p "$STAGE"
           mv "$PUBLISH_DIR/PeachPDF.Cli" "$STAGE/peachpdf"
@@ -81,7 +81,7 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $publishDir = "src/PeachPDF.Cli/bin/Release/net10.0/${{ matrix.rid }}/publish"
+          $publishDir = "src/PeachPDF.Cli/bin/Release/net11.0/${{ matrix.rid }}/publish"
           $stage = "stage"
           New-Item -ItemType Directory -Force -Path $stage | Out-Null
           Move-Item "$publishDir/PeachPDF.Cli.exe" "$stage/peachpdf.exe"
