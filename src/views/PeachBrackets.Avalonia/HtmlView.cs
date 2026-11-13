@@ -336,6 +336,8 @@ public sealed partial class HtmlView : Control
 
         UpdateMetrics();
         InvalidateRegions(result.DirtyRegions);
+        if (_document is { } document)
+            RefreshAccessibility(document);
     }
 
     private double Scale => _dpi * _zoom;
