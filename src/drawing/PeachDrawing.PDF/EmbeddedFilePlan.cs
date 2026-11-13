@@ -199,7 +199,7 @@ internal sealed class EmbeddedFilePlan
         {
             // .LocalDateTime for the same reason the creation date uses it: PdfDate writes the offset of the DateTime's own Kind, so
             // a UTC-Kind value would print the local machine's offset.
-            var modified = (file.ModificationDate ?? fallbackDate ?? PdfEntropy.UtcNow()).LocalDateTime;
+            var modified = PdfEntropy.ToLocal(file.ModificationDate ?? fallbackDate ?? PdfEntropy.UtcNow());
 
             var embeddedFile = new EngineEmbeddedFile(document, file.Data)
             {

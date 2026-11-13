@@ -39,7 +39,10 @@ namespace PeachDrawing.PDF.Tests.Baselines
                 return result;
             }
 
-            public override DateTime Now() => new(2026, 1, 2, 3, 4, 5, DateTimeKind.Local);
+            // UTC-kind dates print "+00:00" whatever the machine's time zone is, so the baselines do not depend on it.
+            public override DateTime Now() => new(2026, 1, 2, 3, 4, 5, DateTimeKind.Utc);
+
+            public override DateTime ToLocal(DateTimeOffset value) => value.UtcDateTime;
         }
 
         private static PdfComposerOptions Options(Action<PdfComposerOptions>? configure = null)

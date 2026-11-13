@@ -1,3 +1,4 @@
+using PeachDrawing.PDF.Engine.Internal;
 using PeachDrawing.PDF.Engine;
 using PeachDrawing.PDF.Engine.Advanced;
 using System;
@@ -278,7 +279,7 @@ public sealed partial class PdfComposer
         // .LocalDateTime: the date is written with the machine's UTC offset, which would mislabel the instant of a value carrying
         // another offset; converting to local time first makes the offset written the right one for that same instant.
         if (options.CreationDate is { } created)
-            info.CreationDate = created.LocalDateTime;
+            info.CreationDate = PdfEntropy.ToLocal(created);
 
         // The accessible PDF/A levels (a) and PDF/UA build on tagged output and additionally require a real document language; PDF/UA
         // (ISO 14289) also requires a title, which it makes the viewer show in place of the file name.

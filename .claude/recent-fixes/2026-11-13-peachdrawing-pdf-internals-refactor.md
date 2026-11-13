@@ -20,6 +20,6 @@ information the attributes carried was copied into each key's doc comment first.
 **Save paths.** The linearizer now builds its cross-reference sections and trailers through `PdfWriter.ToBytes` and `PdfCrossReferenceTable.InUseEntry`/`FreeListHeadEntry`, the same calls the ordinary save uses. Its `/Prev` placeholder is patched in the bytes, searched only after the `/Prev` token.
 
 **Not done.** `PdfGraphics`, `PdfContentInterpreter` and `PdfCanvas` are not split. `PdfGraphicsRenderer` got a partial-file split (`.Compositing.cs`), not a collaborator class, because those methods use its private state heavily. The Native AOT link of `PeachPDF.Cli` could not be run on the development
-machine (no native toolchain); the Release build has no trim or AOT analyzer warnings. The baselines were produced on Windows; the first Linux/macOS CI run is the check that Flate output matches there.
+machine (no native toolchain); the Release build has no trim or AOT analyzer warnings. The first CI run failed on every leg with the same wrong hashes: the baselines had been generated in a non-UTC time zone and the date offset is written into the file (fixed by routing local-time conversion through `PdfEntropy.ToLocal`). With that fixed, the hashes, including the Flate-compressed documents, match on Windows, Linux and macOS.
 
 **Evidence.** `PeachDrawing.PDF.Tests` (net10.0 Debug and Release, net11.0), `PeachPDF.Tests`, solution rebuild with zero warnings.

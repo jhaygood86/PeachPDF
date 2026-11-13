@@ -22,6 +22,12 @@ internal static class PdfEntropy
 
         /// <summary>Returns the instant standing in for "now" (local time, like <see cref="DateTime.Now"/>).</summary>
         public abstract DateTime Now();
+
+        /// <summary>
+        /// Converts an instant to the local time a PDF date is written in (the offset it prints is the date's own, so a machine's time zone
+        /// would otherwise show in the file). The default is the machine's local time.
+        /// </summary>
+        public virtual DateTime ToLocal(DateTimeOffset value) => value.LocalDateTime;
     }
 
     /// <summary>Installs <paramref name="source"/> until the returned scope is disposed.</summary>
@@ -40,6 +46,9 @@ internal static class PdfEntropy
 
     /// <summary>The current local time.</summary>
     internal static DateTime Now() => Current.Value?.Now() ?? DateTime.Now;
+
+    /// <summary>An instant as the local time a PDF date is written in (<see cref="DateTimeOffset.LocalDateTime"/> by default).</summary>
+    internal static DateTime ToLocal(DateTimeOffset value) => Current.Value?.ToLocal(value) ?? value.LocalDateTime;
 
     /// <summary>The current UTC time.</summary>
     internal static DateTimeOffset UtcNow() => Current.Value is { } source ? new DateTimeOffset(source.Now()).ToUniversalTime() : DateTimeOffset.UtcNow;
