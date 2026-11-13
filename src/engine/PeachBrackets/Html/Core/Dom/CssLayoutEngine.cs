@@ -2829,6 +2829,8 @@ namespace PeachBrackets.Html.Dom
 
         public static double GetActualMarginLeft(CssBox box, double? boxWidth = null, double? blockTop = null)
         {
+            if (!box.MarginApplies) return 0;
+
             var marginLeft = box.MarginLeft.Value;
             if (marginLeft.IsValue)
             {
@@ -2871,6 +2873,8 @@ namespace PeachBrackets.Html.Dom
 
         public static double GetActualMarginRight(CssBox box, double? boxWidth = null, double? blockTop = null)
         {
+            if (!box.MarginApplies) return 0;
+
             var marginRight = box.MarginRight.Value;
             if (marginRight.IsValue)
             {

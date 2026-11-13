@@ -1413,10 +1413,24 @@ namespace PeachBrackets.Html.Dom
         public double? AlgorithmicDefiniteHeight { get => _rare is null ? default(double?) : _rare.AlgorithmicDefiniteHeight; set { if (_rare is null) { if (EqualityComparer<double?>.Default.Equals(value, default(double?))) return; _rare = new BoxRareState(); } _rare.AlgorithmicDefiniteHeight = value; } }
 
         /// <summary>
+        /// Whether <c>margin</c> applies to this box: to every element except the internal table display types, which are all of the table-* ones
+        /// other than <c>table</c>, <c>inline-table</c> and <c>table-caption</c> (CSS 2.1 section 8.3).
+        /// </summary>
+        internal bool MarginApplies => DerivedStyle.ActualDisplay is not (Keywords.TableRowGroup or Keywords.TableHeaderGroup or Keywords.TableFooterGroup
+            or Keywords.TableRow or Keywords.TableColumnGroup or Keywords.TableColumn or Keywords.TableCell);
+
+        /// <summary>
+        /// Whether <c>padding</c> applies to this box: to every element except table row groups, header and footer groups, rows, column groups and
+        /// columns (CSS 2.1 section 8.4); a cell does take padding.
+        /// </summary>
+        internal bool PaddingApplies => DerivedStyle.ActualDisplay is not (Keywords.TableRowGroup or Keywords.TableHeaderGroup or Keywords.TableFooterGroup
+            or Keywords.TableRow or Keywords.TableColumnGroup or Keywords.TableColumn);
+
+        /// <summary>
         /// Gets the actual top's Margin
         /// </summary>
         public double ActualMarginTop =>
-            MarginTop.Value is { IsValue: true, Value: { } marginTop }
+            !MarginApplies ? 0 : MarginTop.Value is { IsValue: true, Value: { } marginTop }
                 ? CssValueParser.ParseLength(marginTop, ContainingBlock.AvailableWidth, this) + _blockStepMarginTop
                 : _blockStepMarginTop;
 
@@ -1435,7 +1449,7 @@ namespace PeachBrackets.Html.Dom
         /// Gets the actual Margin of the bottom
         /// </summary>
         public double ActualMarginBottom =>
-            MarginBottom.Value is { IsValue: true, Value: { } marginBottom }
+            !MarginApplies ? 0 : MarginBottom.Value is { IsValue: true, Value: { } marginBottom }
                 ? CssValueParser.ParseLength(marginBottom, ContainingBlock.AvailableWidth, this) + _blockStepMarginBottom
                 : _blockStepMarginBottom;
 
