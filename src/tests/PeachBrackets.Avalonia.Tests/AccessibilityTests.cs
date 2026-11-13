@@ -132,7 +132,7 @@ public class AccessibilityTests
     {
         await HeadlessSession.Run(async () =>
         {
-            var html = "<html><body style='margin:0'><p style='margin:0;height:1000px'>top</p><h1 style='margin:0'>far</h1></body></html>";
+            var html = "<html><body style='margin:0'><p style='margin:0;height:1000px'>top</p><h1 id='far' style='margin:0'>far</h1></body></html>";
             var (window, view) = await HeadlessSession.ShowAsync(html, 400, 300);
             var peer = ControlAutomationPeer.CreatePeerForElement(view);
             var viewBounds = peer.GetBoundingRectangle();
@@ -142,10 +142,10 @@ public class AccessibilityTests
             var before = far.GetBoundingRectangle();
             Assert.True(before.Top - viewBounds.Top > 900, $"expected the heading below the first screen, got {before}");
 
-            view.ScrollToElement("far");
-            _ = view;
+            Assert.True(view.ScrollToElement("far"));
             var after = far.GetBoundingRectangle();
-            Assert.True(after.Top < before.Top);
+            Assert.True(after.Top < before.Top, $"expected the node to follow the scroll: before {before}, after {after}");
+            Assert.False(far.IsOffscreen());
             window.Close();
         });
     }
@@ -189,7 +189,8 @@ public class AccessibilityTests
             var children = 0;
             peer.ChildrenChanged += (_, _) => children++;
             var live = Walk(peer).First(p => p.GetLiveSetting() == AutomationLiveSetting.Polite);
-            Assert.Equal("first", live.GetName());
+            // A region that holds paragraphs is read through them: its own name is only the text it holds directly.
+            Assert.Equal(["first"], Walk(live).Where(p => p.GetName().Length > 0).Select(p => p.GetName()));
 
             // The hidden paragraph is in the document but not in the tree; showing it adds to the live region.
             var document = view.Document!;
@@ -204,7 +205,7 @@ public class AccessibilityTests
             Assert.Contains(diff!.Changes, c => c.Kind == AccessibilityChangeKind.Added);
             var announcement = Assert.Single(diff.Announcements);
             Assert.Equal("second", announcement.Text);
-            Assert.Contains("second", Walk(peer).First(p => p.GetLiveSetting() == AutomationLiveSetting.Polite).GetName());
+            Assert.Contains("second", Walk(Walk(peer).First(p => p.GetLiveSetting() == AutomationLiveSetting.Polite)).Select(p => p.GetName()));
             window.Close();
         });
     }
