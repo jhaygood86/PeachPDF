@@ -27,8 +27,8 @@ public enum DocumentPaintLayer
     /// <see cref="PeachBrackets.Updates.AnimationFrame.OverlayChanged"/>), each with everything under it. With <see cref="HtmlDocumentOptions.AnimationsEnabled"/>,
     /// <see cref="Content"/> leaves those boxes out, so a frame that only moves or fades them repaints nothing of the scrolled surface: the host draws
     /// this layer over it every frame (under <see cref="ViewportAttached"/>), where each box is a single textured quad when the canvas keeps
-    /// <see cref="PeachDrawing.Core.RetainedLayer"/>s. Boxes that cannot be drawn apart without changing what is on top of what (something positioned that
-    /// overlaps them, an ancestor that clips or composites them) stay in <see cref="Content"/> and are repainted as before. Nothing is drawn for a
+    /// <see cref="PeachDrawing.Core.RetainedLayer"/>s. Boxes that cannot be drawn apart without changing what is on top of what (a fixed or sticky box that must sit under them,
+    /// in-flow content over a negative z-index, a group that blends or reads its backdrop) stay in <see cref="Content"/> and are repainted as before. Nothing is drawn for a
     /// document that is not <see cref="MediaType.Screen"/>, or when no animation is running; <see cref="All"/> always draws every box in place.
     /// </summary>
     Animated = 3,

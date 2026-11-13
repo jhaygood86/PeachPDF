@@ -440,9 +440,10 @@ while (document.HasRunningAnimations)
 - **The animated layer.** A host that keeps the page as a surface it does not repaint (a scroller, a set of tiles) paints `DocumentPaintLayer.Content` onto it and draws
   `DocumentPaintLayer.Animated` over it every frame, under `DocumentPaintLayer.ViewportAttached`. A promoted box is then not part of the surface at all: while it only moves or
   fades, `AnimationFrame.DirtyRegions` is empty for it and `AnimationFrame.OverlayChanged` says to draw the animated layer again. A box is drawn apart only when that cannot change
-  what covers what: nothing above it clips, transforms or composites it (an `overflow` other than `visible`, a stacking context), and no other positioned box that is drawn over
-  it, and no fixed or sticky box, overlaps where it is right now. A box that stops qualifying (another box moves over it) goes back to the content layer, and the frame says to
-  repaint where it is; one that never qualifies behaves as it always did. `DocumentPaintLayer.All` still draws every box in place, so a document that is painted in one pass,
+  what covers what: it is drawn under the `overflow` clips of its ancestors, with the whole stacking context (an `opacity` group, a filter, a transform) it is in, and with the positioned
+  boxes painted over it, so the layers draw what one pass would. It stays in the content layer when something it would sit over must sit over it instead (a fixed or sticky box meant to be under it,
+  in-flow content over a box with a negative `z-index`), when its group blends or reads its backdrop, or when the group is large. A box that stops qualifying goes back to the content layer,
+  and the frame says to repaint where it is; one that never qualifies behaves as it always did. `DocumentPaintLayer.All` still draws every box in place, so a document that is painted in one pass,
   or written to a PDF, is the same as before. The layer only exists on a `MediaType.Screen` document.
 - **Reduced motion.** The default `Preferences` report `prefers-reduced-motion: reduce`, so a style sheet that switches animation off for it does; pass
   `new UserPreferences { ReducedMotion = false }` along with `AnimationsEnabled` to let them play, and leave `AnimationsEnabled` off when the system asks for no motion.

@@ -148,16 +148,16 @@ namespace PeachBrackets.Html.Paint
         }
 
         /// <summary>
-        /// Paints only the animated boxes drawn apart from the page (<see cref="DocumentPaintLayer.Animated"/>). Each is in a plain chain of ancestors (see
-        /// <c>AnimationClock.OverlayFor</c>): nothing above it clips, transforms or composites it, so it is painted as it is when reached from the page.
+        /// Paints only the animated boxes drawn apart from the page (<see cref="DocumentPaintLayer.Animated"/>). Each is under a chain of ancestors that are not stacking contexts
+        /// (see <c>AnimationClock.OverlayFor</c>): nothing above it transforms or composites it, and the overflow clips of the ancestors are applied around it.
         /// </summary>
-        internal void PaintAnimated(Canvas g, FragmentainerFragment fragmentainer, IReadOnlyList<BoxFragment> roots)
+        internal void PaintAnimated(Canvas g, FragmentainerFragment fragmentainer, IReadOnlyList<StackingOrder.StackingParticipant> roots)
         {
             _pageRoot = fragmentainer.Root;
             _slot = fragmentainer.SlotIndex;
             _recordsPlacements = true;
-            foreach (var fragment in roots)
-                PaintFragment(g, fragment);
+            foreach (var participant in roots)
+                PaintStackingParticipant(g, participant);
         }
 
         internal void Paint(Canvas g, FragmentainerFragment fragmentainer)
