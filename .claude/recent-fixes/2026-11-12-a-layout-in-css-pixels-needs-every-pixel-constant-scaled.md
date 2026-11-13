@@ -29,6 +29,11 @@ through at the edge. The same is true for any host that scales the canvas instea
   is, which for the open end of a piece (it ends at other text, not at the box's next fragment) left a 0.66-coverage fringe the reference's separate
   spans do not have.
 
+- **List marker shapes snap** with the option (`MarkerFragmentPainter.PaintShape`): css2-generated 197 -> 223.
+- **Floors were re-seeded** at 95% of this run (`wpt-floors.json`, all 16 modules). Two went *down* - css-lists 26 -> 23 and css2-generated
+  225 -> 211 - because a few tests that passed under the transform-based painting (everything at 4/3 fractional positions, no snapping, text 1.33x)
+  stopped passing; the other 14 rose, by ~1,100 tests in total. The lowering is deliberate, not a regression to hunt: those tests did not pass for
+  the right reason.
 ## Still wrong with PixelsPerPoint != 1 (found, not fixed here)
 Other `Length.PointsPerPx` uses ignore `LayoutUnitsPerPoint` (grep for it): `BackgroundImageDrawHandler.pxFactor`, `BorderImageDrawHandler`
 (`numberUnit`), `ReplacedContentRenderer`, `MarginBoxRenderer`, `FragmentEmitter` line ~2582, the sub/superscript shifts in `CssLayoutEngine`. The
