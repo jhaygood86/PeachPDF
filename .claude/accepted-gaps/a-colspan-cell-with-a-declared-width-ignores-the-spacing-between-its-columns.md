@@ -1,0 +1,3 @@
+# A colspan cell with a declared width ignores the spacing between its columns
+
+`CalculateColumnWidths` hands a spanning cell's declared `width` to the columns it spans without crediting the `border-spacing` between them, which a browser counts as part of that width (CSS 2.1 section 17.5.2.2: the cell's width is the sum of the spanned columns and the spacing between them). `border-spacing:10px` with a `colspan=3` cell of `width:300px` is 241.5pt here against Chrome's 226.5pt, the columns under it 75.5pt each against 68.3 / 74.9 / 68.3. A content-driven span is already right (`SpreadSpannedWidth` credits the spacing); only a declared width is not, and it is the same on the release before the default cell padding. Tracking issue #2396.
