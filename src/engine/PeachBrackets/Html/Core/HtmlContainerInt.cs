@@ -5944,8 +5944,8 @@ namespace PeachBrackets.Html
         /// <summary>Paints only the animated boxes that are drawn apart from the page (<see cref="DocumentPaintLayer.Animated"/>), each with everything under it.</summary>
         /// <param name="g">the device to use</param>
         /// <param name="fragmentainer">the page to paint</param>
-        /// <param name="roots">the fragments of the boxes to draw, in paint order</param>
-        public void PerformPaintAnimated(Canvas g, FragmentainerFragment fragmentainer, IReadOnlyList<BoxFragment> roots)
+        /// <param name="roots">the boxes to draw, in paint order, each with the ancestors whose overflow clip applies to it</param>
+        public void PerformPaintAnimated(Canvas g, FragmentainerFragment fragmentainer, IReadOnlyList<StackingOrder.StackingParticipant> roots)
         {
             ArgumentNullException.ThrowIfNull(g);
             ArgumentNullException.ThrowIfNull(fragmentainer);

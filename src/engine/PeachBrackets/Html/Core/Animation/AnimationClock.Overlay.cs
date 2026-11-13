@@ -3,8 +3,10 @@ using System.Collections.Generic;
 using System.Numerics;
 using PeachBrackets.Css;
 using PeachBrackets.Html.Dom;
+using PeachBrackets.Html.Fragmentation;
 using PeachBrackets.Html.Fragments;
 using PeachBrackets.Html.Paint;
+using PeachBrackets.Html.TextGeometry;
 using PeachBrackets.Html.Utils;
 using PeachBrackets.Updates;
 using PeachDrawing.Core;
@@ -14,44 +16,84 @@ namespace PeachBrackets.Html.Animation
     // Which promoted boxes can be drawn apart from the page (DocumentPaintLayer.Animated), so a frame that only moves or fades them repaints nothing of the
     // surface under them.
     //
-    // A box drawn later than the rest of the page is only drawn the same if nothing that is painted after it overlaps it, and if nothing between it and the
-    // page changes how it is drawn. So a box qualifies when (1) every box above it is plain - not a stacking context, not clipping its overflow - which is
-    // what lets the box be painted from the page's coordinates with no ancestor state, and (2) no other positioned box that is drawn over it (or any box the
-    // viewport holds in place) overlaps where the box is right now. Everything that is not positioned paints before a box that is a stacking context
-    // (CSS 2.1 Appendix E steps 3-7 against step 8), so only the positioned ones need to be looked at. A box that stops qualifying (another box moved over
-    // it) goes back to the content layer, and the frame repaints where it was; see AddDirtyRegions.
+    // The animated layer is composited over the content layer, so a box drawn there is only drawn the same if everything the page paints over it is drawn
+    // there too, in the page's own order. The plan is therefore a set of *members*, each a participant of the root stacking context (Appendix E step 8): the
+    // outermost stacking context that holds an animated box (so an ancestor's opacity, filter or transform composites it as it always did - the whole group is
+    // painted by the animated layer), or the animated box itself. The set is closed under "paints later and overlaps": a positioned box painted over a member
+    // that overlaps it joins the set as a companion, repainted by the animated layer in the page's order. What cannot be layered keeps the animated box in the
+    // content layer: a member something fixed or sticky must sit under, in-flow content that paints over a box with a negative z-index, a subtree that blends or
+    // reads its backdrop, a set that has grown past a cap. Ancestors that only clip are not part of the group: the animated layer re-applies their clips
+    // around the member (PaintStackingParticipant), as the page's own paint order does for a hoisted box.
+    //
+    // A box that stops qualifying goes back to the content layer, and the frame repaints where it was; see AddDirtyRegions.
     internal sealed partial class AnimationClock
     {
-        /// <summary>The boxes to draw apart from the page this frame: the set the content layer leaves out, and the fragments the animated layer paints, in order.</summary>
+        // The most boxes (members and companions) one plan holds, and the largest area (in points squared) a member is worth repainting each frame for unless it
+        // is no larger than a few times the animated boxes in it: past these the content layer is cheaper than the animated layer.
+        private const int MaxMembers = 12;
+        private const double MaxMemberArea = 640000;
+        private const double MaxAreaOverAnimated = 8;
+
+        /// <summary>The boxes to draw apart from the page this frame: the set the content layer leaves out, and what the animated layer paints, in order.</summary>
         internal sealed class OverlayPlan
         {
-            public static readonly OverlayPlan Empty = new([], []);
+            public static readonly OverlayPlan Empty = new([], [], []);
 
-            public OverlayPlan(HashSet<CssBox> boxes, List<BoxFragment> roots)
+            public OverlayPlan(HashSet<CssBox> boxes, List<StackingOrder.StackingParticipant> roots, Dictionary<CssBox, Rect> staticRects)
             {
                 Boxes = boxes;
                 Roots = roots;
+                StaticRects = staticRects;
             }
 
+            /// <summary>Every box the content layer leaves out: the members and companions, and the animated boxes inside them.</summary>
             public HashSet<CssBox> Boxes { get; }
 
-            public List<BoxFragment> Roots { get; }
+            /// <summary>The members to paint, in paint order, each with the ancestors whose overflow clip applies to it.</summary>
+            public List<StackingOrder.StackingParticipant> Roots { get; }
+
+            /// <summary>Where each member that is not itself an animated box covers on the page (in points, as the dirty regions are), for repainting it when it changes layers.</summary>
+            public Dictionary<CssBox, Rect> StaticRects { get; }
         }
 
-        private readonly record struct OverlayCandidate(BoxState State, BoxFragment Fragment, Rect Extent);
+        // A participant of the root stacking context that is positioned or a stacking context itself: what the page paints in step 8, in order.
+        private sealed class Part
+        {
+            public required CssBox Box { get; init; }
+            public required StackingOrder.StackingParticipant Participant { get; init; }
+            public required Rect Extent { get; init; }
+            public required double OriginX { get; init; }
+            public required double OriginY { get; init; }
+            public required int Z { get; init; }
+            public required int Order { get; init; }
+            public required bool Attached { get; init; }
+            public bool Eligible { get; set; }
+            public List<Candidate> Animated { get; } = [];
+        }
 
-        private readonly record struct OverlayOther(CssBox Box, Rect Extent, double OriginX, double OriginY, int Z, bool Attached);
+        private sealed class Candidate
+        {
+            public required BoxState State { get; init; }
+            public required BoxFragment Fragment { get; init; }
+            public required Rect Extent { get; init; }
+        }
+
+        private readonly record struct Ink(Rect Rect);
 
         private IReadOnlyList<FragmentainerFragment>? _structureFor;
         private int _structureRevision = -1;
         private int _promotionRevision;
-        private List<OverlayCandidate> _candidates = [];
-        private List<OverlayOther> _others = [];
+        private List<Part> _parts = [];
+        private List<Part> _roots = [];
+        private List<Ink> _ink = [];
 
         private OverlayPlan? _plan;
         private IReadOnlyList<FragmentainerFragment>? _planFor;
         private int _planFrame = -1;
         private int _frame;
+
+        // Where each static member was last known to cover, kept across plans: a member that leaves the plan is repainted where the last plan that held it put it.
+        private readonly Dictionary<CssBox, Rect> _knownStatic = [];
 
         /// <summary>The plan the host last painted with, or null when none was made.</summary>
         internal OverlayPlan? CurrentOverlay => _plan;
@@ -71,49 +113,182 @@ namespace PeachBrackets.Html.Animation
         {
             EnsureStructure(fragmentainers);
 
-            HashSet<CssBox>? boxes = null;
-            List<(int Z, BoxFragment Fragment)>? chosen = null;
-            foreach (var candidate in _candidates)
-            {
-                if (!candidate.State.Promoted || CollidesWithOthers(candidate)) continue;
-
-                (boxes ??= []).Add(candidate.Fragment.Box);
-                (chosen ??= []).Add((LayerOf(candidate.Fragment), candidate.Fragment));
-            }
-
             _planFor = fragmentainers;
             _planFrame = _frame;
-            if (boxes is null || chosen is null)
+
+            // The roots to try: those holding a promoted animated box. One that cannot be layered is dropped and the set worked out again, since the companions
+            // another root pulled in may have been pulled in for it alone.
+            var active = new List<Part>();
+            foreach (var root in _roots)
+            {
+                if (!root.Eligible) continue;
+                foreach (var candidate in root.Animated)
+                {
+                    if (candidate.State.Promoted)
+                    {
+                        active.Add(root);
+                        break;
+                    }
+                }
+            }
+
+            HashSet<Part>? members = null;
+            while (active.Count > 0)
+            {
+                members = [];
+                Part? failed = null;
+                foreach (var root in active)
+                {
+                    if (!Close(root, members))
+                    {
+                        failed = root;
+                        break;
+                    }
+                }
+
+                if (failed is null) break;
+                active.Remove(failed);
+                members = null;
+            }
+
+            if (members is null || members.Count == 0)
             {
                 _plan = OverlayPlan.Empty;
                 return;
             }
 
-            // Paint order among them is the page's: by z-index layer, in tree order within one (the walk found them in tree order, and the sort is stable).
-            var ordered = new List<(int Z, int Index, BoxFragment Fragment)>(chosen.Count);
-            for (var i = 0; i < chosen.Count; i++) ordered.Add((chosen[i].Z, i, chosen[i].Fragment));
-            ordered.Sort((a, b) => a.Z != b.Z ? a.Z.CompareTo(b.Z) : a.Index.CompareTo(b.Index));
+            // Paint order is the page's: by z-index layer, in the order the page's own paint finds them within one.
+            var ordered = new List<Part>(members);
+            ordered.Sort((a, b) => a.Z != b.Z ? a.Z.CompareTo(b.Z) : a.Order.CompareTo(b.Order));
 
-            var roots = new List<BoxFragment>(ordered.Count);
-            foreach (var entry in ordered) roots.Add(entry.Fragment);
-            _plan = new OverlayPlan(boxes, roots);
+            var boxes = new HashSet<CssBox>();
+            var roots = new List<StackingOrder.StackingParticipant>(ordered.Count);
+            var statics = new Dictionary<CssBox, Rect>();
+            var frame = FrameOf(fragmentainers[0]);
+            foreach (var part in ordered)
+            {
+                boxes.Add(part.Box);
+                roots.Add(part.Participant);
+                var animatedSelf = false;
+                foreach (var candidate in part.Animated)
+                {
+                    boxes.Add(candidate.Fragment.Box);
+                    animatedSelf |= ReferenceEquals(candidate.Fragment.Box, part.Box);
+                }
+
+                if (animatedSelf) continue;
+
+                var layout = BoundsOf(part);
+                var rect = new Rect(frame.X(layout.X) - Inflate, frame.Y(layout.Y) - Inflate, (layout.Width / frame.Ppp) + (Inflate * 2), (layout.Height / frame.Ppp) + (Inflate * 2));
+                statics[part.Box] = rect;
+                _knownStatic[part.Box] = rect;
+            }
+
+            _plan = new OverlayPlan(boxes, roots, statics);
         }
 
-        private static int LayerOf(BoxFragment fragment) => StackingOrder.LayerOf(new StackingOrder.StackingParticipant(fragment, []));
+        private TextRunCollector.Frame FrameOf(FragmentainerFragment fragmentainer)
+        {
+            var geometry = fragmentainer.Geometry;
+            return new TextRunCollector.Frame(geometry.ContentLeftPt, geometry.ContentTopPt, _container.MarginLeft, _container.MarginTop, _container.RenderContext.LayoutUnitsPerPoint);
+        }
 
-        // What does not change from step to step: where the candidates are in the tree, and what else is positioned.
+        // Adds the member and everything that has to be drawn with it; false when the set cannot be layered.
+        private bool Close(Part start, HashSet<Part> members)
+        {
+            if (!members.Add(start)) return true;
+
+            var queue = new Queue<Part>();
+            queue.Enqueue(start);
+            while (queue.Count > 0)
+            {
+                var member = queue.Dequeue();
+                if (members.Count > MaxMembers) return false;
+
+                var mine = BoundsOf(member);
+                foreach (var other in _parts)
+                {
+                    if (ReferenceEquals(other, member)) continue;
+                    if (IsAncestorBox(other.Box, member.Box) || IsAncestorBox(member.Box, other.Box)) continue;
+
+                    var theirs = BoundsOf(other);
+                    if (!Overlaps(mine, theirs)) continue;
+
+                    var before = other.Z != member.Z ? other.Z < member.Z : other.Order < member.Order;
+
+                    // Drawn over the animated layer whatever its z-index: right when it is meant to be over the member, wrong when it is meant to be under it.
+                    if (_container.View.IsAttached(other.Box))
+                    {
+                        if (before) return false;
+                        continue;
+                    }
+
+                    // Painted before the member, so under it in either layer.
+                    if (before) continue;
+
+                    // Painted after the member and overlapping it: it has to be drawn over it, so it is drawn by the animated layer too.
+                    if (!other.Eligible) return false;
+                    if (members.Add(other)) queue.Enqueue(other);
+                }
+
+                // Under the root's own content, a negative z-index sits below the text and boxes that are not positioned, which the animated layer would put it over.
+                if (member.Z < 0)
+                {
+                    foreach (var ink in _ink)
+                    {
+                        if (Overlaps(mine, ink.Rect)) return false;
+                    }
+                }
+            }
+
+            return true;
+        }
+
+        // What the member covers right now: the extent of its subtree under its own current matrix, and where each animated box inside it has moved to.
+        private Rect BoundsOf(Part part)
+        {
+            var bounds = CurrentBounds(part.Box, part.Extent, part.OriginX, part.OriginY);
+            foreach (var candidate in part.Animated)
+            {
+                if (ReferenceEquals(candidate.Fragment.Box, part.Box)) continue;
+                bounds = Union(bounds, CurrentBounds(candidate.Fragment.Box, candidate.Extent, candidate.Fragment.WholeBoxRect.X, candidate.Fragment.WholeBoxRect.Y));
+            }
+
+            if (part.Attached && _container.View.DisplacementOf(part.Box) is var (dx, dy) && (dx != 0 || dy != 0))
+                bounds = new Rect(bounds.X + dx, bounds.Y + dy, bounds.Width, bounds.Height);
+
+            return bounds;
+        }
+
+        private static bool Overlaps(Rect a, Rect b) => a.Left < b.Right && b.Left < a.Right && a.Top < b.Bottom && b.Top < a.Bottom;
+
+        private static bool IsAncestorBox(CssBox ancestor, CssBox box)
+        {
+            for (var current = box.ParentBox; current is not null; current = current.ParentBox)
+            {
+                if (ReferenceEquals(current, ancestor)) return true;
+            }
+
+            return false;
+        }
+
+        // What does not change from step to step: what is positioned or composites, the animated boxes in it, and the content that paints under it.
         private void EnsureStructure(IReadOnlyList<FragmentainerFragment> fragmentainers)
         {
-            if (ReferenceEquals(_structureFor, fragmentainers) && _structureRevision == _promotionRevision) return;
+            // Whether an animated box is a stacking context follows its opacity and transform, which change from step to step: it moves in and out of step 8.
+            var signature = StackingSignature();
+            if (ReferenceEquals(_structureFor, fragmentainers) && _structureRevision == _promotionRevision && signature == _stackingSignature) return;
 
+            _stackingSignature = signature;
             _structureFor = fragmentainers;
             _structureRevision = _promotionRevision;
-            _candidates = [];
-            _others = [];
+            _parts = [];
+            _roots = [];
+            _ink = [];
 
             var root = fragmentainers[0].Root;
-            FindCandidates(root);
-
+            var byBox = new Dictionary<CssBox, Part>();
+            var order = 0;
             foreach (var participant in StackingOrder.Flatten(root))
             {
                 var box = participant.Box;
@@ -121,12 +296,57 @@ namespace PeachBrackets.Html.Animation
 
                 var extent = FragmentPainter.SubtreeExtent(participant.Fragment) ?? participant.Fragment.WholeBoxRect;
                 var bleed = FragmentPainter.SubtreeBleed(participant.Fragment) + 2;
-                _others.Add(new OverlayOther(box, Grow(extent, bleed), participant.Fragment.WholeBoxRect.X, participant.Fragment.WholeBoxRect.Y,
-                    StackingOrder.LayerOf(participant), box.Position.Value is PositionMode.Fixed or PositionMode.Sticky));
+                var attached = box.Position.Value is PositionMode.Fixed or PositionMode.Sticky;
+                var part = new Part
+                {
+                    Box = box,
+                    Participant = participant,
+                    Extent = Grow(extent, bleed),
+                    OriginX = participant.Fragment.WholeBoxRect.X,
+                    OriginY = participant.Fragment.WholeBoxRect.Y,
+                    Z = StackingOrder.LayerOf(participant),
+                    Order = order++,
+                    Attached = attached,
+                };
+
+                part.Eligible = !attached && IsLayerable(participant.Fragment, isRoot: true) && AreaOf(part) <= MaxMemberArea;
+                if (!byBox.TryAdd(box, part)) continue;
+                _parts.Add(part);
             }
+
+            FindCandidates(root, byBox);
+
+            // A member as large as the page is worth repainting each frame only when what is animated in it is a good part of it.
+            foreach (var part in _parts)
+            {
+                if (part.Animated.Count == 0) continue;
+                _roots.Add(part);
+
+                var animatedArea = 0.0;
+                foreach (var candidate in part.Animated) animatedArea += candidate.Extent.Width * candidate.Extent.Height;
+                if (AreaOf(part) > MaxMemberArea && AreaOf(part) > animatedArea * MaxAreaOverAnimated) part.Eligible = false;
+            }
+
+            CollectInk(root, byBox);
         }
 
-        private void FindCandidates(BoxFragment fragment)
+        private int _stackingSignature;
+
+        private int StackingSignature()
+        {
+            var hash = new HashCode();
+            foreach (var state in _states)
+            {
+                if (state.Compositor) hash.Add(DomUtils.IsStackingContextBox(state.Box));
+            }
+
+            return hash.ToHashCode();
+        }
+
+        private static double AreaOf(Part part) => part.Extent.Width * part.Extent.Height;
+
+        // Finds each animated box and what it is drawn with: the outermost stacking context it is in (or itself), which is a participant of the root.
+        private void FindCandidates(BoxFragment fragment, Dictionary<CssBox, Part> byBox)
         {
             foreach (var child in fragment.Children)
             {
@@ -135,45 +355,73 @@ namespace PeachBrackets.Html.Animation
 
                 if (_byBox.TryGetValue(box, out var state) && state.Compositor && box.Position.Value is not (PositionMode.Fixed or PositionMode.Sticky))
                 {
-                    // A box in a layer below the page's own content (a negative z-index) paints under the text and floats that are not positioned, which the
-                    // animated layer, drawn over the whole of the content, would put it over.
-                    if (LayerOf(child) < 0) continue;
+                    // The root of the group it is drawn with: the outermost stacking context at or above it. A box that is not one now (an opacity that is 1, no
+                    // transform) is painted with the page's block and inline content, not in step 8, and stays where it is.
+                    Part? rootPart = null;
+                    for (var current = box; current is not null && !current.IsRoot; current = current.ParentBox)
+                    {
+                        if (DomUtils.IsStackingContextBox(current) && byBox.TryGetValue(current, out var found)) rootPart = found;
+                    }
 
-                    var extent = FragmentPainter.SubtreeExtent(child) ?? child.WholeBoxRect;
-                    _candidates.Add(new OverlayCandidate(state, child, Grow(extent, FragmentPainter.SubtreeBleed(child) + 2)));
+                    if (rootPart is not null)
+                    {
+                        var extent = FragmentPainter.SubtreeExtent(child) ?? child.WholeBoxRect;
+                        rootPart.Animated.Add(new Candidate { State = state, Fragment = child, Extent = Grow(extent, FragmentPainter.SubtreeBleed(child) + 2) });
+                    }
+
                     continue;
                 }
 
-                // Nothing under a box that composites, clips or reorders what is in it can be drawn on its own.
-                if (!IsPlain(box)) continue;
-                FindCandidates(child);
+                FindCandidates(child, byBox);
             }
         }
 
-        private static bool IsPlain(CssBox box) =>
-            !DomUtils.ClipsItsOverflow(box) && (box.IsRoot || !DomUtils.IsStackingContextBox(box));
-
-        private bool CollidesWithOthers(OverlayCandidate candidate)
+        // Whether a subtree can be painted away from the page and composited over it: nothing in it blends with, or reads, what is behind the group, and
+        // nothing in it is held by the viewport (the attached layer draws those, and the content layer would leave them out a second time).
+        private static bool IsLayerable(BoxFragment fragment, bool isRoot)
         {
-            var box = candidate.Fragment.Box;
-            var mine = CurrentBounds(box, candidate.Extent, candidate.Fragment.WholeBoxRect.X, candidate.Fragment.WholeBoxRect.Y);
-            var layer = LayerOf(candidate.Fragment);
+            var box = fragment.Box;
+            if (box.ActualMixBlendMode != BlendMode.Normal) return false;
+            if (box.ActualBackdropFilterFunctions.Count > 0) return false;
+            if (!isRoot && box.Position.Value is PositionMode.Fixed or PositionMode.Sticky) return false;
 
-            foreach (var other in _others)
+            foreach (var child in fragment.Children)
             {
-                if (ReferenceEquals(other.Box, box)) continue;
-
-                // What is painted before the box (a lower layer) is under it either way. A box the viewport holds is drawn over the animated layer whatever its z-index.
-                if (!other.Attached && other.Z < layer) continue;
-
-                var theirs = CurrentBounds(other.Box, other.Extent, other.OriginX, other.OriginY);
-                if (other.Attached && _container.View.DisplacementOf(other.Box) is var (dx, dy) && (dx != 0 || dy != 0))
-                    theirs = new Rect(theirs.X + dx, theirs.Y + dy, theirs.Width, theirs.Height);
-
-                if (mine.Left < theirs.Right && theirs.Left < mine.Right && mine.Top < theirs.Bottom && theirs.Top < mine.Bottom) return true;
+                if (!IsLayerable(child, isRoot: false)) return false;
             }
 
-            return false;
+            return true;
+        }
+
+        // The content a negative z-index box would be under: what is not positioned, in the root's own context, that paints something.
+        private void CollectInk(BoxFragment fragment, Dictionary<CssBox, Part> byBox)
+        {
+            foreach (var child in fragment.Children)
+            {
+                var box = child.Box;
+                if (byBox.ContainsKey(box)) continue;
+
+                if (HasInk(child))
+                {
+                    var extent = child.WholeBoxRect;
+                    foreach (var line in child.Lines) extent = Union(extent, line.Rect);
+                    foreach (var word in child.Words) extent = Union(extent, word.Rect);
+                    _ink.Add(new Ink(Grow(extent, FragmentPainter.SubtreeBleed(child) + 2)));
+                }
+
+                CollectInk(child, byBox);
+            }
+        }
+
+        private static bool HasInk(BoxFragment fragment)
+        {
+            var box = fragment.Box;
+            return fragment.Words.Count > 0
+                || box.HasOwnBackground
+                || box.ActualBorderLeftWidth > 0 || box.ActualBorderTopWidth > 0 || box.ActualBorderRightWidth > 0 || box.ActualBorderBottomWidth > 0
+                || box.ActualOutlineWidth > 0
+                || FragmentPainter.ShadowBleed(box) > 0
+                || MonolithicContent.IsReplaced(box);
         }
 
         // Where the box covers now: the extent of its subtree under its current matrix, which pivots at the box's own top-left.
@@ -201,12 +449,30 @@ namespace PeachBrackets.Html.Animation
                 if (was != now) AddStateRects(state, rects);
             }
 
+            AddStaticFlipRects(before, after, rects);
+
             foreach (var (page, list) in rects)
             {
                 foreach (var rect in Merge(list)) result.Add(new DirtyRegion(page, rect));
             }
 
             return result;
+        }
+
+        // A member that is not an animated box (an ancestor group, a companion) that changed layers: repainted where it was last known to be.
+        private void AddStaticFlipRects(IReadOnlySet<CssBox>? before, IReadOnlySet<CssBox>? after, Dictionary<int, List<Rect>> perPage)
+        {
+            foreach (var (box, rect) in _knownStatic)
+            {
+                if (_byBox.ContainsKey(box)) continue;
+
+                var was = before?.Contains(box) == true;
+                var now = after?.Contains(box) == true;
+                if (was == now) continue;
+
+                if (!perPage.TryGetValue(0, out var list)) perPage[0] = list = [];
+                list.Add(rect);
+            }
         }
 
         // Where a box covers on each page it is on, as it is now.

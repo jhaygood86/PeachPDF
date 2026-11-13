@@ -999,6 +999,14 @@ namespace PeachBrackets.Html.Animation
                 state.LastHasTransform = afterHas;
             }
 
+            if (overlayBefore is not null || overlayNow is not null)
+            {
+                var before = perPage.Count;
+                AddStaticFlipRects(overlayBefore, overlayNow, perPage);
+                foreach (var (box, _) in _knownStatic)
+                    overlayChanged |= overlayBefore?.Contains(box) != overlayNow?.Contains(box) && !_byBox.ContainsKey(box);
+            }
+
             foreach (var (page, rects) in perPage)
             {
                 foreach (var rect in Merge(rects))
