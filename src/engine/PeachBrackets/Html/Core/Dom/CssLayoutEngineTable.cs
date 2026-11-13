@@ -247,6 +247,7 @@ namespace PeachBrackets.Html.Dom
         private double[]? _columnWidths;
 
         private double[]? _columnMinWidths;
+
         // Which columns a cell or <col> gave a width of their own, as CalculateColumnWidths left them: the rest are the ones that give width back first.
         private bool[]? _columnWidthDeclared;
 
@@ -3032,7 +3033,7 @@ namespace PeachBrackets.Html.Dom
             // the table itself has no explicit height (GetAvailableTableWidth never set _widthSpecified)
             // and nothing up the containing-block chain is height-definite, there is nothing to shrink
             // toward.
-            if (_isVertical && !_widthSpecified && !CssLayoutEngine.IsHeightDefinite(_tableBox.ContainingBlock))
+            if (HasNoDefiniteExtentToShrinkToward)
                 return;
 
             var curCol = 0;
@@ -3184,12 +3185,19 @@ namespace PeachBrackets.Html.Dom
         }
 
         /// <summary>
+        /// Whether a vertical table has no definite height to fit its columns to (see <see cref="ShrinkColumnsToFitAvailableWidth"/>'s remarks), in which
+        /// case <see cref="GetAvailableTableWidth"/> is only a placeholder and nothing may be squeezed toward it.
+        /// </summary>
+        private bool HasNoDefiniteExtentToShrinkToward =>
+            _isVertical && !_widthSpecified && !CssLayoutEngine.IsHeightDefinite(_tableBox.ContainingBlock);
+
+        /// <summary>
         /// Takes what the table is wider than it may be from the columns no cell or <c>&lt;col&gt;</c> gave a width, in proportion to how much each has
         /// above its own minimum, so a column that asked for a share (<c>width: 20%</c>) keeps it while the unsized ones absorb the squeeze.
         /// </summary>
         private void TakeExcessFromUndeclaredColumns()
         {
-            if (_columnWidthDeclared is not { } declared || declared.Length != _columnWidths!.Length) return;
+            if (_columnWidthDeclared is not { } declared || declared.Length != _columnWidths!.Length || HasNoDefiniteExtentToShrinkToward) return;
 
             var excess = GetWidthSumExcludingCollapsedColumnWidths() - GetAvailableTableWidth();
             if (!(excess > 0)) return;
