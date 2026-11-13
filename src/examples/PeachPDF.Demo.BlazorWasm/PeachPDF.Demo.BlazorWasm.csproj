@@ -2,13 +2,13 @@
 
   <!--
     The in-browser demo: PeachPDF renders HTML/MHTML/ZIP uploads to PDF entirely client-side, with no
-    server round-trip. Single-TFM net10.0, overriding the net10.0 default from
+    server round-trip. Single-TFM net11.0, overriding the multi-target default from
     src/Directory.Build.props (same pattern as PeachPDF.Cli.csproj) - a Blazor WebAssembly app targets one
     framework at a time.
   -->
   <PropertyGroup>
     <TargetFrameworks></TargetFrameworks>
-    <TargetFramework>net10.0</TargetFramework>
+    <TargetFramework>net11.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <IsPackable>false</IsPackable>
@@ -21,6 +21,12 @@
       cost far more than it is worth here. It also drops that database from the payload.
     -->
     <InvariantGlobalization>true</InvariantGlobalization>
+    <!--
+      BL0016 (net11 analyzer) asks for a try/catch around JS interop because a Blazor Server circuit can drop
+      mid-call. This app runs in the browser itself: there is no circuit to lose, so the interop cannot fail
+      that way.
+    -->
+    <NoWarn>$(NoWarn);BL0016</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
