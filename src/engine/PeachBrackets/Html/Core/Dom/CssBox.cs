@@ -7934,8 +7934,14 @@ namespace PeachBrackets.Html.Dom
                     // and the same child at `bottom: 0; right: 0` agreed with Chrome before and
                     // after, as does every offset once the ancestor's padding is zero.
                     var inlineContainingBlock = DomUtils.InlineContainingBlockOf(nearestPositionedAncestor);
-                    var containingBlockOrigin = nearestPositionedAncestor.FirstColumnFragmentOrigin
-                                                ?? nearestPositionedAncestor.Location;
+                    // With no positioned ancestor the containing block is the initial containing block (CSS 2.1 section 10.1): the page area, whose
+                    // corner is where the container's margins end - not the root box, whose top also carries whatever margin its first descendant
+                    // collapsed through it (the body's 8px by default), which made `top: 220px` land at 228.
+                    var containingBlockOrigin = nearestPositionedAncestor.EffectiveParentBox is null
+                                                && !DomUtils.FormsAbsoluteContainingBlock(nearestPositionedAncestor)
+                                                && child.HtmlContainer is { } initialContainer
+                        ? new PaintPoint(initialContainer.MarginLeft, initialContainer.MarginTop)
+                        : nearestPositionedAncestor.FirstColumnFragmentOrigin ?? nearestPositionedAncestor.Location;
                     var containingBlockLeft = inlineContainingBlock?.Left
                                               ?? containingBlockOrigin.X + nearestPositionedAncestor.ActualBorderLeftWidth;
                     var containingBlockTop = inlineContainingBlock?.Top
