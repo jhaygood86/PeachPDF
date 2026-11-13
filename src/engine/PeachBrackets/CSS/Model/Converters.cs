@@ -666,9 +666,10 @@ namespace PeachBrackets.Css
             Construct(() => new FunctionValueConverter(FunctionNames.CalcSize, Any));
 
         // width/height and their min/max: a length, a percentage, auto/none, stretch or calc-size(). (flex-basis keeps the narrower converters above.)
-        public static readonly IValueConverter AutoSizeConverter = AutoLengthOrPercentOrStretchConverter.Or(CalcSizeConverter);
-        public static readonly IValueConverter OptionalSizeConverter = OptionalLengthOrPercentOrStretchConverter.Or(CalcSizeConverter);
-        public static readonly IValueConverter SizeConverter = LengthOrPercentOrStretchConverter.Or(CalcSizeConverter);
+        // CSS Sizing 3: these take <length-percentage [0,∞]>, so a negative value is invalid.
+        public static readonly IValueConverter AutoSizeConverter = NonNegativeLengthOrPercentConverter.OrAuto().OrStretch().Or(CalcSizeConverter);
+        public static readonly IValueConverter OptionalSizeConverter = NonNegativeLengthOrPercentConverter.OrNone().OrStretch().Or(CalcSizeConverter);
+        public static readonly IValueConverter SizeConverter = NonNegativeLengthOrPercentConverter.OrStretch().Or(CalcSizeConverter);
         public static readonly IValueConverter LengthOrPercentOrNormalConverter = LengthOrPercentConverter.Or(Keywords.Normal);
         public static readonly IValueConverter OptionalPercentOrFractionConverter = PercentOrFractionConverter.OrDefault(1f);
         public static readonly IValueConverter OptionalPercentOrNumberConverter =

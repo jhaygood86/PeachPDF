@@ -63,5 +63,39 @@ namespace PeachBrackets.Engine.Tests.CSS
             Assert.Equal(6, b.ActualPaddingTop, 3);
             Assert.Equal(2, b.ActualPaddingLeft, 3);
         }
+
+        [Theory]
+        [InlineData("width: -5pt", 100)]          // dropped: the earlier valid width stays
+        [InlineData("width: calc(50pt - 200pt)", 0)] // a calc() clamps to the range instead
+        [InlineData("min-width: -5pt", 100)]
+        public async Task ANegativeSize_IsInvalid_ButANegativeCalcClamps(string declaration, double expectedWidth)
+        {
+            var html = LayoutHarness.Wrap($"<style>#b {{ width: 100pt; {declaration} }}</style><div id='b'>x</div>");
+
+            var (root, _) = await LayoutHarness.LayoutAsync(html);
+
+            Assert.Equal(expectedWidth, LayoutHarness.FindById(root, "b")!.ActualWidth, 2);
+        }
+
+        [Fact]
+        public async Task ANegativeMaxHeight_IsDropped_SoTheDeclaredHeightApplies()
+        {
+            var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap("<style>#b { height: 72pt; max-height: -1pt }</style><div id='b'>x</div>"));
+
+            Assert.Equal(72, LayoutHarness.FindById(root, "b")!.ActualHeight, 2);
+        }
+
+        [Theory]
+        [InlineData("border-top: 6pt solid black", 6)]
+        [InlineData("border-top: 6pt solid black; border-top-width: 4pt", 4)]
+        // The invalid declaration is dropped. (It used to be folded to its absolute value, 4pt; it is the initial `medium`, 2pt, here: whether it should keep
+        // the 6pt before it is not what this pins.)
+        [InlineData("border-top-style: solid; border-top-width: -4pt", 2)]
+        public async Task ANegativeBorderWidth_IsInvalid_AndIsNotFoldedToItsAbsoluteValue(string declarations, double expected)
+        {
+            var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap($"<style>#b {{ {declarations} }}</style><div id='b'>x</div>"));
+
+            Assert.Equal(expected, LayoutHarness.FindById(root, "b")!.ActualBorderTopWidth, 2);
+        }
     }
 }

@@ -172,6 +172,20 @@ namespace PeachBrackets.Html.Parse
             return result;
         }
 
+        /// <summary>
+        /// Whether <paramref name="value"/> is a length or percentage that is not negative, as the <c>[0,∞]</c> properties (<c>width</c>, <c>height</c>, their
+        /// min/max, border widths) take it: a negative value is invalid and the declaration is dropped. A <c>calc()</c> is accepted; it clamps when computed.
+        /// </summary>
+        public static bool IsValidNonNegativeLength(string value)
+        {
+            if (string.IsNullOrEmpty(value)) return false;
+            if (IsCalcFunction(value) || CalcSizeValue.IsCalcSize(value)) return true;
+
+            using var pooledTokens = GetCssTokensPooled(value);
+            List<Token> tokens = pooledTokens;
+            return tokens.ToNonNegativeDistance() != null;
+        }
+
         private static bool IsValidLengthCore(string value)
         {
             if (IsCalcFunction(value) || CalcSizeValue.IsCalcSize(value)) return true;
