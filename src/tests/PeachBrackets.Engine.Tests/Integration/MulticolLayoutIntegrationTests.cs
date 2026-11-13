@@ -338,6 +338,22 @@ namespace PeachBrackets.Engine.Tests.Integration
         }
 
         [Fact]
+        public async Task BlockEndPaddingAndBorder_SitBelowTheColumns()
+        {
+            // Four 20pt items in two columns: the columns are 40pt tall, and the box's own padding and border follow them. Before, the
+            // box ended where the columns did and its bottom border was painted over the content.
+            var html = Wrap(@"
+                <div id='mc' style='columns:2; column-gap:0; width:200pt; padding-top:3pt; padding-bottom:7pt; border-top:2pt solid black; border-bottom:5pt solid black'>
+                    <div style='height:20pt'></div><div style='height:20pt'></div>
+                    <div style='height:20pt'></div><div style='height:20pt'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html, pageHeight: 1000);
+            var mc = FindById(root, "mc")!;
+
+            Assert.Equal(2 + 3 + 40 + 7 + 5, mc.ActualBottom - mc.Location.Y, 0.5);
+        }
+
+        [Fact]
         public async Task ColumnRule_ActuallyPainted_DrawsALine()
         {
             // Regression coverage per this repo's painting-test convention: a passing layout-level
