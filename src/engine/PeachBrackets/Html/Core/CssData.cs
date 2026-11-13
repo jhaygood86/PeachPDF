@@ -963,8 +963,24 @@ namespace PeachBrackets.Html
                     ? MatchesAsPseudoSubject(indexed.Rule.Selector, (CssBox)node, pseudoName)
                     : DoesSelectorMatch(indexed.Rule.Selector, node);
                 if (!isMatch) return;
-                seen ??= [];
-                if (!seen.Add(indexed.Rule)) return;
+                // A short match list is checked by a scan; the set is built only once it grows past that (most boxes match a handful of rules).
+                if (seen is null)
+                {
+                    foreach (var earlier in matched)
+                        if (ReferenceEquals(earlier.Rule, indexed.Rule)) return;
+
+                    if (matched.Count >= 16)
+                    {
+                        seen = new HashSet<IStyleRule>(matched.Count * 2);
+                        foreach (var earlier in matched) seen.Add(earlier.Rule);
+                        seen.Add(indexed.Rule);
+                    }
+                }
+                else if (!seen.Add(indexed.Rule))
+                {
+                    return;
+                }
+
                 matched.Add(indexed);
             }
 

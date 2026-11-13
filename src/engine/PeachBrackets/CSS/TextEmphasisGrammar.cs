@@ -182,7 +182,13 @@ namespace PeachBrackets.Css
         /// </summary>
         internal static DecorationSkips ParseSkip(string text)
         {
-            var words = (text ?? "").Split(' ', System.StringSplitOptions.RemoveEmptyEntries);
+            // The initial value ("objects") and "none" are by far the commonest; answer them without splitting.
+            if (text is null || text.Equals("objects", System.StringComparison.OrdinalIgnoreCase) || text.Equals(Keywords.Auto, System.StringComparison.OrdinalIgnoreCase))
+                return DecorationSkips.Objects;
+            if (text.Equals("none", System.StringComparison.OrdinalIgnoreCase))
+                return DecorationSkips.None;
+
+            var words = text.Split(' ', System.StringSplitOptions.RemoveEmptyEntries);
             if (words.Length == 0 || (words.Length == 1 && words[0].Equals(Keywords.Auto, System.StringComparison.OrdinalIgnoreCase)))
                 return DecorationSkips.Objects;
 
