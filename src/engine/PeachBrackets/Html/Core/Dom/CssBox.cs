@@ -1729,6 +1729,9 @@ namespace PeachBrackets.Html.Dom
         /// </summary>
         internal double? StaticRightEdge { get => _rare?.StaticRightEdge; set { if (_rare is null) { if (value is null) return; _rare = new BoxRareState(); } _rare.StaticRightEdge = value; } }
 
+        /// <summary>The grid area an absolutely positioned child of a grid container is placed against, in the same coordinates as <see cref="Location"/>: the area its <c>grid-column</c>/<c>grid-row</c> lines name, where a line that does not exist is the padding edge (css-grid-1 section 9). Null when the child has no such area.</summary>
+        internal Rect? GridContainingArea { get => _rare?.GridContainingArea; set { if (_rare is null) { if (value is null) return; _rare = new BoxRareState(); } _rare.GridContainingArea = value; } }
+
         internal (double X, double Y)? InlineStaticPosition { get => _rare is null ? default((double X, double Y)?) : _rare.InlineStaticPosition; set { if (_rare is null) { if (EqualityComparer<(double X, double Y)?>.Default.Equals(value, default((double X, double Y)?))) return; _rare = new BoxRareState(); } _rare.InlineStaticPosition = value; } }
 
         /// <summary>
@@ -7947,10 +7950,19 @@ namespace PeachBrackets.Html.Dom
                     var containingBlockTop = inlineContainingBlock?.Top
                                              ?? containingBlockOrigin.Y + nearestPositionedAncestor.ActualBorderTopWidth;
 
-                    var left = containingBlockLeft + child.ActualMarginLeft +
-                               ResolveOffsetOrZero(child.Left, AbsoluteContainingBlockWidth(nearestPositionedAncestor), child);
+                    // A child of a grid container that is its containing block is placed against the grid area its grid-column/grid-row lines name
+                    // (css-grid-1 section 9), which the grid layout stated; its offsets and percentages resolve against that area, not the padding box.
+                    var gridArea = ReferenceEquals(nearestPositionedAncestor, child.ParentBox) ? child.GridContainingArea : null;
+                    if (gridArea is { } area)
+                    {
+                        containingBlockLeft = area.X;
+                        containingBlockTop = area.Y;
+                    }
 
-                    child._placedPercentageInsetTop = ResolveOffsetOrZero(child.Top, AbsoluteContainingBlockHeight(nearestPositionedAncestor), child);
+                    var left = containingBlockLeft + child.ActualMarginLeft +
+                               ResolveOffsetOrZero(child.Left, gridArea?.Width ?? AbsoluteContainingBlockWidth(nearestPositionedAncestor), child);
+
+                    child._placedPercentageInsetTop = ResolveOffsetOrZero(child.Top, gridArea?.Height ?? AbsoluteContainingBlockHeight(nearestPositionedAncestor), child);
                     var top = containingBlockTop + child.ActualMarginTop + child._placedPercentageInsetTop;
 
                     // With both offsets on an axis `auto` the box sits at its static position, where it would be in flow (CSS 2.1 sections 10.3.7
@@ -7961,6 +7973,14 @@ namespace PeachBrackets.Html.Dom
                         if (staticPosition.Left is { } staticLeft) left = staticLeft + child.ActualMarginLeft;
                         if (staticPosition.Top is { } staticTop) top = staticTop + child.ActualMarginTop;
                         child.StaticRightEdge = staticPosition.RightEdge;
+                    }
+
+                    // In a grid the static position rectangle is the grid area (css-grid-1 section 9: as if the box were the only item in it).
+                    if (gridArea is { } staticArea)
+                    {
+                        if (!child.Left.Value.IsValue) left = staticArea.X + child.ActualMarginLeft;
+                        if (!child.Top.Value.IsValue) top = staticArea.Y + child.ActualMarginTop;
+                        child.StaticRightEdge = null;
                     }
 
                     child.Location = new PaintPoint(left, top);
@@ -8292,8 +8312,10 @@ namespace PeachBrackets.Html.Dom
                     var nearestPositionedAncestor = DomUtils.GetNearestPositionedAncestor(this);
                     var inlineContainingBlock = DomUtils.InlineContainingBlockOf(nearestPositionedAncestor);
 
-                    var right = CssValueParser.ParseLength(Right.Value.Value!.Value, AbsoluteContainingBlockWidth(nearestPositionedAncestor), this);
-                    var actualRight = (inlineContainingBlock?.Right
+                    var rightArea = ReferenceEquals(nearestPositionedAncestor, ParentBox) ? GridContainingArea : null;
+                    var right = CssValueParser.ParseLength(Right.Value.Value!.Value, rightArea?.Width ?? AbsoluteContainingBlockWidth(nearestPositionedAncestor), this);
+                    var actualRight = (rightArea?.Right
+                                       ?? inlineContainingBlock?.Right
                                        ?? nearestPositionedAncestor.ClientRight + nearestPositionedAncestor.ActualPaddingRight) - right;
 
                     var delta = actualRight - ActualRight;

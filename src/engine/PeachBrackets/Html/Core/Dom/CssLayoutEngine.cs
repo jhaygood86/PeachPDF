@@ -3574,11 +3574,15 @@ namespace PeachBrackets.Html.Dom
         /// <c>CssBox</c>'s <c>left</c>/<c>right</c> placement resolves against.
         /// </summary>
         private static double? AbsolutePaddingBoxWidth(CssBox box) =>
-            AbsoluteContainingBlockOf(box) is { } ancestor ? CssBox.AbsoluteContainingBlockWidth(ancestor) : null;
+            AbsoluteContainingBlockOf(box) is { } ancestor ? GridAreaOf(box, ancestor)?.Width ?? CssBox.AbsoluteContainingBlockWidth(ancestor) : null;
+
+        /// <summary>The grid area an absolutely positioned child of a grid container is placed against, when that container is its containing block (css-grid-1 section 9).</summary>
+        private static Rect? GridAreaOf(CssBox box, CssBox containingBlock) =>
+            ReferenceEquals(containingBlock, box.ParentBox) ? box.GridContainingArea : null;
 
         /// <summary>The height counterpart of <see cref="AbsolutePaddingBoxWidth"/>.</summary>
         private static double? AbsolutePaddingBoxHeight(CssBox box) =>
-            AbsoluteContainingBlockOf(box) is { } ancestor ? CssBox.AbsoluteContainingBlockHeight(ancestor) : null;
+            AbsoluteContainingBlockOf(box) is { } ancestor ? GridAreaOf(box, ancestor)?.Height ?? CssBox.AbsoluteContainingBlockHeight(ancestor) : null;
 
         private static CssBox? AbsoluteContainingBlockOf(CssBox box)
         {
