@@ -72,15 +72,7 @@ internal sealed class TransparencyProbe : IDisposable
         finally
         {
             s_current = outer;
-            try
-            {
-                _xGraphics.Restore(state);
-            }
-            catch (Exception)
-            {
-                // The scratch page is unusable; the next probe starts a fresh one.
-                _graphics = null;
-            }
+            _xGraphics.Restore(state);
         }
 
         return Hit;
