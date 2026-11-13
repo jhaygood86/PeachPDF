@@ -123,6 +123,18 @@ namespace PeachBrackets.Html.Paint
             return geometry with { DecorationRect = rect, ClipRect = rect };
         }
 
+        /// <summary>
+        /// The top of a run of text moved so that its baseline (<paramref name="top"/> plus <paramref name="ascent"/>) lies on a whole CSS pixel, or
+        /// <paramref name="top"/> itself under a transform, where the position on the device grid is not the position in layout space.
+        /// </summary>
+        internal static double SnapBaseline(Canvas g, double top, double ascent)
+        {
+            if (!g.CurrentTransform.IsIdentity) return top;
+
+            var pixel = Length.PointsPerPx * g.PixelsPerPoint;
+            return pixel <= 0 ? top : SnapEdge(top + ascent, pixel) - ascent;
+        }
+
         // Rounds half up, with a bias far above float noise (~1e-13) and far below anything layout can mean:
         // two edges that are the same line computed two ways (left + width, a running sum) sit on the same
         // side of a half-pixel boundary instead of splitting into a 1px gap or a doubled border.

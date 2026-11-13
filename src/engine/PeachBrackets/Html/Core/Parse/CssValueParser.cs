@@ -888,7 +888,7 @@ namespace PeachBrackets.Html.Parse
                 Keywords.Thin => 1f,
                 Keywords.Medium => 2f,
                 Keywords.Thick => 4f,
-                _ => SnapBorderWidth(Math.Abs(ParseLength(borderValue, 1, b)), b.HtmlContainer?.SnapBorderWidthsToCssPixels == true)
+                _ => SnapBorderWidth(Math.Abs(ParseLength(borderValue, 1, b)), b.HtmlContainer?.SnapBorderWidthsToCssPixels == true, b.HtmlContainer?.RenderContext?.LayoutUnitsPerPoint ?? 1.0)
             };
         }
 
@@ -896,12 +896,16 @@ namespace PeachBrackets.Html.Parse
         /// CSS Values 4 "snap a length as a border width", on the CSS pixel: a width above 0 and below 1px
         /// becomes 1px, 1px or more is rounded down to a whole number of pixels. A no-op when <paramref name="enabled"/> is false.
         /// </summary>
-        internal static double SnapBorderWidth(double points, bool enabled)
+        /// <param name="units">the width in layout units</param>
+        /// <param name="enabled">whether snapping is on</param>
+        /// <param name="unitsPerPoint">the layout units per point of the render context: a CSS pixel is <see cref="Length.PointsPerPx"/> of them times this</param>
+        internal static double SnapBorderWidth(double units, bool enabled, double unitsPerPoint = 1.0)
         {
-            if (!enabled || points <= 0) return points;
-            var px = points / Length.PointsPerPx;
+            if (!enabled || units <= 0) return units;
+            var unitsPerPx = Length.PointsPerPx * unitsPerPoint;
+            var px = units / unitsPerPx;
             px = px < 1 ? 1 : Math.Floor(px + 1e-9);
-            return px * Length.PointsPerPx;
+            return px * unitsPerPx;
         }
 
         /// <returns>

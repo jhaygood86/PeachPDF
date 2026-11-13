@@ -120,6 +120,9 @@ namespace PeachBrackets.Css
 
             public TokenValue ExtractFor(string name)
             {
+                // An unlabeled value (border-image-width / -outset) is the whole of its one longhand, which the caller has already selected by name.
+                if (_labels.Length == 0) return Original;
+
                 if (name.Is(_labels[0])) return _values[0].Original;
 
                 if (name.Is(_labels[1])) return _values[1].Original;

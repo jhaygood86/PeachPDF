@@ -352,7 +352,12 @@ namespace PeachBrackets.Html.Paint
             {
                 if (precededBySeparator)
                     PaintWordSeparator(g, styleSource, word, rect, baselineShift, SeparatorPlacement.Inline, separatorEdge);
-                var wordPoint = new PaintPoint(rect.X, rect.Y + baselineAdjust);
+                var wordTop = rect.Y + baselineAdjust;
+                // A browser puts a line of text on a whole device pixel vertically, so the same text reads alike wherever the layout above it left it
+                // (a flex item centered at a half pixel, a box after a fractional line height). Opt-in with the rest of the pixel snapping.
+                if (box.HtmlContainer is { SnapBoxDecorationsToCssPixels: true })
+                    wordTop = DecorationPixelSnapping.SnapBaseline(g, wordTop, font.Ascent);
+                var wordPoint = new PaintPoint(rect.X, wordTop);
                 PaintTextShadows(g, effectsStyle ?? styleSource, font, text, wordPoint, textSize, wordFeatures, logicalText);
                 g.DrawString(text, font, colorOverride ?? styleSource.ActualTextFillColor, wordPoint, textSize, styleSource.ActualLetterSpacing, styleSource.ActualFontPalette, wordFeatures, logicalText);
                 PaintTextStroke(g, effectsStyle ?? styleSource, font, text, wordPoint, wordFeatures);

@@ -1,4 +1,3 @@
-using System.Numerics;
 using System.Text.RegularExpressions;
 using PeachBrackets;
 using PeachDrawing;
@@ -8,7 +7,7 @@ namespace PeachBrackets.WptRunner;
 
 /// <summary>
 /// The render seam: one WPT file in, the pixels of an 800x600 screen viewport out, through PeachBrackets' public API only.
-/// One CSS pixel is one device pixel (the canvas is scaled by 4/3 because the layout unit is the point).
+/// One CSS pixel is one device pixel (layout runs in CSS pixels).
 /// </summary>
 internal sealed partial class WptRenderer(string wptRoot) : IReftestRenderer
 {
@@ -31,7 +30,7 @@ internal sealed partial class WptRenderer(string wptRoot) : IReftestRenderer
     {
         var source = Prepare(wptPath, await File.ReadAllTextAsync(FullPath(wptPath)));
 
-        var context = new RasterRenderContext { ResourceLoader = LoadAsync };
+        var context = new RasterRenderContext { ResourceLoader = LoadAsync, PixelsPerPoint = 96.0 / 72.0 };
         var options = new HtmlDocumentOptions
         {
             MediaType = MediaType.Screen,
@@ -52,11 +51,11 @@ internal sealed partial class WptRenderer(string wptRoot) : IReftestRenderer
 
         // The layout unit is the point, so the canvas is scaled by 4/3 to make one CSS pixel one device pixel. (A surface declared as
         // 4/3 pixels per point instead was measured: it passes about a third fewer tests, with larger edge differences.)
+        // Layout runs in CSS pixels (PixelsPerPoint below), so the canvas shows one CSS pixel per device pixel with no transform in between,
+        // and the engine's snapping of boxes and borders to whole CSS pixels lands on whole device pixels, as a browser's does.
         using var canvas = context.CreateCanvas(ViewportWidth, ViewportHeight);
         canvas.DrawRectangle(canvas.GetSolidBrush(PaintColor.FromArgb(255, 255, 255, 255)), 0, 0, ViewportWidth, ViewportHeight);
-        canvas.PushTransform(Matrix3x2.CreateScale(4f / 3f));
         await document.PaintPageAsync(0, canvas);
-        canvas.PopTransform();
 
         var buffer = canvas.ToPixelBuffer();
         var pixels = new byte[buffer.Width * buffer.Height * 4];

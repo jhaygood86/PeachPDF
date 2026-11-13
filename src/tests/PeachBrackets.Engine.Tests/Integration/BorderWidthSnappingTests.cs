@@ -23,6 +23,19 @@ namespace PeachBrackets.Engine.Tests.Integration
             Assert.Equal(expectedPx * Px, CssValueParser.SnapBorderWidth(inputPx * Px, enabled: true), 6);
         }
 
+        [Theory]
+        [InlineData(5.0, 5.0)]
+        [InlineData(4.9, 4.0)]
+        [InlineData(0.4, 1.0)]
+        public void SnapBorderWidth_FollowsTheLayoutUnitsOfTheRenderContext(double inputPx, double expectedPx)
+        {
+            // A context that lays out in CSS pixels (96/72 layout units per point): a CSS pixel is one unit, not 0.75 of one. Snapping on the fixed
+            // 0.75 grid used to turn a 5px border into 4.5.
+            const double unitsPerPoint = 96.0 / 72.0;
+
+            Assert.Equal(expectedPx, CssValueParser.SnapBorderWidth(inputPx, enabled: true, unitsPerPoint), 6);
+        }
+
         [Fact]
         public void SnapBorderWidth_ZeroStaysZero_AndDisabledIsANoOp()
         {

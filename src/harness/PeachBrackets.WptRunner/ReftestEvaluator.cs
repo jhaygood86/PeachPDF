@@ -64,6 +64,9 @@ internal sealed class ReftestEvaluator(IReftestRenderer renderer, string dumpDir
         }
         catch (Exception e)
         {
+            if (Environment.GetEnvironmentVariable("PEACHBRACKETS_WPT_TRACE") == "1")
+                Console.Error.WriteLine($"{wptPath}: {e}");
+
             // Name the root cause, not the engine's wrapper: the wrapper's message alone says nothing about what to fix.
             var root = e;
             while (root.InnerException is { } inner)

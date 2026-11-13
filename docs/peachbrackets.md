@@ -130,7 +130,7 @@ downward. With the default of one unit per point, a canvas for a 400 x 300 point
 | `DefaultLanguage` | The language to assume when the document declares none; it drives hyphenation and language-dependent line breaking. |
 | `AnimationProgress` | Paint the document at a point in its animations, from 0 to 1, instead of its static look. |
 | `AnimationsEnabled` | Play the document's CSS animations, transitions and animated images over time; see [Animations and transitions](#animations-and-transitions). |
-| `SnapBoxDecorationsToCssPixels`, `SnapBorderWidthsToCssPixels` | Snap backgrounds, borders and border widths to whole CSS pixels, as a browser does. |
+| `SnapBoxDecorationsToCssPixels`, `SnapBorderWidthsToCssPixels` | Snap backgrounds, borders, border widths and the baseline of text to whole CSS pixels, as a browser does. On a canvas that lays the document out in CSS pixels (a `RasterRenderContext` with `PixelsPerPoint` of 96/72, as the WinUI view does), those land on whole device pixels. |
 | `CollectFormFields` | Collect form controls into `Annotations.FormFields`. |
 | `RecordTextRuns` | Let the document report where its text is (`TextRuns`), for selection, copy and find. |
 | `EnableIncrementalUpdates` | Allow `SetStyle` to restyle elements, and `ReplaceTextAsync` and its relatives to edit the text, of the laid-out document in place. |

@@ -51,8 +51,19 @@ public sealed class RasterRenderContext : RenderContext
     {
         _ = dpi;
         var surface = new RasterSurface(widthPx, heightPx, gridX: 0, gridY: 0, pixelsPerUnitX: 1, pixelsPerUnitY: 1);
-        return new RasterCanvas(this, surface, pixelsPerPoint: 1);
+        return new RasterCanvas(this, surface, pixelsPerPoint: PixelsPerPoint);
     }
+
+    /// <summary>
+    /// Layout units per point, as <see cref="RenderContext.LayoutUnitsPerPoint"/> reports it: <c>1</c> (the default) means a layout unit is a point, which
+    /// a canvas from <see cref="CreateCanvas"/> then draws as one device pixel. A document laid out against this context at <c>96.0 / 72.0</c> has CSS
+    /// pixels as its layout unit, so a canvas from <see cref="CreateCanvas"/> shows it at one CSS pixel per device pixel with no transform in between, and
+    /// the engine's snapping of boxes and borders to whole CSS pixels lands on whole device pixels. Set it before the document is loaded.
+    /// </summary>
+    public double PixelsPerPoint { get; set; } = 1.0;
+
+    /// <inheritdoc/>
+    public override double LayoutUnitsPerPoint => PixelsPerPoint;
 
     /// <inheritdoc/>
     public override string GetCssMediaType(IEnumerable<string> mediaTypesAvailable) => "screen";
