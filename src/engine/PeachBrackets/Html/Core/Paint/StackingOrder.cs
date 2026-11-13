@@ -52,7 +52,7 @@ namespace PeachBrackets.Html.Paint
             // what keeps this box's own overflow-clip scope (pushed/popped around the same children
             // loop in FragmentPainter) wrapped around them, and their own further plain descendants are
             // handled the same way, recursively, by their own subsequent paint call.
-            foreach (var childFragment in fragment.Children)
+            foreach (var childFragment in InPaintOrder(fragment))
             {
                 var childBox = childFragment.Box;
 
@@ -97,6 +97,31 @@ namespace PeachBrackets.Html.Paint
                 yield return participant;
             }
         }
+
+        /// <summary>
+        /// The children of <paramref name="fragment"/> in the order they paint: document order, except that the items of a flex or grid
+        /// container paint in order-modified document order (CSS Flexbox 1 §4.3, CSS Grid 1 §6.2). Only paint moves; the structure tree stays in
+        /// document order (CSS Flexbox 1 §5.4).
+        /// </summary>
+        private static IEnumerable<BoxFragment> InPaintOrder(BoxFragment fragment)
+        {
+            var box = fragment.Box;
+            if (box.DerivedStyle.ActualDisplay is not (Keywords.Flex or Keywords.InlineFlex or Keywords.Grid or Keywords.InlineGrid))
+                return fragment.Children;
+
+            var anyOrdered = false;
+            foreach (var child in fragment.Children)
+            {
+                if (OrderOf(child.Box) != 0) { anyOrdered = true; break; }
+            }
+
+            if (!anyOrdered) return fragment.Children;
+
+            // Stable: OrderBy keeps document order among equal values. A box that is not an item (an out-of-flow child) has order 0 like any other.
+            return fragment.Children.OrderBy(child => DomUtils.GeneratesFlexOrGridItem(child.Box) ? OrderOf(child.Box) : 0);
+        }
+
+        private static int OrderOf(CssBox box) => int.TryParse(box.Order, out var order) ? order : 0;
 
         // A box claims local Appendix-E ordering responsibility for its own PLAIN FLOAT descendants
         // (rather than deferring them to a more distant ancestor) if it is the root, a genuine stacking

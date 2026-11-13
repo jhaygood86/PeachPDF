@@ -170,6 +170,30 @@ namespace PeachBrackets.Engine.Tests.Integration
         const string TinyPngBase64 =
             "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
 
+        // CSS Flexbox 1 4.3 / CSS Grid 1 6.2: items paint in order-modified document order.
+        [Theory]
+        [InlineData("flex")]
+        [InlineData("grid")]
+        public async Task FlexAndGridItems_PaintInOrderModifiedOrder(string display)
+        {
+            var log = await RecordPaintCalls(
+                $"<div style='display:{display}'><span style='order:2'>Shop</span><span style='order:1'>Signup</span></div>", enableTagging: false);
+
+            var drawn = log.Where(e => e.Item1 == "DrawString").Select(e => e.Item2!).ToList();
+            Assert.True(drawn.IndexOf("Signup") >= 0 && drawn.IndexOf("Shop") >= 0);
+            Assert.True(drawn.IndexOf("Signup") < drawn.IndexOf("Shop"), string.Join(",", drawn));
+        }
+
+        [Fact]
+        public async Task FlexItems_WithEqualOrder_KeepDocumentOrder_AndNegativeOrderPaintsFirst()
+        {
+            var log = await RecordPaintCalls(
+                "<div style='display:flex'><span>A</span><span style='order:-1'>B</span><span>C</span></div>", enableTagging: false);
+
+            var drawn = log.Where(e => e.Item1 == "DrawString").Select(e => e.Item2!).ToList();
+            Assert.Equal(["B", "A", "C"], drawn);
+        }
+
         // ─── Helpers ─────────────────────────────────────────────────────────────
 
         static async Task<System.Collections.Generic.List<(string, string?)>> RecordPaintCalls(string bodyHtml, bool enableTagging)
