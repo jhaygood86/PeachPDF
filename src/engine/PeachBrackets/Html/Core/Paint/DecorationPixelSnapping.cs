@@ -125,6 +125,15 @@ namespace PeachBrackets.Html.Paint
             return geometry with { DecorationRect = rect, ClipRect = rect };
         }
 
+        /// <summary><paramref name="value"/> rounded to the nearest whole CSS pixel, as an edge of a box is; unchanged under a transform.</summary>
+        internal static double SnapCoordinate(Canvas g, double value)
+        {
+            if (!g.CurrentTransform.IsIdentity) return value;
+
+            var pixel = Length.PointsPerPx * g.PixelsPerPoint;
+            return pixel <= 0 ? value : SnapEdge(value, pixel);
+        }
+
         /// <summary>
         /// The top of a run of text moved so that its baseline (<paramref name="top"/> plus <paramref name="ascent"/>) lies on a whole CSS pixel, or
         /// <paramref name="top"/> itself under a transform, where the position on the device grid is not the position in layout space.

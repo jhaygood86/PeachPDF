@@ -92,6 +92,27 @@ public class PixelSnappingTests
     }
 
     [Fact]
+    public async Task AReplacedElement_SitsWhereABlockOfItsSizeWould_AtAHalfPixel()
+    {
+        // The paragraph above leaves the next box at a half pixel. A block rounds its top edge half up; the picture used to be floored, a row higher.
+        const string above = "<div style='height:10.5px'></div>";
+        using var block = await RenderAsync(above + "<div style='width:30px;height:30px;background:black'></div>", 60, 60);
+        using var picture = await RenderAsync(above + "<div style='height:30px'><svg width='30' height='30' style='display:block'><rect width='30' height='30'/></svg></div>", 60, 60);
+
+        Assert.Equal(FirstInkRow(block), FirstInkRow(picture));
+    }
+
+    private static int FirstInkRow(RasterCanvas canvas)
+    {
+        for (var y = 0; y < 60; y++)
+        {
+            if (TestDocument.HasInk(canvas, 0, y, 60, 1)) return y;
+        }
+
+        return -1;
+    }
+
+    [Fact]
     public async Task TheDefaultContext_StillLaysOutInPoints()
     {
         var context = await TestDocument.NewContextAsync();

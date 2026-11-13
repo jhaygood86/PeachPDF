@@ -34,6 +34,11 @@ through at the edge. The same is true for any host that scales the canvas instea
   225 -> 211 - because a few tests that passed under the transform-based painting (everything at 4/3 fractional positions, no snapping, text 1.33x)
   stopped passing; the other 14 rose, by ~1,100 tests in total. The lowering is deliberate, not a regression to hunt: those tests did not pass for
   the right reason.
+- **A replaced element's content rectangle rounds like a box edge.** `ReplacedFragmentPainter.ContentRect` floored the picture's X and Y to a whole
+  *layout unit* ("snapped to whole units" - a point under the old layout, a CSS pixel now), while the box beside it rounds half up, so a picture whose
+  position fell on a half pixel sat a row higher than a block of its size (38 css2-flow tests: the reference's `<img>` against the test's box).
+  With the pixel snapping on and no canvas transform it now uses the same rounding (`DecorationPixelSnapping.SnapCoordinate`); otherwise it floors as
+  before. css2-flow 1306 -> 1643, css2-positioning 243 -> 362, css2-floats 110 -> 160.
 ## Still wrong with PixelsPerPoint != 1 (found, not fixed here)
 Other `Length.PointsPerPx` uses ignore `LayoutUnitsPerPoint` (grep for it): `BackgroundImageDrawHandler.pxFactor`, `BorderImageDrawHandler`
 (`numberUnit`), `ReplacedContentRenderer`, `MarginBoxRenderer`, `FragmentEmitter` line ~2582, the sub/superscript shifts in `CssLayoutEngine`. The
