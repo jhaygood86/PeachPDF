@@ -26,7 +26,8 @@ namespace PeachBrackets.Html.Paint
             bool vertical = false)
         {
             var style = styleSource.TextEmphasisStyle;
-            if (string.IsNullOrEmpty(style) || g.InvisibleText || text.Length == 0)
+            // The initial value is the string "none", so test it before tokenizing: this runs once per painted word.
+            if (string.IsNullOrEmpty(style) || style.Equals("none", StringComparison.OrdinalIgnoreCase) || g.InvisibleText || text.Length == 0)
                 return;
 
             if (!TextEmphasisGrammar.TryParseStyle(style, out var mark) || mark.Glyph() is not { } glyph)

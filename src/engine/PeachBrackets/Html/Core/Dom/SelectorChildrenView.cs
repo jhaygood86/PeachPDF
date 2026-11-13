@@ -50,7 +50,17 @@ namespace PeachBrackets.Html.Dom
         /// <summary>The children a selector sees for the box whose own children are <paramref name="boxes"/>.</summary>
         internal static IReadOnlyList<ICssDomNode> For(List<CssBox> boxes)
         {
-            if (boxes.Count < SiblingIndex.MinChildren) return Build(boxes).Children(boxes);
+            if (boxes.Count < SiblingIndex.MinChildren)
+            {
+                // Nothing is kept for a narrow parent, so with no wrapper to flatten there is nothing to build either.
+                var anyWrapper = false;
+                foreach (var child in boxes)
+                {
+                    if (child.IsAnonymousWrapper) { anyWrapper = true; break; }
+                }
+
+                return anyWrapper ? Build(boxes).Children(boxes) : boxes;
+            }
 
             if (Cache.TryGetValue(boxes, out var view) && view.StillDescribes(boxes)) return view.Children(boxes);
 

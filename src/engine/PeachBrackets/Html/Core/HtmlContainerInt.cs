@@ -2141,6 +2141,7 @@ namespace PeachBrackets.Html
             // "actualTransformComputed" cache in DerivedStyle.ActualTransformMatrix). It reads the computed
             // value (HasTransform) now, but the flag is only consumed after layout, so it stays deferred.
             (HasFloatedBoxes, HasOutOfFlowBoxes, _) = ComputeFlowFlags(Root, includeStackingHoistCandidates: false);
+            if (HasFloatedBoxes) CssBox.MarkFloatFreeSubtrees(Root);
 
             // Depends on cascaded style only, and layout itself consults it, so it has to be settled before
             // the first pass rather than alongside the post-layout flags below.

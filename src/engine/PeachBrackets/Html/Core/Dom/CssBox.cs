@@ -152,6 +152,7 @@ namespace PeachBrackets.Html.Dom
                 _parentBox = parentBox;
                 _parentBox.MaterializeForeignText();
                 _parentBox.Boxes.Add(this);
+                _parentBox.NoteAttached(this);
             }
 
             // Computed once here rather than walked live from NameComparison/GetAttribute (both hot
@@ -222,6 +223,7 @@ namespace PeachBrackets.Html.Dom
                 //Add to new parent
                 _parentBox?.MaterializeForeignText();
                 _parentBox?.Boxes.Add(this);
+                _parentBox?.NoteAttached(this);
             }
         }
 
@@ -322,6 +324,43 @@ namespace PeachBrackets.Html.Dom
         // Where a child was last found in Boxes. Walks that ask for each child's neighbours in turn (the previous sibling of every row of
         // a long table) would otherwise search the list from the start for each, which is quadratic in the number of siblings.
         private int _childIndexHint;
+
+        /// <summary>
+        /// True when no box in this box's subtree (itself included) is floated, as of the last <see cref="MarkFloatFreeSubtrees"/> and every attach
+        /// since (<see cref="NoteAttached"/>). The float scans, which look through every earlier sibling's whole subtree for each line, skip such a
+        /// subtree: it can hold nothing they look for. False is "unknown", the state of any box made after the mark, so it is always safe to scan.
+        /// </summary>
+        internal bool FloatFree { get; private set; }
+
+        /// <summary>
+        /// Sets <see cref="FloatFree"/> through the tree below <paramref name="box"/>, and returns it for <paramref name="box"/>. Runs at the start of each
+        /// layout pass when the document has a float at all.
+        /// </summary>
+        internal static bool MarkFloatFreeSubtrees(CssBox box)
+        {
+            var free = !box.IsFloated;
+
+            foreach (var child in box.Boxes)
+            {
+                if (!MarkFloatFreeSubtrees(child)) free = false;
+            }
+
+            box.FloatFree = free;
+            return free;
+        }
+
+        /// <summary>
+        /// Takes away the <see cref="FloatFree"/> of every box above <paramref name="child"/>, which has just been put among its parent's children,
+        /// when it is or may hold a float. A child with nothing below it that is not floated cannot, so a new line box's anonymous wrapper costs nothing.
+        /// </summary>
+        private void NoteAttached(CssBox child)
+        {
+            if (!child.IsFloated && (child.FloatFree || child.Boxes.Count == 0)) return;
+
+            // A box that is its own parent (a malformed tree some tests build) ends the walk rather than spinning on it.
+            for (var box = this; box is not null; box = ReferenceEquals(box._parentBox, box) ? null : box._parentBox)
+                box.FloatFree = false;
+        }
 
         /// <summary>Set when table layout put a <see cref="CssSpacingBox"/> (a rowspan continuation marker) among this box's children.</summary>
         internal bool HoldsSpacingBox { get; set; }
@@ -1889,7 +1928,10 @@ namespace PeachBrackets.Html.Dom
         public void SetAllBoxes(CssBox fromBox)
         {
             foreach (var childBox in fromBox.Boxes)
+            {
                 childBox._parentBox = this;
+                NoteAttached(childBox);
+            }
 
             Boxes.AddRange(fromBox.Boxes);
             fromBox.Boxes.Clear();
