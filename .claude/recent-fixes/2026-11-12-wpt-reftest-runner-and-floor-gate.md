@@ -20,8 +20,7 @@ set with a `blank` guard, floors that only rise, fuzzy/chain rules) against the 
 
 ## Numbers (Windows, first run, WPT ffc4686d)
 css2-flow 871/2415 pass, css-flexbox 324/1398, css-grid 231/2482, css-transforms 427/905; whole run ~45 s, identical at `--parallel 3` and the
-default (deterministic). Spot-checked rasterized pairs: bidi-001 (a split inline box's border is drawn wrong, a real engine bug) and
-margin-bottom-applies-to-014 (inline-table width) fail for real; margin-009 looks identical but differs by AA fringes (max 28) - that is the
+default (deterministic). Spot-checked rasterized pairs: bidi-001 (a split inline box's border drawn wrong) was a real engine bug, fixed in [2026-11-12-a-bidi-split-inline-box-is-drawn-as-separate-pieces](2026-11-12-a-bidi-split-inline-box-is-drawn-as-separate-pieces.md); margin-bottom-applies-to-014 is NOT an engine bug - its `rel=match` names the reference of the `display:block` test (two empty full-width bars), which no conforming engine can match an `inline-table` with a 200px cell against; margin-009 looks identical but differs by AA fringes (max 28) - that is the
 runner's noise floor for overlapped edges, not investigated further.
 
 ## Gate

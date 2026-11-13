@@ -3199,7 +3199,7 @@ namespace PeachBrackets.Html.Fragmentation
                         IndependentSliceOf(rectangles[line], draft.Box, draft.Region, draft.OriginY, draft.Shift));
                 }
 
-                return lines;
+                return SplitAcrossPieces(lines, draft.Box);
             }
 
             var slices = SliceGeometriesOf(
@@ -3211,7 +3211,49 @@ namespace PeachBrackets.Html.Fragmentation
                 lines[i] = new LineFragment(Localize(rect, draft.OriginY), line, slices[line]);
             }
 
-            return lines;
+            return SplitAcrossPieces(lines, draft.Box);
+        }
+
+        /// <summary>
+        /// Replaces a line's single rectangle of <paramref name="box"/> by one per visual piece when bidi reordering put another box's words between
+        /// two of its own (<see cref="CssLineBox.SplitPieces"/>): each piece is a decoration area of its own, and carries the box's left or right
+        /// edge only where the box itself starts or ends, so a border is not drawn around text that is not the box's.
+        /// </summary>
+        private static LineFragment[] SplitAcrossPieces(LineFragment[] lines, CssBox box)
+        {
+            var any = false;
+            foreach (var fragment in lines)
+            {
+                if (fragment.Line?.SplitPieces?.ContainsKey(box) == true) { any = true; break; }
+            }
+
+            if (!any) return lines;
+
+            var result = new List<LineFragment>(lines.Length + 2);
+            foreach (var fragment in lines)
+            {
+                if (fragment.Line?.SplitPieces is not { } split || !split.TryGetValue(box, out var pieces))
+                {
+                    result.Add(fragment);
+                    continue;
+                }
+
+                foreach (var piece in pieces)
+                {
+                    var rect = new Rect(fragment.Rect.X + piece.Start, fragment.Rect.Y, piece.End - piece.Start, fragment.Rect.Height);
+                    var band = fragment.Slice.FragmentRect;
+                    var slice = fragment.Slice with
+                    {
+                        FragmentRect = new Rect(band.X + piece.Start, band.Y, piece.End - piece.Start, band.Height),
+                        HasLeftEdge = fragment.Slice.HasLeftEdge && piece.HasLeftEdge,
+                        HasRightEdge = fragment.Slice.HasRightEdge && piece.HasRightEdge,
+                    };
+
+                    result.Add(new LineFragment(rect, fragment.Line, slice));
+                }
+            }
+
+            return [.. result];
         }
 
         /// <summary>
