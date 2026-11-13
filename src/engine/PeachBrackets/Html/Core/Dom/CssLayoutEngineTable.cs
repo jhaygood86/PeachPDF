@@ -247,6 +247,8 @@ namespace PeachBrackets.Html.Dom
         private double[]? _columnWidths;
 
         private double[]? _columnMinWidths;
+        // Which columns a cell or <col> gave a width of their own, as CalculateColumnWidths left them: the rest are the ones that give width back first.
+        private bool[]? _columnWidthDeclared;
 
         /// <summary>Cache for <see cref="CollapsedColumnCount"/>.</summary>
         private int? _collapsedColumnCount;
@@ -788,6 +790,7 @@ namespace PeachBrackets.Html.Dom
             else
             {
                 var availCellSpace = CalculateColumnWidths();
+                _columnWidthDeclared = Array.ConvertAll(_columnWidths!, width => !double.IsNaN(width));
 
                 DetermineMissingColumnWidths(availCellSpace);
 
@@ -3143,9 +3146,20 @@ namespace PeachBrackets.Html.Dom
             //Get the minimum length
             GetColumnsMinMaxWidthByContent(false, out var minFullWidths, out _);
 
+            var raised = false;
             for (var i = 0; i < _columnWidths!.Length; i++)
             {
+                if (_columnWidths[i] < minFullWidths[i]) raised = true;
                 _columnWidths[i] = Math.Max(_columnWidths[i], minFullWidths[i]);
+            }
+
+            // A column raised to its minimum took that width from nowhere: the table was already sized to fit without it (a percentage column
+            // narrower than its content, say), so the other columns give it back, down to their own minimums, as they would have had the
+            // column started at its minimum.
+            if (raised)
+            {
+                TakeExcessFromUndeclaredColumns();
+                ShrinkColumnsToFitAvailableWidth();
             }
 
             foreach (var row in _allRows)
@@ -3167,6 +3181,34 @@ namespace PeachBrackets.Html.Dom
 
                 }
             }
+        }
+
+        /// <summary>
+        /// Takes what the table is wider than it may be from the columns no cell or <c>&lt;col&gt;</c> gave a width, in proportion to how much each has
+        /// above its own minimum, so a column that asked for a share (<c>width: 20%</c>) keeps it while the unsized ones absorb the squeeze.
+        /// </summary>
+        private void TakeExcessFromUndeclaredColumns()
+        {
+            if (_columnWidthDeclared is not { } declared || declared.Length != _columnWidths!.Length) return;
+
+            var excess = GetWidthSumExcludingCollapsedColumnWidths() - GetAvailableTableWidth();
+            if (!(excess > 0)) return;
+
+            var minimums = GetColumnMinWidths();
+            var spare = new double[_columnWidths.Length];
+            var spareTotal = 0d;
+            for (var i = 0; i < spare.Length; i++)
+            {
+                if (declared[i] || i >= minimums.Length || IsColumnCollapsed(i)) continue;
+                spare[i] = Math.Max(0, _columnWidths[i] - minimums[i]);
+                spareTotal += spare[i];
+            }
+
+            if (!(spareTotal > 0)) return;
+
+            var take = Math.Min(excess, spareTotal);
+            for (var i = 0; i < spare.Length; i++)
+                _columnWidths[i] -= take * (spare[i] / spareTotal);
         }
 
         /// <summary>
