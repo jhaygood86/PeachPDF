@@ -65,10 +65,8 @@ internal sealed class PdfPage : PdfDictionary, IContentStream
             Size = PageSize.A4;
         }
 
-#pragma warning disable 168
         // Force creation of MediaBox object by invoking property
-        PdfRectangle rect = MediaBox;
-#pragma warning restore 168
+        _ = MediaBox;
     }
 
     /// <summary>

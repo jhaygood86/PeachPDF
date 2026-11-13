@@ -1,5 +1,3 @@
-#nullable enable
-
 using PeachDrawing.Core;
 using PeachDrawing.PDF.Engine;
 using PeachDrawing.PDF.Engine.Annotations;
@@ -8,238 +6,236 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
 
-namespace PeachDrawing.PDF
+namespace PeachDrawing.PDF;
+/// <summary>
+/// An annotation to put on a page that is neither a link nor a form field: a highlight, a note, a stamp, a drawing. It says what kind of
+/// annotation it is, where it sits, what it holds, and how it looks.
+/// </summary>
+public sealed class PdfAnnotationDefinition
 {
+    /// <summary>The annotation type as the PDF names it, without the slash: <c>Highlight</c>, <c>Text</c>, <c>Square</c>, <c>Stamp</c>, <c>Ink</c>...</summary>
+    public required string Subtype { get; init; }
+
     /// <summary>
-    /// An annotation to put on a page that is neither a link nor a form field: a highlight, a note, a stamp, a drawing. It says what kind of
-    /// annotation it is, where it sits, what it holds, and how it looks.
+    /// Where the annotation sits, in points from the page's top-left corner with y down: its box, or the bounding box of the drawn shape when it
+    /// was turned.
     /// </summary>
-    public sealed class PdfAnnotationDefinition
+    public required Rect Bounds { get; init; }
+
+    /// <summary>The size, in points, the appearance is drawn at.</summary>
+    public required Size ContentSize { get; init; }
+
+    /// <summary>
+    /// The linear part of the transform that carries the upright appearance to where the annotation sits (translation left out), in the same
+    /// y-down convention as <see cref="Bounds"/>, or <see langword="null"/> when it is not turned.
+    /// </summary>
+    public Matrix3x2? AppearanceTransform { get; init; }
+
+    /// <summary>Draws the annotation's appearance onto a canvas of <see cref="ContentSize"/>, or <see langword="null"/> for an annotation with none.</summary>
+    public Action<Canvas>? PaintAppearance { get; init; }
+
+    /// <summary>The layout units per point the appearance is drawn at.</summary>
+    public double PixelsPerPoint { get; init; } = 1;
+
+    /// <summary>The text of the annotation (a note's text, or a description of what it marks).</summary>
+    public string? Contents { get; init; }
+
+    /// <summary>The name of the person who made the annotation.</summary>
+    public string? Title { get; init; }
+
+    /// <summary>A short description of the annotation's subject.</summary>
+    public string? Subject { get; init; }
+
+    /// <summary>The annotation's colour (its border, a note's background, a highlight's fill), or <see langword="null"/>.</summary>
+    public PaintColor? Color { get; init; }
+
+    /// <summary>The colour that fills the inside of a closed shape, or <see langword="null"/>.</summary>
+    public PaintColor? InteriorColor { get; init; }
+
+    /// <summary>The opacity the annotation is drawn with, from 0 to 1, or <see langword="null"/> for opaque.</summary>
+    public double? Opacity { get; init; }
+
+    /// <summary>The width of the annotation's border, in points, or <see langword="null"/> for the default.</summary>
+    public double? BorderWidth { get; init; }
+
+    /// <summary>The name of a note's or stamp's icon (<c>Comment</c>, <c>Approved</c>...), or <see langword="null"/>.</summary>
+    public string? IconName { get; init; }
+
+    /// <summary>
+    /// The regions a text markup annotation (a highlight, underline, strike-out or squiggly) covers, four points per region, in points from the
+    /// page's top-left corner with y down.
+    /// </summary>
+    public IReadOnlyList<PaintPoint> QuadPoints { get; init; } = [];
+
+    /// <summary>The strokes of an ink annotation, each a run of points in points from the page's top-left corner with y down.</summary>
+    public IReadOnlyList<IReadOnlyList<PaintPoint>> InkStrokes { get; init; } = [];
+
+    /// <summary>The vertices of a polygon or polyline annotation, in points from the page's top-left corner with y down.</summary>
+    public IReadOnlyList<PaintPoint> Vertices { get; init; } = [];
+
+    /// <summary>The two ends of a line annotation, in points from the page's top-left corner with y down; empty for any other kind.</summary>
+    public IReadOnlyList<PaintPoint> LineEnds { get; init; } = [];
+
+    /// <summary>
+    /// For a <c>FileAttachment</c> annotation, the <see cref="PdfEmbeddedFile.FileName"/> of a file the document embeds
+    /// (<see cref="PdfComposerOptions.EmbeddedFiles"/>): the annotation points at that file, so it is not stored twice. Matched exactly.
+    /// </summary>
+    public string? EmbeddedFileName { get; init; }
+
+    /// <summary>When the annotation was made, or <see langword="null"/> to leave it out.</summary>
+    public DateTimeOffset? CreatedAt { get; init; }
+
+    /// <summary>When the annotation was last changed, or <see langword="null"/> for the time it was written.</summary>
+    public DateTimeOffset? ModifiedAt { get; init; }
+
+    /// <summary>
+    /// Where the window that shows <see cref="Contents"/> opens, in points from the page's top-left corner with y down, or
+    /// <see langword="null"/> to let the reader choose. Written as a linked <c>Popup</c> annotation, and only when there is text to show.
+    /// </summary>
+    public Rect? PopupBounds { get; init; }
+
+    /// <summary>Whether the popup window starts open.</summary>
+    public bool PopupOpen { get; init; }
+
+    /// <summary>Whether the annotation cannot be edited.</summary>
+    public bool ReadOnly { get; init; }
+
+    /// <summary>Whether the annotation cannot be deleted or moved.</summary>
+    public bool Locked { get; init; }
+
+    /// <summary>Whether the annotation keeps its size however the page is zoomed.</summary>
+    public bool NoZoom { get; init; }
+
+    /// <summary>Whether the annotation stays upright however the page is turned.</summary>
+    public bool NoRotate { get; init; }
+
+    /// <summary>Whether the annotation is left out when the page is printed.</summary>
+    public bool NotPrinted { get; init; }
+}
+
+/// <summary>
+/// Adds annotations that are not links or form fields (highlights, notes, stamps, drawings) to the pages of a document, each with the
+/// appearance it is given, so a reader shows it as drawn.
+/// </summary>
+/// <remarks>Get one from <see cref="PdfComposer.CreateAnnotationBuilder"/>.</remarks>
+public sealed class PdfAnnotationBuilder
+{
+    private readonly PdfDocument _document;
+    private readonly PdfRenderContext _renderContext;
+
+    internal PdfAnnotationBuilder(PdfDocument document, PdfRenderContext renderContext)
     {
-        /// <summary>The annotation type as the PDF names it, without the slash: <c>Highlight</c>, <c>Text</c>, <c>Square</c>, <c>Stamp</c>, <c>Ink</c>...</summary>
-        public required string Subtype { get; init; }
-
-        /// <summary>
-        /// Where the annotation sits, in points from the page's top-left corner with y down: its box, or the bounding box of the drawn shape when it
-        /// was turned.
-        /// </summary>
-        public required Rect Bounds { get; init; }
-
-        /// <summary>The size, in points, the appearance is drawn at.</summary>
-        public required Size ContentSize { get; init; }
-
-        /// <summary>
-        /// The linear part of the transform that carries the upright appearance to where the annotation sits (translation left out), in the same
-        /// y-down convention as <see cref="Bounds"/>, or <see langword="null"/> when it is not turned.
-        /// </summary>
-        public Matrix3x2? AppearanceTransform { get; init; }
-
-        /// <summary>Draws the annotation's appearance onto a canvas of <see cref="ContentSize"/>, or <see langword="null"/> for an annotation with none.</summary>
-        public Action<Canvas>? PaintAppearance { get; init; }
-
-        /// <summary>The layout units per point the appearance is drawn at.</summary>
-        public double PixelsPerPoint { get; init; } = 1;
-
-        /// <summary>The text of the annotation (a note's text, or a description of what it marks).</summary>
-        public string? Contents { get; init; }
-
-        /// <summary>The name of the person who made the annotation.</summary>
-        public string? Title { get; init; }
-
-        /// <summary>A short description of the annotation's subject.</summary>
-        public string? Subject { get; init; }
-
-        /// <summary>The annotation's colour (its border, a note's background, a highlight's fill), or <see langword="null"/>.</summary>
-        public PaintColor? Color { get; init; }
-
-        /// <summary>The colour that fills the inside of a closed shape, or <see langword="null"/>.</summary>
-        public PaintColor? InteriorColor { get; init; }
-
-        /// <summary>The opacity the annotation is drawn with, from 0 to 1, or <see langword="null"/> for opaque.</summary>
-        public double? Opacity { get; init; }
-
-        /// <summary>The width of the annotation's border, in points, or <see langword="null"/> for the default.</summary>
-        public double? BorderWidth { get; init; }
-
-        /// <summary>The name of a note's or stamp's icon (<c>Comment</c>, <c>Approved</c>...), or <see langword="null"/>.</summary>
-        public string? IconName { get; init; }
-
-        /// <summary>
-        /// The regions a text markup annotation (a highlight, underline, strike-out or squiggly) covers, four points per region, in points from the
-        /// page's top-left corner with y down.
-        /// </summary>
-        public IReadOnlyList<PaintPoint> QuadPoints { get; init; } = [];
-
-        /// <summary>The strokes of an ink annotation, each a run of points in points from the page's top-left corner with y down.</summary>
-        public IReadOnlyList<IReadOnlyList<PaintPoint>> InkStrokes { get; init; } = [];
-
-        /// <summary>The vertices of a polygon or polyline annotation, in points from the page's top-left corner with y down.</summary>
-        public IReadOnlyList<PaintPoint> Vertices { get; init; } = [];
-
-        /// <summary>The two ends of a line annotation, in points from the page's top-left corner with y down; empty for any other kind.</summary>
-        public IReadOnlyList<PaintPoint> LineEnds { get; init; } = [];
-
-        /// <summary>
-        /// For a <c>FileAttachment</c> annotation, the <see cref="PdfEmbeddedFile.FileName"/> of a file the document embeds
-        /// (<see cref="PdfComposerOptions.EmbeddedFiles"/>): the annotation points at that file, so it is not stored twice. Matched exactly.
-        /// </summary>
-        public string? EmbeddedFileName { get; init; }
-
-        /// <summary>When the annotation was made, or <see langword="null"/> to leave it out.</summary>
-        public DateTimeOffset? CreatedAt { get; init; }
-
-        /// <summary>When the annotation was last changed, or <see langword="null"/> for the time it was written.</summary>
-        public DateTimeOffset? ModifiedAt { get; init; }
-
-        /// <summary>
-        /// Where the window that shows <see cref="Contents"/> opens, in points from the page's top-left corner with y down, or
-        /// <see langword="null"/> to let the reader choose. Written as a linked <c>Popup</c> annotation, and only when there is text to show.
-        /// </summary>
-        public Rect? PopupBounds { get; init; }
-
-        /// <summary>Whether the popup window starts open.</summary>
-        public bool PopupOpen { get; init; }
-
-        /// <summary>Whether the annotation cannot be edited.</summary>
-        public bool ReadOnly { get; init; }
-
-        /// <summary>Whether the annotation cannot be deleted or moved.</summary>
-        public bool Locked { get; init; }
-
-        /// <summary>Whether the annotation keeps its size however the page is zoomed.</summary>
-        public bool NoZoom { get; init; }
-
-        /// <summary>Whether the annotation stays upright however the page is turned.</summary>
-        public bool NoRotate { get; init; }
-
-        /// <summary>Whether the annotation is left out when the page is printed.</summary>
-        public bool NotPrinted { get; init; }
+        _document = document;
+        _renderContext = renderContext;
     }
 
-    /// <summary>
-    /// Adds annotations that are not links or form fields (highlights, notes, stamps, drawings) to the pages of a document, each with the
-    /// appearance it is given, so a reader shows it as drawn.
-    /// </summary>
-    /// <remarks>Get one from <see cref="PdfComposer.CreateAnnotationBuilder"/>.</remarks>
-    public sealed class PdfAnnotationBuilder
+    /// <summary>Puts an annotation on a page.</summary>
+    /// <param name="page">the page it goes on</param>
+    /// <param name="annotation">what it is, where it is and how it looks</param>
+    public void AddAnnotation(PdfComposerPage page, PdfAnnotationDefinition annotation)
     {
-        private readonly PdfDocument _document;
-        private readonly PdfRenderContext _renderContext;
+        ArgumentNullException.ThrowIfNull(page);
+        ArgumentNullException.ThrowIfNull(annotation);
 
-        internal PdfAnnotationBuilder(PdfDocument document, PdfRenderContext renderContext)
+        var height = page.HeightPoints;
+        var bounds = annotation.Bounds;
+        var engine = new PdfGenericAnnotation(_document, annotation.Subtype)
         {
-            _document = document;
-            _renderContext = renderContext;
+            Rectangle = new PdfRectangle(new Rect(bounds.X, height - (bounds.Y + bounds.Height), bounds.Width, bounds.Height)),
+            Text = annotation.Contents,
+        };
+
+        engine.SetString("/T", annotation.Title);
+        engine.SetString("/Subj", annotation.Subject);
+        if (annotation.Color is { } color)
+            engine.SetNumbers("/C", Components(color));
+        if (annotation.InteriorColor is { } interior)
+            engine.SetNumbers("/IC", Components(interior));
+        if (annotation.Opacity is { } opacity)
+            engine.SetNumber("/CA", Math.Clamp(opacity, 0, 1));
+        if (annotation.BorderWidth is { } width)
+            engine.SetNumbers("/Border", [0, 0, Math.Max(0, width)]);
+        if (annotation.IconName is { Length: > 0 } icon)
+            engine.SetName("/Name", icon);
+
+        if (annotation.QuadPoints.Count > 0)
+            engine.SetNumbers("/QuadPoints", Flip(annotation.QuadPoints, height));
+        if (annotation.InkStrokes.Count > 0)
+            engine.SetNumberLists("/InkList", annotation.InkStrokes.Select(stroke => Flip(stroke, height)));
+        if (annotation.Vertices.Count > 0)
+            engine.SetNumbers("/Vertices", Flip(annotation.Vertices, height));
+        if (annotation.LineEnds.Count == 2)
+            engine.SetNumbers("/L", Flip(annotation.LineEnds, height));
+
+        var flags = annotation.NotPrinted ? (PdfAnnotationFlags)0 : PdfAnnotationFlags.Print;
+        if (annotation.ReadOnly) flags |= PdfAnnotationFlags.ReadOnly;
+        if (annotation.Locked) flags |= PdfAnnotationFlags.Locked;
+        if (annotation.NoZoom) flags |= PdfAnnotationFlags.NoZoom;
+        if (annotation.NoRotate) flags |= PdfAnnotationFlags.NoRotate;
+        engine.Flags = flags;
+
+        if (annotation.PaintAppearance is { } paint)
+        {
+            var form = PdfFormBuilder.CreateAppearanceForm(_document, _renderContext, annotation.PixelsPerPoint, annotation.ContentSize, paint);
+            Matrix3x2? matrix = annotation.AppearanceTransform is { } m ? new Matrix3x2(m.M11, -m.M12, -m.M21, m.M22, 0, 0) : null;
+            PdfFormBuilder.ApplyMatrix(form, matrix);
+            var ap = new PdfDictionary(_document);
+            ap.Elements.SetReference("/N", form);
+            engine.Elements.SetObject(PdfAnnotation.Keys.AP, ap);
         }
 
-        /// <summary>Puts an annotation on a page.</summary>
-        /// <param name="page">the page it goes on</param>
-        /// <param name="annotation">what it is, where it is and how it looks</param>
-        public void AddAnnotation(PdfComposerPage page, PdfAnnotationDefinition annotation)
-        {
-            ArgumentNullException.ThrowIfNull(page);
-            ArgumentNullException.ThrowIfNull(annotation);
+        // A free-text annotation must carry a default appearance string (ISO 32000-1 Table 174); the drawn appearance is what a reader shows.
+        if (string.Equals(annotation.Subtype.TrimStart('/'), "FreeText", StringComparison.Ordinal))
+            engine.SetAsciiString("/DA", "/Helv 9 Tf 0 g");
 
-            var height = page.HeightPoints;
-            var bounds = annotation.Bounds;
-            var engine = new PdfGenericAnnotation(_document, annotation.Subtype)
+        if (annotation.CreatedAt is { } created)
+            engine.SetDate("/CreationDate", created);
+        if (annotation.ModifiedAt is { } modified)
+            engine.SetDate(PdfAnnotation.Keys.M, modified);
+
+        if (annotation.EmbeddedFileName is { } embeddedName)
+        {
+            if (_document.Options.EmbeddingPlan is not EmbeddedFilePlan plan || !plan.TryGetSpecification(embeddedName, out var specification))
             {
-                Rectangle = new PdfRectangle(new Rect(bounds.X, height - (bounds.Y + bounds.Height), bounds.Width, bounds.Height)),
-                Text = annotation.Contents,
+                throw new ArgumentException(
+                    $"PdfAnnotationDefinition.EmbeddedFileName '{embeddedName}' is not a file the document embeds. Add a PdfEmbeddedFile with that " +
+                    "FileName to PdfComposerOptions.EmbeddedFiles first.", nameof(annotation));
+            }
+
+            engine.SetReference("/FS", specification);
+        }
+        else if (string.Equals(annotation.Subtype.TrimStart('/'), "FileAttachment", StringComparison.Ordinal))
+        {
+            throw new ArgumentException("A FileAttachment annotation needs PdfAnnotationDefinition.EmbeddedFileName.", nameof(annotation));
+        }
+
+        page.Page.Annotations.Add(engine);
+
+        if (annotation.PopupBounds is { } popup && (!string.IsNullOrEmpty(annotation.Contents) || !string.IsNullOrEmpty(annotation.Title)))
+        {
+            var popupEngine = new PdfGenericAnnotation(_document, "Popup")
+            {
+                Rectangle = new PdfRectangle(new Rect(popup.X, height - (popup.Y + popup.Height), popup.Width, popup.Height)),
             };
-
-            engine.SetString("/T", annotation.Title);
-            engine.SetString("/Subj", annotation.Subject);
-            if (annotation.Color is { } color)
-                engine.SetNumbers("/C", Components(color));
-            if (annotation.InteriorColor is { } interior)
-                engine.SetNumbers("/IC", Components(interior));
-            if (annotation.Opacity is { } opacity)
-                engine.SetNumber("/CA", Math.Clamp(opacity, 0, 1));
-            if (annotation.BorderWidth is { } width)
-                engine.SetNumbers("/Border", [0, 0, Math.Max(0, width)]);
-            if (annotation.IconName is { Length: > 0 } icon)
-                engine.SetName("/Name", icon);
-
-            if (annotation.QuadPoints.Count > 0)
-                engine.SetNumbers("/QuadPoints", Flip(annotation.QuadPoints, height));
-            if (annotation.InkStrokes.Count > 0)
-                engine.SetNumberLists("/InkList", annotation.InkStrokes.Select(stroke => Flip(stroke, height)));
-            if (annotation.Vertices.Count > 0)
-                engine.SetNumbers("/Vertices", Flip(annotation.Vertices, height));
-            if (annotation.LineEnds.Count == 2)
-                engine.SetNumbers("/L", Flip(annotation.LineEnds, height));
-
-            var flags = annotation.NotPrinted ? (PdfAnnotationFlags)0 : PdfAnnotationFlags.Print;
-            if (annotation.ReadOnly) flags |= PdfAnnotationFlags.ReadOnly;
-            if (annotation.Locked) flags |= PdfAnnotationFlags.Locked;
-            if (annotation.NoZoom) flags |= PdfAnnotationFlags.NoZoom;
-            if (annotation.NoRotate) flags |= PdfAnnotationFlags.NoRotate;
-            engine.Flags = flags;
-
-            if (annotation.PaintAppearance is { } paint)
-            {
-                var form = PdfFormBuilder.CreateAppearanceForm(_document, _renderContext, annotation.PixelsPerPoint, annotation.ContentSize, paint);
-                Matrix3x2? matrix = annotation.AppearanceTransform is { } m ? new Matrix3x2(m.M11, -m.M12, -m.M21, m.M22, 0, 0) : null;
-                PdfFormBuilder.ApplyMatrix(form, matrix);
-                var ap = new PdfDictionary(_document);
-                ap.Elements.SetReference("/N", form);
-                engine.Elements.SetObject(PdfAnnotation.Keys.AP, ap);
-            }
-
-            // A free-text annotation must carry a default appearance string (ISO 32000-1 Table 174); the drawn appearance is what a reader shows.
-            if (string.Equals(annotation.Subtype.TrimStart('/'), "FreeText", StringComparison.Ordinal))
-                engine.SetAsciiString("/DA", "/Helv 9 Tf 0 g");
-
-            if (annotation.CreatedAt is { } created)
-                engine.SetDate("/CreationDate", created);
-            if (annotation.ModifiedAt is { } modified)
-                engine.SetDate(PdfAnnotation.Keys.M, modified);
-
-            if (annotation.EmbeddedFileName is { } embeddedName)
-            {
-                if (_document.Options.EmbeddingPlan is not EmbeddedFilePlan plan || !plan.TryGetSpecification(embeddedName, out var specification))
-                {
-                    throw new ArgumentException(
-                        $"PdfAnnotationDefinition.EmbeddedFileName '{embeddedName}' is not a file the document embeds. Add a PdfEmbeddedFile with that " +
-                        "FileName to PdfComposerOptions.EmbeddedFiles first.", nameof(annotation));
-                }
-
-                engine.SetReference("/FS", specification);
-            }
-            else if (string.Equals(annotation.Subtype.TrimStart('/'), "FileAttachment", StringComparison.Ordinal))
-            {
-                throw new ArgumentException("A FileAttachment annotation needs PdfAnnotationDefinition.EmbeddedFileName.", nameof(annotation));
-            }
-
-            page.Page.Annotations.Add(engine);
-
-            if (annotation.PopupBounds is { } popup && (!string.IsNullOrEmpty(annotation.Contents) || !string.IsNullOrEmpty(annotation.Title)))
-            {
-                var popupEngine = new PdfGenericAnnotation(_document, "Popup")
-                {
-                    Rectangle = new PdfRectangle(new Rect(popup.X, height - (popup.Y + popup.Height), popup.Width, popup.Height)),
-                };
-                popupEngine.SetBoolean("/Open", annotation.PopupOpen);
-                page.Page.Annotations.Add(popupEngine);
-                popupEngine.SetReference("/Parent", engine);
-                engine.SetReference("/Popup", popupEngine);
-            }
+            popupEngine.SetBoolean("/Open", annotation.PopupOpen);
+            page.Page.Annotations.Add(popupEngine);
+            popupEngine.SetReference("/Parent", engine);
+            engine.SetReference("/Popup", popupEngine);
         }
+    }
 
-        private static IEnumerable<double> Components(PaintColor color)
-        {
-            var (r, g, b) = color.ToRgb();
-            return [r / 255.0, g / 255.0, b / 255.0];
-        }
+    private static IEnumerable<double> Components(PaintColor color)
+    {
+        var (r, g, b) = color.ToRgb();
+        return [r / 255.0, g / 255.0, b / 255.0];
+    }
 
-        private static IEnumerable<double> Flip(IEnumerable<PaintPoint> points, double pageHeight)
+    private static IEnumerable<double> Flip(IEnumerable<PaintPoint> points, double pageHeight)
+    {
+        foreach (var point in points)
         {
-            foreach (var point in points)
-            {
-                yield return point.X;
-                yield return pageHeight - point.Y;
-            }
+            yield return point.X;
+            yield return pageHeight - point.Y;
         }
     }
 }

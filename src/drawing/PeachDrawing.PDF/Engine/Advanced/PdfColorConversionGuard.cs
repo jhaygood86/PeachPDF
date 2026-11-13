@@ -1,5 +1,3 @@
-#nullable enable
-
 using PeachDrawing.Core;
 using PeachDrawing.PDF.Engine.Drawing;
 using System;

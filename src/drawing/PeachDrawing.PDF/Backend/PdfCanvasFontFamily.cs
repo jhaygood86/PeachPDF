@@ -13,23 +13,21 @@
 using PeachDrawing.Core;
 using PeachDrawing.PDF.Engine.Drawing;
 
-namespace PeachDrawing.PDF
+namespace PeachDrawing.PDF;
+/// <summary>
+/// Adapter for WinForms Font object for core.
+/// </summary>
+internal sealed class PdfCanvasFontFamily : FontFamily
 {
+    private readonly string _name;
+
     /// <summary>
-    /// Adapter for WinForms Font object for core.
+    /// Init.
     /// </summary>
-    internal sealed class PdfCanvasFontFamily : FontFamily
+    public PdfCanvasFontFamily(string name)
     {
-        private readonly string _name;
-
-        /// <summary>
-        /// Init.
-        /// </summary>
-        public PdfCanvasFontFamily(string name)
-        {
-            _name = name;
-        }
-
-        public override string Name => _name;
+        _name = name;
     }
+
+    public override string Name => _name;
 }
