@@ -65,6 +65,21 @@ namespace PeachBrackets.Engine.Tests.Integration
             Assert.Equal("1.", c.Text);
         }
 
+        [Theory]
+        // An item that sets the counter pins the start: counting down from the start reaches the value it sets.
+        [InlineData("<li id='a'>a</li><li id='b'>b</li><li id='c' value='7'>c</li><li id='d'>d</li>", "9.", "8.", "7.", "6.")]
+        [InlineData("<li id='a'>a</li><li id='b' value='6'>b</li><li id='c'>c</li><li id='d'>d</li>", "7.", "6.", "5.", "4.")]
+        // The increment of an element counts toward the start too, not just one per element.
+        [InlineData("<li id='a'>a</li><li id='b' value='3' style='counter-increment: list-item -2'>b</li><li id='c'>c</li><li id='d'>d</li>", "5.", "3.", "2.", "1.")]
+        public async Task OlReversed_StartsWhereTheFirstItemThatSetsTheValueNeedsIt(string items, string a, string b, string c, string d)
+        {
+            var root = await BuildAndLayout(Wrap("<ol reversed>" + items + "</ol>"));
+
+            string Marker(string id) => ((CssBoxMarker)FindById(root, id)!.Boxes.Single(x => x.IsMarkerPseudoElement)).Text;
+
+            Assert.Equal([a, b, c, d], [Marker("a"), Marker("b"), Marker("c"), Marker("d")]);
+        }
+
         [Fact]
         public async Task OlReversedWithStart_CountsDownFromStart()
         {
