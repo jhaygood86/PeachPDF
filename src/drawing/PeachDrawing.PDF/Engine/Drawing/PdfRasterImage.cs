@@ -26,7 +26,6 @@ internal enum PdfImageState
 /// </summary>
 internal class PdfRasterImage : IDisposable
 {
-    // The hierarchy is adapted to WPF/Silverlight/WinRT
     //
     // PdfRasterImage                           <-- ImageSource
     //   PdfForm

@@ -289,15 +289,15 @@ internal sealed class PdfDocument : PdfObject, IDisposable
     {
         PdfDocumentInformation info = Info;
 
-        string pdfSharpProducer = PdfProductInfo.Producer;
+        string defaultProducer = PdfProductInfo.Producer;
 
         // Set Creator if value is undefined.
         if (info.Elements[PdfDocumentInformation.Keys.Creator] is null)
-            info.Creator = pdfSharpProducer;
+            info.Creator = defaultProducer;
 
         string producer = info.Producer;
         if (producer.Length == 0)
-            producer = pdfSharpProducer;
+            producer = defaultProducer;
         info.Elements.SetString(PdfDocumentInformation.Keys.Producer, producer);
 
         // Prepare used fonts.
