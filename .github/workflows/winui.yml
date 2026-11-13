@@ -8,7 +8,7 @@ on:
   pull_request:
     branches: [ main ]
     paths:
-      - 'src/engine/PeachBrackets.WinUI/**'
+      - 'src/views/PeachBrackets.WinUI/**'
       - 'src/examples/PeachBrackets.WinUI.Example/**'
       - 'src/engine/PeachBrackets/**'
       - 'src/drawing/PeachDrawing.Win2D/**'

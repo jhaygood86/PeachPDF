@@ -174,8 +174,8 @@ jobs:
 
     - name: Build and pack
       run: |
-        dotnet build src/engine/PeachBrackets.Android/PeachBrackets.Android.csproj --configuration Release
-        dotnet pack src/engine/PeachBrackets.Android/PeachBrackets.Android.csproj --configuration Release --no-build --output ./packages
+        dotnet build src/views/PeachBrackets.Android/PeachBrackets.Android.csproj --configuration Release
+        dotnet pack src/views/PeachBrackets.Android/PeachBrackets.Android.csproj --configuration Release --no-build --output ./packages
 
     - name: NuGet login
       uses: NuGet/login@v1
@@ -213,8 +213,8 @@ jobs:
 
     - name: Build and pack
       run: |
-        dotnet build src/engine/PeachBrackets.WinUI/PeachBrackets.WinUI.csproj --configuration Release
-        dotnet pack src/engine/PeachBrackets.WinUI/PeachBrackets.WinUI.csproj --configuration Release --no-build --output ./packages
+        dotnet build src/views/PeachBrackets.WinUI/PeachBrackets.WinUI.csproj --configuration Release
+        dotnet pack src/views/PeachBrackets.WinUI/PeachBrackets.WinUI.csproj --configuration Release --no-build --output ./packages
 
     - name: NuGet login
       uses: NuGet/login@v1
@@ -297,9 +297,9 @@ jobs:
 
     - name: Build and pack
       run: |
-        dotnet build src/engine/PeachBrackets.Apple/PeachBrackets.Apple.csproj --configuration Release -p:ValidateXcodeVersion=false
+        dotnet build src/views/PeachBrackets.Apple/PeachBrackets.Apple.csproj --configuration Release -p:ValidateXcodeVersion=false
         dotnet test --project src/tests/PeachBrackets.Apple.Tests/PeachBrackets.Apple.Tests.csproj --configuration Release
-        dotnet pack src/engine/PeachBrackets.Apple/PeachBrackets.Apple.csproj --configuration Release --no-build --output ./packages
+        dotnet pack src/views/PeachBrackets.Apple/PeachBrackets.Apple.csproj --configuration Release --no-build --output ./packages
 
     - name: NuGet login
       uses: NuGet/login@v1

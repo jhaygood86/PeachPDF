@@ -1,16 +1,18 @@
 <Project Sdk="Microsoft.NET.Sdk">
 	<Import Project="..\..\Version.props" />
 	<PropertyGroup>
-		<!-- Android-only: .NET for Android (not MAUI). -->
-		<TargetFrameworks>net10.0-android;net11.0-android</TargetFrameworks>
-		<SupportedOSPlatformVersion>24</SupportedOSPlatformVersion>
+		<!-- Apple-only (AppKit on macOS, UIKit on iOS). -->
+		<TargetFrameworks>net10.0-macos;net10.0-ios;net11.0-macos;net11.0-ios</TargetFrameworks>
+		<!-- The oldest systems the view works on: the colour picker, the document picker and uniform types need iOS 14, the sheet detents iOS 15; macOS 11 has uniform types. The iOS 16 edit menu is used only where it exists. -->
+		<SupportedOSPlatformVersion Condition="$(TargetFramework.Contains('-ios'))">15.0</SupportedOSPlatformVersion>
+		<SupportedOSPlatformVersion Condition="$(TargetFramework.Contains('-macos'))">11.0</SupportedOSPlatformVersion>
 		<Nullable>enable</Nullable>
 		<ImplicitUsings>enable</ImplicitUsings>
-		<AssemblyName>PeachBrackets.Android</AssemblyName>
-		<RootNamespace>PeachBrackets.Android</RootNamespace>
-		<PackageId>PeachBrackets.Android</PackageId>
-		<Description>A .NET for Android view that shows an HTML document laid out by PeachBrackets: touch scrolling, fling and pinch zoom, links, text selection and copy, and the CSS cursor, hover and touch-action behaviour the document asks for.</Description>
-		<PackageTags>html;css;android;view;viewer;rendering;skia</PackageTags>
+		<AssemblyName>PeachBrackets.Apple</AssemblyName>
+		<RootNamespace>PeachBrackets.Apple</RootNamespace>
+		<PackageId>PeachBrackets.Apple</PackageId>
+		<Description>A macOS (AppKit) and iOS (UIKit) view that shows an HTML document laid out by PeachBrackets: GPU-composited scrolling and zoom, mouse, trackpad, touch and pointer input, links, text selection and copy, and the CSS cursor, hover and touch-action behaviour the document asks for.</Description>
+		<PackageTags>html;css;macos;ios;appkit;uikit;view;viewer;rendering;coregraphics</PackageTags>
 		<PackageIcon>peach.png</PackageIcon>
 		<PackageReadmeFile>README.md</PackageReadmeFile>
 		<PackageProjectUrl>https://peachpdf.net/</PackageProjectUrl>
@@ -28,11 +30,16 @@
 		<GenerateAssemblyTitleVersionAttribute>false</GenerateAssemblyTitleVersionAttribute>
 		<GenerateAssemblyVersionAttribute>false</GenerateAssemblyVersionAttribute>
 	</PropertyGroup>
+	<ItemGroup Condition="$(TargetFramework.Contains('-ios'))">
+		<Compile Remove="AppKit\**" />
+	</ItemGroup>
+	<ItemGroup Condition="$(TargetFramework.Contains('-macos'))">
+		<Compile Remove="UIKit\**" />
+	</ItemGroup>
 	<ItemGroup>
-		<ProjectReference Include="..\PeachBrackets\PeachBrackets.csproj" />
+		<ProjectReference Include="..\..\engine\PeachBrackets\PeachBrackets.csproj" />
 		<ProjectReference Include="..\..\drawing\PeachDrawing.Core\PeachDrawing.Core.csproj" />
-		<ProjectReference Include="..\..\drawing\PeachDrawing.Skia\PeachDrawing.Skia.csproj" />
-		<PackageReference Include="SkiaSharp.Views" />
+		<ProjectReference Include="..\..\drawing\PeachDrawing.CoreGraphics\PeachDrawing.CoreGraphics.csproj" />
 	</ItemGroup>
 	<ItemGroup>
 		<None Include="..\..\..\LICENSE" Pack="true" PackagePath="\" />

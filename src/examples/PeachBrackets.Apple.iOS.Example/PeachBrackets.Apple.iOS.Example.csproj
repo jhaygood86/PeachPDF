@@ -17,7 +17,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\engine\PeachBrackets.Apple\PeachBrackets.Apple.csproj" />
+    <ProjectReference Include="..\..\views\PeachBrackets.Apple\PeachBrackets.Apple.csproj" />
     <!-- Rewrites a page fetched from the web (its root classes and base address) before the view loads it; see PageRewriter. Demo only, not shipped. -->
     <PackageReference Include="AngleSharp" />
     <Compile Include="..\PeachBrackets.Apple.Demo.Shared\*.cs" Link="Shared\%(Filename)%(Extension)" />

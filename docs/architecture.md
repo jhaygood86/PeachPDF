@@ -1148,19 +1148,19 @@ Three packages put a `PeachBrackets.HtmlDocument` on a screen. Each is a thin sh
 
 ### PeachBrackets.WinUI
 
-**Guide:** [PeachBrackets.WinUI](peachbrackets-winui.md) · **Source:** [src/engine/PeachBrackets.WinUI/](https://github.com/jhaygood86/PeachPDF/tree/main/src/engine/PeachBrackets.WinUI/) · depends on `PeachBrackets` and `PeachDrawing.Win2D` · Windows only
+**Guide:** [PeachBrackets.WinUI](peachbrackets-winui.md) · **Source:** [src/views/PeachBrackets.WinUI/](https://github.com/jhaygood86/PeachPDF/tree/main/src/views/PeachBrackets.WinUI/) · depends on `PeachBrackets` and `PeachDrawing.Win2D` · Windows only
 
 Code-only (no XAML). `HtmlView` hosts a `CanvasVirtualControl` in a `ScrollViewer`, paints only invalidated regions, and drives the document from pointer events. The partials split the view by concern (input, scrolling, text input, forms, pickers, cursors, images, animation, focus, UI Automation in `HtmlViewAutomationPeer`). `HtmlViewLogic`-style window-free pieces (cursor mapping, device capabilities, page hit mapping, launchable schemes) are separated so they can be unit tested; the control itself is exercised in a real window by the UI tests.
 
 ### PeachBrackets.Android
 
-**Guide:** [PeachBrackets.Android](peachbrackets-android.md) · **Source:** [src/engine/PeachBrackets.Android/](https://github.com/jhaygood86/PeachPDF/tree/main/src/engine/PeachBrackets.Android/) · depends on `PeachBrackets`, `PeachDrawing.Skia` and `SkiaSharp.Views` · .NET for Android (API 24+)
+**Guide:** [PeachBrackets.Android](peachbrackets-android.md) · **Source:** [src/views/PeachBrackets.Android/](https://github.com/jhaygood86/PeachPDF/tree/main/src/views/PeachBrackets.Android/) · depends on `PeachBrackets`, `PeachDrawing.Skia` and `SkiaSharp.Views` · .NET for Android (API 24+)
 
 `HtmlView : FrameLayout` hosts an `SKGLSurfaceView` (or, with `useGpu: false`, an `SKCanvasView`). The visible region is painted by `PaintPageRegionAsync`; on the GPU it is painted as 1024-pixel tiles of the `DocumentPaintLayer.Content` layer kept as textures (a `TileGrid` with an LRU), with the `ViewportAttached` layer painted over them each frame. Touch is handled directly (`GestureDetector`, `ScaleGestureDetector`, `OverScroller`) with an event per touch stage so the host can take a gesture away from the document's `touch-action`. `Logic/` holds the Android-free pieces (accessibility mapping, tile grid, scroll and zoom math, caret and IME edits, picker values), compiled into a plain-.NET test project. The UI thread must never block on an async call.
 
 ### PeachBrackets.Apple
 
-**Guide:** [PeachBrackets.Apple](peachbrackets-apple.md) · **Source:** [src/engine/PeachBrackets.Apple/](https://github.com/jhaygood86/PeachPDF/tree/main/src/engine/PeachBrackets.Apple/) · depends on `PeachBrackets` and `PeachDrawing.CoreGraphics` · macOS and iOS
+**Guide:** [PeachBrackets.Apple](peachbrackets-apple.md) · **Source:** [src/views/PeachBrackets.Apple/](https://github.com/jhaygood86/PeachPDF/tree/main/src/views/PeachBrackets.Apple/) · depends on `PeachBrackets` and `PeachDrawing.CoreGraphics` · macOS and iOS
 
 `HtmlViewEngine` is the shared part: off-main-thread load and layout, a 1×1 composer as the measuring canvas, the tile cache where **each 512-pixel tile is a `CALayer`** (painted a few milliseconds at a time, and only the tiles a change's dirty regions touch) so Core Animation composites scroll and zoom on the GPU, the viewport-attached overlay layer, and the serialized pointer-state pump. `AppKit/HtmlView.cs` (an `NSScrollView` over a flipped page view) and `UIKit/HtmlView.cs` (a `UIScrollView` with tap, long-press and hover recognizers, a pointer interaction, an edit menu and a touch gate that applies `touch-action`) are the two views, each compiled for its platform only; there is one public-surface snapshot per platform because they differ.
 

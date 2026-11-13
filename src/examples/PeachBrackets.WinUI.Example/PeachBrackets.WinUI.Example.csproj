@@ -18,7 +18,7 @@
 		<ShowcaseExportDir>$(MSBuildProjectDirectory)\obj\showcases\</ShowcaseExportDir>
 	</PropertyGroup>
 	<ItemGroup>
-		<ProjectReference Include="..\..\engine\PeachBrackets.WinUI\PeachBrackets.WinUI.csproj" />
+		<ProjectReference Include="..\..\views\PeachBrackets.WinUI\PeachBrackets.WinUI.csproj" />
 		<PackageReference Include="Microsoft.WindowsAppSDK" />
 		<PackageReference Include="Microsoft.Graphics.Win2D" />
 		<!-- Rewrites a fetched web page (its root classes and base address) before the control loads it; see PageRewriter. Demo only, not shipped. -->

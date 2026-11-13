@@ -30,7 +30,7 @@
 		<Win2DWarnNoPlatform>false</Win2DWarnNoPlatform>
 	</PropertyGroup>
 	<ItemGroup>
-		<ProjectReference Include="..\PeachBrackets\PeachBrackets.csproj" />
+		<ProjectReference Include="..\..\engine\PeachBrackets\PeachBrackets.csproj" />
 		<ProjectReference Include="..\..\drawing\PeachDrawing.Core\PeachDrawing.Core.csproj" />
 		<ProjectReference Include="..\..\drawing\PeachDrawing.Win2D\PeachDrawing.Win2D.csproj" />
 		<!-- Only the parts of the Windows App SDK the control compiles against, not the all-in-one package, which brings the AI, ML, Search and Widgets components with it. -->

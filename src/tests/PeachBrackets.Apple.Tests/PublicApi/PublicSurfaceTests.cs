@@ -7,7 +7,7 @@ using System.Text;
 namespace PeachBrackets.Apple.Tests.PublicApi;
 
 /// <summary>
-/// Pins the public surface of <c>PeachBrackets.Apple</c> to <c>src/engine/PeachBrackets.Apple/PublicApi.macos.txt</c> and <c>PublicApi.ios.txt</c> (the two views differ). The assembly targets Apple platforms, so it
+/// Pins the public surface of <c>PeachBrackets.Apple</c> to <c>src/views/PeachBrackets.Apple/PublicApi.macos.txt</c> and <c>PublicApi.ios.txt</c> (the two views differ). The assembly targets Apple platforms, so it
 /// cannot be loaded by a plain .NET test; it is read as metadata instead, which needs no Android assemblies. The test reads the build of the project
 /// that is on disk (build it first, with the macos and ios workloads) and is skipped when there is none. Run with <c>UPDATE_PUBLIC_API=1</c> to rewrite the
 /// snapshot after an intended change.
@@ -170,7 +170,7 @@ public class PublicSurfaceTests
             if (Directory.Exists(candidate)) return candidate;
         }
 
-        throw new DirectoryNotFoundException("Could not find engine/PeachBrackets.Apple above " + AppContext.BaseDirectory);
+        throw new DirectoryNotFoundException("Could not find views/PeachBrackets.Apple above " + AppContext.BaseDirectory);
     }
 
     // Writes the types a signature mentions by name; nothing is resolved, which is what lets Apple types appear in a plain test.

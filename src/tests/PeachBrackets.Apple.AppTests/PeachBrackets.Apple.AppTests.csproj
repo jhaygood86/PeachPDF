@@ -29,7 +29,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\engine\PeachBrackets.Apple\PeachBrackets.Apple.csproj" />
+    <ProjectReference Include="..\..\views\PeachBrackets.Apple\PeachBrackets.Apple.csproj" />
   </ItemGroup>
 
   <ItemGroup>

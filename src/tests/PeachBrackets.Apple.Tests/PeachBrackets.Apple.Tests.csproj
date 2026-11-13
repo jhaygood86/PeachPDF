@@ -31,7 +31,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Include="..\..\engine\PeachBrackets.Apple\Logic\*.cs" Link="Logic\%(Filename)%(Extension)" />
+    <Compile Include="..\..\views\PeachBrackets.Apple\Logic\*.cs" Link="Logic\%(Filename)%(Extension)" />
   </ItemGroup>
 
   <ItemGroup>
