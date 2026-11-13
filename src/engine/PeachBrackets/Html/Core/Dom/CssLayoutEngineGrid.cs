@@ -486,6 +486,17 @@ namespace PeachBrackets.Html.Dom
 
                 if (expandsFlexRows)
                     ExpandFlexibleRows(rows, BlockContentSize, rowGap);
+                else if (!_vertical && !hasDefiniteHeight && !rowSubgrid && rows.Any(t => IsFlexTrack(t.Def))
+                    && CssValueParser.IsValidLength(_gridBox.MinHeight) && !CssValueParser.DependsOnPercentage(_gridBox.MinHeight))
+                {
+                    // An auto-height grid is as tall as its rows - unless its `min-height` is taller, in which case that minimum is the space
+                    // the flexible rows share (CSS Grid 1 section 12.1: use the minimum as the available space when it would grow the grid).
+                    // The rows hold their content size as the base, so a short minimum leaves them alone.
+                    var minBlock = CssValueParser.ParseLength(_gridBox.MinHeight, 0, _gridBox) + _gridBox.ActualBoxSizeIncludedHeight
+                        - _gridBox.ActualPaddingTop - _gridBox.ActualPaddingBottom
+                        - _gridBox.ActualBorderTopWidth - _gridBox.ActualBorderBottomWidth;
+                    ExpandFlexibleRows(rows, minBlock, rowGap);
+                }
 
                     var rowContainerSize = hasDefiniteBlock ? BlockContentSize
                         : rows.Sum(t => t.Size) + (rowCount > 1 ? rowGap * (rowCount - 1) : 0);

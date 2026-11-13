@@ -223,6 +223,24 @@ namespace PeachBrackets.Engine.Tests.Integration
             if (expectedItemHeight < 450) Assert.Equal(col.Location.Y + 450, col.ActualBottom, 0.5);
         }
 
+        [Theory]
+        [InlineData("", "margin-top:auto")]
+        [InlineData("justify-content:space-between;", "")]
+        [InlineData("width:200pt;", "margin-top:auto")]
+        [InlineData("width:200pt;justify-content:space-between;", "")]
+        public async Task AColumnWithAMinHeightGivesAutoMarginsAndJustifyContentTheRoom(string containerStyle, string bottomStyle)
+        {
+            var html = Wrap($@"
+                <div id='col' style='display:flex; flex-direction:column; min-height:200mm; {containerStyle}'>
+                    <div id='top'>TOP</div>
+                    <div id='bottom' style='{bottomStyle}'>BOTTOM</div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var col = DomUtils.GetBoxById(root, "col")!;
+            var bottom = DomUtils.GetBoxById(root, "bottom")!;
+            Assert.Equal(col.ActualBottom, bottom.ActualBottom, 0.5);
+        }
+
         // ─── flex-grow ───────────────────────────────────────────────────────────
 
         [Fact]
