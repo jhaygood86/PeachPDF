@@ -1,16 +1,16 @@
 using PeachDrawing.Core;
 using System;
 
-namespace PeachBrackets.Android.Logic;
+namespace PeachBrackets.HtmlViewCore;
 
-/// <summary>The parts of the animation host that need no Android: when motion is allowed, what time the document is stepped to, and where a repainted region is in the page's pixels.</summary>
+/// <summary>The parts of the animation host that need no platform: when motion is allowed, what time the document is stepped to, and where a repainted region is in the page's pixels.</summary>
 internal static class AnimationLogic
 {
     /// <summary>
-    /// Whether the system lets animations play: Android's "remove animations" setting is the animator duration scale being 0 (developer options, or the accessibility
-    /// switch of the same name), and any other scale plays them.
+    /// Whether the system lets animations play, for a platform that reports an animation duration scale (Android's "remove animations" setting is that scale being 0, from developer options or the accessibility
+    /// switch of the same name): 0 removes them and any other scale plays them.
     /// </summary>
-    /// <param name="animatorDurationScale">the <c>animator_duration_scale</c> global setting</param>
+    /// <param name="animatorDurationScale">the platform's animation duration scale</param>
     public static bool SystemAllowsMotion(float animatorDurationScale) => animatorDurationScale > 0f;
 
     /// <summary>
@@ -39,16 +39,16 @@ internal static class AnimationLogic
         }
     }
 
-    /// <summary>The time of a frame reported by the choreographer, in nanoseconds on its own clock.</summary>
+    /// <summary>The time of a frame reported by a display clock, in nanoseconds on its own clock.</summary>
     public static TimeSpan FromFrameNanos(long frameTimeNanos) => TimeSpan.FromTicks(frameTimeNanos / 100);
 
     /// <summary>
     /// Where a region of a page (in points from the sheet's top-left) is in the page's device pixels at the current zoom: the pixels the tiles are cut from.
     /// </summary>
     /// <param name="region">the region, in points</param>
-    /// <param name="pageTop">where the page starts, in dp</param>
-    /// <param name="pixelsPerPoint">how many dp a point is</param>
-    /// <param name="scale">device pixels per dp (density times zoom)</param>
+    /// <param name="pageTop">where the page starts, in DIPs</param>
+    /// <param name="pixelsPerPoint">how many DIPs a point is</param>
+    /// <param name="scale">device pixels per DIP (density times zoom)</param>
     public static (double Left, double Top, double Width, double Height) RegionToPixels(Rect region, double pageTop, double pixelsPerPoint, double scale) =>
         (region.X * pixelsPerPoint * scale, (pageTop + (region.Y * pixelsPerPoint)) * scale, region.Width * pixelsPerPoint * scale, region.Height * pixelsPerPoint * scale);
 }
