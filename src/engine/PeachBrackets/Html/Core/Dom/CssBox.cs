@@ -9544,7 +9544,7 @@ namespace PeachBrackets.Html.Dom
             max = count * Math.Max(width, contentMax) + (count - 1) * gap;
 
             // With a column-width the container can drop to one column, but never below 1px (Chrome).
-            min = hasWidth ? Math.Max(Length.PointsPerPx, Math.Min(contentMin, width)) : count * contentMin + (count - 1) * gap;
+            min = hasWidth ? Math.Max(Length.PointsPerPx * g.PixelsPerPoint, Math.Min(contentMin, width)) : count * contentMin + (count - 1) * gap;
 
             // A spanner is as wide as the container, so the container is at least as wide as the widest of them, however narrow the columns.
             foreach (var child in box.Boxes)

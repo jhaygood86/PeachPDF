@@ -36,9 +36,9 @@ namespace PeachBrackets.Html.Dom
                 (naturalWidth, naturalHeight) = ImageResolutionResolver.NaturalSize(box, image);
             }
 
-            // Intrinsic pixels -> layout points, to match contentBox.
-            naturalWidth *= Css.Length.PointsPerPx;
-            naturalHeight *= Css.Length.PointsPerPx;
+            // Intrinsic pixels -> layout units (a CSS pixel is PointsPerPx points, and the canvas has PixelsPerPoint units per point), to match contentBox.
+            naturalWidth *= Css.Length.PointsPerPx * g.PixelsPerPoint;
+            naturalHeight *= Css.Length.PointsPerPx * g.PixelsPerPoint;
 
             var (destination, needsClip) = ObjectFitResolver.Compute(
                 contentBox, naturalWidth, naturalHeight, box.ObjectFit.Value, box.ObjectPosition, box);

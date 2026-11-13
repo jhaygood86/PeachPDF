@@ -113,6 +113,17 @@ public class PixelSnappingTests
     }
 
     [Fact]
+    public async Task AnInlineSvgWithPositionAbsolute_IsPlacedByItsOffsets()
+    {
+        // The svg is a replaced element like an img: its absolute positioning used to be dropped (the box stayed in the flow at the page origin and was
+        // given no width), because the wrapper that carries an absolutely positioned inline replaced box was only made for the others.
+        using var canvas = await RenderAsync("<svg style='position:absolute;left:40px;top:30px' width='20' height='20'><rect width='20' height='20' fill='black'/></svg>", 100, 80);
+
+        Assert.True(TestDocument.HasInk(canvas, 40, 30, 20, 20), "the square is at its offsets");
+        Assert.False(TestDocument.HasInk(canvas, 0, 0, 30, 20), "and not at the origin");
+    }
+
+    [Fact]
     public async Task TheDefaultContext_StillLaysOutInPoints()
     {
         var context = await TestDocument.NewContextAsync();

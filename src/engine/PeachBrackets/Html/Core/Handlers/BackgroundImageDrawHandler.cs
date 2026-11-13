@@ -50,7 +50,7 @@ namespace PeachBrackets.Html.Handlers
             bool intrinsicSizeInCssPixels,
             double imageDensity = 1)
         {
-            var pxFactor = intrinsicSizeInCssPixels ? Length.PointsPerPx : 1d;
+            var pxFactor = intrinsicSizeInCssPixels ? Length.PointsPerPx * g.PixelsPerPoint : 1d;
             backgroundRepeat = BackgroundLayerResolver.NormalizeRepeat(backgroundRepeat);
 
             // image-orientation turns a natural bitmap upright; a generated tile (gradient) has no orientation.

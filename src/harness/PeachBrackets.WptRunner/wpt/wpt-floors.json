@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "wptCommit": "ffc4686d117de150daf1287809302e3edea82dc6",
   "floors": {
-    "css-backgrounds": 277,
+    "css-backgrounds": 305,
     "css-color": 158,
     "css-flexbox": 498,
     "css-grid": 378,
@@ -11,10 +11,10 @@
     "css-position": 31,
     "css-tables": 51,
     "css-text": 583,
-    "css-transforms": 413,
-    "css-values": 82,
-    "css2-floats": 152,
-    "css2-flow": 1560,
+    "css-transforms": 418,
+    "css-values": 83,
+    "css2-floats": 159,
+    "css2-flow": 1584,
     "css2-generated": 211,
     "css2-positioning": 343,
     "css2-tables": 94
