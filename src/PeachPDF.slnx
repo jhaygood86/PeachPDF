@@ -26,6 +26,7 @@
   <Project Path="examples/PeachPDF.Demo.BlazorWasm/PeachPDF.Demo.BlazorWasm.csproj" />
   <Project Path="PeachPDF.SourceGenerators/PeachPDF.SourceGenerators.csproj" />
   <Project Path="tests/PeachPDF.SourceGenerators.Tests/PeachPDF.SourceGenerators.Tests.csproj" />
+  <Project Path="harness/PeachBrackets.WptRunner/PeachBrackets.WptRunner.csproj" />
   <Project Path="harness/PeachPDF.TestHarness/PeachPDF.TestHarness.csproj" />
   <Project Path="tests/PeachPDF.Tests/PeachPDF.Tests.csproj" />
   <Project Path="engine/PeachBrackets/PeachBrackets.csproj" />

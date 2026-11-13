@@ -1,0 +1,20 @@
+{
+  "modules": [
+    { "id": "css2-flow", "dirs": ["css/CSS2/normal-flow", "css/CSS2/box-display", "css/CSS2/box", "css/CSS2/margin-padding-clear", "css/CSS2/linebox", "css/CSS2/visudet", "css/CSS2/visuren", "css/CSS2/text", "css/CSS2/bidi-text"] },
+    { "id": "css2-floats", "dirs": ["css/CSS2/floats", "css/CSS2/floats-clear"] },
+    { "id": "css2-positioning", "dirs": ["css/CSS2/positioning", "css/CSS2/abspos", "css/CSS2/zindex", "css/CSS2/stacking-context", "css/CSS2/zorder", "css/CSS2/visufx"] },
+    { "id": "css2-tables", "dirs": ["css/CSS2/tables"] },
+    { "id": "css2-generated", "dirs": ["css/CSS2/generate", "css/CSS2/generated-content", "css/CSS2/lists"] },
+    { "id": "css-flexbox", "dirs": ["css/css-flexbox"] },
+    { "id": "css-grid", "dirs": ["css/css-grid"] },
+    { "id": "css-tables", "dirs": ["css/css-tables"] },
+    { "id": "css-position", "dirs": ["css/css-position"] },
+    { "id": "css-backgrounds", "dirs": ["css/css-backgrounds"] },
+    { "id": "css-color", "dirs": ["css/css-color"] },
+    { "id": "css-values", "dirs": ["css/css-values"] },
+    { "id": "css-text", "dirs": ["css/css-text"] },
+    { "id": "css-transforms", "dirs": ["css/css-transforms"] },
+    { "id": "css-multicol", "dirs": ["css/css-multicol"] },
+    { "id": "css-lists", "dirs": ["css/css-lists"] }
+  ]
+}
