@@ -91,7 +91,7 @@ foreach (var link in document.Annotations.Links)
 `GetElementAt`, `GetCursorAt` and `GetInteractionAt` answer what is under a point; `SetPointerStateAsync` applies `:hover` and
 `:active`; `SetStyle` (with `EnableIncrementalUpdates`) restyles an element and returns the regions to repaint; `AnimationsEnabled`
 plus `AdvanceAnimations` plays CSS animations, transitions and animated images; `PaintPageRegionAsync` paints only an invalidated
-rectangle. The ready-made views built on this are `PeachBrackets.WinUI`, `PeachBrackets.Android` and `PeachBrackets.Apple`.
+rectangle. The ready-made views built on this are `PeachBrackets.WinUI`, `PeachBrackets.Android`, `PeachBrackets.Apple` and `PeachBrackets.Avalonia`.
 
 **Text: selection, copy and find.** `RecordTextRuns` lets the document report where its text is. `HitTest`, `GetWordAt`, `FindText`,
 `SetSelectedRanges` and `GetText` give selection, copy and find; with `EnableSelectionStyling` the selection paints in the document's

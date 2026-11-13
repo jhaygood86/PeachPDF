@@ -49,6 +49,7 @@ PeachPDF converts HTML and CSS into PDF documents entirely within .NET, with no 
 - [PeachBrackets views](#peachbrackets-views)
   - [PeachBrackets.WinUI](#peachbracketswinui)
   - [PeachBrackets.Android](#peachbracketsandroid)
+  - [PeachBrackets.Avalonia](#peachbracketsavalonia)
   - [PeachBrackets.Apple](#peachbracketsapple)
 - [PeachPDF (the product)](#peachpdf-the-product)
   - [Generating a PDF](#generating-a-pdf)
@@ -77,11 +78,11 @@ PeachPDF converts HTML and CSS into PDF documents entirely within .NET, with no 
 | **PeachDrawing** | CPU software rasterizer: `RasterCanvas`, filters, blend modes, warps | `PeachDrawing.Core`, `PeachImage` | the PDF, SVG, Skia, Win2D and CoreGraphics backends; `PeachBrackets` | [PeachDrawing](peachdrawing.md) |
 | **PeachDrawing.PDF** | The PDF `Canvas` and the `PdfComposer` that writes a PDF file; also reads, merges and rewrites existing PDFs | `PeachDrawing`, `PeachDrawing.Core`, `PeachDrawing.Text`, `PeachImage` | `PeachPDF` | [PeachDrawing.PDF](peachdrawing-pdf.md) |
 | **PeachDrawing.Svg** | A vector SVG `Canvas` | `PeachDrawing.Core`, `PeachDrawing`, `PeachImage` | applications; the test harness | [PeachDrawing.Svg](peachdrawing-svg.md) |
-| **PeachDrawing.Skia** | A SkiaSharp `Canvas` over a surface the host supplies | `PeachDrawing.Core`, `PeachDrawing`, `PeachImage`, SkiaSharp | `PeachBrackets.Android`; applications | [PeachDrawing.Skia](peachdrawing-skia.md) |
+| **PeachDrawing.Skia** | A SkiaSharp `Canvas` over a surface the host supplies | `PeachDrawing.Core`, `PeachDrawing`, `PeachImage`, SkiaSharp | `PeachBrackets.Android`, `PeachBrackets.Avalonia`; applications | [PeachDrawing.Skia](peachdrawing-skia.md) |
 | **PeachDrawing.Win2D** | A Win2D `Canvas` (Windows only) | `PeachDrawing.Core`, `PeachDrawing`, `PeachImage`, Win2D | `PeachBrackets.WinUI` | [PeachDrawing.Win2D](peachdrawing-win2d.md) |
 | **PeachDrawing.CoreGraphics** | A CoreGraphics `Canvas` (macOS and iOS) | `PeachDrawing.Core`, `PeachDrawing`, `PeachImage` | `PeachBrackets.Apple` | [PeachDrawing.CoreGraphics](peachdrawing-coregraphics.md) |
 | **PeachBrackets** | The HTML, CSS, SVG and MathML engine: parse, cascade, lay out into pages, paint a page onto any `Canvas` | `PeachDrawing`, `PeachDrawing.Core`, `PeachDrawing.Text`, `PeachImage`, MimeKit | `PeachPDF` and the three views | [PeachBrackets](peachbrackets.md) |
-| **PeachBrackets.WinUI / .Android / .Apple** | `HtmlView` controls that show a document on a screen | `PeachBrackets` plus the Win2D, Skia or CoreGraphics backend | applications | [WinUI](peachbrackets-winui.md), [Android](peachbrackets-android.md), [Apple](peachbrackets-apple.md) |
+| **PeachBrackets.WinUI / .Android / .Apple / .Avalonia** | `HtmlView` controls that show a document on a screen | `PeachBrackets` plus the Win2D, Skia or CoreGraphics backend | applications | [WinUI](peachbrackets-winui.md), [Android](peachbrackets-android.md), [Apple](peachbrackets-apple.md), [Avalonia](peachbrackets-avalonia.md) |
 | **PeachPDF** | The PDF product: `PdfGenerator`, the declarative page builder, resource loaders, PDF feature builders | `PeachBrackets`, `PeachDrawing.PDF`, `PeachDrawing`, `PeachDrawing.Core`, `PeachDrawing.Text`, `PeachImage`, MimeKit | applications, `peachpdf` | [Getting started](getting-started.md) |
 | **PeachPDF.Cli** | The `peachpdf` command-line tool (Native AOT) | `PeachPDF` | users | [Command-line tool](cli.md) |
 | **PeachPDF.SourceGenerators** | Build-time analyzer that generates the CSS/SVG property registry; never shipped | — | `PeachBrackets` | — |
@@ -104,7 +105,7 @@ PeachDrawing  (CPU raster)
         │
         ├──► PeachDrawing.PDF ─────────────┐
         ├──► PeachDrawing.Svg              │
-        ├──► PeachDrawing.Skia ──► PeachBrackets.Android
+        ├──► PeachDrawing.Skia ──► PeachBrackets.Android, PeachBrackets.Avalonia
         ├──► PeachDrawing.Win2D ─► PeachBrackets.WinUI
         └──► PeachDrawing.CoreGraphics ─► PeachBrackets.Apple
                                            │
@@ -1158,6 +1159,13 @@ Code-only (no XAML). `HtmlView` hosts a `CanvasVirtualControl` in a `ScrollViewe
 
 `HtmlView : FrameLayout` hosts an `SKGLSurfaceView` (or, with `useGpu: false`, an `SKCanvasView`). The visible region is painted by `PaintPageRegionAsync`; on the GPU it is painted as 1024-pixel tiles of the `DocumentPaintLayer.Content` layer kept as textures (a `TileGrid` with an LRU), with the `ViewportAttached` layer painted over them each frame. Touch is handled directly (`GestureDetector`, `ScaleGestureDetector`, `OverScroller`) with an event per touch stage so the host can take a gesture away from the document's `touch-action`. `Logic/` holds the Android-free pieces (accessibility mapping, tile grid, scroll and zoom math, caret and IME edits, picker values), compiled into a plain-.NET test project. The UI thread must never block on an async call.
 
+
+### PeachBrackets.Avalonia
+
+**Guide:** [PeachBrackets.Avalonia](peachbrackets-avalonia.md) · **Source:** [src/views/PeachBrackets.Avalonia/](https://github.com/jhaygood86/PeachPDF/tree/main/src/views/PeachBrackets.Avalonia/) · depends on `PeachBrackets`, `PeachDrawing.Skia` and Avalonia 12 · cross-platform (`net10.0`, `net11.0`)
+
+`HtmlView : Control` draws through an `ICustomDrawOperation` whose `Render` takes the Skia lease Avalonia gives it (`ISkiaSharpApiLeaseFeature`: the `SKCanvas` and, on the GPU, the `GRContext`) and paints through `SkiaCanvas.FromCanvas`. On the GPU the `DocumentPaintLayer.Content` layer is kept as 1024-pixel tiles (`TileGrid`, an LRU of `SKImage`s) with the `Animated` and `ViewportAttached` layers painted over them each frame; without a GPU the visible region is painted straight. Avalonia renders on its own thread, so a lock separates painting from the UI thread's restyles, edits and animation steps. The partials split the view by concern (input, scrolling, touch, text input with an `TextInputMethodClient`, forms, pickers, cursors, images, animation, focus, accessibility peers). The platform-free pieces live in `PeachBrackets.HtmlView.Core`, a folder of internal sources the WinUI, Android, Apple and Avalonia views compile in, so none of it is public API.
+
 ### PeachBrackets.Apple
 
 **Guide:** [PeachBrackets.Apple](peachbrackets-apple.md) · **Source:** [src/views/PeachBrackets.Apple/](https://github.com/jhaygood86/PeachPDF/tree/main/src/views/PeachBrackets.Apple/) · depends on `PeachBrackets` and `PeachDrawing.CoreGraphics` · macOS and iOS
@@ -1341,7 +1349,7 @@ Each package is tested by a project of its own that references only that package
 | `PeachDrawing.PDF` | `PeachDrawing.PDF.Tests` |
 | `PeachDrawing.Svg`, `.Skia`, `.Win2D`, `.CoreGraphics` | `PeachDrawing.Svg.Tests`, `PeachDrawing.Skia.Tests`, `PeachDrawing.Win2D.Tests`, `PeachDrawing.CoreGraphics.Tests` |
 | `PeachBrackets` | `PeachBrackets.Tests` (public API only) and `PeachBrackets.Engine.Tests` (box tree, layout and paint internals) |
-| `PeachBrackets.WinUI`, `.Android`, `.Apple` | `PeachBrackets.WinUI.Tests` and `.UITests` (a real window), `PeachBrackets.Android.Tests` (logic, no emulator), `PeachBrackets.Apple.Tests` and `.AppTests` (an offscreen window) |
+| `PeachBrackets.WinUI`, `.Android`, `.Apple`, `.Avalonia` | `PeachBrackets.WinUI.Tests` and `.UITests` (a real window), `PeachBrackets.Android.Tests` (logic, no emulator), `PeachBrackets.Apple.Tests` and `.AppTests` (an offscreen window), `PeachBrackets.Avalonia.Tests` (Avalonia's headless platform) |
 | `PeachPDF` | `PeachPDF.Tests` (what ends up in the saved PDF, written back through a PDF reader) |
 | `PeachPDF.Cli` | `PeachPDF.Cli.Tests` |
 | `PeachPDF.SourceGenerators` | `PeachPDF.SourceGenerators.Tests` (diagnostics, generated shape, incrementality) |

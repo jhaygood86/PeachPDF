@@ -78,6 +78,7 @@ The guides are grouped as in the site's **Guides** menu.
 - **[PeachBrackets.WinUI](peachbrackets-winui.md)** — a WinUI 3 `HtmlView` control for showing an HTML document in a Windows app: scrolling, zoom, links, selection and copy, and the CSS cursor, hover and touch behavior the document asks for.
 - **[PeachBrackets.Android](peachbrackets-android.md)** — a .NET for Android `HtmlView` for showing an HTML document in an Android app: touch scrolling, fling and pinch zoom, links, long-press selection and copy, and the CSS cursor, hover and touch-action behavior the document asks for.
 - **[PeachBrackets.Apple](peachbrackets-apple.md)** — an AppKit (macOS) and UIKit (iOS) `HtmlView` for showing an HTML document in a Mac or iPhone/iPad app: system scrolling and pinch zoom over tiles composited by the graphics hardware, mouse, trackpad, touch and pointer input, links, selection and copy, and the CSS cursor, hover and touch-action behavior the document asks for.
+- **[PeachBrackets.Avalonia](peachbrackets-avalonia.md)** — an Avalonia 12 `HtmlView` control for showing an HTML document in a desktop (or mobile) Avalonia app: scrolling and zoom, links, selection and copy, form controls, text editing, animations, accessibility, and the CSS cursor, hover and touch-action behavior the document asks for, drawn through Avalonia's Skia lease.
 
 ### Project
 

@@ -267,7 +267,7 @@ We support TrueType, CFF, WOFF, and WOFF2 font formats.
 
 PeachPDF is built on libraries you can also use on their own, all versioned together:
 
-- [PeachBrackets](https://peachpdf.net/peachbrackets.html) — the HTML/CSS/SVG/MathML engine without any PDF: load, lay out and paint pages onto any canvas. Hosts: [WinUI](https://peachpdf.net/peachbrackets-winui.html), [Android](https://peachpdf.net/peachbrackets-android.html), [Apple](https://peachpdf.net/peachbrackets-apple.html).
+- [PeachBrackets](https://peachpdf.net/peachbrackets.html) — the HTML/CSS/SVG/MathML engine without any PDF: load, lay out and paint pages onto any canvas. Hosts: [WinUI](https://peachpdf.net/peachbrackets-winui.html), [Android](https://peachpdf.net/peachbrackets-android.html), [Apple](https://peachpdf.net/peachbrackets-apple.html), [Avalonia](https://peachpdf.net/peachbrackets-avalonia.html).
 - [PeachDrawing.PDF](https://peachpdf.net/peachdrawing-pdf.html) — the PDF writer and PDF operations (merge, split, overlay, encrypt, linearize), usable with no HTML.
 - [PeachDrawing.Core](https://peachpdf.net/peachdrawing-core.html) — the `Canvas` abstraction, with backends [PeachDrawing](https://peachpdf.net/peachdrawing.html) (CPU raster), [PeachDrawing.Svg](https://peachpdf.net/peachdrawing-svg.html), [PeachDrawing.Skia](https://peachpdf.net/peachdrawing-skia.html), [PeachDrawing.Win2D](https://peachpdf.net/peachdrawing-win2d.html) and [PeachDrawing.CoreGraphics](https://peachpdf.net/peachdrawing-coregraphics.html).
 - [PeachDrawing.Text](https://peachpdf.net/peachdrawing-text.html) — fonts, shaping, bidi, hyphenation and paragraph layout.
