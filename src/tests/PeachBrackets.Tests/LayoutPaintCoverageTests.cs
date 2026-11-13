@@ -173,6 +173,19 @@ public class LayoutPaintCoverageTests
         Assert.Equal((0, 0, 255), PageRaster.Rgb(canvas, 10, 45));
     }
 
+    [Theory]
+    [InlineData("break-spaces", true)]
+    [InlineData("pre-wrap", false)]
+    public async Task OnlyBreakSpacesWrapsALongRunOfPreservedSpacesOntoMoreLines(string whiteSpace, bool wraps)
+    {
+        var spaces = new string(' ', 60);
+        using var canvas = await PageRaster.RenderAsync(
+            $"<div style='width:50px;font:10px sans-serif;white-space:{whiteSpace};background:rgb(0,128,0)'>a{spaces}</div>");
+
+        Assert.Equal(Green, PageRaster.Rgb(canvas, 25, 5));
+        Assert.Equal(wraps ? Green : White, PageRaster.Rgb(canvas, 25, 20));
+    }
+
     [Fact]
     public async Task ADeclaredWidthInlineBlockThatDoesNotFitTheLineStartsTheNextOne()
     {
