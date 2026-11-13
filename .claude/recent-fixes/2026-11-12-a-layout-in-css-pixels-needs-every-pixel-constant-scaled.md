@@ -20,6 +20,15 @@ through at the edge. The same is true for any host that scales the canvas instea
   vertically. Without it the same text laid out at 10.2px and at 10.4px (a flex item centered at a half pixel against a plain block) painted
   with different anti-aliasing rows - 109 flexbox tests differed by one row of "max 15" pixels. css-flexbox 413 -> 515.
 
+- **Fonts must be built in points and report layout units.** `RasterCanvas` follows `PdfCanvas`'s convention (`Font.Size` is points; the canvas divides
+  layout units by `PixelsPerPoint`), so a plain `TypefaceFont` created at the layout size drew text 1.33x too large and wider than its laid-out box
+  at 96/72 - invisible to reftests, which draw test and reference alike. `RasterRenderContext` now builds a `RasterFont` (the `SkiaFont` shape: a
+  `TypefaceFont` of `size / PixelsPerPoint` whose metrics are rounded and scaled to layout units) whenever `PixelsPerPoint` is not 1, and a plain
+  `TypefaceFont` as before otherwise, so existing standalone callers see no change. `PixelSnappingTests` pins the glyph height.
+- **Pieces of a bidi-split box snap on every edge** (`SliceGeometry.SnapsEveryEdge`): the snapping leaves an edge that is "a cut across a break" where it
+  is, which for the open end of a piece (it ends at other text, not at the box's next fragment) left a 0.66-coverage fringe the reference's separate
+  spans do not have.
+
 ## Still wrong with PixelsPerPoint != 1 (found, not fixed here)
 Other `Length.PointsPerPx` uses ignore `LayoutUnitsPerPoint` (grep for it): `BackgroundImageDrawHandler.pxFactor`, `BorderImageDrawHandler`
 (`numberUnit`), `ReplacedContentRenderer`, `MarginBoxRenderer`, `FragmentEmitter` line ~2582, the sub/superscript shifts in `CssLayoutEngine`. The

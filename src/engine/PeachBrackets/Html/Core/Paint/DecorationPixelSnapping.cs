@@ -118,8 +118,10 @@ namespace PeachBrackets.Html.Paint
                 };
             }
 
-            var rect = Snap(g, geometry.DecorationRect,
-                geometry.HasLeftEdge, geometry.HasTopEdge, geometry.HasRightEdge, geometry.HasBottomEdge);
+            var rect = geometry.SnapsEveryEdge
+                ? Snap(g, geometry.DecorationRect)
+                : Snap(g, geometry.DecorationRect,
+                    geometry.HasLeftEdge, geometry.HasTopEdge, geometry.HasRightEdge, geometry.HasBottomEdge);
             return geometry with { DecorationRect = rect, ClipRect = rect };
         }
 

@@ -73,6 +73,25 @@ public class PixelSnappingTests
     }
 
     [Fact]
+    public async Task Text_IsDrawnAtTheSizeItWasLaidOutAt_WhenALayoutUnitIsACssPixel()
+    {
+        // A 40px capital H in Source Sans 3 is about 26px tall (cap height 0.66em). Drawn at the font size taken as points it would be a third
+        // taller (about 35px), and wider than the box laid out for it.
+        using var canvas = await RenderAsync("<div style='font-size:40px;line-height:40px;color:black'>H</div>", 60, 60);
+
+        int top = -1, bottom = -1;
+        for (var y = 0; y < 60; y++)
+        {
+            if (!TestDocument.HasInk(canvas, 0, y, 60, 1)) continue;
+            if (top < 0) top = y;
+            bottom = y;
+        }
+
+        var height = bottom - top + 1;
+        Assert.InRange(height, 24, 29);
+    }
+
+    [Fact]
     public async Task TheDefaultContext_StillLaysOutInPoints()
     {
         var context = await TestDocument.NewContextAsync();

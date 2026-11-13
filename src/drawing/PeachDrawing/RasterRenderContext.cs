@@ -121,11 +121,17 @@ public sealed class RasterRenderContext : RenderContext
 
     private static bool IsItalic(PaintFontStyle style) => (style & PaintFontStyle.Italic) == PaintFontStyle.Italic;
 
-    private TypefaceFont MatchAndCreateFont(string family, double size, PaintFontStyle style, double weight, double stretch, double? obliqueSkewSinus)
+    /// <summary>A plain <see cref="TypefaceFont"/> where a layout unit is a point; otherwise a <see cref="RasterFont"/> over one built in points, which reports its metrics in layout units.</summary>
+    private Font NewFont(PeachDrawing.Text.Typeface typeface, double size, SyntheticStyle synthesis, double? obliqueSkewSinus) =>
+        PixelsPerPoint == 1.0
+            ? new TypefaceFont(typeface, size, synthesis, obliqueSkewSinus)
+            : new RasterFont(new TypefaceFont(typeface, size / PixelsPerPoint, synthesis, obliqueSkewSinus), PixelsPerPoint);
+
+    private Font MatchAndCreateFont(string family, double size, PaintFontStyle style, double weight, double stretch, double? obliqueSkewSinus)
     {
         var query = TypefaceQuery.From(weight, stretch, IsItalic(style), null, null, obliqueSkewSinus);
         var match = _fontSet.MatchOrFallback(family, query);
-        return new TypefaceFont(match.Typeface, size, Restrict(match.Synthesis, style), obliqueSkewSinus);
+        return NewFont(match.Typeface, size, Restrict(match.Synthesis, style), obliqueSkewSinus);
     }
 
     /// <inheritdoc/>
@@ -139,7 +145,7 @@ public sealed class RasterRenderContext : RenderContext
             return null;
         }
 
-        return new TypefaceFont(match.Typeface, size, Restrict(match.Synthesis, style), obliqueSkewSinus);
+        return NewFont(match.Typeface, size, Restrict(match.Synthesis, style), obliqueSkewSinus);
     }
 
     /// <inheritdoc/>
@@ -153,7 +159,7 @@ public sealed class RasterRenderContext : RenderContext
             if (!fallbackFamily.TryMatch(TypefaceQuery.From(weight, stretch, IsItalic(style), codepoint, null, obliqueSkewSinus), out var match))
                 return null;
 
-            return new TypefaceFont(match.Typeface, size, Restrict(match.Synthesis, style), obliqueSkewSinus);
+            return NewFont(match.Typeface, size, Restrict(match.Synthesis, style), obliqueSkewSinus);
         }
         catch
         {

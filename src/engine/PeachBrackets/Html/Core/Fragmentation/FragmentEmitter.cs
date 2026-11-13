@@ -3247,6 +3247,7 @@ namespace PeachBrackets.Html.Fragmentation
                         FragmentRect = new Rect(band.X + piece.Start, band.Y, piece.End - piece.Start, band.Height),
                         HasLeftEdge = fragment.Slice.HasLeftEdge && piece.HasLeftEdge,
                         HasRightEdge = fragment.Slice.HasRightEdge && piece.HasRightEdge,
+                        SnapsEveryEdge = true,
                     };
 
                     result.Add(new LineFragment(rect, fragment.Line, slice));

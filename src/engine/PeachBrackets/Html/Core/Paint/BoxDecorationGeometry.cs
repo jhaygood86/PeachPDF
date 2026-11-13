@@ -49,6 +49,7 @@ namespace PeachBrackets.Html.Paint
     /// the break.
     /// </param>
     /// <param name="HasBottomEdge">whether the box's own bottom border belongs to this rectangle</param>
+    /// <param name="SnapsEveryEdge">whether the pixel snapping moves the open edges too; see <see cref="SliceGeometry.SnapsEveryEdge"/></param>
     /// <param name="NeedsClip">
     /// whether <paramref name="ClipRect"/> has to be pushed before painting. False whenever
     /// <paramref name="DecorationRect"/> is this rectangle already, which keeps the common case's content
@@ -61,7 +62,8 @@ namespace PeachBrackets.Html.Paint
         bool HasRightEdge,
         bool HasTopEdge,
         bool HasBottomEdge,
-        bool NeedsClip)
+        bool NeedsClip,
+        bool SnapsEveryEdge = false)
     {
         /// <summary>
         /// A rectangle no break touches: it is its own decoration area and owns all four of its edges. The
@@ -96,7 +98,7 @@ namespace PeachBrackets.Html.Paint
             {
                 return new BoxDecorationGeometry(line.Rect, line.Rect,
                     slice.HasLeftEdge, slice.HasRightEdge,
-                    slice.HasTopEdge, slice.HasBottomEdge, NeedsClip: false);
+                    slice.HasTopEdge, slice.HasBottomEdge, NeedsClip: false, SnapsEveryEdge: slice.SnapsEveryEdge);
             }
 
             return new BoxDecorationGeometry(slice.UnbrokenStrip, line.Rect,
