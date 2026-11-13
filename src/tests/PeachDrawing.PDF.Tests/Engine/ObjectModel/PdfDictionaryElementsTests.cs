@@ -206,7 +206,7 @@ namespace PeachPDF.Tests.PdfEngineTests.ObjectModel
             var item = new PdfInteger(5);
             dict.Elements.SetValue("/Key", item);
 
-            Assert.Same(item, dict.Elements.GetValue("/Key"));
+            Assert.Same(item, dict.Elements["/Key"]);
         }
 
         [Fact]
@@ -214,7 +214,7 @@ namespace PeachPDF.Tests.PdfEngineTests.ObjectModel
         {
             var dict = new PdfDictionary();
 
-            Assert.Null(dict.Elements.GetValue("/Missing"));
+            Assert.Null(dict.Elements["/Missing"]);
         }
 
         [Fact]

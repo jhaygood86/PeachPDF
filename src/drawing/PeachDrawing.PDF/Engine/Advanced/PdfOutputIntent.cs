@@ -80,17 +80,15 @@ internal sealed class PdfOutputIntent : PdfDictionary
     /// <summary>
     /// Predefined keys of this dictionary.
     /// </summary>
-    internal sealed class Keys : KeysBase
+    internal sealed class Keys
     {
         /// <summary>(Required) Must be OutputIntent for an output intent dictionary.</summary>
-        [PdfKey(PdfKeyType.Name | PdfKeyType.Required, FixedValue = "OutputIntent")]
         public const string Type = "/Type";
 
         /// <summary>
         /// (Required) The output intent subtype - GTS_PDFA1 identifies this as a PDF/A output
         /// intent (reused, unchanged, across ISO 19005-1/2/3).
         /// </summary>
-        [PdfKey(PdfKeyType.Name | PdfKeyType.Required)]
         public const string S = "/S";
 
         /// <summary>
@@ -98,31 +96,19 @@ internal sealed class PdfOutputIntent : PdfDictionary
         /// for a registered characterization, the name registered with ICC; PeachPDF always names
         /// the well-known "sRGB IEC61966-2.1" condition.
         /// </summary>
-        [PdfKey(PdfKeyType.String | PdfKeyType.Required)]
         public const string OutputConditionIdentifier = "/OutputConditionIdentifier";
 
         /// <summary>
         /// (Required if OutputConditionIdentifier does not identify a standard characterization,
         /// but PeachPDF always writes it) A human-readable description of the output intent.
         /// </summary>
-        [PdfKey(PdfKeyType.String | PdfKeyType.Optional)]
         public const string Info = "/Info";
 
         /// <summary>
         /// (Required for PDF/A; must be an indirect reference) An ICC profile stream defining the
         /// transformation from source color space to a device-independent color space.
         /// </summary>
-        [PdfKey(PdfKeyType.Stream | PdfKeyType.Optional | PdfKeyType.MustBeIndirect)]
         public const string DestOutputProfile = "/DestOutputProfile";
 
-        /// <summary>
-        /// Gets the KeysMeta for these keys.
-        /// </summary>
-        public static PdfDictionaryMetadata Meta { get; } = CreateMeta(typeof(Keys));
     }
-
-    /// <summary>
-    /// Gets the KeysMeta of this dictionary type.
-    /// </summary>
-    internal override PdfDictionaryMetadata Meta => Keys.Meta;
 }

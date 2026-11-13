@@ -523,7 +523,7 @@ internal sealed class PdfShading : PdfDictionary
     /// <summary>
     /// Common keys for all streams.
     /// </summary>
-    internal sealed class Keys : KeysBase
+    internal sealed class Keys
     {
         /// <summary>
         /// (Required) The shading type:
@@ -535,14 +535,12 @@ internal sealed class PdfShading : PdfDictionary
         /// 6 Coons patch mesh
         /// 7 Tensor-product patch mesh
         /// </summary>
-        [PdfKey(PdfKeyType.Integer | PdfKeyType.Required)]
         public const string ShadingType = "/ShadingType";
 
         /// <summary>
         /// (Required) The color space in which color values are expressed. This may be any device, 
         /// CIE-based, or special color space except a Pattern space.
         /// </summary>
-        [PdfKey(PdfKeyType.NameOrArray | PdfKeyType.Required)]
         public const string ColorSpace = "/ColorSpace";
 
         /// <summary>
@@ -553,7 +551,6 @@ internal sealed class PdfShading : PdfDictionary
         /// the effect is as if the painting operation were performed twice: first with the 
         /// background color and then with the shading.
         /// </summary>
-        [PdfKey(PdfKeyType.Array | PdfKeyType.Optional)]
         public const string Background = "/Background";
 
         /// <summary>
@@ -563,7 +560,6 @@ internal sealed class PdfShading : PdfDictionary
         /// clipping boundary when the shading is painted, in addition to the current clipping path
         /// and any other clipping boundaries in effect at that time.
         /// </summary>
-        [PdfKey(PdfKeyType.Rectangle | PdfKeyType.Optional)]
         public const string BBox = "/BBox";
 
         /// <summary>
@@ -577,7 +573,6 @@ internal sealed class PdfShading : PdfDictionary
         /// is ignored.
         /// Default value: false.
         /// </summary>
-        [PdfKey(PdfKeyType.Boolean | PdfKeyType.Optional)]
         public const string AntiAlias = "/AntiAlias";
 
         // ---- Type 2 ----------------------------------------------------------
@@ -586,7 +581,6 @@ internal sealed class PdfShading : PdfDictionary
         /// (Required) An array of four numbers [x0 y0 x1 y1] specifying the starting and
         /// ending coordinates of the axis, expressed in the shading's target coordinate space.
         /// </summary>
-        [PdfKey(PdfKeyType.Array | PdfKeyType.Required)]
         public const string Coords = "/Coords";
 
         /// <summary>
@@ -596,7 +590,6 @@ internal sealed class PdfShading : PdfDictionary
         /// the axis. The variable t becomes the input argument to the color function(s).
         /// Default value: [0.0 1.0].
         /// </summary>
-        [PdfKey(PdfKeyType.Array | PdfKeyType.Optional)]
         public const string Domain = "/Domain";
 
         /// <summary>
@@ -607,7 +600,6 @@ internal sealed class PdfShading : PdfDictionary
         /// dictionary. If the value returned by the function for a given color component is out
         /// of range, it is adjusted to the nearest valid value.
         /// </summary>
-        [PdfKey(PdfKeyType.Function | PdfKeyType.Required)]
         public const string Function = "/Function";
 
         /// <summary>
@@ -615,17 +607,7 @@ internal sealed class PdfShading : PdfDictionary
         /// beyond the starting and ending points of the axis, respectively.
         /// Default value: [false false].
         /// </summary>
-        [PdfKey(PdfKeyType.Array | PdfKeyType.Optional)]
         public const string Extend = "/Extend";
 
-        /// <summary>
-        /// Gets the KeysMeta for these keys.
-        /// </summary>
-        internal static PdfDictionaryMetadata Meta { get; } = CreateMeta(typeof(Keys));
     }
-
-    /// <summary>
-    /// Gets the KeysMeta of this dictionary type.
-    /// </summary>
-    internal override PdfDictionaryMetadata Meta => Keys.Meta;
 }

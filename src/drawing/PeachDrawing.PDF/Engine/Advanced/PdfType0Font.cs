@@ -91,13 +91,11 @@ internal sealed class PdfType0Font : PdfFont
         /// (Required) The type of PDF object that this dictionary describes;
         /// must be Font for a font dictionary.
         /// </summary>
-        [PdfKey(PdfKeyType.Name | PdfKeyType.Required, FixedValue = "Font")]
         public new const string Type = "/Type";
 
         /// <summary>
         /// (Required) The type of font; must be Type0 for a Type 0 font.
         /// </summary>
-        [PdfKey(PdfKeyType.Name | PdfKeyType.Required)]
         public new const string Subtype = "/Subtype";
 
         /// <summary>
@@ -110,7 +108,6 @@ internal sealed class PdfType0Font : PdfFont
         /// Encoding entry (or the CMapName entry in the CMap). If the descendant is a
         /// Type 2 CIDFont, this name should be the same as the CIDFont's BaseFont name.
         /// </summary>
-        [PdfKey(PdfKeyType.Name | PdfKeyType.Required)]
         public new const string BaseFont = "/BaseFont";
 
         /// <summary>
@@ -119,31 +116,19 @@ internal sealed class PdfType0Font : PdfFont
         /// Type 2 CIDFont whose associated TrueType font program is not embedded
         /// in the PDF file, the Encoding entry must be a predefined CMap name.
         /// </summary>
-        [PdfKey(PdfKeyType.StreamOrName | PdfKeyType.Required)]
         public const string Encoding = "/Encoding";
 
         /// <summary>
         /// (Required) A one-element array specifying the CIDFont dictionary that is the
         /// descendant of this Type 0 font.
         /// </summary>
-        [PdfKey(PdfKeyType.Array | PdfKeyType.Required)]
         public const string DescendantFonts = "/DescendantFonts";
 
         /// <summary>
         /// ((Optional) A stream containing a CMap file that maps character codes to
         /// Unicode values.
         /// </summary>
-        [PdfKey(PdfKeyType.Stream | PdfKeyType.Optional)]
         public const string ToUnicode = "/ToUnicode";
 
-        /// <summary>
-        /// Gets the KeysMeta for these keys.
-        /// </summary>
-        internal static PdfDictionaryMetadata Meta { get; } = CreateMeta(typeof(Keys));
     }
-
-    /// <summary>
-    /// Gets the KeysMeta of this dictionary type.
-    /// </summary>
-    internal override PdfDictionaryMetadata Meta => Keys.Meta;
 }

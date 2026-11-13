@@ -78,7 +78,7 @@ internal sealed class PdfExtGState : PdfDictionary
     /// <summary>
     /// Common keys for all streams.
     /// </summary>
-    internal sealed class Keys : KeysBase
+    internal sealed class Keys
     {
         // ReSharper disable InconsistentNaming
 
@@ -86,44 +86,37 @@ internal sealed class PdfExtGState : PdfDictionary
         /// (Optional) The type of PDF object that this dictionary describes;
         /// must be ExtGState for a graphics state parameter dictionary.
         /// </summary>
-        [PdfKey(PdfKeyType.Name | PdfKeyType.Optional)]
         public const string Type = "/Type";
 
         /// <summary>
         /// (Optional; PDF 1.3) The line width (see "Line Width" on page 185).
         /// </summary>
-        [PdfKey(PdfKeyType.Real | PdfKeyType.Optional)]
         public const string LW = "/LW";
 
         /// <summary>
         /// (Optional; PDF 1.3) The line cap style.
         /// </summary>
-        [PdfKey(PdfKeyType.Integer | PdfKeyType.Optional)]
         public const string LC = "/LC";
 
         /// <summary>
         /// (Optional; PDF 1.3) The line join style.
         /// </summary>
-        [PdfKey(PdfKeyType.Integer | PdfKeyType.Optional)]
         public const string LJ = "/LJ";
 
         /// <summary>
         /// (Optional; PDF 1.3) The miter limit.
         /// </summary>
-        [PdfKey(PdfKeyType.Real | PdfKeyType.Optional)]
         public const string ML = "/ML";
 
         /// <summary>
         /// (Optional; PDF 1.3) The line dash pattern, expressed as an array of the form
         /// [dashArray dashPhase], where dashArray is itself an array and dashPhase is an integer.
         /// </summary>
-        [PdfKey(PdfKeyType.Array | PdfKeyType.Optional)]
         public const string D = "/D";
 
         /// <summary>
         /// (Optional; PDF 1.3) The name of the rendering intent.
         /// </summary>
-        [PdfKey(PdfKeyType.Name | PdfKeyType.Optional)]
         public const string RI = "/RI";
 
         /// <summary>
@@ -134,20 +127,17 @@ internal sealed class PdfExtGState : PdfDictionary
         /// unless there is also an op entry in the same graphics state parameter dictionary, in
         /// which case the OP entry sets only the overprint parameter for stroking.
         /// </summary>
-        [PdfKey(PdfKeyType.Boolean | PdfKeyType.Optional)]
         public const string OP = "/OP";
 
         /// <summary>
         /// (Optional; PDF 1.3) A flag specifying whether to apply overprint for painting operations
         /// other than stroking. If this entry is absent, the OP entry, if any, sets this parameter.
         /// </summary>
-        [PdfKey(PdfKeyType.Boolean | PdfKeyType.Optional)]
         public const string op = "/op";
 
         /// <summary>
         /// (Optional; PDF 1.3) The overprint mode.
         /// </summary>
-        [PdfKey(PdfKeyType.Integer | PdfKeyType.Optional)]
         public const string OPM = "/OPM";
 
         /// <summary>
@@ -156,14 +146,12 @@ internal sealed class PdfExtGState : PdfDictionary
         /// These two objects correspond to the operands of the Tf operator; however,
         /// the first operand is an indirect object reference instead of a resource name.
         /// </summary>
-        [PdfKey(PdfKeyType.Array | PdfKeyType.Optional)]
         public const string Font = "/Font";
 
         /// <summary>
         /// (Optional) The black-generation function, which maps the interval [0.0 1.0]
         /// to the interval [0.0 1.0].
         /// </summary>
-        [PdfKey(PdfKeyType.Function | PdfKeyType.Optional)]
         public const string BG = "/BG";
 
         /// <summary>
@@ -172,14 +160,12 @@ internal sealed class PdfExtGState : PdfDictionary
         /// If both BG and BG2 are present in the same graphics state parameter dictionary, 
         /// BG2 takes precedence.
         /// </summary>
-        [PdfKey(PdfKeyType.FunctionOrName | PdfKeyType.Optional)]
         public const string BG2 = "/BG2";
 
         /// <summary>
         /// (Optional) The undercolor-removal function, which maps the interval
         /// [0.0 1.0] to the interval [-1.0 1.0].
         /// </summary>
-        [PdfKey(PdfKeyType.Function | PdfKeyType.Optional)]
         public const string UCR = "/UCR";
 
         /// <summary>
@@ -188,7 +174,6 @@ internal sealed class PdfExtGState : PdfDictionary
         /// If both UCR and UCR2 are present in the same graphics state parameter dictionary, 
         /// UCR2 takes precedence.
         /// </summary>
-        [PdfKey(PdfKeyType.FunctionOrName | PdfKeyType.Optional)]
         public const string UCR2 = "/UCR2";
 
         /// <summary>
@@ -199,7 +184,6 @@ internal sealed class PdfExtGState : PdfDictionary
         /// crucially, this is a PER-COMPONENT function (it never sees more than one colorant's value
         /// at a time), so it cannot express a cross-channel colour transform.
         /// </summary>
-        [PdfKey(PdfKeyType.FunctionOrName | PdfKeyType.Optional)]
         public const string TR = "/TR";
 
         /// <summary>
@@ -207,7 +191,6 @@ internal sealed class PdfExtGState : PdfDictionary
         /// denoting the transfer function that was in effect at the start of the page. If both TR
         /// and TR2 are present in the same graphics state parameter dictionary, TR2 takes precedence.
         /// </summary>
-        [PdfKey(PdfKeyType.FunctionOrName | PdfKeyType.Optional)]
         public const string TR2 = "/TR2";
 
         //HT  dictionary, stream, or name
@@ -217,20 +200,17 @@ internal sealed class PdfExtGState : PdfDictionary
         /// <summary>
         /// (Optional) A flag specifying whether to apply automatic stroke adjustment.
         /// </summary>
-        [PdfKey(PdfKeyType.Boolean | PdfKeyType.Optional)]
         public const string SA = "/SA";
 
         /// <summary>
         /// (Optional; PDF 1.4) The current blend mode to be used in the transparent imaging model.
         /// </summary>
-        [PdfKey(PdfKeyType.NameOrArray | PdfKeyType.Optional)]
         public const string BM = "/BM";
 
         /// <summary>
         /// (Optional; PDF 1.4) The current soft mask, specifying the mask shape or
         /// mask opacity values to be used in the transparent imaging model.
         /// </summary>
-        [PdfKey(PdfKeyType.NameOrDictionary | PdfKeyType.Optional)]
         public const string SMask = "/SMask";
 
         /// <summary>
@@ -238,13 +218,11 @@ internal sealed class PdfExtGState : PdfDictionary
         /// shape or constant opacity value to be used for stroking operations in the transparent
         /// imaging model.
         /// </summary>
-        [PdfKey(PdfKeyType.Real | PdfKeyType.Optional)]
         public const string CA = "/CA";
 
         /// <summary>
         /// (Optional; PDF 1.4) Same as CA, but for nonstroking operations.
         /// </summary>
-        [PdfKey(PdfKeyType.Real | PdfKeyType.Optional)]
         public const string ca = "/ca";
 
         /// <summary>
@@ -252,26 +230,15 @@ internal sealed class PdfExtGState : PdfDictionary
         /// the current soft mask and alpha constant are to be interpreted as shape values (true)
         /// or opacity values (false).
         /// </summary>
-        [PdfKey(PdfKeyType.Boolean | PdfKeyType.Optional)]
         public const string AIS = "/AIS";
 
         /// <summary>
         /// (Optional; PDF 1.4) The text knockout flag, which determines the behavior of 
         /// overlapping glyphs within a text object in the transparent imaging model.
         /// </summary>
-        [PdfKey(PdfKeyType.Boolean | PdfKeyType.Optional)]
         public const string TK = "/TK";
 
         // ReSharper restore InconsistentNaming
 
-        /// <summary>
-        /// Gets the KeysMeta for these keys.
-        /// </summary>
-        internal static PdfDictionaryMetadata Meta { get; } = CreateMeta(typeof(Keys));
     }
-
-    /// <summary>
-    /// Gets the KeysMeta of this dictionary type.
-    /// </summary>
-    internal override PdfDictionaryMetadata Meta => Keys.Meta;
 }

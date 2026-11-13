@@ -291,7 +291,7 @@ internal sealed class PdfNameTreeNode : PdfDictionary
     /// <summary>
     /// Predefined keys of this dictionary.
     /// </summary>
-    internal sealed class Keys : KeysBase
+    internal sealed class Keys
     {
         // Reference: TABLE 3.33  Entries in a name tree node dictionary / Page 162
 
@@ -303,7 +303,6 @@ internal sealed class PdfNameTreeNode : PdfDictionary
         /// An array of indirect references to the immediate children of this node
         /// The children may be intermediate or leaf nodes.
         /// </summary>
-        [PdfKey(PdfKeyType.Array)]
         public const string Kids = "/Kids";
 
         /// <summary>
@@ -313,7 +312,6 @@ internal sealed class PdfNameTreeNode : PdfDictionary
         /// where each keyi is a string and the corresponding valuei is the object associated with that key.
         /// The keys are sorted in lexical order, as described below.
         /// </summary>
-        [PdfKey(PdfKeyType.Array)]
         public const string Names = "/Names";
 
         /// <summary>
@@ -321,22 +319,12 @@ internal sealed class PdfNameTreeNode : PdfDictionary
         /// An array of two strings, specifying the (lexically) least and greatest keys included in the Names array 
         /// of a leaf node or in the Namesarrays of any leaf nodes that are descendants of an intermediate node.
         /// </summary>
-        [PdfKey(PdfKeyType.Array)]
         public const string Limits = "/Limits";
 
-        /// <summary>
-        /// Gets the KeysMeta for these keys.
-        /// </summary>
-        public static PdfDictionaryMetadata Meta { get; } = CreateMeta(typeof(Keys));
 
 
         // ReSharper restore InconsistentNaming
     }
-
-    /// <summary>
-    /// Gets the KeysMeta of this dictionary type.
-    /// </summary>
-    internal override PdfDictionaryMetadata Meta => Keys.Meta;
 
     /// <summary>
     /// Gets the DebuggerDisplayAttribute text.

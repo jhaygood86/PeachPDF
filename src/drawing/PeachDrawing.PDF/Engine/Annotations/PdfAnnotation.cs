@@ -101,7 +101,7 @@ internal abstract class PdfAnnotation : PdfDictionary
     /// <summary>
     /// Predefined keys of this dictionary.
     /// </summary>
-    internal class Keys : KeysBase
+    internal class Keys
     {
         // ReSharper disable InconsistentNaming
 
@@ -109,20 +109,17 @@ internal abstract class PdfAnnotation : PdfDictionary
         /// (Optional) The type of PDF object that this dictionary describes; if present,
         /// must be Annot for an annotation dictionary.
         /// </summary>
-        [PdfKey(PdfKeyType.Name | PdfKeyType.Optional, FixedValue = "Annot")]
         public const string Type = "/Type";
 
         /// <summary>
         /// (Required) The type of annotation that this dictionary describes.
         /// </summary>
-        [PdfKey(PdfKeyType.Name | PdfKeyType.Required)]
         public const string Subtype = "/Subtype";
 
         /// <summary>
         /// (Required) The annotation rectangle, defining the location of the annotation
         /// on the page in default user space units.
         /// </summary>
-        [PdfKey(PdfKeyType.Rectangle | PdfKeyType.Required)]
         public const string Rect = "/Rect";
 
         /// <summary>
@@ -132,7 +129,6 @@ internal abstract class PdfAnnotation : PdfDictionary
         /// extracting the document's contents in support of accessibility to users with
         /// disabilities or for other purposes.
         /// </summary>
-        [PdfKey(PdfKeyType.TextString | PdfKeyType.Optional)]
         public const string Contents = "/Contents";
 
         // P
@@ -141,7 +137,6 @@ internal abstract class PdfAnnotation : PdfDictionary
         /// (Optional; PDF 1.4) The annotation name, a text string uniquely identifying it
         /// among all the annotations on its page.
         /// </summary>
-        [PdfKey(PdfKeyType.TextString | PdfKeyType.Optional)]
         public const string NM = "/NM";
 
         /// <summary>
@@ -149,21 +144,18 @@ internal abstract class PdfAnnotation : PdfDictionary
         /// modified. The preferred format is a date string, but viewer applications should be 
         /// prepared to accept and display a string in any format.
         /// </summary>
-        [PdfKey(PdfKeyType.Date | PdfKeyType.Optional)]
         public const string M = "/M";
 
         /// <summary>
         /// (Optional; PDF 1.1) A set of flags specifying various characteristics of the annotation.
         /// Default value: 0.
         /// </summary>
-        [PdfKey("1.1", PdfKeyType.Integer | PdfKeyType.Optional)]
         public const string F = "/F";
 
         /// <summary>
         /// (Optional; PDF 1.2) A border style dictionary specifying the characteristics of
         /// the annotation's border.
         /// </summary>
-        [PdfKey("1.2", PdfKeyType.Dictionary | PdfKeyType.Optional)]
         public const string BS = "/BS";
 
         /// <summary>
@@ -171,7 +163,6 @@ internal abstract class PdfAnnotation : PdfDictionary
         /// is presented visually on the page. Individual annotation handlers may ignore
         /// this entry and provide their own appearances.
         /// </summary>
-        [PdfKey("1.2", PdfKeyType.Dictionary | PdfKeyType.Optional)]
         public const string AP = "/AP";
 
         /// <summary>
@@ -179,7 +170,6 @@ internal abstract class PdfAnnotation : PdfDictionary
         /// The annotation's appearance state, which selects the applicable appearance stream from 
         /// an appearance subdictionary.
         /// </summary>
-        [PdfKey("1.2", PdfKeyType.Dictionary | PdfKeyType.Optional)]
         public const string AS = "/AS";
 
         /// <summary>
@@ -197,7 +187,6 @@ internal abstract class PdfAnnotation : PdfDictionary
         /// dash phase is specified; the phase is assumed to be 0.
         /// Note: In PDF 1.2 or later, this entry may be ignored in favor of the BS entry.
         /// </summary>
-        [PdfKey(PdfKeyType.Array | PdfKeyType.Optional)]
         public const string Border = "/Border";
 
         /// <summary>
@@ -208,7 +197,6 @@ internal abstract class PdfAnnotation : PdfDictionary
         /// - The title bar of the annotation's pop-up window
         /// - The border of a link annotation
         /// </summary>
-        [PdfKey("1.1", PdfKeyType.Array | PdfKeyType.Optional)]
         public const string C = "/C";
 
         /// <summary>
@@ -216,7 +204,6 @@ internal abstract class PdfAnnotation : PdfDictionary
         /// Note: This entry is not permitted in link annotations if a Dest entry is present.
         /// Also note that the A entry in movie annotations has a different meaning.
         /// </summary>
-        [PdfKey("1.1", PdfKeyType.Dictionary | PdfKeyType.Optional)]
         public const string A = "/A";
 
         // AA
@@ -225,7 +212,6 @@ internal abstract class PdfAnnotation : PdfDictionary
         /// (Required if the annotation is a structural content item; PDF 1.3) The integer
         /// key of the annotation's entry in the structure parent tree.
         /// </summary>
-        [PdfKey("1.3", PdfKeyType.Integer | PdfKeyType.Optional)]
         public const string StructParent = "/StructParent";
 
         // OC
@@ -237,14 +223,12 @@ internal abstract class PdfAnnotation : PdfDictionary
         /// pop-up window when open and active. By convention, this entry identifies
         /// the user who added the annotation.
         /// </summary>
-        [PdfKey(PdfKeyType.TextString | PdfKeyType.Optional)]
         public const string T = "/T";
 
         /// <summary>
         /// (Optional; PDF 1.3) An indirect reference to a pop-up annotation for entering or
         /// editing the text associated with this annotation.
         /// </summary>
-        [PdfKey(PdfKeyType.Dictionary | PdfKeyType.Optional)]
         public const string Popup = "/Popup";
 
         /// <summary>
@@ -259,7 +243,6 @@ internal abstract class PdfAnnotation : PdfDictionary
         /// The implicit blend mode is Normal.
         /// Default value: 1.0.
         /// </summary>
-        [PdfKey(PdfKeyType.Real | PdfKeyType.Optional)]
         public const string CA = "/CA";
 
         //RC
@@ -270,7 +253,6 @@ internal abstract class PdfAnnotation : PdfDictionary
         /// (Optional; PDF 1.5) Text representing a short description of the subject being
         /// addressed by the annotation.
         /// </summary>
-        [PdfKey("1.5", PdfKeyType.TextString | PdfKeyType.Optional)]
         public const string Subj = "/Subj";
 
         //RT

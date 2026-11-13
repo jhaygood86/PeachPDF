@@ -44,11 +44,5 @@ namespace PeachPDF.Tests.PdfEngineTests.Structure
 
             Assert.Same(annotation, objRef.Object);
         }
-
-        [Fact]
-        public void Keys_Meta_IsAccessible()
-        {
-            Assert.NotNull(new PdfObjectReference().Meta);
-        }
     }
 }

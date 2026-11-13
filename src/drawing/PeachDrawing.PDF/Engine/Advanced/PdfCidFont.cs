@@ -147,13 +147,11 @@ internal sealed class PdfCidFont : PdfFont
         /// (Required) The type of PDF object that this dictionary describes;
         /// must be Font for a CIDFont dictionary.
         /// </summary>
-        [PdfKey(PdfKeyType.Name | PdfKeyType.Required, FixedValue = "Font")]
         public new const string Type = "/Type";
 
         /// <summary>
         /// (Required) The type of CIDFont; CIDFontType0 or CIDFontType2.
         /// </summary>
-        [PdfKey(PdfKeyType.Name | PdfKeyType.Required)]
         public new const string Subtype = "/Subtype";
 
         /// <summary>
@@ -162,28 +160,24 @@ internal sealed class PdfCidFont : PdfFont
         /// Type 2 CIDFonts, it is derived the same way as for a simple TrueType font;
         /// In either case, the name can have a subset prefix if appropriate.
         /// </summary>
-        [PdfKey(PdfKeyType.Name | PdfKeyType.Required)]
         public new const string BaseFont = "/BaseFont";
 
         /// <summary>
         /// (Required) A dictionary containing entries that define the character collection
         /// of the CIDFont.
         /// </summary>
-        [PdfKey(PdfKeyType.Dictionary | PdfKeyType.Required)]
         public const string CIDSystemInfo = "/CIDSystemInfo";
 
         /// <summary>
         /// (Required; must be an indirect reference) A font descriptor describing the
         /// CIDFont’s default metrics other than its glyph widths.
         /// </summary>
-        [PdfKey(PdfKeyType.Dictionary | PdfKeyType.MustBeIndirect, typeof(PdfFontDescriptor))]
         public new const string FontDescriptor = "/FontDescriptor";
 
         /// <summary>
         /// (Optional) The default width for glyphs in the CIDFont.
         /// Default value: 1000.
         /// </summary>
-        [PdfKey(PdfKeyType.Integer)]
         public const string DW = "/DW";
 
         /// <summary>
@@ -192,7 +186,6 @@ internal sealed class PdfCidFont : PdfFont
         /// for consecutive CIDs or one width for a range of CIDs.
         /// Default value: none (the DW value is used for all glyphs).
         /// </summary>
-        [PdfKey(PdfKeyType.Array, typeof(PdfArray))]
         public const string W = "/W";
 
         /// <summary>
@@ -200,7 +193,6 @@ internal sealed class PdfCidFont : PdfFont
         /// numbers specifying the default metrics for vertical writing.
         /// Default value: [880 −1000].
         /// </summary>
-        [PdfKey(PdfKeyType.Array)]
         public const string DW2 = "/DW2";
 
         /// <summary>
@@ -208,7 +200,6 @@ internal sealed class PdfCidFont : PdfFont
         /// of the metrics for vertical writing for the glyphs in the CIDFont.
         /// Default value: none (the DW2 value is used for all glyphs).
         /// </summary>
-        [PdfKey(PdfKeyType.Array, typeof(PdfArray))]
         public const string W2 = "/W2";
 
         /// <summary>
@@ -223,17 +214,7 @@ internal sealed class PdfCidFont : PdfFont
         /// This entry may appear only in a Type 2 CIDFont whose associated True-Type font 
         /// program is embedded in the PDF file.
         /// </summary>
-        [PdfKey(PdfKeyType.Dictionary | PdfKeyType.StreamOrName)]
         public const string CIDToGIDMap = "/CIDToGIDMap";
 
-        /// <summary>
-        /// Gets the KeysMeta for these keys.
-        /// </summary>
-        internal static PdfDictionaryMetadata Meta { get; } = CreateMeta(typeof(Keys));
     }
-
-    /// <summary>
-    /// Gets the KeysMeta of this dictionary type.
-    /// </summary>
-    internal override PdfDictionaryMetadata Meta => Keys.Meta;
 }

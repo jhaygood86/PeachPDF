@@ -682,26 +682,22 @@ internal sealed partial class PdfImage : PdfXObject
         /// (Optional) The type of PDF object that this dictionary describes;
         /// if present, must be XObject for an image XObject.
         /// </summary>
-        [PdfKey(PdfKeyType.Name | PdfKeyType.Optional)]
         public const string Type = "/Type";
 
         /// <summary>
         /// (Required) The type of XObject that this dictionary describes;
         /// must be Image for an image XObject.
         /// </summary>
-        [PdfKey(PdfKeyType.Name | PdfKeyType.Required)]
         public const string Subtype = "/Subtype";
 
         /// <summary>
         /// (Required) The width of the image, in samples.
         /// </summary>
-        [PdfKey(PdfKeyType.Integer | PdfKeyType.Required)]
         public const string Width = "/Width";
 
         /// <summary>
         /// (Required) The height of the image, in samples.
         /// </summary>
-        [PdfKey(PdfKeyType.Integer | PdfKeyType.Required)]
         public const string Height = "/Height";
 
         /// <summary>
@@ -712,7 +708,6 @@ internal sealed partial class PdfImage : PdfXObject
         /// - If ColorSpace is absent, the color space specifications in the JPEG2000 data are used.
         ///   The Decode array is also ignored unless ImageMask is true.
         /// </summary>
-        [PdfKey(PdfKeyType.NameOrArray | PdfKeyType.Required)]
         public const string ColorSpace = "/ColorSpace";
 
         /// <summary>
@@ -729,14 +724,12 @@ internal sealed partial class PdfImage : PdfXObject
         /// If the image stream uses the JPXDecode filter, this entry is optional and ignored if present.
         /// The bit depth is determined in the process of decoding the JPEG2000 image.
         /// </summary>
-        [PdfKey(PdfKeyType.Integer | PdfKeyType.Required)]
         public const string BitsPerComponent = "/BitsPerComponent";
 
         /// <summary>
         /// (Optional; PDF 1.1) The name of a color rendering intent to be used in rendering the image.
         /// Default value: the current rendering intent in the graphics state.
         /// </summary>
-        [PdfKey(PdfKeyType.Name | PdfKeyType.Optional)]
         public const string Intent = "/Intent";
 
         /// <summary>
@@ -745,7 +738,6 @@ internal sealed partial class PdfImage : PdfXObject
         /// not be specified; unmasked areas are painted using the current nonstroking color.
         /// Default value: false.
         /// </summary>
-        [PdfKey(PdfKeyType.Boolean | PdfKeyType.Optional)]
         public const string ImageMask = "/ImageMask";
 
         /// <summary>
@@ -754,7 +746,6 @@ internal sealed partial class PdfImage : PdfXObject
         /// a range of colors to be applied to it as a color key mask. If ImageMask is true, this entry
         /// must not be present.
         /// </summary>
-        [PdfKey(PdfKeyType.StreamOrArray | PdfKeyType.Optional)]
         public const string Mask = "/Mask";
 
         /// <summary>
@@ -764,14 +755,12 @@ internal sealed partial class PdfImage : PdfXObject
         /// by ColorSpace. If the image uses the JPXDecode filter and ImageMask is false, Decode is ignored.
         /// Default value: see "Decode Arrays".
         /// </summary>
-        [PdfKey(PdfKeyType.Array | PdfKeyType.Optional)]
         public const string Decode = "/Decode";
 
         /// <summary>
         /// (Optional) A flag indicating whether image interpolation is to be performed. 
         /// Default value: false.
         /// </summary>
-        [PdfKey(PdfKeyType.Boolean | PdfKeyType.Optional)]
         public const string Interpolate = "/Interpolate";
 
         /// <summary>
@@ -779,7 +768,6 @@ internal sealed partial class PdfImage : PdfXObject
         /// elements within the array has no significance. This entry may not be present in an image 
         /// XObject that is itself an alternate image.
         /// </summary>
-        [PdfKey(PdfKeyType.Array | PdfKeyType.Optional)]
         public const string Alternates = "/Alternates";
 
         /// <summary>
@@ -792,7 +780,6 @@ internal sealed partial class PdfImage : PdfXObject
         /// image has no associated soft mask (although the current soft mask in the graphics state may
         /// still apply).
         /// </summary>
-        [PdfKey(PdfKeyType.Integer | PdfKeyType.Required)]
         public const string SMask = "/SMask";
 
         /// <summary>
@@ -809,41 +796,35 @@ internal sealed partial class PdfImage : PdfXObject
         ///   nonzero value, SMask should not be specified.
         /// Default value: 0.
         /// </summary>
-        [PdfKey(PdfKeyType.Integer | PdfKeyType.Optional)]
         public const string SMaskInData = "/SMaskInData";
 
         /// <summary>
         /// (Required in PDF 1.0; optional otherwise) The name by which this image XObject is 
         /// referenced in the XObject subdictionary of the current resource dictionary.
         /// </summary>
-        [PdfKey(PdfKeyType.Name | PdfKeyType.Optional)]
         public const string Name = "/Name";
 
         /// <summary>
         /// (Required if the image is a structural content item; PDF 1.3) The integer key of the 
         /// image's entry in the structural parent tree.
         /// </summary>
-        [PdfKey(PdfKeyType.Integer | PdfKeyType.Required)]
         public const string StructParent = "/StructParent";
 
         /// <summary>
         /// (Optional; PDF 1.3; indirect reference preferred) The digital identifier of the image's
         /// parent Web Capture content set.
         /// </summary>
-        [PdfKey(PdfKeyType.String | PdfKeyType.Optional)]
         public const string ID = "/ID";
 
         /// <summary>
         /// (Optional; PDF 1.2) An OPI version dictionary for the image. If ImageMask is true, 
         /// this entry is ignored.
         /// </summary>
-        [PdfKey(PdfKeyType.Dictionary | PdfKeyType.Optional)]
         public const string OPI = "/OPI";
 
         /// <summary>
         /// (Optional; PDF 1.4) A metadata stream containing metadata for the image.
         /// </summary>
-        [PdfKey(PdfKeyType.Stream | PdfKeyType.Optional)]
         public const string Metadata = "/Metadata";
 
         /// <summary>
@@ -852,7 +833,6 @@ internal sealed partial class PdfImage : PdfXObject
         /// processed, its visibility is determined based on this entry. If it is determined to be 
         /// invisible, the entire image is skipped, as if there were no Do operator to invoke it.
         /// </summary>
-        [PdfKey(PdfKeyType.Dictionary | PdfKeyType.Optional)]
         public const string OC = "/OC";
 
         // ReSharper restore InconsistentNaming

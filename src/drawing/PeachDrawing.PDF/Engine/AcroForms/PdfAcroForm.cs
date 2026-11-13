@@ -7,15 +7,22 @@ namespace PeachDrawing.PDF.Engine.AcroForms;
 /// by <see cref="Advanced.PdfCatalog.AcroForm"/> only when interactive PDF forms output is
 /// enabled - see that property's own doc comment.
 /// </summary>
-internal sealed class PdfAcroForm : PdfDictionary
+internal sealed class PdfAcroForm : PdfDictionary, IPdfDictionaryValue<PdfAcroForm>
 {
+    static PdfAcroForm IPdfDictionaryValue<PdfAcroForm>.Create(PdfDocument document) => new(document);
+    static PdfAcroForm IPdfDictionaryValue<PdfAcroForm>.Wrap(PdfDictionary existing) => new(existing);
+
+    private PdfAcroForm(PdfDictionary dict)
+        : base(dict)
+    { }
+
     public PdfAcroForm(PdfDocument document)
         : base(document)
     {
     }
 
     /// <summary>The document's top-level fields ("/Fields") - one entry per text/checkbox/radio-group/combo field; a radio group's own widget kids are not listed here.</summary>
-    public PdfArray Fields => _fields ??= Elements.GetOrCreate<PdfArray>(Keys.Fields, ValueCreationFlags.CreateIndirect);
+    public PdfArray Fields => _fields ??= Elements.GetOrCreateArray<PdfArray>(Keys.Fields, ValueCreationFlags.CreateIndirect);
     PdfArray _fields = null!;
 
     /// <summary>Appends a top-level field.</summary>
@@ -39,32 +46,23 @@ internal sealed class PdfAcroForm : PdfDictionary
     /// <summary>
     /// Predefined keys of this dictionary.
     /// </summary>
-    internal sealed class Keys : KeysBase
+    internal sealed class Keys
     {
-        [PdfKey(PdfKeyType.Array | PdfKeyType.Required | PdfKeyType.MustBeIndirect)]
         public const string Fields = "/Fields";
 
-        [PdfKey(PdfKeyType.Boolean | PdfKeyType.Optional)]
         public const string NeedAppearances = "/NeedAppearances";
 
-        [PdfKey(PdfKeyType.Integer | PdfKeyType.Optional)]
         public const string SigFlags = "/SigFlags";
 
-        [PdfKey(PdfKeyType.Array | PdfKeyType.Optional)]
         public const string CO = "/CO";
 
-        [PdfKey(PdfKeyType.Dictionary | PdfKeyType.Optional)]
         public const string DR = "/DR";
 
-        [PdfKey(PdfKeyType.String | PdfKeyType.Optional)]
         public const string DA = "/DA";
 
-        [PdfKey(PdfKeyType.Integer | PdfKeyType.Optional)]
         public const string Q = "/Q";
 
-        public static PdfDictionaryMetadata Meta { get; } = CreateMeta(typeof(Keys));
 
     }
 
-    internal override PdfDictionaryMetadata Meta => Keys.Meta;
 }

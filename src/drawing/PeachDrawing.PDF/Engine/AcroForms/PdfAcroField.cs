@@ -81,39 +81,27 @@ internal abstract class PdfAcroField : PdfAnnotation
     /// </summary>
     internal new class Keys : PdfAnnotation.Keys
     {
-        [PdfKey(PdfKeyType.Name | PdfKeyType.Optional)]
         public const string FT = "/FT";
 
-        [PdfKey(PdfKeyType.Dictionary | PdfKeyType.Optional)]
         public const string Parent = "/Parent";
 
-        [PdfKey(PdfKeyType.Array | PdfKeyType.Optional)]
         public const string Kids = "/Kids";
 
-        [PdfKey(PdfKeyType.String | PdfKeyType.Optional)]
         public const string TU = "/TU";
 
-        [PdfKey(PdfKeyType.Integer | PdfKeyType.Optional)]
         public const string Ff = "/Ff";
 
-        [PdfKey(PdfKeyType.Various | PdfKeyType.Optional)]
         public const string V = "/V";
 
-        [PdfKey(PdfKeyType.Various | PdfKeyType.Optional)]
         public const string DV = "/DV";
 
-        [PdfKey(PdfKeyType.String | PdfKeyType.Optional)]
         public const string DA = "/DA";
 
-        [PdfKey(PdfKeyType.Integer | PdfKeyType.Optional)]
         public const string MaxLen = "/MaxLen";
 
-        [PdfKey(PdfKeyType.Array | PdfKeyType.Optional)]
         public const string Opt = "/Opt";
 
-        public static PdfDictionaryMetadata Meta { get; } = CreateMeta(typeof(Keys));
 
     }
 
-    internal override PdfDictionaryMetadata Meta => Keys.Meta;
 }

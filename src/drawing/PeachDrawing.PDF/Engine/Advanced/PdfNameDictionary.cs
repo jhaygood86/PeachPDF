@@ -92,14 +92,13 @@ internal sealed class PdfNameDictionary : PdfDictionary
     /// <summary>
     /// Predefined keys of this dictionary.
     /// </summary>
-    internal sealed class Keys : KeysBase
+    internal sealed class Keys
     {
         // ReSharper disable InconsistentNaming
 
         /// <summary>
         /// (Optional; PDF 1.2) A name tree mapping name strings to destinations (see “Named Destinations” on page 583).
         /// </summary>
-        [PdfKey("1.2", PdfKeyType.NameTree | PdfKeyType.Optional)]
         public const string Dests = "/Dests";
 
         //[PdfKey("1.3", PdfKeyType.NameTree | PdfKeyType.Optional)]
@@ -124,7 +123,6 @@ internal sealed class PdfNameDictionary : PdfDictionary
         /// (Optional; PDF 1.4) A name tree mapping name strings to file specifications for embedded file streams
         /// (see Section 3.10.3, “Embedded File Streams”).
         /// </summary>
-        [PdfKey("1.4", PdfKeyType.NameTree | PdfKeyType.Optional)]
         public const string EmbeddedFiles = "/EmbeddedFiles";
 
         //[PdfKey("1.4", PdfKeyType.NameTree | PdfKeyType.Optional)]

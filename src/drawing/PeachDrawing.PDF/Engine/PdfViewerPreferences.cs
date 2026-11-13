@@ -5,10 +5,17 @@ namespace PeachDrawing.PDF.Engine;
 /// <summary>
 /// Represents the PDF document viewer preferences dictionary.
 /// </summary>
-internal sealed class PdfViewerPreferences : PdfDictionary
+internal sealed class PdfViewerPreferences : PdfDictionary, IPdfDictionaryValue<PdfViewerPreferences>
 {
+    static PdfViewerPreferences IPdfDictionaryValue<PdfViewerPreferences>.Create(PdfDocument document) => new(document);
+    static PdfViewerPreferences IPdfDictionaryValue<PdfViewerPreferences>.Wrap(PdfDictionary existing) => new(existing);
+
     internal PdfViewerPreferences(PdfDocument document)
         : base(document)
+    { }
+
+    PdfViewerPreferences(PdfDictionary dict)
+        : base(dict)
     { }
 
     /// <summary>
@@ -26,20 +33,18 @@ internal sealed class PdfViewerPreferences : PdfDictionary
     /// <summary>
     /// Predefined keys of this dictionary.
     /// </summary>
-    internal sealed class Keys : KeysBase
+    internal sealed class Keys
     {
         /// <summary>
         /// (Optional) A flag specifying whether to hide the viewer application's tool
         ///  bars when the document is active. Default value: false.
         /// </summary>
-        [PdfKey(PdfKeyType.Boolean | PdfKeyType.Optional)]
         public const string HideToolbar = "/HideToolbar";
 
         /// <summary>
         /// (Optional) A flag specifying whether to hide the viewer application's
         /// menu bar when the document is active. Default value: false.
         /// </summary>
-        [PdfKey(PdfKeyType.Boolean | PdfKeyType.Optional)]
         public const string HideMenubar = "/HideMenubar";
 
         /// <summary>
@@ -47,21 +52,18 @@ internal sealed class PdfViewerPreferences : PdfDictionary
         ///  the document's window (such as scroll bars and navigation controls),
         ///  leaving only the document's contents displayed. Default value: false.
         /// </summary>
-        [PdfKey(PdfKeyType.Boolean | PdfKeyType.Optional)]
         public const string HideWindowUI = "/HideWindowUI";
 
         /// <summary>
         /// (Optional) A flag specifying whether to resize the document's window to
         /// fit the size of the first displayed page. Default value: false.
         /// </summary>
-        [PdfKey(PdfKeyType.Boolean | PdfKeyType.Optional)]
         public const string FitWindow = "/FitWindow";
 
         /// <summary>
         /// (Optional) A flag specifying whether to position the document's window
         /// in the center of the screen. Default value: false.
         /// </summary>
-        [PdfKey(PdfKeyType.Boolean | PdfKeyType.Optional)]
         public const string CenterWindow = "/CenterWindow";
 
         /// <summary>
@@ -70,7 +72,6 @@ internal sealed class PdfViewerPreferences : PdfDictionary
         /// information dictionary. If false, the title bar should instead display the name
         /// of the PDF file containing the document. Default value: false.
         /// </summary>
-        [PdfKey(PdfKeyType.Boolean | PdfKeyType.Optional)]
         public const string DisplayDocTitle = "/DisplayDocTitle";
 
         /// <summary>
@@ -83,7 +84,6 @@ internal sealed class PdfViewerPreferences : PdfDictionary
         /// This entry is meaningful only if the value of the PageMode entry in the catalog 
         /// dictionary is FullScreen; it is ignored otherwise. Default value: UseNone.
         /// </summary>
-        [PdfKey(PdfKeyType.Name | PdfKeyType.Optional)]
         public const string NonFullScreenPageMode = "/NonFullScreenPageMode";
 
         /// <summary>
@@ -94,7 +94,6 @@ internal sealed class PdfViewerPreferences : PdfDictionary
         /// but can be used to determine the relative positioning of pages when displayed 
         /// side by side or printed n-up. Default value: L2R.
         /// </summary>
-        [PdfKey(PdfKeyType.Name | PdfKeyType.Optional)]
         public const string Direction = "/Direction";
 
         /// <summary>
@@ -107,7 +106,6 @@ internal sealed class PdfViewerPreferences : PdfDictionary
         /// interpret or manipulate the page boundaries as described in Section 10.10.1, "Page Boundaries."
         /// Most PDF consumer applications disregard it.
         /// </summary>
-        [PdfKey(PdfKeyType.Name | PdfKeyType.Optional)]
         public const string ViewArea = "/ViewArea";
 
         /// <summary>
@@ -120,7 +118,6 @@ internal sealed class PdfViewerPreferences : PdfDictionary
         /// interpret or manipulate the page boundaries as described in Section 10.10.1, "Page Boundaries."
         /// Most PDF consumer applications disregard it.
         /// </summary>
-        [PdfKey(PdfKeyType.Name | PdfKeyType.Optional)]
         public const string ViewClip = "/ViewClip";
 
         /// <summary>
@@ -133,7 +130,6 @@ internal sealed class PdfViewerPreferences : PdfDictionary
         /// interpret or manipulate the page boundaries as described in Section 10.10.1, "Page Boundaries."
         /// Most PDF consumer applications disregard it.
         /// </summary>
-        [PdfKey(PdfKeyType.Name | PdfKeyType.Optional)]
         public const string PrintArea = "/PrintArea";
 
         /// <summary>
@@ -145,7 +141,6 @@ internal sealed class PdfViewerPreferences : PdfDictionary
         /// Note: This entry is intended primarily for use by prepress applications that interpret
         /// or manipulate the page boundaries. Most PDF consumer applications disregard it.
         /// </summary>
-        [PdfKey(PdfKeyType.Name | PdfKeyType.Optional)]
         public const string PrintClip = "/PrintClip";
 
         /// <summary>
@@ -158,17 +153,7 @@ internal sealed class PdfViewerPreferences : PdfDictionary
         /// Note: If the print dialog is suppressed and its parameters are provided directly
         /// by the application, the value of this entry should still be used.
         /// </summary>
-        [PdfKey(PdfKeyType.Name | PdfKeyType.Optional)]
         public const string PrintScaling = "/PrintScaling";
 
-        /// <summary>
-        /// Gets the KeysMeta for these keys.
-        /// </summary>
-        public static PdfDictionaryMetadata Meta { get; } = CreateMeta(typeof(Keys));
     }
-
-    /// <summary>
-    /// Gets the KeysMeta of this dictionary type.
-    /// </summary>
-    internal override PdfDictionaryMetadata Meta => Keys.Meta;
 }

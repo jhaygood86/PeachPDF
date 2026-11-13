@@ -12,7 +12,6 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
-using System.Reflection;
 using System.Text;
 
 namespace PeachDrawing.PDF.Engine;
@@ -114,7 +113,7 @@ internal partial class PdfDictionary
         /// <summary>
         /// Common keys for all streams.
         /// </summary>
-        internal class Keys : KeysBase
+        internal class Keys
         {
             // ReSharper disable InconsistentNaming
 
@@ -124,7 +123,6 @@ internal partial class PdfDictionary
             /// EOL marker, preceding endstream, that is not included in the count and is not logically
             /// part of the stream data.)
             /// </summary>
-            [PdfKey(PdfKeyType.Integer | PdfKeyType.Required)]
             public const string Length = "/Length";
 
             /// <summary>
@@ -132,7 +130,6 @@ internal partial class PdfDictionary
             /// the keywords stream and endstream, or an array of such names. Multiple filters should be
             /// specified in the order in which they are to be applied.
             /// </summary>
-            [PdfKey(PdfKeyType.NameOrArray | PdfKeyType.Optional)]
             public const string Filter = "/Filter";
 
             /// <summary>
@@ -146,7 +143,6 @@ internal partial class PdfDictionary
             /// their default values). If none of the filters have parameters, or if all their parameters
             /// have default values, the DecodeParms entry may be omitted.
             /// </summary>
-            [PdfKey(PdfKeyType.ArrayOrDictionary | PdfKeyType.Optional)]
             public const string DecodeParms = "/DecodeParms";
 
             /// <summary>
@@ -156,21 +152,18 @@ internal partial class PdfDictionary
             /// However, the Length entry should still specify the number of those bytes. (Usually, there are
             /// no bytes and Length is 0.)
             /// </summary>
-            [PdfKey("1.2", PdfKeyType.String | PdfKeyType.Optional)]
             public const string F = "/F";
 
             /// <summary>
             /// (Optional; PDF 1.2) The name of a filter to be applied in processing the data found in the
             /// stream’s external file, or an array of such names. The same rules apply as for Filter.
             /// </summary>
-            [PdfKey("1.2", PdfKeyType.NameOrArray | PdfKeyType.Optional)]
             public const string FFilter = "/FFilter";
 
             /// <summary>
             /// (Optional; PDF 1.2) A parameter dictionary, or an array of such dictionaries, used by the
             /// filters specified by FFilter. The same rules apply as for DecodeParms.
             /// </summary>
-            [PdfKey("1.2", PdfKeyType.ArrayOrDictionary | PdfKeyType.Optional)]
             public const string FDecodeParms = "/FDecodeParms";
 
             /// <summary>
@@ -180,7 +173,6 @@ internal partial class PdfDictionary
             /// This value should be considered a hint only; for some stream filters, it may not be possible
             /// to determine this value precisely.
             /// </summary>
-            [PdfKey("1.5", PdfKeyType.Integer | PdfKeyType.Optional)]
             public const string DL = "/DL";
 
             // ReSharper restore InconsistentNaming

@@ -12,9 +12,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
-using System.Reflection;
 using System.Text;
-using static System.Diagnostics.CodeAnalysis.DynamicallyAccessedMemberTypes;
 
 namespace PeachDrawing.PDF.Engine;
 
@@ -427,158 +425,78 @@ internal partial class PdfDictionary
         }
 
         /// <summary>
-        /// Gets the value for the specified key. If the value does not exist, it is optionally created.
+        /// Gets the dictionary a key holds as a <typeparamref name="TItem"/>, creating it when the key has no value yet and wrapping the
+        /// plain dictionary it holds otherwise. A reference is followed; a value of the right class is returned as it is.
         /// </summary>
-        public PdfItem? GetValue(string key, ValueCreationFlags options)
-        {
-            PdfItem? value = this[key];
-
-            if (value is null)
-                return options == ValueCreationFlags.None ? null : CreateMissingValue(key, options);
-
-            if (value is PdfReference iref)
-                return ResolveIndirectValue(key, iref);
-
-            // The value exists and can be returned as-is unless it needs object-type coercion.
-            if (value is PdfDictionary dict)
-                return CoerceDictionary(key, dict);
-
-            if (value is PdfArray array)
-                return CoerceArray(key, array);
-
-            return value;
-        }
-
-        /// <summary>
-        /// Creates and stores the value for a key that has no value yet, per GetValue's options.
-        /// </summary>
-        PdfItem CreateMissingValue(string key, ValueCreationFlags options)
-        {
-            Type type = GetValueType(key) ?? throw new NotImplementedException("Cannot create value for key: " + key);
-
-            Debug.Assert(typeof(PdfItem).IsAssignableFrom(type), "Type not allowed.");
-
-            PdfObject obj = typeof(PdfDictionary).IsAssignableFrom(type) ? CreateDictionary(type, null)
-                : typeof(PdfArray).IsAssignableFrom(type) ? CreateArray(type, null)
-                : throw new NotImplementedException("Type other than array or dictionary.");
-
-            if (options == ValueCreationFlags.CreateIndirect)
-            {
-                _ownerDictionary.Owner._irefTable.Add(obj);
-                this[key] = obj.RequiredReference;
-            }
-            else
-                this[key] = obj;
-
-            return obj;
-        }
-
-        /// <summary>
-        /// Resolves an indirect reference value, coercing it to the key's declared type if necessary.
-        /// </summary>
-        PdfItem ResolveIndirectValue(string key, PdfReference iref)
-        {
-            // If we come here PDF file is corrupted.
-            PdfItem value = iref.Value ?? throw new InvalidOperationException("Indirect reference without value.");
-
-            Type? type = GetValueType(key);
-            Debug.Assert(type is not null, "No value type specified in meta information. Please send this file to PDFsharp support.");
-
-            if (type is null || type == value.GetType())
-                return value;
-
-            if (typeof(PdfDictionary).IsAssignableFrom(type))
-            {
-                Debug.Assert(value is PdfDictionary, "Bug in PeachDrawing.PDF.Engine. Please send this file to PDFsharp support.");
-                return CreateDictionary(type, (PdfDictionary)value);
-            }
-
-            if (typeof(PdfArray).IsAssignableFrom(type))
-            {
-                Debug.Assert(value is PdfArray, "Bug in PeachDrawing.PDF.Engine. Please send this file to PDFsharp support.");
-                return CreateArray(type, (PdfArray)value);
-            }
-
-            throw new NotImplementedException("Type other than array or dictionary.");
-        }
-
-        PdfDictionary CoerceDictionary(string key, PdfDictionary dict)
-        {
-            Debug.Assert(!dict.IsIndirect);
-
-            Type? type = GetValueType(key);
-            Debug.Assert(type is not null, "No value type specified in meta information. Please send this file to PDFsharp support.");
-            return dict.GetType() != type ? CreateDictionary(type, dict) : dict;
-        }
-
-        PdfArray CoerceArray(string key, PdfArray array)
-        {
-            Debug.Assert(!array.IsIndirect);
-
-            // This is more complicated. If type is null do nothing.
-            Type? type = GetValueType(key);
-            return type is not null && type != array.GetType() ? CreateArray(type, array) : array;
-        }
-
-        /// <summary>
-        /// Gets the typed value of a key that is created when missing, so the result is never null.
-        /// </summary>
-        internal TItem GetOrCreate<TItem>(string key, ValueCreationFlags options) where TItem : PdfItem
+        internal TItem GetOrCreate<TItem>(string key, ValueCreationFlags options)
+            where TItem : PdfDictionary, IPdfDictionaryValue<TItem>
         {
             Debug.Assert(options != ValueCreationFlags.None, "A value that is not created can be missing.");
-            return (TItem)GetValue(key, options)!;
+            return GetExisting<TItem>(key) ?? Store(key, TItem.Create(_ownerDictionary.Owner), options);
         }
 
         /// <summary>
-        /// Short cut for GetValue(key, ValueCreationFlags.None).
+        /// Gets the dictionary a key holds as a <typeparamref name="TItem"/>, or <see langword="null"/> when the key has no value.
         /// </summary>
-        public PdfItem? GetValue(string key)
+        internal TItem? GetExisting<TItem>(string key) where TItem : PdfDictionary, IPdfDictionaryValue<TItem>
         {
-            return GetValue(key, ValueCreationFlags.None);
-        }
+            if (Resolve(key) is not { } value)
+                return null;
 
-        /// <summary>
-        /// Returns the type of the object to be created as value of the specified key.
-        /// </summary>
-        [return: DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors | DynamicallyAccessedMemberTypes.NonPublicConstructors)]
-        Type? GetValueType(string key)  // TODO: move to PdfObject
-        {
-            Type? type = null;
-            PdfDictionaryMetadata? meta = _ownerDictionary.Meta;
-            if (meta is not null)
+            return value switch
             {
-                PdfKeyDescriptor? kd = meta[key];
-                if (kd is not null)
-                    type = kd.GetValueType();
-                //else
-                //    Debug.WriteLine("Warning: Key not descriptor table: " + key);  // TODO: check what this means...
-            }
-            //else
-            //    Debug.WriteLine("Warning: No meta provided for type: " + _owner.GetType().Name);  // TODO: check what this means...
-            return type;
+                TItem typed => typed,
+                PdfDictionary dictionary => TItem.Wrap(dictionary),
+                _ => throw new InvalidCastException($"The value of {key} is a {value.GetType().Name}, not a dictionary."),
+            };
         }
 
-        PdfArray CreateArray([DynamicallyAccessedMembers(PublicConstructors | NonPublicConstructors)] Type type, PdfArray? oldArray) =>
-            oldArray is null
-                ? Instantiate<PdfArray>(type, _ownerDictionary.Owner, typeof(PdfDocument))
-                : Instantiate<PdfArray>(type, oldArray, typeof(PdfArray));
-
-        PdfDictionary CreateDictionary([DynamicallyAccessedMembers(PublicConstructors | NonPublicConstructors)] Type type, PdfDictionary? oldDictionary) =>
-            oldDictionary is null
-                ? Instantiate<PdfDictionary>(type, _ownerDictionary.Owner, typeof(PdfDocument))
-                : Instantiate<PdfDictionary>(type, oldDictionary, typeof(PdfDictionary));
+        /// <summary>
+        /// The array counterpart of <see cref="GetOrCreate{TItem}"/>.
+        /// </summary>
+        internal TItem GetOrCreateArray<TItem>(string key, ValueCreationFlags options)
+            where TItem : PdfArray, IPdfArrayValue<TItem>
+        {
+            Debug.Assert(options != ValueCreationFlags.None, "A value that is not created can be missing.");
+            return GetExistingArray<TItem>(key) ?? Store(key, TItem.Create(_ownerDictionary.Owner), options);
+        }
 
         /// <summary>
-        /// Creates the value type a key is declared with, through its (possibly non-public) constructor taking one argument.
+        /// The array counterpart of <see cref="GetExisting{TItem}"/>.
         /// </summary>
-        static TItem Instantiate<TItem>([DynamicallyAccessedMembers(PublicConstructors | NonPublicConstructors)] Type type, object argument, Type argumentType)
-            where TItem : PdfObject
+        internal TItem? GetExistingArray<TItem>(string key) where TItem : PdfArray, IPdfArrayValue<TItem>
         {
-            ConstructorInfo? constructor = type.GetConstructor(
-                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic, null, [argumentType], null);
-            Debug.Assert(constructor is not null, "No appropriate constructor found for type: " + type.Name);
-            return (TItem)(constructor ?? throw new InvalidOperationException("No appropriate constructor found for type: " + type.Name))
-                .Invoke([argument]);
+            if (Resolve(key) is not { } value)
+                return null;
+
+            return value switch
+            {
+                TItem typed => typed,
+                PdfArray array => TItem.Wrap(array),
+                _ => throw new InvalidCastException($"The value of {key} is a {value.GetType().Name}, not an array."),
+            };
+        }
+
+        /// <summary>The value of a key with a reference followed, or <see langword="null"/> when the key has none.</summary>
+        PdfItem? Resolve(string key) => this[key] switch
+        {
+            null => null,
+            PdfReference iref => iref.Value ?? throw new InvalidOperationException("Indirect reference without value."),
+            { } value => value,
+        };
+
+        /// <summary>Stores a newly created value under <paramref name="key"/>, directly or as an indirect object.</summary>
+        TObject Store<TObject>(string key, TObject created, ValueCreationFlags options) where TObject : PdfObject
+        {
+            if (options == ValueCreationFlags.CreateIndirect)
+            {
+                _ownerDictionary.Owner._irefTable.Add(created);
+                this[key] = created.RequiredReference;
+            }
+            else
+                this[key] = created;
+
+            return created;
         }
 
         /// <summary>

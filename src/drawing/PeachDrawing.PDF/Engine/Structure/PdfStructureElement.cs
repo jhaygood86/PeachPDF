@@ -173,44 +173,32 @@ internal sealed class PdfStructureElement : PdfDictionary
     /// <summary>
     /// Predefined keys of this dictionary.
     /// </summary>
-    internal sealed class Keys : KeysBase
+    internal sealed class Keys
     {
         // Reference: ISO 32000-1 Table 323 - Entries in a structure element dictionary
 
-        [PdfKey(PdfKeyType.Name | PdfKeyType.Optional, FixedValue = "StructElem")]
         public const string Type = "/Type";
 
-        [PdfKey(PdfKeyType.Name | PdfKeyType.Required)]
         public const string S = "/S";
 
-        [PdfKey(PdfKeyType.Dictionary | PdfKeyType.Required)]
         public const string P = "/P";
 
-        [PdfKey(PdfKeyType.ByteString | PdfKeyType.Optional)]
         public const string ID = "/ID";
 
-        [PdfKey(PdfKeyType.Dictionary | PdfKeyType.Optional)]
         public const string Pg = "/Pg";
 
-        [PdfKey(PdfKeyType.Various | PdfKeyType.Optional)]
         public const string K = "/K";
 
-        [PdfKey(PdfKeyType.TextString | PdfKeyType.Optional)]
         public const string Lang = "/Lang";
 
-        [PdfKey(PdfKeyType.TextString | PdfKeyType.Optional)]
         public const string Alt = "/Alt";
 
-        [PdfKey(PdfKeyType.TextString | PdfKeyType.Optional)]
         public const string ActualText = "/ActualText";
 
         // PDF 2.0 addition (ISO 32000-2 §14.13, "Associated files") - not in ISO 32000-1 Table 323.
-        [PdfKey(PdfKeyType.Array | PdfKeyType.Optional)]
         public const string AF = "/AF";
 
-        public static PdfDictionaryMetadata Meta { get; } = CreateMeta(typeof(Keys));
 
     }
 
-    internal override PdfDictionaryMetadata Meta => Keys.Meta;
 }

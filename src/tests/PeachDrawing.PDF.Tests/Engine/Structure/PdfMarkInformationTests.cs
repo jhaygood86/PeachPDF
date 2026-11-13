@@ -30,11 +30,5 @@ namespace PeachPDF.Tests.PdfEngineTests.Structure
 
             Assert.True(markInfo.Marked);
         }
-
-        [Fact]
-        public void Keys_Meta_IsAccessible()
-        {
-            Assert.NotNull(new PdfMarkInformation().Meta);
-        }
     }
 }

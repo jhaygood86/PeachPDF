@@ -116,7 +116,6 @@ internal abstract class PdfDictionaryWithContentStream : PdfDictionary, IContent
         /// (Optional but strongly recommended; PDF 1.2) A dictionary specifying any
         /// resources (such as fonts and images) required by the form XObject.
         /// </summary>
-        [PdfKey(PdfKeyType.Dictionary | PdfKeyType.Optional, typeof(PdfResources))]
         public const string Resources = "/Resources";
     }
 }

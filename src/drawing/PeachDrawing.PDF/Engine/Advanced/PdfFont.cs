@@ -102,25 +102,22 @@ internal class PdfFont : PdfDictionary
     /// <summary>
     /// Predefined keys common to all font dictionaries.
     /// </summary>
-    internal class Keys : KeysBase
+    internal class Keys
     {
         /// <summary>
         /// (Required) The type of PDF object that this dictionary describes;
         /// must be Font for a font dictionary.
         /// </summary>
-        [PdfKey(PdfKeyType.Name | PdfKeyType.Required, FixedValue = "Font")]
         public const string Type = "/Type";
 
         /// <summary>
         /// (Required) The type of font.
         /// </summary>
-        [PdfKey(PdfKeyType.Name | PdfKeyType.Required)]
         public const string Subtype = "/Subtype";
 
         /// <summary>
         /// (Required) The PostScript name of the font.
         /// </summary>
-        [PdfKey(PdfKeyType.Name | PdfKeyType.Required)]
         public const string BaseFont = "/BaseFont";
 
         /// <summary>
@@ -130,7 +127,6 @@ internal class PdfFont : PdfDictionary
         /// FontDescriptor must either all be present or all be absent. Ordinarily, they are
         /// absent; specifying them enables a standard font to be overridden.
         /// </summary>
-        [PdfKey(PdfKeyType.Dictionary | PdfKeyType.MustBeIndirect, typeof(PdfFontDescriptor))]
         public const string FontDescriptor = "/FontDescriptor";
     }
 }

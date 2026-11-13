@@ -9,8 +9,11 @@ namespace PeachDrawing.PDF.Engine.Advanced;
 /// <summary>
 /// Represents a PDF resource object.
 /// </summary>
-internal sealed class PdfResources : PdfDictionary
+internal sealed class PdfResources : PdfDictionary, IPdfDictionaryValue<PdfResources>
 {
+    static PdfResources IPdfDictionaryValue<PdfResources>.Create(PdfDocument document) => new(document);
+    static PdfResources IPdfDictionaryValue<PdfResources>.Wrap(PdfDictionary existing) => new(existing);
+
     // Resource management works roughly like this:
     // When the user creates an TypefaceFont and uses it in the PdfGraphics of a PdfPage, then at the first time
     // a PdfFont is created and cached in the document global font table. If the user creates a new
@@ -256,68 +259,51 @@ internal sealed class PdfResources : PdfDictionary
     /// <summary>
     /// Predefined keys of this dictionary.
     /// </summary>
-    internal sealed class Keys : KeysBase
+    internal sealed class Keys
     {
         /// <summary>
         /// (Optional) A dictionary that maps resource names to graphics state 
         /// parameter dictionaries.
         /// </summary>
-        [PdfKey(PdfKeyType.Dictionary | PdfKeyType.Optional, typeof(PdfResourceMap))]
         public const string ExtGState = "/ExtGState";
 
         /// <summary>
         /// (Optional) A dictionary that maps each resource name to either the name of a
         /// device-dependent color space or an array describing a color space.
         /// </summary>
-        [PdfKey(PdfKeyType.Dictionary | PdfKeyType.Optional, typeof(PdfResourceMap))]
         public const string ColorSpace = "/ColorSpace";
 
         /// <summary>
         /// (Optional) A dictionary that maps each resource name to either the name of a
         /// device-dependent color space or an array describing a color space.
         /// </summary>
-        [PdfKey(PdfKeyType.Dictionary | PdfKeyType.Optional, typeof(PdfResourceMap))]
         public const string Pattern = "/Pattern";
 
         /// <summary>
         /// (Optional; PDF 1.3) A dictionary that maps resource names to shading dictionaries.
         /// </summary>
-        [PdfKey("1.3", PdfKeyType.Dictionary | PdfKeyType.Optional, typeof(PdfResourceMap))]
         public const string Shading = "/Shading";
 
         /// <summary>
         /// (Optional) A dictionary that maps resource names to external objects.
         /// </summary>
-        [PdfKey(PdfKeyType.Dictionary | PdfKeyType.Optional, typeof(PdfResourceMap))]
         public const string XObject = "/XObject";
 
         /// <summary>
         /// (Optional) A dictionary that maps resource names to font dictionaries.
         /// </summary>
-        [PdfKey(PdfKeyType.Dictionary | PdfKeyType.Optional, typeof(PdfResourceMap))]
         public const string Font = "/Font";
 
         /// <summary>
         /// (Optional) An array of predefined procedure set names.
         /// </summary>
-        [PdfKey(PdfKeyType.Array | PdfKeyType.Optional)]
         public const string ProcSet = "/ProcSet";
 
         /// <summary>
         /// (Optional; PDF 1.2) A dictionary that maps resource names to property list
         /// dictionaries for marked content.
         /// </summary>
-        [PdfKey(PdfKeyType.Dictionary | PdfKeyType.Optional, typeof(PdfResourceMap))]
         public const string Properties = "/Properties";
 
-        /// <summary>
-        /// Gets the KeysMeta for these keys.
-        /// </summary>
-        internal static PdfDictionaryMetadata Meta { get; } = CreateMeta(typeof(Keys));
     }
-
-    /// <summary>
-    /// Gets the KeysMeta of this dictionary type.
-    /// </summary>
-    internal override PdfDictionaryMetadata Meta => Keys.Meta;
 }

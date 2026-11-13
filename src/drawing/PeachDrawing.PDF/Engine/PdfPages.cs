@@ -12,8 +12,11 @@ namespace PeachDrawing.PDF.Engine;
 /// Represents the pages of the document.
 /// </summary>
 [DebuggerDisplay("(PageCount={Count})")]
-internal sealed class PdfPages : PdfDictionary, IEnumerable<PdfPage>
+internal sealed class PdfPages : PdfDictionary, IEnumerable<PdfPage>, IPdfDictionaryValue<PdfPages>
 {
+    static PdfPages IPdfDictionaryValue<PdfPages>.Create(PdfDocument document) => new(document);
+    static PdfPages IPdfDictionaryValue<PdfPages>.Wrap(PdfDictionary existing) => new(existing);
+
     internal PdfPages(PdfDocument document)
         : base(document)
     {
@@ -190,7 +193,7 @@ internal sealed class PdfPages : PdfDictionary, IEnumerable<PdfPage>
         get
         {
             if (_pagesArray is null)
-                _pagesArray = Elements.GetOrCreate<PdfArray>(Keys.Kids, ValueCreationFlags.Create);
+                _pagesArray = Elements.GetOrCreateArray<PdfArray>(Keys.Kids, ValueCreationFlags.Create);
             return _pagesArray;
         }
     }
@@ -231,38 +234,25 @@ internal sealed class PdfPages : PdfDictionary, IEnumerable<PdfPage>
         /// (Required) The type of PDF object that this dictionary describes; 
         /// must be Pages for a page tree node.
         /// </summary>
-        [PdfKey(PdfKeyType.Name | PdfKeyType.Required, FixedValue = "Pages")]
         public const string Type = "/Type";
 
         /// <summary>
         /// (Required except in root node; must be an indirect reference)
         /// The page tree node that is the immediate parent of this one.
         /// </summary>
-        [PdfKey(PdfKeyType.Dictionary | PdfKeyType.Required)]
         public const string Parent = "/Parent";
 
         /// <summary>
         /// (Required) An array of indirect references to the immediate children of this node.
         /// The children may be page objects or other page tree nodes.
         /// </summary>
-        [PdfKey(PdfKeyType.Array | PdfKeyType.Required)]
         public const string Kids = "/Kids";
 
         /// <summary>
         /// (Required) The number of leaf nodes (page objects) that are descendants of this node 
         /// within the page tree.
         /// </summary>
-        [PdfKey(PdfKeyType.Integer | PdfKeyType.Required)]
         public const string Count = "/Count";
 
-        /// <summary>
-        /// Gets the KeysMeta for these keys.
-        /// </summary>
-        public static PdfDictionaryMetadata Meta { get; } = CreateMeta(typeof(Keys));
     }
-
-    /// <summary>
-    /// Gets the KeysMeta of this dictionary type.
-    /// </summary>
-    internal override PdfDictionaryMetadata Meta => Keys.Meta;
 }

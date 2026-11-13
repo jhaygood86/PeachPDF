@@ -126,7 +126,7 @@ internal class PdfTrailer : PdfDictionary  // Reference: 3.4.4  File Trailer / P
     /// <summary>
     /// Predefined keys of this dictionary.
     /// </summary>
-    internal class Keys : KeysBase  // Reference: TABLE 3.13  Entries in the file trailer dictionary / Page 97
+    internal class Keys  // Reference: TABLE 3.13  Entries in the file trailer dictionary / Page 97
     {
         /// <summary>
         /// (Required; must not be an indirect reference) The total number of entries in the file's 
@@ -136,7 +136,6 @@ internal class PdfTrailer : PdfDictionary  // Reference: 3.4.4  File Trailer / P
         /// Note: Any object in a cross-reference section whose number is greater than this value is
         /// ignored and considered missing.
         /// </summary>
-        [PdfKey(PdfKeyType.Integer | PdfKeyType.Required)]
         public const string Size = "/Size";
 
         /// <summary>
@@ -144,26 +143,22 @@ internal class PdfTrailer : PdfDictionary  // Reference: 3.4.4  File Trailer / P
         /// reference) The byte offset from the beginning of the file to the beginning of the previous 
         /// cross-reference section.
         /// </summary>
-        [PdfKey(PdfKeyType.Integer | PdfKeyType.Optional)]
         public const string Prev = "/Prev";
 
         /// <summary>
         /// (Required; must be an indirect reference) The catalog dictionary for the PDF document
         /// contained in the file.
         /// </summary>
-        [PdfKey(PdfKeyType.Dictionary | PdfKeyType.Required, typeof(PdfCatalog))]
         public const string Root = "/Root";
 
         /// <summary>
         /// (Required if document is encrypted; PDF 1.1) The document's encryption dictionary.
         /// </summary>
-        [PdfKey(PdfKeyType.Dictionary | PdfKeyType.Optional)]
         public const string Encrypt = "/Encrypt";
 
         /// <summary>
         /// (Optional; must be an indirect reference) The document's information dictionary.
         /// </summary>
-        [PdfKey(PdfKeyType.Dictionary | PdfKeyType.Optional, typeof(PdfDocumentInformation))]
         public const string Info = "/Info";
 
         /// <summary>
@@ -172,23 +167,12 @@ internal class PdfTrailer : PdfDictionary  // Reference: 3.4.4  File Trailer / P
         /// its absence might prevent the file from functioning in some workflows
         /// that depend on files being uniquely identified.
         /// </summary>
-        [PdfKey(PdfKeyType.Array | PdfKeyType.Optional)]
         public const string ID = "/ID";
 
         /// <summary>
         /// (Optional) The byte offset from the beginning of the file of a cross-reference stream.
         /// </summary>
-        [PdfKey(PdfKeyType.Integer | PdfKeyType.Optional)]
         public const string XRefStm = "/XRefStm";
 
-        /// <summary>
-        /// Gets the KeysMeta for these keys.
-        /// </summary>
-        public static PdfDictionaryMetadata Meta { get; } = CreateMeta(typeof(Keys));
     }
-
-    /// <summary>
-    /// Gets the KeysMeta of this dictionary type.
-    /// </summary>
-    internal override PdfDictionaryMetadata Meta => Keys.Meta;
 }
