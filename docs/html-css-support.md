@@ -130,7 +130,7 @@ Example:
 | Element | MDN Reference | Notes |
 |---------|--------------|-------|
 | `address` | [address](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/address) | Rendered as a block |
-| `blockquote` | [blockquote](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/blockquote) | Rendered as a block with default margin |
+| `blockquote` | [blockquote](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/blockquote) | Rendered as a block with the HTML Standard's default margin (`1em` above and below, `40px` on each side). The same sheet gives `p`, `pre`, `figure`, `ul`, `ol`, `dl` and `menu` `1em` above and below (none inside another list), `h1` to `h6` `0.67em`, `0.83em`, `1em`, `1.33em`, `1.67em` and `2.33em`, and `fieldset` and `form` none |
 | `center` | [center](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/center) | Deprecated element; rendered with `text-align: center` |
 | `dd` | [dd](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/dd) | Full support |
 | `dir` | [dir](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/dir) | Deprecated element; rendered as an unordered list |
@@ -277,7 +277,7 @@ document follows them for formatting elements, paragraphs, lists, headings and b
   a real, empty paragraph element behind, so `p + table + p` matches *that* element rather than the
   next authored paragraph.
 
-Quirks mode follows the DOCTYPE (13.2.6.4.1): in a document without an acceptable DOCTYPE a `<table>` start tag leaves an open `<p>` open, as in a browser.
+Quirks mode follows the DOCTYPE (13.2.6.4.1): in a document without an acceptable DOCTYPE a `<table>` start tag leaves an open `<p>` open, as in a browser. Quirks mode reaches the parser only: a document without a DOCTYPE is still laid out with the standards-mode user-agent style sheet, so the quirks-mode rules (a `form`'s bottom margin, no top margin on the first paragraph of a `body` or cell, and tables not inheriting the font) are not applied.
 Not yet the spec's: the legacy `frameset` modes, the mixed-case form of SVG and MathML attribute names, and
 the tokenizer, which is MimeKit's rather than the standard's state machine.
 

@@ -82,16 +82,20 @@ namespace PeachBrackets.Html
             th              { font-weight: bolder; text-align: center }
             caption         { text-align: center }
             body            { margin: 8px }
+            /* HTML Standard 15.3.3, 15.3.6 and 15.3.7: the block margins of headings, paragraphs and
+               lists. `fieldset` and `form` have none (a quirks-mode `form` gets a bottom margin, which
+               is not applied: see docs/html-css-support.md). The inline margins are the physical
+               spelling of the standard's logical ones, for the reason given at the `hr` rule. */
             h1              { font-size: 2em; margin: .67em 0 }
-            h2              { font-size: 1.5em; margin: .75em 0 }
-            h3              { font-size: 1.17em; margin: .83em 0 }
-            h4, p,
-            blockquote, ul,
-            fieldset, form,
-            ol, dl, dir,
-            menu            { margin: 1.12em 0 }
-            h5              { font-size: .83em; margin: 1.5em 0 }
-            h6              { font-size: .75em; margin: 1.67em 0 }
+            h2              { font-size: 1.5em; margin: .83em 0 }
+            h3              { font-size: 1.17em; margin: 1em 0 }
+            h4              { font-size: 1em; margin: 1.33em 0 }
+            h5              { font-size: .83em; margin: 1.67em 0 }
+            h6              { font-size: .67em; margin: 2.33em 0 }
+            p, blockquote,
+            figure, ul, ol,
+            dl, dir, menu   { margin: 1em 0 }
+            figure          { margin-left: 40px; margin-right: 40px }
             h1, h2, h3, h4,
             h5, h6, b,
             strong          { font-weight: bolder; }
@@ -189,8 +193,8 @@ namespace PeachBrackets.Html
                             { content: counter(footnote); vertical-align: baseline; font-size: 100%;
                               line-height: inherit; font-variant-position: super }
             }
-            ol ul, ul ol,
-            ul ul, ol ol    { margin-top: 0; margin-bottom: 0 }
+            :is(dir, dl, menu, ol, ul) :is(dir, dl, menu, ol, ul)
+                            { margin-top: 0; margin-bottom: 0 }
             ol ul, ul ul    { list-style-type: circle }
             ul ul ul, 
             ol ul ul, 
@@ -238,7 +242,7 @@ namespace PeachBrackets.Html
             a               { color: #0055BB; text-decoration:underline }
             table           { border-color:#dfdfdf; }
             td, th          { border-color:#dfdfdf; }
-            pre             { font-size: 10pt; margin-top: 15px; }
+            pre             { font-size: 10pt; margin: 1em 0 }
 
             /* Default -peachpdf-pdf-tag-type mapping (used only when tagged PDF output is
                enabled; harmless no-op otherwise). Author stylesheets may override any of
