@@ -72,6 +72,34 @@ public class LayoutPaintCoverageTests
     }
 
     [Fact]
+    public async Task EmptyAutoFitRowsAndColumnsCollapse_SoTheContentDistributionSharesTheSpaceAmongTheOthers()
+    {
+        // Five 20px tracks fit the 100px square; only column 3/4 and row 2/3 hold an item, so two tracks are left in each axis and space-evenly puts
+        // 20px before, between and after them.
+        using var canvas = await PageRaster.RenderAsync(
+            "<div style='display:grid;width:100px;height:100px;grid-template-columns:repeat(auto-fit,20px);grid-template-rows:repeat(auto-fit,20px);" +
+            "align-content:space-evenly;justify-content:space-evenly'>" +
+            "<div style='grid-row:2;grid-column:3;background:rgb(0,128,0)'></div><div style='grid-row:3;grid-column:4;background:rgb(0,128,0)'></div></div>");
+
+        Assert.Equal(Green, PageRaster.Rgb(canvas, 30, 30));
+        Assert.Equal(Green, PageRaster.Rgb(canvas, 70, 70));
+        Assert.Equal(White, PageRaster.Rgb(canvas, 10, 10));
+        Assert.Equal(White, PageRaster.Rgb(canvas, 30, 70));
+    }
+
+    [Fact]
+    public async Task AutoFillRowsRepeatAsOftenAsTheyFit_AndKeepTheirEmptyTracks()
+    {
+        using var canvas = await PageRaster.RenderAsync(
+            "<div style='display:grid;width:100px;height:100px;grid-template-rows:repeat(auto-fill,20px);grid-template-columns:100px'>" +
+            "<div style='grid-row:4;background:rgb(0,128,0)'></div></div>");
+
+        // Row 4 is 60..80: three empty rows above it are kept.
+        Assert.Equal(Green, PageRaster.Rgb(canvas, 50, 70));
+        Assert.Equal(White, PageRaster.Rgb(canvas, 50, 30));
+    }
+
+    [Fact]
     public async Task AWrappingFlexColumnWithADefiniteHeightIsAsWideAsItsColumns()
     {
         using var canvas = await PageRaster.RenderAsync(
