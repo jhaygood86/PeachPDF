@@ -8155,6 +8155,46 @@ namespace PeachBrackets.Html.Dom
             return left is null && top is null && rightEdge is null ? null : (left, top, rightEdge);
         }
 
+        /// <summary>
+        /// An absolutely positioned child of a grid container sits at its static position, which is as if it were the only item in the grid area (css-grid-1
+        /// section 9) and is aligned in it by its <c>align-self</c> and <c>justify-self</c> (the container's <c>*-items</c> where those are <c>auto</c>) on each
+        /// axis where both insets are <c>auto</c>. The area is the one its grid lines name when the grid is its containing block, else the grid's content box.
+        /// Horizontal, left-to-right grids only.
+        /// </summary>
+        private void AlignStaticPositionInGrid()
+        {
+            if (ParentBox is not { } grid || grid.DerivedStyle.ActualDisplay is not (Keywords.Grid or Keywords.InlineGrid)
+                || grid.WritingMode.Value.IsVertical() || WritingMode.Value.IsVertical() || grid.Direction.Value == DirectionMode.Rtl)
+            {
+                return;
+            }
+
+            var area = GridContainingArea ?? new Rect(grid.ClientLeft, grid.ClientTop, grid.ClientRight - grid.ClientLeft, grid.ClientBottom - grid.ClientTop);
+
+            static double Factor(string alignment, double free)
+            {
+                var safe = alignment.StartsWith("safe", StringComparison.OrdinalIgnoreCase);
+                if (safe && free < 0) return 0;
+                if (alignment.Contains("center", StringComparison.OrdinalIgnoreCase)) return 0.5;
+                if (alignment.Contains("last", StringComparison.OrdinalIgnoreCase) || alignment.EndsWith("end", StringComparison.OrdinalIgnoreCase)) return 1;
+                return 0;
+            }
+
+            if (Left.Value.IsKeyword && Right.Value.IsKeyword)
+            {
+                var free = area.Width - (ActualBoxSizingWidth + ActualMarginLeft + ActualMarginRight);
+                var factor = Factor(CssLayoutEngineGrid.ResolveSelfAlignment(JustifySelf.ToString(), grid.JustifyItems.ToString()), free);
+                if (factor > 0) OffsetLeft(free * factor);
+            }
+
+            if (Top.Value.IsKeyword && Bottom.Value.IsKeyword)
+            {
+                var free = area.Height - (ActualBoxSizingHeight + ActualMarginTop + ActualMarginBottom);
+                var factor = Factor(CssLayoutEngineGrid.ResolveSelfAlignment(AlignSelf.ToString(), grid.AlignItems.ToString()), free);
+                if (factor > 0) OffsetTop(free * factor);
+            }
+        }
+
         private CssBox? PreviousInFlowSibling(CssBox child) =>
             ReferenceEquals(child.ParentBox, this) ? DomUtils.GetPreviousSibling(child, false) : null;
 
@@ -8388,6 +8428,8 @@ namespace PeachBrackets.Html.Dom
                 {
                     PlaceAbsoluteBottomEdge(null);
                 }
+
+                AlignStaticPositionInGrid();
             }
 
             // A fixed box's containing block is the viewport (the first page's content area in paged media), so `right`/`bottom` measure from that area's far

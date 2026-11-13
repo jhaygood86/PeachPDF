@@ -2102,7 +2102,7 @@ namespace PeachBrackets.Html.Dom
         /// container's <c>*-items</c> value, which itself defaults to <c>normal</c> (or <c>legacy</c>, which lays out the same). <c>normal</c> is kept
         /// distinct from an explicit <c>stretch</c>, because it stretches a non-replaced item but lets a
         /// replaced item with a natural size keep it (see <see cref="PlaceItemInCell"/>).</summary>
-        private static string ResolveSelfAlignment(string self, string items)
+        internal static string ResolveSelfAlignment(string self, string items)
         {
             var value = self;
             if (string.IsNullOrEmpty(value) || value.Isi(Keywords.Auto) || value.Isi(Keywords.Normal))
