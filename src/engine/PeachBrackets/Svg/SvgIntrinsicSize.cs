@@ -71,6 +71,33 @@ namespace PeachBrackets.Svg
         }
 
         /// <summary>
+        /// The natural size and aspect ratio of <paramref name="document"/> as a <i>background image</i> sees them (CSS Images 3 section 5.3): only what the
+        /// document states is a size, and an axis it does not state is left null, because the default object size of a background is its positioning area,
+        /// not the 300x150 a replaced box falls back to (<see cref="ResolveForBox"/>). The ratio comes from <c>width</c> and <c>height</c> when both are
+        /// given, otherwise from the <c>viewBox</c>, which also derives the missing axis from the one that is stated.
+        /// </summary>
+        public static (double? Width, double? Height, double? Ratio) ResolveForBackground(SvgDocument? document)
+        {
+            if (document is null)
+                return (null, null, null);
+
+            double? width = document.Width is > 0 ? document.Width : null;
+            double? height = document.Height is > 0 ? document.Height : null;
+            var viewBoxRatio = ViewBoxRatio(document);
+
+            if (width is not null && height is not null)
+                return (width, height, width / height);
+
+            if (width is not null)
+                return (width, viewBoxRatio is { } r ? width / r : null, viewBoxRatio);
+
+            if (height is not null)
+                return (viewBoxRatio is { } q ? height * q : null, height, viewBoxRatio);
+
+            return (null, null, viewBoxRatio);
+        }
+
+        /// <summary>
         /// The aspect ratio (width over height) of a document that has one but no size of its own: a <c>viewBox</c> and neither <c>width</c> nor
         /// <c>height</c>. Null for any other document. Such a document sizes like a block-level replaced element with a ratio and no natural size
         /// (CSS 2.1 section 10.3.2): it takes the width its containing block has available, and its height follows the ratio.

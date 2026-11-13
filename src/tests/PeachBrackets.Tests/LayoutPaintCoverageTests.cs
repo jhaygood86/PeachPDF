@@ -87,6 +87,31 @@ public class LayoutPaintCoverageTests
         Assert.Equal(White, PageRaster.Rgb(canvas, 30, 70));
     }
 
+    private const string SizelessSvg =
+        "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'%3E%3Crect width='100%25' height='50%25' fill='green'/%3E%3C/svg%3E";
+
+    [Fact]
+    public async Task ASvgBackgroundWithNoSizeOrViewBoxFillsThePositioningArea()
+    {
+        // The svg states no size, so its percentages are shares of the 100x60 area it is drawn into: the top half is green.
+        using var canvas = await PageRaster.RenderAsync(
+            $"<div style=\"width:100px;height:60px;background:url({SizelessSvg}) no-repeat\"></div>", loadResources: true);
+
+        Assert.Equal(Green, PageRaster.Rgb(canvas, 90, 20));
+        Assert.Equal(White, PageRaster.Rgb(canvas, 90, 55));
+    }
+
+    [Fact]
+    public async Task ASvgBackgroundWithNoSizeTakesTheSizeBackgroundSizeGivesIt()
+    {
+        using var canvas = await PageRaster.RenderAsync(
+            $"<div style=\"width:100px;height:60px;background:url({SizelessSvg}) no-repeat;background-size:40px 40px\"></div>", loadResources: true);
+
+        Assert.Equal(Green, PageRaster.Rgb(canvas, 30, 10));
+        Assert.Equal(White, PageRaster.Rgb(canvas, 30, 30));
+        Assert.Equal(White, PageRaster.Rgb(canvas, 70, 10));
+    }
+
     [Fact]
     public async Task ADeclaredWidthInlineBlockThatDoesNotFitTheLineStartsTheNextOne()
     {

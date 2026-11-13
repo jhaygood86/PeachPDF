@@ -47,6 +47,16 @@ namespace PeachBrackets.Svg
         {
         }
 
+        /// <summary>The viewport a standalone SVG with no size of its own is drawn into, in CSS px (see <see cref="SvgDocument.ForViewport"/>).</summary>
+        internal double? ViewportWidthPx { get; init; }
+
+        /// <summary>See <see cref="ViewportWidthPx"/>.</summary>
+        internal double? ViewportHeightPx { get; init; }
+
+        public double? CssWidthPx => ViewportWidthPx;
+
+        public double? CssHeightPx => ViewportHeightPx;
+
         internal XElementSvgSourceNode(XElement element, XElement svgRoot, CssData? cssData, string media, CssVarResolver.VarContext? varContext = null,
             SvgAnimationContext? animation = null)
         {

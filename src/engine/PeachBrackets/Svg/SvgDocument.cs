@@ -81,6 +81,32 @@ namespace PeachBrackets.Svg
         /// </summary>
         internal StandaloneSvgPlayer? Player { get; set; }
 
+        /// <summary>
+        /// Builds this standalone document again for a viewport of the given size in CSS px, set where the document has no <c>viewBox</c> and lacks a
+        /// <c>width</c> or <c>height</c>: a percentage in such a document is the share of whatever it is drawn into, which no build knows until it is placed.
+        /// Null for every document that carries its own viewport.
+        /// </summary>
+        internal Func<double, double, SvgDocument>? ViewportRebuilder { get; set; }
+
+        private Dictionary<(double, double), SvgDocument>? _viewportBuilds;
+
+        /// <summary>
+        /// The document as it is drawn into a viewport of <paramref name="widthPx"/> by <paramref name="heightPx"/> CSS px: this one when it has a viewport of
+        /// its own, otherwise a build whose percentages resolve against that size (kept per size).
+        /// </summary>
+        internal SvgDocument ForViewport(double widthPx, double heightPx)
+        {
+            if (ViewportRebuilder is not { } rebuild || widthPx <= 0 || heightPx <= 0)
+                return this;
+
+            _viewportBuilds ??= [];
+            var key = (Math.Round(widthPx, 3), Math.Round(heightPx, 3));
+            if (!_viewportBuilds.TryGetValue(key, out var built))
+                _viewportBuilds[key] = built = rebuild(widthPx, heightPx);
+
+            return built;
+        }
+
         /// <summary>The scene graph to paint now: the player's latest one for an animated image, this document otherwise.</summary>
         internal SvgDocument Current => Player?.Current ?? this;
     }
