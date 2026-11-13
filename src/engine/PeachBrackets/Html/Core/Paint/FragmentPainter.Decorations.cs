@@ -1814,7 +1814,7 @@ namespace PeachBrackets.Html.Paint
         /// Draws the vertical rule lines between columns of a multi-column container, one segment per
         /// gap per page-row (see <see cref="CssBox.ColumnRuleSegments"/>).
         /// </summary>
-        private static void PaintColumnRules(Canvas g, CssBox box, double originY, Rect clip)
+        private static void PaintColumnRules(Canvas g, CssBox box, double originY, Rect clip, bool snap)
         {
             // `none` and `hidden` draw nothing. DerivedStyle.ActualColumnRuleWidth already zeroes both,
             // and the call site's `> 0` check would therefore keep us out - but the dash-style switch
@@ -1824,14 +1824,12 @@ namespace PeachBrackets.Html.Paint
             // cached width that has no invalidator.
             if (box.ColumnRuleStyle.Value is LineStyle.None or LineStyle.Hidden) return;
 
-            var pen = g.GetPen(box.ActualColumnRuleColor);
-            pen.Width = box.ActualColumnRuleWidth;
-            pen.DashStyle = box.ColumnRuleStyle.Value switch
-            {
-                LineStyle.Dashed => DashStyle.Dash,
-                LineStyle.Dotted => DashStyle.Dot,
-                _ => DashStyle.Solid,
-            };
+            // Drawn as the segment a table's collapsed border is, so every style - dashed and dotted fitted
+            // to the rule's length, double as two bands, groove and ridge as two faces - is what the same
+            // border on a box would be.
+            var ruleWidth = box.ActualColumnRuleWidth;
+            var ruleStyle = box.ColumnRuleStyle.Value;
+            var ruleColor = box.ActualColumnRuleColor;
 
             // Column rules are recorded by the columns engine in document space, so they need the same
             // origin shift the builder already applied to every other rectangle on this page.
@@ -1839,13 +1837,16 @@ namespace PeachBrackets.Html.Paint
             {
                 foreach (var (x, top, bottom) in verticalRules)
                 {
-                    var visualX = x;
                     var visualTop = top - originY;
                     var visualBottom = bottom - originY;
 
-                    if (!IsRectVisible(new Rect(visualX - 1, visualTop, 2, visualBottom - visualTop), clip)) continue;
+                    if (!IsRectVisible(new Rect(x - 1, visualTop, 2, visualBottom - visualTop), clip)) continue;
 
-                    g.DrawLine(pen, visualX, visualTop, visualX, visualBottom);
+                    // The rule's edges snap like a box's, or it would end on a fractional row beside a
+                    // background that ends on a whole one.
+                    var rect = new Rect(x - ruleWidth / 2, visualTop, ruleWidth, visualBottom - visualTop);
+                    if (snap) rect = DecorationPixelSnapping.Snap(g, rect);
+                    BordersDrawHandler.DrawCollapsedSegment(g, false, rect, ruleStyle, ruleColor, rect.Width, side: null);
                 }
             }
 
@@ -1859,7 +1860,9 @@ namespace PeachBrackets.Html.Paint
 
                     if (!IsRectVisible(new Rect(left, visualY - 1, right - left, 2), clip)) continue;
 
-                    g.DrawLine(pen, left, visualY, right, visualY);
+                    var rect = new Rect(left, visualY - ruleWidth / 2, right - left, ruleWidth);
+                    if (snap) rect = DecorationPixelSnapping.Snap(g, rect);
+                    BordersDrawHandler.DrawCollapsedSegment(g, true, rect, ruleStyle, ruleColor, rect.Height, side: null);
                 }
             }
         }

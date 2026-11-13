@@ -211,6 +211,62 @@ namespace PeachBrackets.Engine.Tests.Integration
         }
 
         [Fact]
+        public async Task OneFloatAmongManyFloatFreeParagraphs_FloatScanWorkGrowsLinearlyWithTheDocument()
+        {
+            // A document that has a float at all cannot take the HasFloatedBoxes short-circuit, and every line then looked through the whole
+            // subtree of every earlier sibling: quadratic in the number of paragraphs, though only the first holds a float. Subtrees marked float
+            // free are skipped, so the walk examines the paragraphs that follow the float once per line, not every earlier paragraph's words.
+            // Counts, not the clock: quadrupling the paragraphs must not multiply the visits by anything near sixteen.
+            List<(int Paragraphs, long Visits)> samples = [];
+
+            foreach (var paragraphs in new[] { 20, 80 })
+            {
+                var body = new StringBuilder("<div style='float:right;width:40pt;height:20pt'></div>");
+                for (var i = 0; i < paragraphs; i++)
+                    body.Append($"<p style='margin:0'>Paragraph {i} carries a handful of words so that each one lays out on a line of its own.</p>");
+
+                var (_, container) = await BuildAndLayout(Wrap(body.ToString()));
+                samples.Add((paragraphs, container.FloatScanBoxVisits));
+            }
+
+            Assert.True(samples[0].Visits > 0, "the float is there, so the scan has to have looked at something");
+            Assert.True(samples[1].Visits <= 6.0 * samples[0].Visits,
+                $"{samples[0].Visits} visits for {samples[0].Paragraphs} paragraphs became {samples[1].Visits} for {samples[1].Paragraphs}: " +
+                "the walk has gone back to examining every earlier paragraph for every line");
+        }
+
+        [Fact]
+        public async Task FloatFreeSubtreesAreMarked_AndAnAttachedFloatClearsTheMarkAboveIt()
+        {
+            var (root, _) = await BuildAndLayout(Wrap(@"
+                <div id='holder'><p id='plain'>No float in here.</p><div id='has' style='float:left;width:30pt;height:10pt'></div></div>
+                <p id='after'>Also nothing.</p>"));
+
+            var plain = FindById(root, "plain")!;
+            var holder = FindById(root, "holder")!;
+            var after = FindById(root, "after")!;
+
+            Assert.True(plain.FloatFree, "a paragraph with no float anywhere below it is float free");
+            Assert.True(after.FloatFree);
+            Assert.False(holder.FloatFree, "the float's ancestor is not");
+            Assert.False(root.FloatFree);
+
+            // A float put in after the mark was taken has to take the mark away from every box above it: nothing re-marks within a pass.
+            var late = new CssBox(null, null);
+            late.Float = PeachBrackets.Css.CssProperty<PeachBrackets.Css.Floating>.FromValue(PeachBrackets.Css.Keywords.Left, PeachBrackets.Css.Floating.Left);
+            late.ParentBox = plain;
+
+            Assert.False(plain.FloatFree);
+            Assert.False(plain.ParentBox!.FloatFree);
+
+            // A box with nothing in it that is not floated (an anonymous wrapper, a spacing box) cannot hold one, so it costs no mark.
+            var untouched = FindById(root, "after")!;
+            var wrapper = new CssBox(untouched.ParentBox, null);
+            Assert.True(untouched.FloatFree);
+            Assert.False(wrapper.FloatFree, "a box made after the mark is unknown, which is scanned");
+        }
+
+        [Fact]
         public async Task ManyNestedBlocksWithoutFloats_StillRendersEveryPage()
         {
             // End-to-end companion to the counter guards: the same document through the real generator,

@@ -462,6 +462,15 @@ namespace PeachPDF.Tests.TestSupport
             _clipStack.Push(rect);
             Log.Add(new PushClipCall(rect));
         }
+        /// <summary>How many of the path clips were pushed with <see cref="PushClipAroundShapes"/> (so were promised to hold no text).</summary>
+        public int ShapeOnlyClipCount { get; private set; }
+
+        public override void PushClipAroundShapes(GraphicsPath path)
+        {
+            ShapeOnlyClipCount++;
+            PushClip(path);
+        }
+
         public override void PushClip(GraphicsPath path)
         {
             if (path is TestGraphicsPath testPath)

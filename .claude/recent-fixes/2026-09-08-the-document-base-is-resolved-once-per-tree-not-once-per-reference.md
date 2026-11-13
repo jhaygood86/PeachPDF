@@ -36,7 +36,7 @@ timing is what the work was actually worth.
 
 ## Deliberately not done
 
-- **`<base>` is still ignored for a `<link>`/`@import` stylesheet.** Those load from inside
+- **(Superseded by [2026-11-12](2026-11-12-the-stylesheets-resolve-against-the-base-element.md): a stylesheet now honours `<base>`, and a malformed `<base href>` no longer throws.) `<base>` is still ignored for a `<link>`/`@import` stylesheet.** Those load from inside
   `DomParser.GenerateCssTree`, and `Root` is only assigned once `SetHtml` returns, so they reach
   `ResolveAgainstDocumentBase` with a null root and fall back to the adapter's base URI. That is
   long-standing behaviour and this change preserves it byte-for-byte. Whether the parse-time path

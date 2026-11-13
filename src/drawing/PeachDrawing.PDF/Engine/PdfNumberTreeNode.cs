@@ -18,8 +18,11 @@ namespace PeachDrawing.PDF.Engine;
 /// Kids/PrepareForSave machinery below would support splitting later if ever needed.
 /// </summary>
 [DebuggerDisplay("({" + nameof(DebuggerDisplay) + "})")]
-internal sealed class PdfNumberTreeNode : PdfDictionary
+internal sealed class PdfNumberTreeNode : PdfDictionary, IPdfDictionaryValue<PdfNumberTreeNode>
 {
+    static PdfNumberTreeNode IPdfDictionaryValue<PdfNumberTreeNode>.Create(PdfDocument document) => new(document);
+    static PdfNumberTreeNode IPdfDictionaryValue<PdfNumberTreeNode>.Wrap(PdfDictionary existing) => new(existing);
+
     public PdfNumberTreeNode()
     { }
 
@@ -244,24 +247,19 @@ internal sealed class PdfNumberTreeNode : PdfDictionary
     /// <summary>
     /// Predefined keys of this dictionary.
     /// </summary>
-    internal sealed class Keys : KeysBase
+    internal sealed class Keys
     {
         // Reference: ISO 32000-1 Table 37 - Entries in a number tree node dictionary
 
-        [PdfKey(PdfKeyType.Array)]
         public const string Kids = "/Kids";
 
-        [PdfKey(PdfKeyType.Array)]
         public const string Nums = "/Nums";
 
-        [PdfKey(PdfKeyType.Array)]
         public const string Limits = "/Limits";
 
-        public static PdfDictionaryMetadata Meta { get; } = CreateMeta(typeof(Keys));
 
     }
 
-    internal override PdfDictionaryMetadata Meta => Keys.Meta;
 
     string DebuggerDisplay => string.Format("root:{0}", IsRoot);
 }

@@ -1266,26 +1266,40 @@ namespace PeachBrackets.Html
         {
             get
             {
-                // Root is only assigned once SetHtml returns, so a <link>/@import stylesheet - loaded from
-                // inside DomParser.GenerateCssTree - resolves with no document base and falls back to the
-                // adapter's. Long-standing behaviour, kept as-is. (An <img> is not in that group: images
-                // are resolved during layout, via CssBoxImage.MeasureWordsSize, by which point Root is
-                // assigned and <base> is honoured.) The early return is only a fast path - the memo key
-                // already handles a null root, since the next read against a real tree fails
-                // ReferenceEquals and re-walks.
-                if (Root is null) return RenderContext.BaseUri;
+                // While the stylesheets are collected, Root is not assigned yet (it is only once SetHtml returns), so the tree being built is
+                // ParsingRoot: a <link>/@import stylesheet then resolves against the document's <base href> too. The early return is only a fast
+                // path - the memo key already handles a null tree, since the next read against a real one fails ReferenceEquals and re-walks.
+                var tree = Root ?? ParsingRoot;
+                if (tree is null) return RenderContext.BaseUri;
 
-                if (!ReferenceEquals(_documentBaseRoot, Root))
+                if (!ReferenceEquals(_documentBaseRoot, tree))
                 {
-                    var href = DomUtils.GetBoxByTagName(Root, "base")?.HtmlTag?.TryGetAttribute("href", "");
-                    // A malformed href still throws from exactly where it did before - and, since the key
-                    // is only committed afterwards, from every later read too rather than just the first.
-                    _documentBase = string.IsNullOrWhiteSpace(href) ? null : new Uri(href);
-                    _documentBaseRoot = Root;
+                    // HTML "document base URL": the first <base> that has an href, resolved against the host's own base address (the fallback
+                    // base URL). A href that does not make an absolute address is ignored rather than failing the render.
+                    var href = FirstBaseHref(tree);
+                    _documentBase = href is not null && Uri.TryCreate(RenderContext.BaseUri, href, out var resolved) && resolved.IsAbsoluteUri ? resolved : null;
+                    _documentBaseRoot = tree;
                 }
 
                 return _documentBase ?? RenderContext.BaseUri;
             }
+        }
+
+        /// <summary>The tree <see cref="DomParser.GenerateCssTree"/> is building while it collects the stylesheets, or null; see <see cref="DocumentBaseUri"/>.</summary>
+        internal CssBox? ParsingRoot { get; set; }
+
+        private static string? FirstBaseHref(CssBox box)
+        {
+            if (box.HtmlTag is { } tag && tag.Name == "base" && tag.TryGetAttribute("href", "") is { } href && !string.IsNullOrWhiteSpace(href))
+                return href;
+
+            foreach (var child in box.Boxes)
+            {
+                if (FirstBaseHref(child) is { } found)
+                    return found;
+            }
+
+            return null;
         }
 
         /// <summary>
@@ -2141,6 +2155,7 @@ namespace PeachBrackets.Html
             // "actualTransformComputed" cache in DerivedStyle.ActualTransformMatrix). It reads the computed
             // value (HasTransform) now, but the flag is only consumed after layout, so it stays deferred.
             (HasFloatedBoxes, HasOutOfFlowBoxes, _) = ComputeFlowFlags(Root, includeStackingHoistCandidates: false);
+            if (HasFloatedBoxes) CssBox.MarkFloatFreeSubtrees(Root);
 
             // Depends on cascaded style only, and layout itself consults it, so it has to be settled before
             // the first pass rather than alongside the post-layout flags below.
@@ -5944,8 +5959,8 @@ namespace PeachBrackets.Html
         /// <summary>Paints only the animated boxes that are drawn apart from the page (<see cref="DocumentPaintLayer.Animated"/>), each with everything under it.</summary>
         /// <param name="g">the device to use</param>
         /// <param name="fragmentainer">the page to paint</param>
-        /// <param name="roots">the fragments of the boxes to draw, in paint order</param>
-        public void PerformPaintAnimated(Canvas g, FragmentainerFragment fragmentainer, IReadOnlyList<BoxFragment> roots)
+        /// <param name="roots">the boxes to draw, in paint order, each with the ancestors whose overflow clip applies to it</param>
+        public void PerformPaintAnimated(Canvas g, FragmentainerFragment fragmentainer, IReadOnlyList<StackingOrder.StackingParticipant> roots)
         {
             ArgumentNullException.ThrowIfNull(g);
             ArgumentNullException.ThrowIfNull(fragmentainer);

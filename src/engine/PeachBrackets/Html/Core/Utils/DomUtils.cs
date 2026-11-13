@@ -1156,6 +1156,8 @@ namespace PeachBrackets.Html.Utils
         /// <param name="column">The column the float being placed is in, or null when it is in none.</param>
         private static double LowestFloatTopIn(CssBox box, double offsetAbove, bool columnScoped, Fragmentation.ColumnAreaKey? column)
         {
+            if (box.FloatFree) return double.NegativeInfinity;
+
             // The static position: a relative offset moves where a float is drawn, not where later floats go (CSS 2.1 §9.4.3). The offset of
             // every box the float lies in has moved it too, since a box's contents are moved along with it.
             var offset = offsetAbove + box.RelativeOffsetY;
@@ -1243,7 +1245,12 @@ namespace PeachBrackets.Html.Utils
 
                 for (var i = 0; i < currentBoxIdx; i++)
                 {
-                    var next = GetNextIntersectingFloatBox(reference.ParentBox.Boxes[i], coordinates, floatProp, ref boxesVisited, -frameOffsetX, -frameOffsetY,
+                    var earlier = reference.ParentBox.Boxes[i];
+
+                    // A subtree with no float in it holds nothing this looks for; only a right float also tests the inline-level boxes of its own line.
+                    if (earlier.FloatFree && !(isSiblingLevel && floatProp == Floating.Right)) continue;
+
+                    var next = GetNextIntersectingFloatBox(earlier, coordinates, floatProp, ref boxesVisited, -frameOffsetX, -frameOffsetY,
                         isSiblingLevel);
 
                     if (next is not null)
@@ -1329,6 +1336,9 @@ namespace PeachBrackets.Html.Utils
         internal static bool EstablishesIndependentFormattingContext(CssBox box)
         {
             if (box.ParentBox is null) return true;
+            // The root element establishes a block formatting context (CSS 2.1 section 9.4.1), and its margins do not collapse (section 8.3.1): what its
+            // first descendant's margin would collapse through its top stays inside it, so the <html> box starts at the top of the page area.
+            if (box.ParentBox.ParentBox is null && box.HtmlTag is { } rootTag && rootTag.Name.Equals("html", StringComparison.OrdinalIgnoreCase)) return true;
             if (box.IsFloated || box.IsPageFloated) return true;
             if (box.Position.Value is PositionMode.Absolute or PositionMode.Fixed) return true;
             if (box.Overflow.Value is not Overflow.Visible) return true;
@@ -1540,7 +1550,10 @@ namespace PeachBrackets.Html.Utils
 
                 for (var i = 0; i < currentBoxIdx; i++)
                 {
-                    ScanForNarrowestRightFloatBox(reference.ParentBox.Boxes[i], reader, top, lineLeft, ref narrowest, ref narrowestLeft, ref boxesVisited);
+                    var earlier = reference.ParentBox.Boxes[i];
+                    if (earlier.FloatFree) continue;
+
+                    ScanForNarrowestRightFloatBox(earlier, reader, top, lineLeft, ref narrowest, ref narrowestLeft, ref boxesVisited);
                 }
 
                 reference = reference.ParentBox;
@@ -1558,25 +1571,31 @@ namespace PeachBrackets.Html.Utils
             // the same block-axis rows as a line in a later one (css-multicol-1 §2: a float belongs to the
             // column box it appears in).
             // Where the float is in flow, in the frame of the line being laid out (CSS 2.1 section 9.4.3), not where it is drawn.
-            var delta = box.IsFloated ? box.FrameDeltaFor(reader) : default;
-            var flowX = box.FlowLeftEdge + delta.X;
-            var flowTop = box.FlowTopEdge + delta.Y;
-            var flowBottom = box.FlowBottomEdge + delta.Y;
-
-            if (box.EffectiveFloatSide == Floating.Right && flowTop <= top && top < flowBottom
-                && flowX + (box.ActualRight - box.Location.X) + box.ActualMarginRight > lineLeft)
+            // Only a right float is measured: this visits every box before the line, so the frame arithmetic stays behind the cheap test.
+            if (box.EffectiveFloatSide == Floating.Right)
             {
-                var left = flowX - box.ActualMarginLeft;
+                var delta = box.IsFloated ? box.FrameDeltaFor(reader) : default;
+                var flowX = box.FlowLeftEdge + delta.X;
+                var flowTop = box.FlowTopEdge + delta.Y;
+                var flowBottom = box.FlowBottomEdge + delta.Y;
 
-                if (left < narrowestLeft)
+                if (flowTop <= top && top < flowBottom
+                    && flowX + (box.ActualRight - box.Location.X) + box.ActualMarginRight > lineLeft)
                 {
-                    narrowestLeft = left;
-                    narrowest = box;
+                    var left = flowX - box.ActualMarginLeft;
+
+                    if (left < narrowestLeft)
+                    {
+                        narrowestLeft = left;
+                        narrowest = box;
+                    }
                 }
             }
 
             foreach (var childBox in box.Boxes)
             {
+                if (childBox.FloatFree) continue;
+
                 ScanForNarrowestRightFloatBox(childBox, reader, top, lineLeft, ref narrowest, ref narrowestLeft, ref boxesVisited);
             }
         }
@@ -1623,6 +1642,8 @@ namespace PeachBrackets.Html.Utils
 
                 for (var i = 0; i < currentBoxIdx; i++)
                 {
+                    if (reference.ParentBox.Boxes[i].FloatFree) continue;
+
                     ScanForVerticalFloatInsets(reference.ParentBox.Boxes[i], columnBlockAxisPoint, blockStartIsRight,
                         readerTop, readerBottom, columnBlockExtent, ref top, ref bottom, ref boxesVisited);
                 }
@@ -1650,6 +1671,8 @@ namespace PeachBrackets.Html.Utils
 
             foreach (var childBox in box.Boxes)
             {
+                if (childBox.FloatFree) continue;
+
                 ScanForVerticalFloatInsets(childBox, columnBlockAxisPoint, blockStartIsRight, readerTop, readerBottom, columnBlockExtent,
                     ref top, ref bottom, ref boxesVisited);
             }
@@ -2143,6 +2166,8 @@ namespace PeachBrackets.Html.Utils
 
             foreach (var childBox in box.Boxes)
             {
+                if (childBox.FloatFree) continue;
+
                 var foundBox = GetNextIntersectingFloatBox(childBox, coordinates, floatProp, ref boxesVisited, offsetX, offsetY);
                 if (foundBox != null)
                 {

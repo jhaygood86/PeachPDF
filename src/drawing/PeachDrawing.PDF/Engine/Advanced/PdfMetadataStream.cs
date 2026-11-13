@@ -1,5 +1,3 @@
-#nullable enable
-
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -345,24 +343,13 @@ internal sealed class PdfMetadataStream : PdfDictionary
     /// <summary>
     /// Predefined keys of this dictionary.
     /// </summary>
-    internal sealed class Keys : KeysBase
+    internal sealed class Keys
     {
         /// <summary>(Required) Must be Metadata for a metadata stream dictionary.</summary>
-        [PdfKey(PdfKeyType.Name | PdfKeyType.Required, FixedValue = "Metadata")]
         public const string Type = "/Type";
 
         /// <summary>(Required) Must be XML for an XMP metadata stream.</summary>
-        [PdfKey(PdfKeyType.Name | PdfKeyType.Required, FixedValue = "XML")]
         public const string Subtype = "/Subtype";
 
-        /// <summary>
-        /// Gets the KeysMeta for these keys.
-        /// </summary>
-        public static PdfDictionaryMetadata Meta { get; } = CreateMeta(typeof(Keys));
     }
-
-    /// <summary>
-    /// Gets the KeysMeta of this dictionary type.
-    /// </summary>
-    internal override PdfDictionaryMetadata Meta => Keys.Meta;
 }

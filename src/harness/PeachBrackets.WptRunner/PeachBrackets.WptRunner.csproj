@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Description>Runs web-platform-tests reftests through PeachBrackets and gates each CSS module on a committed pass-count floor.</Description>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Public API only, the way a package consumer uses the engine (the WPT checkout is fetched, never vendored). -->
+    <ProjectReference Include="..\..\engine\PeachBrackets\PeachBrackets.csproj" />
+    <ProjectReference Include="..\..\drawing\PeachDrawing\PeachDrawing.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="PeachBrackets.WptRunner.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="wpt\modules.json" Link="modules.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="wpt\WPT_COMMIT" Link="WPT_COMMIT">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+</Project>

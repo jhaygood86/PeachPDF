@@ -79,6 +79,10 @@ public sealed partial class HtmlView : UserControl
     /// <summary>Creates a view with nothing in it.</summary>
     public HtmlView()
     {
+        // The first document is mostly JIT time; this compiles what it will use while it is still being fetched (once per process, on a thread-pool thread).
+        if (Environment.GetEnvironmentVariable("PEACH_NO_ENGINE_WARMUP") is not { Length: > 0 })
+            _ = HtmlDocument.WarmUpAsync();
+
         IsTabStop = true;
         _canvas.HorizontalAlignment = HorizontalAlignment.Left;
         _canvas.VerticalAlignment = VerticalAlignment.Top;
@@ -96,6 +100,7 @@ public sealed partial class HtmlView : UserControl
             var started = Stopwatch.GetTimestamp();
             var noted = 0.0;
             UpdateViewport();
+            QueueWarm();
             if (!e.IsIntermediate)
                 QueueImageUpgrade();
             HtmlViewDiagnostics.Trace?.Invoke($"ViewChanged y={_scroller.VerticalOffset:F0} intermediate: NoteScrolling {noted:F1} ms, whole handler {HtmlViewDiagnostics.MillisecondsSince(started):F1} ms");
@@ -316,6 +321,7 @@ public sealed partial class HtmlView : UserControl
         StopAnimationLoop();
         _loadVersion++;
         _reflowTimer?.Stop();
+        _warmTimer?.Stop();
         StopWatchingDisplayScale();
         _regionTarget?.Dispose();
         _regionTarget = null;
@@ -492,6 +498,8 @@ public sealed partial class HtmlView : UserControl
         _canvas.Invalidate();
         RaiseOutsideMeasure(() => DocumentLoaded?.Invoke(this, EventArgs.Empty));
         EnsureAnimationLoop();
+        _warmFailed = false;
+        QueueWarm(400);
     }
 
     // Tells the document which part of it is showing, so a fixed box stays where it was put in the view and a sticky one follows the top of it. An

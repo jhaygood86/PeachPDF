@@ -148,6 +148,67 @@ namespace PeachBrackets.Engine.Tests.Integration
             Assert.True(left.Applied);
         }
 
+        // Boxes the load changes after the cascade: an inline that holds a block is made a block, an absolutely positioned inline is wrapped (and left static in
+        // the wrapper), an item of a flex container is blockified even when it comes up through a display: contents box. Cascading one of them again on its own
+        // takes each change back, which used to make every hover over one a full load.
+        private const string CorrectedBoxes = """
+            <!DOCTYPE html><html><head><style>
+            body { margin: 0 }
+            .row { display: flex }
+            .shell { display: contents }
+            .link { color: rgb(10,10,10); text-decoration: none; line-height: 1.5 }
+            .link:hover { color: rgb(255,0,0); text-decoration: underline }
+            .card { position: relative; display: block; width: 120px; height: 60px; color: rgb(0,0,100) }
+            .card:hover { color: rgb(200,0,0); background-color: rgb(240,240,255) }
+            .pic { position: absolute; left: 0; top: 0; width: 30px; height: 30px; background: rgb(0,128,0) }
+            .card:hover .pic { opacity: .5 }
+            </style></head><body>
+            <a id=wrap class=link href=#><div style="width: 100px; height: 20px">block in an inline</div></a>
+            <div class=row><span class=shell><a id=item class=link href=#>flex item</a></span></div>
+            <a id=card class=card href=#><span id=pic class=pic></span>caption <b>bold</b></a>
+            </body></html>
+            """;
+
+        [Theory]
+        [InlineData("wrap")]
+        [InlineData("item")]
+        [InlineData("card")]
+        public async Task ABoxTheLoadCorrectedAfterTheCascade_IsRestyledInPlaceTheSameAsLoadingAgain(string id)
+        {
+            var (document, canvas) = await LoadAsync(CorrectedBoxes, verify: true);
+            var bounds = document.GetElementBounds(id)!.Value;
+
+            // The verification throws when the styles or the geometry differ from a reload's.
+            var entered = await document.SetPointerStateAsync(0, bounds.X + (bounds.Width / 2), bounds.Y + (bounds.Height / 2), false, canvas);
+            Assert.True(entered.Applied);
+            Assert.True(entered.Incremental, document.LastRestyleFallbackReason);
+
+            var left = await document.ClearPointerStateAsync(canvas);
+            Assert.True(left.Applied);
+            Assert.True(left.Incremental, document.LastRestyleFallbackReason);
+        }
+
+        [Fact]
+        public async Task AGraphicThatCannotBeBuiltAgainInPlace_LeavesTheChangeToLoadingTheDocumentAgain()
+        {
+            var (document, canvas) = await LoadAsync(
+                "<!DOCTYPE html><html><head><style>.f { fill: rgb(0,0,255) } a:hover .f { fill: rgb(255,0,0) }</style></head><body>" +
+                "<a id=link href=#>link <svg width=20 height=20 viewBox='0 0 20 20'><rect class=f width=20 height=20 /></svg></a></body></html>");
+
+            // The graphic keeps the elements it was built from for a state rule that styles one of them; without them it cannot be built again.
+            var graphic = Walk(document.Container.Root!).OfType<CssBoxSvg>().Single();
+            Assert.True(graphic.CanRebuildForState);
+            typeof(CssBoxSvg).GetField("_stateBoxes", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.SetValue(graphic, null);
+            Assert.False(graphic.CanRebuildForState);
+
+            var bounds = document.GetElementBounds("link")!.Value;
+            var entered = await document.SetPointerStateAsync(0, bounds.X + 2, bounds.Y + 2, false, canvas);
+
+            Assert.True(entered.Applied);
+            Assert.False(entered.Incremental);
+            Assert.Contains("cannot be built again", document.LastRestyleFallbackReason);
+        }
+
         [Fact]
         public async Task FocusMoves_AreRestyledTheSameAsLoadingAgain()
         {

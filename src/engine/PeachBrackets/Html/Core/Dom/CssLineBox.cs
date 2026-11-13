@@ -179,6 +179,14 @@ namespace PeachBrackets.Html.Dom
         public Dictionary<CssBox, Rect> Rectangles { get; }
 
         /// <summary>
+        /// For a box whose words are not visually contiguous on this line (bidi reordering put another box's words between them), the
+        /// pieces it is drawn as, left to right; null when no box is split. A piece is stored relative to the left edge of the box's own
+        /// <see cref="Rectangles"/> entry, so a move of the whole rectangle (alignment, a relative offset, a fragmentainer's translation)
+        /// leaves it valid. The union rectangle stays the box's rectangle for everything but painting.
+        /// </summary>
+        internal Dictionary<CssBox, List<InlineSplitPiece>>? SplitPieces { get; set; }
+
+        /// <summary>
         /// The right margin edge of the furthest inline-block whose content flows into this line placed on it so far, or negative infinity when
         /// there is none. A float placed after it cannot move it aside as it moves the line's words, so it has to know it is there. (One that
         /// holds block-level content, an inline-flex, -grid or -table has a box of its own that the float scan finds instead.)
@@ -388,4 +396,11 @@ namespace PeachBrackets.Html.Dom
             return string.Join(" ", ws);
         }
     }
+
+    /// <summary>One visually contiguous piece of an inline box split by bidi reordering; see <see cref="CssLineBox.SplitPieces"/>.</summary>
+    /// <param name="Start">the piece's left edge, relative to the left edge of the box's rectangle on the line</param>
+    /// <param name="End">the piece's right edge, relative to the same point</param>
+    /// <param name="HasLeftEdge">whether the box's own left border and padding sit at this piece's left edge</param>
+    /// <param name="HasRightEdge">whether the box's own right border and padding sit at this piece's right edge</param>
+    internal readonly record struct InlineSplitPiece(double Start, double End, bool HasLeftEdge, bool HasRightEdge);
 }

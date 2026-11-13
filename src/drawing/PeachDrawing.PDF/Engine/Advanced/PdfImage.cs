@@ -31,8 +31,6 @@ internal sealed partial class PdfImage : PdfXObject
         _targetWidth = targetWidth;
         _targetHeight = targetHeight;
 
-        ////// TODO: identify multiple used images. If the image already exists use the same XRef.
-        ////_defaultName = PdfImageTable.NextImageName;
 
         switch (_image.Format.Guid.ToString("B").ToUpper())
         {
@@ -442,7 +440,7 @@ internal sealed partial class PdfImage : PdfXObject
     /// <summary>
     /// Embeds a pass-through-eligible GIF source as <c>/LZWDecode</c> - the same LZW code values and
     /// code widths the GIF's own encoder produced (so no LZW decompress+recompress round trip), just
-    /// re-packed via <see cref="RepackGifLzwForPdf"/> from GIF's own bit order into PDF's. This is
+    /// re-packed via <see cref="PdfGifLzw.RepackGifLzwForPdf"/> from GIF's own bit order into PDF's. This is
     /// <em>not</em> a literal byte-for-byte copy the way <see cref="EmbedPngPassthrough"/>'s <c>IDAT</c>
     /// is: GIF packs LZW codes least-significant-bit-first, while PDF's <c>/LZWDecode</c> (inherited
     /// from the classic Unix "compress" format, same as TIFF's LZW) packs them most-significant-bit-
@@ -458,7 +456,7 @@ internal sealed partial class PdfImage : PdfXObject
     {
         Elements[Keys.ColorSpace] = BuildIndexedColorSpace(data.Palette);
 
-        var pdfLzwData = RepackGifLzwForPdf(data.LzwData);
+        var pdfLzwData = PdfGifLzw.RepackGifLzwForPdf(data.LzwData);
         Stream = new PdfStream(pdfLzwData, this);
         Elements[PdfStream.Keys.Length] = new PdfInteger(pdfLzwData.Length);
         Elements[PdfStream.Keys.Filter] = new PdfName("/LZWDecode");
@@ -478,121 +476,6 @@ internal sealed partial class PdfImage : PdfXObject
         Elements[Keys.Width] = new PdfInteger(EffectiveWidth);
         Elements[Keys.Height] = new PdfInteger(EffectiveHeight);
         Elements[Keys.BitsPerComponent] = new PdfInteger(8);
-    }
-
-    /// <summary>
-    /// Re-packs a GIF frame's LZW-compressed bytes (bit-packed least-significant-bit-first, GIF's own
-    /// convention - see <see cref="EmbedGifPassthrough"/>'s own remarks) into PDF <c>/LZWDecode</c>'s
-    /// bit-packing convention (most-significant-bit-first). Preserves the exact same sequence of code
-    /// values and code widths GIF's own encoder chose - both conventions grow from 9 to 12 bits using
-    /// the identical "early change" trigger (widen the moment the code table becomes full for the
-    /// current width, confirmed against PeachImage's own <c>GifLzwEncoder</c>/<c>GifLzwDecoder</c>
-    /// source, matching PDF's own default <c>/EarlyChange 1</c>) - so this only ever needs to track
-    /// that shared code-table-size bookkeeping to find code boundaries, never PeachImage's actual
-    /// prefix/suffix dictionary contents (no pixel decode happens here). Hardcodes GIF's Clear/End
-    /// codes at 256/257 (start code width 9) rather than deriving them from a <c>MinCodeSize</c>
-    /// parameter, since <see cref="ImageSource.IImageSource.GifPassthrough"/>'s eligibility gate
-    /// already guarantees <c>MinCodeSize == 8</c> for every caller - the same fixed values PDF's
-    /// <c>/LZWDecode</c> itself always uses (it has no <c>MinCodeSize</c> concept of its own).
-    /// </summary>
-    internal static byte[] RepackGifLzwForPdf(byte[] gifLzwData)
-    {
-        const int clearCode = 256;
-        const int endCode = 257;
-        const int maxCodeTableSize = 4096;
-
-        int inBytePos = 0;
-        ulong inBitBuffer = 0;
-        int inBitCount = 0;
-        bool TryReadLsbFirst(int bits, out int code)
-        {
-            while (inBitCount < bits)
-            {
-                if (inBytePos >= gifLzwData.Length)
-                {
-                    code = 0;
-                    return false;
-                }
-                inBitBuffer |= (ulong)gifLzwData[inBytePos++] << inBitCount;
-                inBitCount += 8;
-            }
-            code = (int)(inBitBuffer & ((1UL << bits) - 1));
-            inBitBuffer >>= bits;
-            inBitCount -= bits;
-            return true;
-        }
-
-        using var output = new MemoryStream();
-        int outBitBuffer = 0;
-        int outBitCount = 0;
-        void WriteMsbFirst(int code, int bits)
-        {
-            outBitBuffer = (outBitBuffer << bits) | code;
-            outBitCount += bits;
-            while (outBitCount >= 8)
-            {
-                outBitCount -= 8;
-                output.WriteByte((byte)((outBitBuffer >> outBitCount) & 0xFF));
-            }
-            outBitBuffer &= (1 << outBitCount) - 1;
-        }
-
-        // GIF and PDF/TIFF both grow code width from 9 to 12 bits using "early change" timing, but not
-        // at the *same* code count: GIF grows the moment the table becomes full for the current width
-        // (nextCode == maxCode - confirmed against PeachImage's own GifLzwEncoder/GifLzwDecoder source),
-        // while PDF/TIFF grows one code earlier (nextCode == maxCode - 1 - confirmed empirically against
-        // a real libtiff-generated LZW stream: decoding it with GIF's own trigger diverges exactly at
-        // the first width-growth boundary, decoding with this one-earlier trigger matches perfectly).
-        // So this needs two independent code-width trackers sharing one nextCode counter: readCodeSize
-        // to find code boundaries in the GIF bitstream, writeCodeSize to decide how many bits the *same*
-        // code value needs in the PDF bitstream - the two can differ for a stretch around each boundary.
-        int nextCode = endCode + 1;
-        int readCodeSize = 9, readMaxCode = 1 << 9;
-        int writeCodeSize = 9, writeMaxCode = 1 << 9;
-        int prevCode = -1;
-
-        while (TryReadLsbFirst(readCodeSize, out int code))
-        {
-            WriteMsbFirst(code, writeCodeSize);
-
-            if (code == clearCode)
-            {
-                nextCode = endCode + 1;
-                readCodeSize = writeCodeSize = 9;
-                readMaxCode = writeMaxCode = 1 << 9;
-                prevCode = -1;
-                continue;
-            }
-
-            if (code == endCode)
-            {
-                break;
-            }
-
-            if (prevCode != -1 && nextCode < maxCodeTableSize)
-            {
-                nextCode++;
-                if (nextCode == readMaxCode && readCodeSize < 12)
-                {
-                    readCodeSize++;
-                    readMaxCode = 1 << readCodeSize;
-                }
-                if (nextCode == writeMaxCode - 1 && writeCodeSize < 12)
-                {
-                    writeCodeSize++;
-                    writeMaxCode = 1 << writeCodeSize;
-                }
-            }
-
-            prevCode = code;
-        }
-
-        if (outBitCount > 0)
-        {
-            output.WriteByte((byte)((outBitBuffer << (8 - outBitCount)) & 0xFF));
-        }
-
-        return output.ToArray();
     }
 
     /// <summary>
@@ -799,26 +682,22 @@ internal sealed partial class PdfImage : PdfXObject
         /// (Optional) The type of PDF object that this dictionary describes;
         /// if present, must be XObject for an image XObject.
         /// </summary>
-        [PdfKey(PdfKeyType.Name | PdfKeyType.Optional)]
         public const string Type = "/Type";
 
         /// <summary>
         /// (Required) The type of XObject that this dictionary describes;
         /// must be Image for an image XObject.
         /// </summary>
-        [PdfKey(PdfKeyType.Name | PdfKeyType.Required)]
         public const string Subtype = "/Subtype";
 
         /// <summary>
         /// (Required) The width of the image, in samples.
         /// </summary>
-        [PdfKey(PdfKeyType.Integer | PdfKeyType.Required)]
         public const string Width = "/Width";
 
         /// <summary>
         /// (Required) The height of the image, in samples.
         /// </summary>
-        [PdfKey(PdfKeyType.Integer | PdfKeyType.Required)]
         public const string Height = "/Height";
 
         /// <summary>
@@ -829,7 +708,6 @@ internal sealed partial class PdfImage : PdfXObject
         /// - If ColorSpace is absent, the color space specifications in the JPEG2000 data are used.
         ///   The Decode array is also ignored unless ImageMask is true.
         /// </summary>
-        [PdfKey(PdfKeyType.NameOrArray | PdfKeyType.Required)]
         public const string ColorSpace = "/ColorSpace";
 
         /// <summary>
@@ -846,14 +724,12 @@ internal sealed partial class PdfImage : PdfXObject
         /// If the image stream uses the JPXDecode filter, this entry is optional and ignored if present.
         /// The bit depth is determined in the process of decoding the JPEG2000 image.
         /// </summary>
-        [PdfKey(PdfKeyType.Integer | PdfKeyType.Required)]
         public const string BitsPerComponent = "/BitsPerComponent";
 
         /// <summary>
         /// (Optional; PDF 1.1) The name of a color rendering intent to be used in rendering the image.
         /// Default value: the current rendering intent in the graphics state.
         /// </summary>
-        [PdfKey(PdfKeyType.Name | PdfKeyType.Optional)]
         public const string Intent = "/Intent";
 
         /// <summary>
@@ -862,7 +738,6 @@ internal sealed partial class PdfImage : PdfXObject
         /// not be specified; unmasked areas are painted using the current nonstroking color.
         /// Default value: false.
         /// </summary>
-        [PdfKey(PdfKeyType.Boolean | PdfKeyType.Optional)]
         public const string ImageMask = "/ImageMask";
 
         /// <summary>
@@ -871,7 +746,6 @@ internal sealed partial class PdfImage : PdfXObject
         /// a range of colors to be applied to it as a color key mask. If ImageMask is true, this entry
         /// must not be present.
         /// </summary>
-        [PdfKey(PdfKeyType.StreamOrArray | PdfKeyType.Optional)]
         public const string Mask = "/Mask";
 
         /// <summary>
@@ -881,14 +755,12 @@ internal sealed partial class PdfImage : PdfXObject
         /// by ColorSpace. If the image uses the JPXDecode filter and ImageMask is false, Decode is ignored.
         /// Default value: see "Decode Arrays".
         /// </summary>
-        [PdfKey(PdfKeyType.Array | PdfKeyType.Optional)]
         public const string Decode = "/Decode";
 
         /// <summary>
         /// (Optional) A flag indicating whether image interpolation is to be performed. 
         /// Default value: false.
         /// </summary>
-        [PdfKey(PdfKeyType.Boolean | PdfKeyType.Optional)]
         public const string Interpolate = "/Interpolate";
 
         /// <summary>
@@ -896,7 +768,6 @@ internal sealed partial class PdfImage : PdfXObject
         /// elements within the array has no significance. This entry may not be present in an image 
         /// XObject that is itself an alternate image.
         /// </summary>
-        [PdfKey(PdfKeyType.Array | PdfKeyType.Optional)]
         public const string Alternates = "/Alternates";
 
         /// <summary>
@@ -909,7 +780,6 @@ internal sealed partial class PdfImage : PdfXObject
         /// image has no associated soft mask (although the current soft mask in the graphics state may
         /// still apply).
         /// </summary>
-        [PdfKey(PdfKeyType.Integer | PdfKeyType.Required)]
         public const string SMask = "/SMask";
 
         /// <summary>
@@ -926,41 +796,35 @@ internal sealed partial class PdfImage : PdfXObject
         ///   nonzero value, SMask should not be specified.
         /// Default value: 0.
         /// </summary>
-        [PdfKey(PdfKeyType.Integer | PdfKeyType.Optional)]
         public const string SMaskInData = "/SMaskInData";
 
         /// <summary>
         /// (Required in PDF 1.0; optional otherwise) The name by which this image XObject is 
         /// referenced in the XObject subdictionary of the current resource dictionary.
         /// </summary>
-        [PdfKey(PdfKeyType.Name | PdfKeyType.Optional)]
         public const string Name = "/Name";
 
         /// <summary>
         /// (Required if the image is a structural content item; PDF 1.3) The integer key of the 
         /// image's entry in the structural parent tree.
         /// </summary>
-        [PdfKey(PdfKeyType.Integer | PdfKeyType.Required)]
         public const string StructParent = "/StructParent";
 
         /// <summary>
         /// (Optional; PDF 1.3; indirect reference preferred) The digital identifier of the image's
         /// parent Web Capture content set.
         /// </summary>
-        [PdfKey(PdfKeyType.String | PdfKeyType.Optional)]
         public const string ID = "/ID";
 
         /// <summary>
         /// (Optional; PDF 1.2) An OPI version dictionary for the image. If ImageMask is true, 
         /// this entry is ignored.
         /// </summary>
-        [PdfKey(PdfKeyType.Dictionary | PdfKeyType.Optional)]
         public const string OPI = "/OPI";
 
         /// <summary>
         /// (Optional; PDF 1.4) A metadata stream containing metadata for the image.
         /// </summary>
-        [PdfKey(PdfKeyType.Stream | PdfKeyType.Optional)]
         public const string Metadata = "/Metadata";
 
         /// <summary>
@@ -969,7 +833,6 @@ internal sealed partial class PdfImage : PdfXObject
         /// processed, its visibility is determined based on this entry. If it is determined to be 
         /// invisible, the entire image is skipped, as if there were no Do operator to invoke it.
         /// </summary>
-        [PdfKey(PdfKeyType.Dictionary | PdfKeyType.Optional)]
         public const string OC = "/OC";
 
         // ReSharper restore InconsistentNaming

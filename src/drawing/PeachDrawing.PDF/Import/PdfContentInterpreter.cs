@@ -10,7 +10,7 @@ namespace PeachDrawing.PDF.Import;
 
 /// <summary>
 /// Runs a PDF content stream and issues the matching calls on a <see cref="Canvas"/>: path construction and painting,
-/// clipping, the graphics state (CTM, line style, colour, alpha) and form XObjects. The canvas is expected to be in
+/// clipping, the graphics state (CTM, line style, color, alpha) and form XObjects. The canvas is expected to be in
 /// PDF user space already (see <see cref="PdfPagePainter"/>); every operator maps onto the canvas' own save/restore
 /// stack so <c>q</c>/<c>Q</c> and clips unwind in the right order. Operators it does not handle yet (text, images,
 /// shadings, patterns, inline images) are recorded in <see cref="Unsupported"/> and skipped.
@@ -243,7 +243,7 @@ internal sealed class PdfContentInterpreter
         return image;
     }
 
-    /// <summary>The byte length of an unfiltered inline image's data, from its size and colour space, or null when it cannot be known.</summary>
+    /// <summary>The byte length of an unfiltered inline image's data, from its size and color space, or null when it cannot be known.</summary>
     int? ExactInlineLength(PdfDictionary image, PdfDictionary? resources)
     {
         if (image.ContainsKeyRaw("F") || image.ContainsKeyRaw("Filter")) return null;
@@ -321,7 +321,7 @@ internal sealed class PdfContentInterpreter
             case "W": _pendingClip = FillMode.Nonzero; break;
             case "W*": _pendingClip = FillMode.EvenOdd; break;
 
-            // --- colour
+            // --- color
             case "g": Cur.FillPattern = null; Cur.FillSpace = PdfColorSpace.Gray; Cur.Fill = [N(o, 0)]; break;
             case "G": Cur.StrokePattern = null; Cur.StrokeSpace = PdfColorSpace.Gray; Cur.Stroke = [N(o, 0)]; break;
             case "rg": Cur.FillPattern = null; Cur.FillSpace = PdfColorSpace.Rgb; Cur.Fill = [N(o, 0), N(o, 1), N(o, 2)]; break;
@@ -344,7 +344,7 @@ internal sealed class PdfContentInterpreter
                 var space = fill ? Cur.FillSpace : Cur.StrokeSpace;
                 if (space.IsPattern)
                 {
-                    // An uncoloured pattern's own colour comes first, in the underlying space: "r g b /P1 scn".
+                    // An uncolored pattern's own color comes first, in the underlying space: "r g b /P1 scn".
                     PaintColor? patternColor = space.UnderlyingSpace is { } under && comps.Count == under.Components ? under.ToColor(comps.ToArray(), 1) : null;
                     if (fill) Cur.FillPatternColor = patternColor; else Cur.StrokePatternColor = patternColor;
                     var patterns = res is null ? null : _doc.DictOf(res, "Pattern");
@@ -689,7 +689,7 @@ internal sealed class PdfContentInterpreter
         BeginGroup(mask, res, null, "gs SMask");
     }
 
-    /// <summary>Starts drawing into a tile of its own, to be composited through a soft mask or a colour transfer when the state ends.</summary>
+    /// <summary>Starts drawing into a tile of its own, to be composited through a soft mask or a color transfer when the state ends.</summary>
     void BeginGroup(PdfDictionary? mask, PdfDictionary? res, ColorMatrix? transfer, string what, double opacity = 1)
     {
         if (_region is not { } region) { _unsupported.Add(what); return; }
@@ -704,9 +704,9 @@ internal sealed class PdfContentInterpreter
     }
 
     /// <summary>
-    /// Applies a <c>/TR</c> or <c>/TR2</c> entry: a function (or one per colour component) that the colours painted from now on are passed
+    /// Applies a <c>/TR</c> or <c>/TR2</c> entry: a function (or one per color component) that the colors painted from now on are passed
     /// through. A canvas has no such state, so what follows is drawn into a group that is composited through the equivalent per-channel
-    /// colour matrix - which exists only for a function that is linear between 0 and 1 (the clamped scale-and-offset the writer emits).
+    /// color matrix - which exists only for a function that is linear between 0 and 1 (the clamped scale-and-offset the writer emits).
     /// <c>/Identity</c> and <c>/Default</c> end a transfer begun in this state.
     /// </summary>
     void SetTransfer(PdfItem value)
@@ -806,7 +806,7 @@ internal sealed class PdfContentInterpreter
         var mg = maskTile.Value.Graphics;
         if (luminosity)
         {
-            // The mask group is composited over its backdrop colour (black unless /BC says otherwise) across the whole area.
+            // The mask group is composited over its backdrop color (black unless /BC says otherwise) across the whole area.
             var backdrop = PaintColor.Black;
             if (_doc.ArrayOf(maskDict, "BC") is { } bc && bc.Elements.Count > 0)
             {
@@ -898,7 +898,7 @@ internal sealed class PdfContentInterpreter
         _curX = x3; _curY = y3;
     }
 
-    /// <summary>The brush a fill or stroke paints with: its solid colour, or the pattern the colour names. Null when it cannot be made.</summary>
+    /// <summary>The brush a fill or stroke paints with: its solid color, or the pattern the color names. Null when it cannot be made.</summary>
     Brush? BrushFor(bool fill, PdfDictionary? res)
     {
         var st = Cur;
@@ -967,7 +967,7 @@ internal sealed class PdfContentInterpreter
             clip.Start(bx0, by0); clip.LineTo(Math.Min(bx1, bx0 + cellW), by0); clip.LineTo(Math.Min(bx1, bx0 + cellW), Math.Min(by1, by0 + cellH)); clip.LineTo(bx0, Math.Min(by1, by0 + cellH)); clip.CloseFigure();
             g.PushClip(clip);
             var sub = new PdfContentInterpreter(_doc, g, new Rect(0, 0, w, h)) { _formDepth = _formDepth + 1 };
-            if (uncoloured) sub.UseFixedColour(uncolouredColor!.Value);
+            if (uncoloured) sub.UseFixedColor(uncolouredColor!.Value);
             sub.Run(_doc.DecodeStream(pattern).Data, _doc.DictOf(pattern, "Resources") ?? res);
             sub.Finish();
             foreach (var f in sub._unsupported) _unsupported.Add(f);
@@ -984,10 +984,10 @@ internal sealed class PdfContentInterpreter
         return new TileBrush(image, cellW, cellH, brushToPattern * toCurrent);
     }
 
-    /// <summary>Makes every colour operator a no-op and paints in <paramref name="colour"/>: the content of an uncoloured pattern (PDF 8.7.3.3).</summary>
-    void UseFixedColour(PaintColor colour)
+    /// <summary>Makes every color operator a no-op and paints in <paramref name="color"/>: the content of an uncolored pattern (PDF 8.7.3.3).</summary>
+    void UseFixedColor(PaintColor color)
     {
-        var (r, g, b) = colour.ToRgb();
+        var (r, g, b) = color.ToRgb();
         var comps = new[] { r / 255.0, g / 255.0, b / 255.0 };
         Cur.FillSpace = Cur.StrokeSpace = PdfColorSpace.Rgb;
         Cur.Fill = Cur.Stroke = comps;
@@ -999,7 +999,7 @@ internal sealed class PdfContentInterpreter
     {
         if (!Matrix3x2.Invert(Cur.Ctm, out var inverse)) return null;
         var toCurrent = shadingToBase * _streamBase * inverse;
-        var brush = PdfShading.CreateBrush(_doc, shading, res, toCurrent, alpha, _canvas.RenderContext, out var why);
+        var brush = PdfShadingBrushFactory.CreateBrush(_doc, shading, res, toCurrent, alpha, _canvas.RenderContext, out var why);
         if (brush is null) _unsupported.Add(why!);
         return brush;
     }
@@ -1041,7 +1041,7 @@ internal sealed class PdfContentInterpreter
         if (brush is not null) _canvas.DrawRectangle(brush, -1e5, -1e5, 2e5, 2e5);
     }
 
-    /// <summary>The pen the current stroke colour, line width, caps, joins and dash describe; null when the colour cannot be made.</summary>
+    /// <summary>The pen the current stroke color, line width, caps, joins and dash describe; null when the color cannot be made.</summary>
     Pen? MakePen(PdfDictionary? res)
     {
         var strokeBrush = BrushFor(fill: false, res);

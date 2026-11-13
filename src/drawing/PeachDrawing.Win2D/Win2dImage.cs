@@ -25,6 +25,7 @@ internal sealed class Win2dImage : PeachDrawing.Core.Image
     private readonly Lock _gate = new();
     private CanvasBitmap? _bitmap;
     private CanvasDevice? _bitmapDevice;
+    private double _bitmapScale = 1;
     private bool _disposed;
 
     // An animated image holds every frame composited, ready to upload, and the frame that is drawn.
@@ -109,14 +110,36 @@ internal sealed class Win2dImage : PeachDrawing.Core.Image
         return TryDecode(encoded)?._premultipliedRgba ?? throw new InvalidDataException("The image can no longer be decoded.");
     }
 
-    /// <summary>The bitmap for <paramref name="creator"/>'s device: the one already made if it is for that device, otherwise a new one.</summary>
-    public CanvasBitmap GetBitmap(ICanvasResourceCreator creator)
+    /// <summary>
+    /// The smallest scale, in quarter-octave steps (at most 1, at least 1/64), at which a bitmap still has at least the resolution a draw at
+    /// <paramref name="needed"/> device pixels per source pixel reads, so a picture shown far smaller than it is decoded keeps only what it shows.
+    /// The steps are fine (the bitmap is at most 19% larger across) so the draw that follows is close to one to one and does not blur a thin line
+    /// a second time; they are coarse enough that a zoom does not decode the image again for every notch.
+    /// </summary>
+    internal static double ScaleFor(double needed)
+    {
+        if (!(needed < 0.84))
+            return 1;
+
+        const double floor = 1.0 / 64;
+        if (needed <= floor)
+            return floor;
+
+        return Math.Min(1, Math.Pow(2, Math.Ceiling(Math.Log2(needed) * 4) / 4));
+    }
+
+    /// <summary>
+    /// The bitmap for <paramref name="creator"/>'s device: the one already made if it is for that device (and, for an image that can be decoded
+    /// smaller, has at least <paramref name="scale"/> of the image's resolution), otherwise a new one. The bitmap is <see cref="BitmapScale"/> of the
+    /// image's size, which is what a caller drawing from it divides by.
+    /// </summary>
+    public CanvasBitmap GetBitmap(ICanvasResourceCreator creator, double scale = 1)
     {
         lock (_gate)
         {
             ObjectDisposedException.ThrowIf(_disposed, this);
             var device = creator.Device;
-            if (_bitmap is not null && ReferenceEquals(_bitmapDevice, device))
+            if (_bitmap is not null && ReferenceEquals(_bitmapDevice, device) && _bitmapScale >= scale)
             {
                 // The next frame goes into the texture that is there: no new allocation on the device.
                 if (_frames is { } playing && _bitmapFrame != _currentFrame)
@@ -129,16 +152,99 @@ internal sealed class Win2dImage : PeachDrawing.Core.Image
             }
 
             // A bitmap of another (or a lost) device is of no use; release it before making the replacement.
-            _bitmap?.Dispose();
-            _bitmap = null;
+            ReleaseBitmap();
             _bitmapDevice = null;
 
-            _bitmap = _frames is { } frames
-                ? CreateFromPixels(creator, frames[_currentFrame].Pixels)
-                : _premultipliedRgba is null ? LoadOnDevice(device) : CreateFromPixels(creator, _premultipliedRgba);
+            var made = 1.0;
+            var loadStarted = Win2dPaintStatistics.Start();
+            if (_frames is { } frames)
+            {
+                _bitmap = CreateFromPixels(creator, frames[_currentFrame].Pixels);
+            }
+            else if (_premultipliedRgba is not null)
+            {
+                _bitmap = CreateFromPixels(creator, _premultipliedRgba);
+            }
+            else
+            {
+                var want = Math.Clamp(scale, 1.0 / 64, 1.0);
+                _bitmap = want < 1 ? LoadScaledOnDevice(device, want, out made) : LoadOnDevice(device);
+            }
+
             _bitmapFrame = _currentFrame;
             _bitmapDevice = device;
+            _bitmapScale = made;
+            _bitmapBytes = (long)_bitmap.SizeInPixels.Width * _bitmap.SizeInPixels.Height * 4;
+            Win2dPaintStatistics.ImageBitmap(_bitmapBytes);
+            Win2dPaintStatistics.Stop(Win2dPaintStatistics.Counter.ImageLoad, loadStarted);
             return _bitmap;
+        }
+    }
+
+    private long _bitmapBytes;
+
+    private void ReleaseBitmap()
+    {
+        if (_bitmap is null)
+            return;
+
+        _bitmap.Dispose();
+        _bitmap = null;
+        Win2dPaintStatistics.ImageBitmap(-_bitmapBytes);
+        _bitmapBytes = 0;
+    }
+
+    /// <summary>How much of the image's size the bitmap <see cref="GetBitmap"/> returned has (1 for the full size).</summary>
+    internal double BitmapScale
+    {
+        get
+        {
+            lock (_gate)
+                return _bitmapScale;
+        }
+    }
+
+    // A JPEG is the common large picture, and Windows decodes it at a reduced size by scaling inside the decode (the full picture is never made), with a
+    // box-like Fant filter. Anything else (a PNG screenshot with thin lines, a logo) is decoded whole and reduced on the device with the same cubic filter a
+    // draw would use, because Windows' own scaler measurably dims a one-pixel line in a big reduction; only the reduced bitmap is kept. A failure falls
+    // back to the full size.
+    private CanvasBitmap LoadScaledOnDevice(CanvasDevice device, double scale, out double made)
+    {
+        var width = Math.Max(1, (int)Math.Ceiling(Width * scale));
+        var height = Math.Max(1, (int)Math.Ceiling(Height * scale));
+        try
+        {
+            made = (double)width / Width;
+            if (_encoded![0] == 0xFF && _encoded[1] == 0xD8)
+            {
+                var pixels = Task.Run(async () =>
+                {
+                    using var stream = new MemoryStream(_encoded).AsRandomAccessStream();
+                    var decoder = await BitmapDecoder.CreateAsync(stream);
+                    var transform = new BitmapTransform { ScaledWidth = (uint)width, ScaledHeight = (uint)height, InterpolationMode = BitmapInterpolationMode.Fant };
+                    var data = await decoder.GetPixelDataAsync(BitmapPixelFormat.Rgba8, BitmapAlphaMode.Premultiplied, transform,
+                        ExifOrientationMode.IgnoreExifOrientation, ColorManagementMode.DoNotColorManage);
+                    return data.DetachPixelData();
+                }).GetAwaiter().GetResult();
+
+                return CanvasBitmap.CreateFromBytes(device, pixels, width, height, DirectXPixelFormat.R8G8B8A8UIntNormalized, 96f, CanvasAlphaMode.Premultiplied);
+            }
+
+            using var full = LoadOnDevice(device);
+            var reduced = new CanvasRenderTarget(device, width, height, 96f, DirectXPixelFormat.B8G8R8A8UIntNormalized, CanvasAlphaMode.Premultiplied);
+            using (var session = reduced.CreateDrawingSession())
+            {
+                session.Clear(Windows.UI.Color.FromArgb(0, 0, 0, 0));
+                session.Blend = CanvasBlend.Copy;
+                session.DrawImage(full, new Windows.Foundation.Rect(0, 0, width, height), new Windows.Foundation.Rect(0, 0, Width, Height), 1f, CanvasImageInterpolation.HighQualityCubic);
+            }
+
+            return reduced;
+        }
+        catch (Exception ex) when (ex is System.Runtime.InteropServices.COMException or ArgumentException or InvalidOperationException or IOException)
+        {
+            made = 1;
+            return LoadOnDevice(device);
         }
     }
 
@@ -200,8 +306,7 @@ internal sealed class Win2dImage : PeachDrawing.Core.Image
                 return;
 
             _disposed = true;
-            _bitmap?.Dispose();
-            _bitmap = null;
+            ReleaseBitmap();
             _bitmapDevice = null;
         }
     }

@@ -8,10 +8,7 @@
       "inherited": false,
       "cssom": {"converter": "Converters.LineWidthConverter", "animatable": true, "unitless": true, "registryAnimatable": true},
       "initialValue": "medium",
-      "cssDataType": [
-        "length",
-        "keyword"
-      ],
+      "cssDataType": ["nonnegative-length", "keyword"],
       "supportedValues": [
         "auto"
       ],
@@ -393,10 +390,7 @@
       "inherited": false,
       "cssom": {"converter": "Converters.LineWidthConverter", "animatable": true, "unitless": true, "registryAnimatable": true},
       "initialValue": "medium",
-      "cssDataType": [
-        "length",
-        "keyword"
-      ],
+      "cssDataType": ["nonnegative-length", "keyword"],
       "supportedValues": [
         "auto"
       ],
@@ -413,10 +407,7 @@
       "inherited": false,
       "cssom": {"converter": "Converters.LineWidthConverter", "animatable": true, "unitless": true, "registryAnimatable": true},
       "initialValue": "medium",
-      "cssDataType": [
-        "length",
-        "keyword"
-      ],
+      "cssDataType": ["nonnegative-length", "keyword"],
       "supportedValues": [
         "auto"
       ],
@@ -433,10 +424,7 @@
       "inherited": false,
       "cssom": {"converter": "Converters.LineWidthConverter", "animatable": true, "unitless": true, "registryAnimatable": true},
       "initialValue": "medium",
-      "cssDataType": [
-        "length",
-        "keyword"
-      ],
+      "cssDataType": ["nonnegative-length", "keyword"],
       "supportedValues": [
         "auto"
       ],
@@ -1050,7 +1038,7 @@
       "inherited": false,
       "cssom": {"converter": "Converters.LineWidthConverter", "animatable": true, "registryAnimatable": true},
       "initialValue": "medium",
-      "cssDataType": ["length", "keyword"],
+      "cssDataType": ["nonnegative-length", "keyword"],
       "supportedValues": ["thin", "medium", "thick"],
       "keywordComparison": "ordinal-ignore-case",
       "html": {
@@ -2350,9 +2338,9 @@
     {
       "name": "padding-bottom",
       "inherited": false,
-      "cssom": {"converter": "Converters.LengthOrPercentConverter", "animatable": true, "unitless": true, "registryAnimatable": true},
+      "cssom": {"converter": "Converters.NonNegativeLengthOrPercentConverter", "animatable": true, "unitless": true, "registryAnimatable": true},
       "initialValue": "0",
-      "cssDataType": "length",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.NonNegativeLengthOrPercentConverter.Convert" },
       "html": {
         "propertyPath": "PaddingBottom",
         "invalidates": "InvalidatePaddingBottom",
@@ -2363,9 +2351,9 @@
     {
       "name": "padding-left",
       "inherited": false,
-      "cssom": {"converter": "Converters.LengthOrPercentConverter", "animatable": true, "unitless": true, "registryAnimatable": true},
+      "cssom": {"converter": "Converters.NonNegativeLengthOrPercentConverter", "animatable": true, "unitless": true, "registryAnimatable": true},
       "initialValue": "0",
-      "cssDataType": "length",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.NonNegativeLengthOrPercentConverter.Convert" },
       "html": {
         "propertyPath": "PaddingLeft",
         "invalidates": "InvalidatePaddingLeft",
@@ -2376,9 +2364,9 @@
     {
       "name": "padding-right",
       "inherited": false,
-      "cssom": {"converter": "Converters.LengthOrPercentConverter", "animatable": true, "unitless": true, "registryAnimatable": true},
+      "cssom": {"converter": "Converters.NonNegativeLengthOrPercentConverter", "animatable": true, "unitless": true, "registryAnimatable": true},
       "initialValue": "0",
-      "cssDataType": "length",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.NonNegativeLengthOrPercentConverter.Convert" },
       "html": {
         "propertyPath": "PaddingRight",
         "invalidates": "InvalidatePaddingRight",
@@ -2389,9 +2377,9 @@
     {
       "name": "padding-top",
       "inherited": false,
-      "cssom": {"converter": "Converters.LengthOrPercentConverter", "animatable": true, "unitless": true, "registryAnimatable": true},
+      "cssom": {"converter": "Converters.NonNegativeLengthOrPercentConverter", "animatable": true, "unitless": true, "registryAnimatable": true},
       "initialValue": "0",
-      "cssDataType": "length",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.NonNegativeLengthOrPercentConverter.Convert" },
       "html": {
         "propertyPath": "PaddingTop",
         "invalidates": "InvalidatePaddingTop",
@@ -2484,10 +2472,7 @@
       "inherited": false,
       "cssom": {"converter": "Converters.AutoSizeConverter", "animatable": true, "unitless": true, "registryAnimatable": true},
       "initialValue": "auto",
-      "cssDataType": [
-        "length",
-        "keyword"
-      ],
+      "cssDataType": ["nonnegative-length", "keyword"],
       "supportedValues": [
         "auto",
         "stretch",
@@ -2511,10 +2496,7 @@
       "inherited": false,
       "cssom": {"converter": "Converters.OptionalSizeConverter", "animatable": true, "registryAnimatable": true},
       "initialValue": "none",
-      "cssDataType": [
-        "length",
-        "keyword"
-      ],
+      "cssDataType": ["nonnegative-length", "keyword"],
       "supportedValues": [
         "auto",
         "stretch",
@@ -2533,10 +2515,7 @@
       "inherited": false,
       "cssom": {"converter": "Converters.SizeConverter", "animatable": true, "registryAnimatable": true},
       "initialValue": "auto",
-      "cssDataType": [
-        "length",
-        "keyword"
-      ],
+      "cssDataType": ["nonnegative-length", "keyword"],
       "supportedValues": [
         "auto",
         "stretch",
@@ -2555,10 +2534,7 @@
       "inherited": false,
       "cssom": {"converter": "Converters.AutoSizeConverter", "animatable": true, "unitless": true, "registryAnimatable": true},
       "initialValue": "auto",
-      "cssDataType": [
-        "length",
-        "keyword"
-      ],
+      "cssDataType": ["nonnegative-length", "keyword"],
       "supportedValues": [
         "auto",
         "stretch",
@@ -2582,10 +2558,7 @@
       "inherited": false,
       "cssom": {"converter": "Converters.OptionalSizeConverter", "animatable": true, "registryAnimatable": true},
       "initialValue": "none",
-      "cssDataType": [
-        "length",
-        "keyword"
-      ],
+      "cssDataType": ["nonnegative-length", "keyword"],
       "supportedValues": [
         "auto",
         "stretch",
@@ -2604,10 +2577,7 @@
       "inherited": false,
       "cssom": {"converter": "Converters.SizeConverter", "animatable": true, "registryAnimatable": true},
       "initialValue": "auto",
-      "cssDataType": [
-        "length",
-        "keyword"
-      ],
+      "cssDataType": ["nonnegative-length", "keyword"],
       "supportedValues": [
         "auto",
         "stretch",
@@ -4985,7 +4955,7 @@
       "inherited": true,
       "cssom": {"converter": "Converters.LineWidthConverter", "animatable": true, "registryAnimatable": true},
       "initialValue": "0",
-      "cssDataType": ["length", "keyword"],
+      "cssDataType": ["nonnegative-length", "keyword"],
       "supportedValues": ["thin", "medium", "thick"],
       "keywordComparison": "ordinal-ignore-case",
       "html": {
@@ -5383,14 +5353,14 @@
       "name": "row-gap",
       "comment": "CssKeywordOrValue<NormalKeyword, LengthOrCalc>-backed (issue #598's follow-up: typed union storage instead of a raw string) — see CssKeywordOrValueParser.FromCssText.",
       "inherited": false,
-      "cssom": {"converter": "Converters.LengthOrPercentOrNormalConverter .OrGlobalValue()", "animatable": true, "registryAnimatable": true},
+      "cssom": {"converter": "Converters.NonNegativeLengthOrPercentOrNormalConverter .OrGlobalValue()", "animatable": true, "registryAnimatable": true},
       "initialValue": "normal",
       "cssDataType": {
         "type": "keyword-or-value",
         "enumType": "NormalKeyword",
         "keywordMap": "Map.NormalKeywords",
         "fallback": "NormalKeyword.Normal",
-        "valueType": "length"
+        "valueType": "nonnegative-length"
       },
       "html": {
         "propertyPath": "FlexRowGap",
@@ -5403,14 +5373,14 @@
       "name": "column-gap",
       "comment": "CssKeywordOrValue<NormalKeyword, LengthOrCalc>-backed (issue #598's follow-up). See CssLayoutEngineColumns.ResolveColumns for multicol's spec-mandated 'normal' => 1em special case (flex/grid instead resolve 'normal' to 0) — unaffected by this storage change, just a call-site consumption detail to preserve.",
       "inherited": false,
-      "cssom": {"converter": "Converters.LengthOrPercentOrNormalConverter .OrGlobalValue()", "animatable": true, "registryAnimatable": true},
+      "cssom": {"converter": "Converters.NonNegativeLengthOrPercentOrNormalConverter .OrGlobalValue()", "animatable": true, "registryAnimatable": true},
       "initialValue": "normal",
       "cssDataType": {
         "type": "keyword-or-value",
         "enumType": "NormalKeyword",
         "keywordMap": "Map.NormalKeywords",
         "fallback": "NormalKeyword.Normal",
-        "valueType": "length"
+        "valueType": "nonnegative-length"
       },
       "html": {
         "propertyPath": "FlexColumnGap",
@@ -5672,10 +5642,7 @@
       "inherited": false,
       "cssom": {"converter": "Converters.LineWidthConverter", "animatable": true, "registryAnimatable": true},
       "initialValue": "medium",
-      "cssDataType": [
-        "length",
-        "keyword"
-      ],
+      "cssDataType": ["nonnegative-length", "keyword"],
       "supportedValues": [
         "auto"
       ],
@@ -5989,10 +5956,7 @@
         "axis": "block",
         "side": "start"
       },
-      "cssDataType": [
-        "length",
-        "keyword"
-      ],
+      "cssDataType": ["nonnegative-length", "keyword"],
       "supportedValues": [
         "auto"
       ],
@@ -6069,10 +6033,7 @@
         "axis": "block",
         "side": "end"
       },
-      "cssDataType": [
-        "length",
-        "keyword"
-      ],
+      "cssDataType": ["nonnegative-length", "keyword"],
       "supportedValues": [
         "auto"
       ],
@@ -6149,10 +6110,7 @@
         "axis": "inline",
         "side": "start"
       },
-      "cssDataType": [
-        "length",
-        "keyword"
-      ],
+      "cssDataType": ["nonnegative-length", "keyword"],
       "supportedValues": [
         "auto"
       ],
@@ -6229,10 +6187,7 @@
         "axis": "inline",
         "side": "end"
       },
-      "cssDataType": [
-        "length",
-        "keyword"
-      ],
+      "cssDataType": ["nonnegative-length", "keyword"],
       "supportedValues": [
         "auto"
       ],

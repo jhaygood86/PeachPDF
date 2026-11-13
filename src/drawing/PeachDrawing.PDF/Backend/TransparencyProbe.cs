@@ -57,6 +57,10 @@ internal sealed class TransparencyProbe : IDisposable
         Hit = false;
         var outer = s_current;
         s_current = this;
+        // The writer realizes a fill colour or alpha only when it differs from the page's current graphics state, and the guard sits on
+        // that path. A probe must therefore start from the pristine state every time: saved here and restored after, so a probe that
+        // repeats the previous one's fill still reaches the guard.
+        var state = _xGraphics!.Save();
         try
         {
             paint(_graphics!);
@@ -68,6 +72,7 @@ internal sealed class TransparencyProbe : IDisposable
         finally
         {
             s_current = outer;
+            _xGraphics.Restore(state);
         }
 
         return Hit;

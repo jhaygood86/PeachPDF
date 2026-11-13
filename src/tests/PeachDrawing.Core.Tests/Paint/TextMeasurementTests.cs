@@ -72,9 +72,11 @@ namespace PeachDrawing.Core.Tests.Paint
         }
 
         [Fact]
-        public void OtherControlCharactersAreDropped()
+        public void OtherControlCharactersTakeRoom_ACarriageReturnDoesNot()
         {
-            Assert.Equal(Measure("ab").Width, Measure("a\u0001b").Width, 9);
+            // A control character is drawn (as the font's missing-glyph shape), so it is measured; a carriage return is half of a line break.
+            Assert.True(Measure("a\u0001b").Width > Measure("ab").Width);
+            Assert.Equal(Measure("ab").Width, Measure("a\rb").Width, 9);
         }
 
         [Fact]
@@ -126,12 +128,12 @@ namespace PeachDrawing.Core.Tests.Paint
         }
 
         [Fact]
-        public void BoldSynthesis_DoesNotCountLineFeedsOrDroppedControlCharacters()
+        public void BoldSynthesis_DoesNotCountLineFeedsOrCarriageReturns()
         {
-            // Two characters survive: the line feed and the control character are not measured.
-            var plain = Measure("a\n\u0001b").Width;
+            // Two characters survive: the line feed and the carriage return are not measured.
+            var plain = Measure("a\n\rb").Width;
 
-            Assert.Equal(plain + 2 * Size * TextMeasurement.BoldEmphasis, Measure("a\n\u0001b", SyntheticStyle.Bold).Width, 9);
+            Assert.Equal(plain + 2 * Size * TextMeasurement.BoldEmphasis, Measure("a\n\rb", SyntheticStyle.Bold).Width, 9);
         }
     }
 }

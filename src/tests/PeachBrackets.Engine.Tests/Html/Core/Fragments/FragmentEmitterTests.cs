@@ -75,16 +75,11 @@ namespace PeachBrackets.Engine.Tests.Html.Core.Fragments
         [InlineData("<div style='height:1000pt'>x</div>", 200, "0", "0")]
         // Forced breaks materialize consecutive pages; each origin is the previous plus one band.
         [InlineData("<p>a</p><p style='page-break-before:always'>b</p><p style='page-break-before:always'>c</p>", 300, "0,1,2", "0,260,520")]
-        // The div's own margin-top collapses all the way up through html/body to the document root
-        // (§8.3.1) - which §5.2's truncation never sees, since "only the root is excluded: it has
-        // nothing before it for a break to fall between." So the margin is genuinely, entirely applied,
-        // landing the content wherever that lands it on the page grid - slot 5 here, not truncated to
-        // slot 0. Before #435's stage 1 gave the root's own placement a cursor step of its own
-        // (`CssBox.PlaceBlockChild`'s `child.ParentBox is null` arm), this fixture materialized as slot
-        // 0 with local Y 920 - off the bottom of a ~200pt sheet and never actually drawn on any visible
-        // page. Caught only by walking the fragment tree's own word rectangles, not by this slot/origin
-        // pin alone (see ContentAfterARootLevelMarginCollapse_LandsWithinItsFragmentsVisibleArea below).
-        [InlineData("<div style='margin-top:900pt'>far below</div>", 200, "5", "800")]
+        // The div's own margin-top stays inside the <html> box (the root element establishes a block formatting context, CSS 2.1 section 9.4.1), so
+        // css-break-3 section 5.2 reaches it: the oversized margin is truncated at the unforced break after the first page and the content lands at the
+        // top of slot 1. (It used to collapse up into the document root, which that truncation never sees, and the margin was applied whole, landing the
+        // content in slot 5.)
+        [InlineData("<div style='margin-top:900pt'>far below</div>", 200, "1", "160")]
         // Real content either side of a tall empty gap: the gap's own slots are never materialized. The paragraphs' margins are written out, because
         // where the last one falls against a 160pt slot is a matter of a point or two and is not what this pins (the default margin moved it).
         [InlineData("<p style='margin:1.12em 0'>top</p><div style='height:900pt'></div><p style='margin:1.12em 0'>far below</p>", 200, "0,6", "0,960")]
@@ -301,8 +296,10 @@ namespace PeachBrackets.Engine.Tests.Html.Core.Fragments
 
             var slots = container.FragmentTree!.Fragmentainers.Select(f => f.SlotIndex).ToList();
 
-            Assert.DoesNotContain(1, slots);
-            Assert.DoesNotContain(2, slots);
+            // The oversized margin is truncated at the break after the first page, so the text lands in slot 1 and no slot beyond it is made of
+            // the fixed bar alone. (Whether the first slot is materialized as well depends on the host's fonts, so it is not pinned.)
+            Assert.Contains(1, slots);
+            Assert.DoesNotContain(slots, slot => slot > 1);
         }
 
         [Fact]

@@ -14,7 +14,6 @@ internal class PdfStringFormat
     {
     }
 
-    //TODO public StringFormat(StringFormat format);
     //public StringFormat(StringFormatFlags options);
     //public StringFormat(StringFormatFlags options, int language);
     //public object Clone();

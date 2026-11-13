@@ -27,7 +27,7 @@ internal sealed class PdfGenericAnnotation : PdfAnnotation
 
     public void SetName(string key, string value) => Elements.SetName(key, "/" + value.TrimStart('/'));
 
-    public void SetDate(string key, System.DateTimeOffset value) => Elements.SetDateTime(key, value.LocalDateTime);
+    public void SetDate(string key, System.DateTimeOffset value) => Elements.SetDateTime(key, PeachDrawing.PDF.Engine.Internal.PdfEntropy.ToLocal(value));
 
     public void SetReference(string key, PdfObject value) => Elements.SetReference(key, value);
 

@@ -1,0 +1,15 @@
+# Style rules for PeachDrawing.PDF. Only rules the code already satisfies belong here, so the build stays clean;
+# tighten one when a refactor makes the whole project conform to it.
+root = false
+
+[*.cs]
+charset = utf-8
+indent_style = space
+indent_size = 4
+trim_trailing_whitespace = false
+
+# One namespace per file, declared file-scoped.
+csharp_style_namespace_declarations = file_scoped:warning
+# Nullable is on for the whole project, so a file never needs its own directive.
+dotnet_diagnostic.IDE0240.severity = warning
+dotnet_diagnostic.IDE0241.severity = warning

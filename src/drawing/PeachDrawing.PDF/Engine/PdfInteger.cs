@@ -71,7 +71,6 @@ internal sealed class PdfInteger : PdfNumber, IConvertible, IFormattable
 
     DateTime IConvertible.ToDateTime(IFormatProvider? provider)
     {
-        // TODO:  Add PdfInteger.ToDateTime implementation
         return new DateTime();
     }
 
@@ -135,7 +134,6 @@ internal sealed class PdfInteger : PdfNumber, IConvertible, IFormattable
 
     object IConvertible.ToType(Type conversionType, IFormatProvider? provider)
     {
-        // TODO:  Add PdfInteger.ToType implementation
         return null!;
     }
 

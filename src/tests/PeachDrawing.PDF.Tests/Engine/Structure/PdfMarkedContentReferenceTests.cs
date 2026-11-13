@@ -41,11 +41,5 @@ namespace PeachPDF.Tests.PdfEngineTests.Structure
 
             Assert.Equal(7, mcr.Mcid);
         }
-
-        [Fact]
-        public void Keys_Meta_IsAccessible()
-        {
-            Assert.NotNull(new PdfMarkedContentReference().Meta);
-        }
     }
 }

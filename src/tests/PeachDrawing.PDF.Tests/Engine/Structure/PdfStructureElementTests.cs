@@ -35,12 +35,6 @@ namespace PeachPDF.Tests.PdfEngineTests.Structure
         }
 
         [Fact]
-        public void Keys_Meta_IsAccessible()
-        {
-            Assert.NotNull(new PdfStructureElement().Meta);
-        }
-
-        [Fact]
         public void StructureType_RoundTrips()
         {
             var doc = new PdfDocument();

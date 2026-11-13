@@ -164,13 +164,13 @@ namespace PeachBrackets.Html.Handlers
                 // every edge tile the wrong aspect. Only a genuinely sizeless SVG falls back to the area.
                 var (intrinsicWidth, intrinsicHeight) = SvgIntrinsicSize.Resolve(svg);
                 var svgWidth = intrinsicWidth is > 0 && intrinsicHeight is > 0
-                    ? intrinsicWidth.Value * Length.PointsPerPx : tileWidth;
+                    ? intrinsicWidth.Value * Length.PointsPerPx * g.PixelsPerPoint : tileWidth;
                 var svgHeight = intrinsicWidth is > 0 && intrinsicHeight is > 0
-                    ? intrinsicHeight.Value * Length.PointsPerPx : tileHeight;
+                    ? intrinsicHeight.Value * Length.PointsPerPx * g.PixelsPerPoint : tileHeight;
 
                 var form = SvgRenderer.GetOrCreateForm(g, svg, svgWidth, svgHeight);
                 return form is null ? null : new ResolvedSourceImage(form, svgWidth, svgHeight,
-                    numberUnit: Length.PointsPerPx, ownsImage: g.TileCacheOwner is null);
+                    numberUnit: Length.PointsPerPx * g.PixelsPerPoint, ownsImage: g.TileCacheOwner is null);
             }
 
             var tile = g.CreateTile(tileWidth, tileHeight);

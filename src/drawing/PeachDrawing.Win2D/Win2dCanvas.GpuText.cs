@@ -56,6 +56,7 @@ public sealed partial class Win2dCanvas
         _queueBounds = _queue.Count == 0
             ? bounds
             : (Math.Min(_queueBounds.Left, bounds.Left), Math.Min(_queueBounds.Top, bounds.Top), Math.Max(_queueBounds.Right, bounds.Item3), Math.Max(_queueBounds.Bottom, bounds.Item4));
+        _textRunsQueued++;
         _queue.Add(new QueuedText(run, color, key, cacheable, bgrStripes));
     }
 
@@ -112,6 +113,19 @@ public sealed partial class Win2dCanvas
         if (_queue.Count == 0)
             return;
 
+        var paintStarted = Win2dPaintStatistics.Start();
+        try
+        {
+            FlushQueuedText();
+        }
+        finally
+        {
+            Win2dPaintStatistics.Stop(Win2dPaintStatistics.Counter.TextFlush, paintStarted);
+        }
+    }
+
+    private void FlushQueuedText()
+    {
         var items = _queue.ToArray();
         _queue.Clear();
         if (_lcdTarget is not { } target || _disposed)
@@ -129,18 +143,22 @@ public sealed partial class Win2dCanvas
         var dpi = _session.Dpi;
         var scale = dpi / 96f;
         var scratch = _context.LcdScratch;
-        scratch.Ensure(_session.Device, dpi, (int)size.Width, (int)size.Height);
+
+        // The scratch targets are the size of the area the queued text covers, not of the target: what is read and written is that area, at the origin of each.
+        scratch.Ensure(_session.Device, dpi, right - left, bottom - top);
 
         var transient = new List<IDisposable>();
         try
         {
             // What is on the target now, for the shader to read (the session is being drawn into, so it cannot be sampled directly).
             _session.Flush();
-            scratch.Backdrop.CopyPixelsFromBitmap(target, left, top, left, top, right - left, bottom - top);
+            scratch.Backdrop.CopyPixelsFromBitmap(target, 0, 0, left, top, right - left, bottom - top);
 
+            // In the target's own space, where it goes back; in the scratch targets' space the same area starts at their origin.
             var area = new Windows.Foundation.Rect(left / scale, top / scale, (right - left) / scale, (bottom - top) / scale);
-            AddLayer(scratch.Ink, items, area, scale, inkLayer: true, transient);
-            AddLayer(scratch.Alpha, items, area, scale, inkLayer: false, transient);
+            var local = new Windows.Foundation.Rect(0, 0, area.Width, area.Height);
+            AddLayer(scratch.Ink, items, local, (left, top), scale, inkLayer: true, transient);
+            AddLayer(scratch.Alpha, items, local, (left, top), scale, inkLayer: false, transient);
 
             _lcdEffect ??= Win2dLcdShader.Create();
             _lcdEffect.Source1 = scratch.Backdrop;
@@ -149,7 +167,7 @@ public sealed partial class Win2dCanvas
 
             // The shader's output has no edge, so it is made in a target of its own and only the area is put back.
             using (var result = scratch.Result.CreateDrawingSession())
-                result.DrawImage(_lcdEffect, (float)area.X, (float)area.Y, area);
+                result.DrawImage(_lcdEffect, 0, 0, local);
 
             var transform = _session.Transform;
             var blend = _session.Blend;
@@ -157,7 +175,7 @@ public sealed partial class Win2dCanvas
             {
                 _session.Transform = Matrix3x2.Identity;
                 _session.Blend = CanvasBlend.Copy;
-                _session.DrawImage(scratch.Result, (float)area.X, (float)area.Y, area);
+                _session.DrawImage(scratch.Result, (float)area.X, (float)area.Y, local);
             }
             finally
             {
@@ -176,7 +194,7 @@ public sealed partial class Win2dCanvas
     }
 
     // One layer: black over the area, then every queued run's bitmap added at its place. Where runs do not overlap, adding is exact.
-    private void AddLayer(CanvasRenderTarget layer, QueuedText[] items, Windows.Foundation.Rect area, float scale, bool inkLayer, List<IDisposable> transient)
+    private void AddLayer(CanvasRenderTarget layer, QueuedText[] items, Windows.Foundation.Rect area, (int Left, int Top) origin, float scale, bool inkLayer, List<IDisposable> transient)
     {
         using var session = layer.CreateDrawingSession();
         session.Blend = CanvasBlend.Copy;
@@ -185,7 +203,7 @@ public sealed partial class Win2dCanvas
         foreach (var item in items)
         {
             var bitmap = BitmapFor(item, inkLayer, transient);
-            session.DrawImage(bitmap, item.Mask.Left / scale, item.Mask.Top / scale);
+            session.DrawImage(bitmap, (item.Mask.Left - origin.Left) / scale, (item.Mask.Top - origin.Top) / scale);
         }
     }
 

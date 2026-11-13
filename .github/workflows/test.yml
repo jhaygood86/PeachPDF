@@ -159,7 +159,7 @@ jobs:
     - name: Build small test projects
       if: matrix.suite == 'small'
       run: |
-        foreach ($p in 'PeachPDF.Cli.Tests', 'PeachDrawing.Core.Tests', 'PeachDrawing.Tests', 'PeachDrawing.PDF.Tests', 'PeachDrawing.Svg.Tests', 'PeachDrawing.Skia.Tests', 'PeachBrackets.Tests', 'PeachPDF.SourceGenerators.Tests', 'PeachDrawing.Text.Brotli.Tests') {
+        foreach ($p in 'PeachPDF.Cli.Tests', 'PeachDrawing.Core.Tests', 'PeachDrawing.Tests', 'PeachDrawing.PDF.Tests', 'PeachDrawing.Svg.Tests', 'PeachDrawing.Skia.Tests', 'PeachBrackets.Tests', 'PeachBrackets.WptRunner.Tests', 'PeachPDF.SourceGenerators.Tests', 'PeachDrawing.Text.Brotli.Tests') {
           dotnet build "src/tests/$p/$p.csproj" --configuration Release
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         }
@@ -229,6 +229,10 @@ jobs:
       if: matrix.suite == 'small'
       run: dotnet test --project ${{ github.workspace }}/src/tests/PeachBrackets.Tests/PeachBrackets.Tests.csproj --no-build --configuration Release --report-trx --report-trx-filename brackets-test-results.trx --coverlet --coverlet-output-format cobertura --coverlet-exclude-by-file "**/PeachPdfProductInfo.g.cs" --coverlet-exclude-by-file "**/PeachPDF.Cli/Program.cs" --coverlet-file-prefix brackets-test-results --results-directory coverage
 
+    - name: Test WPT reftest runner (PeachBrackets.WptRunner)
+      if: matrix.suite == 'small'
+      run: dotnet test --project ${{ github.workspace }}/src/tests/PeachBrackets.WptRunner.Tests/PeachBrackets.WptRunner.Tests.csproj --no-build --configuration Release --report-trx --report-trx-filename wpt-runner-test-results.trx --coverlet --coverlet-output-format cobertura --coverlet-exclude-by-file "**/PeachPdfProductInfo.g.cs" --coverlet-exclude-by-file "**/PeachPDF.Cli/Program.cs" --coverlet-file-prefix wpt-runner-test-results --results-directory coverage
+
     # The css-properties.json -> CssPropertyRegistry.g.cs/SvgPropertyRegistry.g.cs source generator's
     # tests (JSON reader, PPGxxx diagnostics, generated-output shape).
     - name: Test source generators
@@ -268,12 +272,21 @@ jobs:
     needs: [changes, test]
     if: always() && needs.changes.outputs.src == 'true' && needs.test.result != 'cancelled' && needs.test.result != 'skipped'
     name: coverage (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, ubuntu-latest, macos-latest]
+        # `os` names whose test results are merged and gated; `runner` is where that happens. The macOS results are read on a Linux
+        # worker: merging and gating cobertura files needs no Mac (only a rewrite of the checkout path they carry, below), and a macOS runner is
+        # slow to get and the most expensive minute there is. The check keeps its name, so branch protection is unaffected.
+        include:
+          - os: windows-latest
+            runner: windows-latest
+          - os: ubuntu-latest
+            runner: ubuntu-latest
+          - os: macos-latest
+            runner: ubuntu-latest
 
     steps:
     - name: Checkout
@@ -304,6 +317,17 @@ jobs:
         path: coverage
         merge-multiple: true
 
+    # Cobertura files name their files relative to a <source> directory, which is a path on the machine that made them. diff-cover joins the two to find a
+    # file in the checkout, so macOS results read on another worker are pointed at this checkout first.
+    - name: Point the macOS coverage at this checkout
+      if: matrix.os == 'macos-latest' && runner.os != 'macOS'
+      run: |
+        foreach ($file in Get-ChildItem -Path coverage -Filter "*.coverage.cobertura.*.xml" -Recurse) {
+          $text = Get-Content -Raw -Path $file.FullName
+          $text = [regex]::Replace($text, '(?<=<source>)/Users/runner/work/[^/]+/[^/]+', $env:GITHUB_WORKSPACE.Replace('\', '/'))
+          Set-Content -Path $file.FullName -Value $text -NoNewline
+        }
+
     - name: Generate HTML coverage report
       run: reportgenerator -reports:coverage/**/*.coverage.cobertura.*.xml -targetdir:coverage-report -reporttypes:Html
 
@@ -313,11 +337,11 @@ jobs:
         git fetch origin ${{ github.base_ref }}
         $coverageFiles = (Get-ChildItem -Path coverage -Filter "*.coverage.cobertura.*.xml" -Recurse | ForEach-Object FullName)
 
-        # The 256-bit (AVX) forms of the vectorized kernels live in *.Vector256.cs files. The macOS runners are ARM64, where 256-bit vectors are not hardware
+        # The 256-bit (AVX) forms of the vectorized kernels live in *.Vector256.cs files. The macOS test runners are ARM64, where 256-bit vectors are not hardware
         # accelerated and those forms never run (their tests skip), so those files are left out of the macOS gate; the 128-bit forms (NEON there) are what it
         # measures. Windows and Linux run both forms and gate them.
         $exclude = @()
-        if ($env:RUNNER_OS -eq 'macOS') { $exclude = @('--exclude', '*.Vector256.cs') }
+        if ('${{ matrix.os }}' -eq 'macos-latest') { $exclude = @('--exclude', '*.Vector256.cs') }
 
         diff-cover $coverageFiles --compare-branch=origin/${{ github.base_ref }} --fail-under=90 @exclude --format html:diff-cover-report.html
 

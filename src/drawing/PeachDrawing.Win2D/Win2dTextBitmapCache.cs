@@ -25,6 +25,8 @@ internal sealed class Win2dTextBitmapCache(Win2dResourceCounts counts)
     private object? _device;
     private long _bytes;
 
+    internal long ByteCount => _bytes;
+
     internal int Hits { get; private set; }
 
     internal int Misses { get; private set; }

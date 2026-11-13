@@ -190,7 +190,9 @@ namespace PeachBrackets.Html.Dom
                 .Where(DomUtils.GeneratesFlexOrGridItem)
                 .ToList();
 
-            if (items.Count == 0)
+            // A grid whose only children are absolutely positioned still has its tracks: they are the grid areas those children are placed against
+            // (css-grid-1 section 9), so it is laid out like any other rather than stopping here.
+            if (items.Count == 0 && !_gridBox.Boxes.Any(static b => b.Position.Value is PositionMode.Absolute && !b.IsRunningPositioned))
             {
                 if (!hasDefiniteHeight)
                     _gridBox.ActualBottom = _gridBox.Location.Y + _gridBox.ActualBoxSizeIncludedHeight;
@@ -486,6 +488,17 @@ namespace PeachBrackets.Html.Dom
 
                 if (expandsFlexRows)
                     ExpandFlexibleRows(rows, BlockContentSize, rowGap);
+                else if (!_vertical && !hasDefiniteHeight && !rowSubgrid && rows.Any(t => IsFlexTrack(t.Def))
+                    && CssValueParser.IsValidLength(_gridBox.MinHeight) && !CssValueParser.DependsOnPercentage(_gridBox.MinHeight))
+                {
+                    // An auto-height grid is as tall as its rows - unless its `min-height` is taller, in which case that minimum is the space
+                    // the flexible rows share (CSS Grid 1 section 12.1: use the minimum as the available space when it would grow the grid).
+                    // The rows hold their content size as the base, so a short minimum leaves them alone.
+                    var minBlock = CssValueParser.ParseLength(_gridBox.MinHeight, 0, _gridBox) + _gridBox.ActualBoxSizeIncludedHeight
+                        - _gridBox.ActualPaddingTop - _gridBox.ActualPaddingBottom
+                        - _gridBox.ActualBorderTopWidth - _gridBox.ActualBorderBottomWidth;
+                    ExpandFlexibleRows(rows, minBlock, rowGap);
+                }
 
                     var rowContainerSize = hasDefiniteBlock ? BlockContentSize
                         : rows.Sum(t => t.Size) + (rowCount > 1 ? rowGap * (rowCount - 1) : 0);
@@ -510,6 +523,9 @@ namespace PeachBrackets.Html.Dom
                             subgrid.ReportedRowSizes = reportedRows;
                         }
                 }
+
+                if (!colSubgrid && !rowSubgrid)
+                    StateAbsolutelyPositionedAreas(columns, rows, explicitColDefs.Count, explicitRowDefs.Count, colLineNames, rowLineNames);
 
                 // ── Place each item into its (possibly spanned) cell, aligned per justify-self/align-self
                 // (defaulting to justify-items/align-items, then to stretch). A subgrid child is given the adopted
@@ -2287,6 +2303,56 @@ namespace PeachBrackets.Html.Dom
         /// the space-* distributions. <c>normal</c>/<c>stretch</c> pack at the start (auto-track stretch is a
         /// v1 gap).
         /// </summary>
+        /// <summary>
+        /// States, for each absolutely positioned child of this grid container, the grid area its <c>grid-column</c>/<c>grid-row</c> lines name
+        /// (css-grid-1 section 9): the containing block that child's offsets and size resolve against when this grid is its containing block. A line
+        /// that does not exist (auto, or beyond the explicit grid) is the grid container's padding edge on that side. A horizontal, left-to-right grid only.
+        /// </summary>
+        private void StateAbsolutelyPositionedAreas(Track[] columns, Track[] rows, int explicitColumns, int explicitRows,
+            IReadOnlyDictionary<string, List<int>> colLineNames, IReadOnlyDictionary<string, List<int>> rowLineNames)
+        {
+            if (_vertical || _rtl) return;
+
+            var paddingLeft = _gridBox.ClientLeft - _gridBox.ActualPaddingLeft;
+            var paddingRight = _gridBox.ClientRight + _gridBox.ActualPaddingRight;
+            var paddingTop = _gridBox.ClientTop - _gridBox.ActualPaddingTop;
+            var rowsEnd = rows.Length > 0 ? rows[^1].Position + rows[^1].Size : BlockOrigin;
+            var paddingBottom = Math.Max(rowsEnd, _gridBox.ClientBottom) + _gridBox.ActualPaddingBottom;
+
+            foreach (var child in _gridBox.Boxes)
+            {
+                if (child.Position.Value is not PositionMode.Absolute) continue;
+
+                var (colStart, colSpan) = ResolveAxis(child.GridColumnStart, child.GridColumnEnd, explicitColumns, colLineNames);
+                var (rowStart, rowSpan) = ResolveAxis(child.GridRowStart, child.GridRowEnd, explicitRows, rowLineNames);
+
+                double Edge(Track[] tracks, int start, int span, bool atStart, double paddingEdge)
+                {
+                    // Line index of the edge: the start line is `start`, the end line `start + span`. A line outside the explicit tracks is the padding edge.
+                    if (start < 0) return paddingEdge;
+                    var line = atStart ? start : start + span;
+                    if (line < 0 || line > tracks.Length) return paddingEdge;
+                    if (atStart) return line >= tracks.Length ? paddingEdge : tracks[line].Position;
+                    return tracks[line - 1].Position + tracks[line - 1].Size;
+                }
+
+                var left = Edge(columns, colStart, colSpan, atStart: true, paddingLeft);
+                var right = Edge(columns, colStart, colSpan, atStart: false, paddingRight);
+                var top = Edge(rows, rowStart, rowSpan, atStart: true, paddingTop);
+                var bottom = Edge(rows, rowStart, rowSpan, atStart: false, paddingBottom);
+
+                child.GridContainingArea = new Rect(left, top, Math.Max(0, right - left), Math.Max(0, bottom - top));
+
+                // The child may already have been placed against the padding box by its own pass: put it where its area says (the area's corner,
+                // moved by any inset it declares). A pass that places it later reads the area itself, and finds it already there.
+                var area = child.GridContainingArea.Value;
+                var wantedLeft = area.X + child.ActualMarginLeft + CssBox.ResolveOffsetOrZero(child.Left, area.Width, child);
+                var wantedTop = area.Y + child.ActualMarginTop + CssBox.ResolveOffsetOrZero(child.Top, area.Height, child);
+                if (Math.Abs(wantedLeft - child.Location.X) > 0.01) child.OffsetLeft(wantedLeft - child.Location.X);
+                if (Math.Abs(wantedTop - child.Location.Y) > 0.01) child.OffsetTop(wantedTop - child.Location.Y);
+            }
+        }
+
         private static void PositionTracks(Track[] tracks, double start, double containerSize, double gap, string value)
         {
             var n = tracks.Length;

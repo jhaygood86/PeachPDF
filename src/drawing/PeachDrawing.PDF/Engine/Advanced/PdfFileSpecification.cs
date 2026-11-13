@@ -100,14 +100,13 @@ internal class PdfFileSpecification : PdfDictionary
     /// <summary>
     /// Predefined keys of this embedded file.
     /// </summary>
-    internal class Keys : KeysBase
+    internal class Keys
     {
         /// <summary>
         /// (Required if an EF or RF entry is present; recommended always) 
         /// The type of PDF object that this dictionary describes; must be Filespec 
         /// for a file specification dictionary (see implementation note 45 in Appendix H).
         /// </summary>
-        [PdfKey(PdfKeyType.Name | PdfKeyType.Optional, FixedValue = "Filespec")]
         public const string Type = "/Type";
 
         /// <summary>
@@ -120,7 +119,6 @@ internal class PdfFileSpecification : PdfDictionary
         /// The UF entry provides cross-platform and cross-language compatibility and the F 
         /// entry provides backwards compatibility
         /// </summary>
-        [PdfKey(PdfKeyType.Dictionary | PdfKeyType.Optional)]
         public const string F = "/F";
 
         /// <summary>
@@ -135,7 +133,6 @@ internal class PdfFileSpecification : PdfDictionary
         /// Note: It is recommended that the F and UF entries be used in place of the DOS, 
         /// Mac, or Unix entries.
         /// </summary>
-        [PdfKey(PdfKeyType.Dictionary | PdfKeyType.Optional)]
         public const string EF = "/EF";
 
         /// <summary>
@@ -143,13 +140,11 @@ internal class PdfFileSpecification : PdfDictionary
         /// file specification of the form described in the PDF specification - the cross-platform,
         /// cross-language counterpart of F.
         /// </summary>
-        [PdfKey(PdfKeyType.String | PdfKeyType.Optional)]
         public const string UF = "/UF";
 
         /// <summary>
         /// (Optional; PDF 1.6) A text string describing the file.
         /// </summary>
-        [PdfKey(PdfKeyType.String | PdfKeyType.Optional)]
         public const string Desc = "/Desc";
 
         /// <summary>
@@ -157,18 +152,7 @@ internal class PdfFileSpecification : PdfDictionary
         /// object it's associated with - one of /Source, /Data, /Alternative, /Supplement,
         /// /EncryptedPayload, /FormData, /Schema, or /Unspecified (ISO 32000-2 Table 43).
         /// </summary>
-        [PdfKey(PdfKeyType.Name | PdfKeyType.Optional)]
         public const string AFRelationship = "/AFRelationship";
 
-        /// <summary>
-        /// Gets the KeysMeta for these keys.
-        /// </summary>
-        internal static PdfDictionaryMetadata Meta => meta ??= CreateMeta(typeof(Keys));
-        static PdfDictionaryMetadata meta = null!;
     }
-
-    /// <summary>
-    /// Gets the KeysMeta of this dictionary type.
-    /// </summary>
-    internal override PdfDictionaryMetadata Meta => Keys.Meta;
 }

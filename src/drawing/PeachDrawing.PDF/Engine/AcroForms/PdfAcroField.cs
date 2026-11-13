@@ -81,39 +81,37 @@ internal abstract class PdfAcroField : PdfAnnotation
     /// </summary>
     internal new class Keys : PdfAnnotation.Keys
     {
-        [PdfKey(PdfKeyType.Name | PdfKeyType.Optional)]
+        /// <summary>(Optional)</summary>
         public const string FT = "/FT";
 
-        [PdfKey(PdfKeyType.Dictionary | PdfKeyType.Optional)]
+        /// <summary>(Optional)</summary>
         public const string Parent = "/Parent";
 
-        [PdfKey(PdfKeyType.Array | PdfKeyType.Optional)]
+        /// <summary>(Optional)</summary>
         public const string Kids = "/Kids";
 
-        [PdfKey(PdfKeyType.String | PdfKeyType.Optional)]
+        /// <summary>(Optional)</summary>
         public const string TU = "/TU";
 
-        [PdfKey(PdfKeyType.Integer | PdfKeyType.Optional)]
+        /// <summary>(Optional)</summary>
         public const string Ff = "/Ff";
 
-        [PdfKey(PdfKeyType.Various | PdfKeyType.Optional)]
+        /// <summary>(Optional)</summary>
         public const string V = "/V";
 
-        [PdfKey(PdfKeyType.Various | PdfKeyType.Optional)]
+        /// <summary>(Optional)</summary>
         public const string DV = "/DV";
 
-        [PdfKey(PdfKeyType.String | PdfKeyType.Optional)]
+        /// <summary>(Optional)</summary>
         public const string DA = "/DA";
 
-        [PdfKey(PdfKeyType.Integer | PdfKeyType.Optional)]
+        /// <summary>(Optional)</summary>
         public const string MaxLen = "/MaxLen";
 
-        [PdfKey(PdfKeyType.Array | PdfKeyType.Optional)]
+        /// <summary>(Optional)</summary>
         public const string Opt = "/Opt";
 
-        public static PdfDictionaryMetadata Meta { get; } = CreateMeta(typeof(Keys));
 
     }
 
-    internal override PdfDictionaryMetadata Meta => Keys.Meta;
 }

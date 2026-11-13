@@ -6,206 +6,198 @@ using Xunit;
 namespace PeachPDF.Tests.PdfEngineTests.ObjectModel
 {
     /// <summary>
-    /// Exercises <see cref="PdfDictionary.DictionaryElements.GetValue(string, ValueCreationFlags)"/>'s private helpers
-    /// (CreateMissingValue/ResolveIndirectValue/CoerceDictionary/CoerceArray) directly, using a
-    /// test-only dictionary type whose <c>Keys</c> declare object types under our control - the real
-    /// PDF dictionary types don't expose a scenario for every branch (e.g. a key declared as one
-    /// concrete dictionary/array subtype whose stored value is a different, incompatible one).
+    /// Exercises <see cref="PdfDictionary.DictionaryElements.GetOrCreate{TItem}"/>, <c>GetExisting</c> and their array counterparts
+    /// with test-only dictionary and array classes: creating a missing value (direct or indirect), following a reference, returning a
+    /// value that already has the right class and wrapping one that has a more general class.
     /// </summary>
     public class PdfDictionaryGetValueTests
     {
-        private sealed class TestSubDictionary : PdfDictionary
+        private sealed class TestSubDictionary : PdfDictionary, IPdfDictionaryValue<TestSubDictionary>
         {
             public TestSubDictionary() { }
             public TestSubDictionary(PdfDocument document) : base(document) { }
             public TestSubDictionary(PdfDictionary dict) : base(dict) { }
+
+            static TestSubDictionary IPdfDictionaryValue<TestSubDictionary>.Create(PdfDocument document) => new(document);
+            static TestSubDictionary IPdfDictionaryValue<TestSubDictionary>.Wrap(PdfDictionary existing) => new(existing);
         }
 
-        private sealed class TestSubArray : PdfArray
+        private sealed class TestSubArray : PdfArray, IPdfArrayValue<TestSubArray>
         {
             public TestSubArray() { }
             public TestSubArray(PdfDocument document) : base(document) { }
             public TestSubArray(PdfArray array) : base(array) { }
+
+            static TestSubArray IPdfArrayValue<TestSubArray>.Create(PdfDocument document) => new(document);
+            static TestSubArray IPdfArrayValue<TestSubArray>.Wrap(PdfArray existing) => new(existing);
         }
 
-        private sealed class TestKeyedDictionary : PdfDictionary
-        {
-            public TestKeyedDictionary() { }
-            public TestKeyedDictionary(PdfDocument document) : base(document) { }
+        private const string SubDict = "/SubDict";
+        private const string SubArray = "/SubArray";
 
-            internal override PdfDictionaryMetadata Meta => Keys.Meta;
-
-            internal sealed class Keys : KeysBase
-            {
-                [PdfKey(PdfKeyType.Dictionary | PdfKeyType.Optional, typeof(TestSubDictionary))]
-                public const string SubDict = "/SubDict";
-
-                [PdfKey(PdfKeyType.Array | PdfKeyType.Optional, typeof(TestSubArray))]
-                public const string SubArray = "/SubArray";
-
-                [PdfKey(PdfKeyType.Integer | PdfKeyType.Optional, typeof(PdfInteger))]
-                public const string BadType = "/BadType";
-
-                public static PdfDictionaryMetadata Meta => _meta ??= CreateMeta(typeof(Keys));
-                static PdfDictionaryMetadata? _meta;
-            }
-        }
-
-        private static (PdfDocument Document, TestKeyedDictionary Dictionary) CreateOwned()
+        private static (PdfDocument Document, PdfDictionary Dictionary) CreateOwned()
         {
             var document = new PdfDocument();
-            var dict = new TestKeyedDictionary(document);
+            var dict = new PdfDictionary(document);
             document.Internals.AddObject(dict);
             return (document, dict);
         }
 
         [Fact]
-        public void GetValue_MissingKeyWithNoneOptions_ReturnsNull()
+        public void GetExisting_MissingKey_ReturnsNull()
         {
             var (_, dict) = CreateOwned();
 
-            Assert.Null(dict.Elements.GetValue(TestKeyedDictionary.Keys.SubDict, ValueCreationFlags.None));
+            Assert.Null(dict.Elements.GetExisting<TestSubDictionary>(SubDict));
+            Assert.Null(dict.Elements.GetExistingArray<TestSubArray>(SubArray));
         }
 
         [Fact]
-        public void GetValue_MissingDictionaryKeyCreateDirect_CreatesDirectValue()
+        public void GetOrCreate_MissingDictionaryKeyCreateDirect_CreatesDirectValue()
         {
             var (_, dict) = CreateOwned();
 
-            var value = dict.Elements.GetValue(TestKeyedDictionary.Keys.SubDict, ValueCreationFlags.Create);
+            var sub = dict.Elements.GetOrCreate<TestSubDictionary>(SubDict, ValueCreationFlags.Create);
 
-            var sub = Assert.IsType<TestSubDictionary>(value);
-            Assert.Same(sub, dict.Elements[TestKeyedDictionary.Keys.SubDict]);
+            Assert.False(sub.IsIndirect);
+            Assert.Same(sub, dict.Elements[SubDict]);
         }
 
         [Fact]
-        public void GetValue_MissingDictionaryKeyCreateIndirect_CreatesIndirectValue()
+        public void GetOrCreate_MissingDictionaryKeyCreateIndirect_CreatesIndirectValue()
         {
             var (_, dict) = CreateOwned();
 
-            var value = dict.Elements.GetValue(TestKeyedDictionary.Keys.SubDict, ValueCreationFlags.CreateIndirect);
+            var sub = dict.Elements.GetOrCreate<TestSubDictionary>(SubDict, ValueCreationFlags.CreateIndirect);
 
-            var sub = Assert.IsType<TestSubDictionary>(value);
             Assert.True(sub.IsIndirect);
-            Assert.IsType<PdfReference>(dict.Elements[TestKeyedDictionary.Keys.SubDict]);
+            Assert.IsType<PdfReference>(dict.Elements[SubDict]);
         }
 
         [Fact]
-        public void GetValue_MissingArrayKeyCreateDirect_CreatesDirectValue()
+        public void GetOrCreateArray_MissingKeyCreateDirect_CreatesDirectValue()
         {
             var (_, dict) = CreateOwned();
 
-            var value = dict.Elements.GetValue(TestKeyedDictionary.Keys.SubArray, ValueCreationFlags.Create);
+            var sub = dict.Elements.GetOrCreateArray<TestSubArray>(SubArray, ValueCreationFlags.Create);
 
-            Assert.IsType<TestSubArray>(value);
+            Assert.Same(sub, dict.Elements[SubArray]);
         }
 
         [Fact]
-        public void GetValue_MissingKeyWithUndeclaredType_ThrowsNotImplemented()
+        public void GetOrCreateArray_MissingKeyCreateIndirect_CreatesIndirectValue()
         {
             var (_, dict) = CreateOwned();
 
-            var ex = Assert.Throws<NotImplementedException>(
-                () => dict.Elements.GetValue("/Undeclared", ValueCreationFlags.Create));
-            Assert.Contains("Cannot create value for key", ex.Message);
+            var sub = dict.Elements.GetOrCreateArray<TestSubArray>(SubArray, ValueCreationFlags.CreateIndirect);
+
+            Assert.True(sub.IsIndirect);
+            Assert.IsType<PdfReference>(dict.Elements[SubArray]);
         }
 
         [Fact]
-        public void GetValue_MissingKeyWithNonDictionaryOrArrayType_ThrowsNotImplemented()
+        public void GetOrCreate_CalledTwice_ReturnsTheValueTheFirstCallCreated()
         {
             var (_, dict) = CreateOwned();
 
-            var ex = Assert.Throws<NotImplementedException>(
-                () => dict.Elements.GetValue(TestKeyedDictionary.Keys.BadType, ValueCreationFlags.Create));
-            Assert.Contains("Type other than array or dictionary", ex.Message);
+            var first = dict.Elements.GetOrCreate<TestSubDictionary>(SubDict, ValueCreationFlags.Create);
+            var second = dict.Elements.GetOrCreate<TestSubDictionary>(SubDict, ValueCreationFlags.Create);
+
+            Assert.Same(first, second);
         }
 
         [Fact]
-        public void GetValue_IndirectValueAlreadyCorrectType_ReturnsItUnchanged()
+        public void GetOrCreate_IndirectValueAlreadyCorrectType_ReturnsItUnchanged()
         {
             var (document, dict) = CreateOwned();
             var sub = new TestSubDictionary(document);
             document.Internals.AddObject(sub);
-            dict.Elements.SetReference(TestKeyedDictionary.Keys.SubDict, sub);
+            dict.Elements.SetReference(SubDict, sub);
 
-            var value = dict.Elements.GetValue(TestKeyedDictionary.Keys.SubDict);
-
-            Assert.Same(sub, value);
+            Assert.Same(sub, dict.Elements.GetOrCreate<TestSubDictionary>(SubDict, ValueCreationFlags.Create));
         }
 
         [Fact]
-        public void GetValue_IndirectDictionaryValueWrongType_CoercesToDeclaredType()
+        public void GetOrCreate_IndirectDictionaryValueOfGeneralType_WrapsItInTheRequestedType()
         {
             var (document, dict) = CreateOwned();
             var plain = new PdfDictionary(document);
+            plain.Elements.SetInteger("/Marker", 7);
             document.Internals.AddObject(plain);
-            dict.Elements.SetReference(TestKeyedDictionary.Keys.SubDict, plain);
+            dict.Elements.SetReference(SubDict, plain);
 
-            var value = dict.Elements.GetValue(TestKeyedDictionary.Keys.SubDict);
+            var value = dict.Elements.GetOrCreate<TestSubDictionary>(SubDict, ValueCreationFlags.Create);
 
-            Assert.IsType<TestSubDictionary>(value);
+            Assert.Equal(7, value.Elements.GetInteger("/Marker"));
         }
 
         [Fact]
-        public void GetValue_IndirectArrayValueWrongType_CoercesToDeclaredType()
+        public void GetOrCreateArray_IndirectValueOfGeneralType_WrapsItInTheRequestedType()
         {
             var (document, dict) = CreateOwned();
             var plain = new PdfArray(document);
             document.Internals.AddObject(plain);
-            dict.Elements.SetReference(TestKeyedDictionary.Keys.SubArray, plain);
+            dict.Elements.SetReference(SubArray, plain);
 
-            var value = dict.Elements.GetValue(TestKeyedDictionary.Keys.SubArray);
+            var value = dict.Elements.GetOrCreateArray<TestSubArray>(SubArray, ValueCreationFlags.Create);
 
             Assert.IsType<TestSubArray>(value);
         }
 
         [Fact]
-        public void GetValue_DirectDictionaryValueWrongType_CoercesToDeclaredType()
+        public void GetExisting_DirectDictionaryValueOfGeneralType_WrapsItInTheRequestedType()
         {
             var (_, dict) = CreateOwned();
-            dict.Elements[TestKeyedDictionary.Keys.SubDict] = new PdfDictionary();
+            dict.Elements[SubDict] = new PdfDictionary();
 
-            var value = dict.Elements.GetValue(TestKeyedDictionary.Keys.SubDict);
-
-            Assert.IsType<TestSubDictionary>(value);
+            Assert.IsType<TestSubDictionary>(dict.Elements.GetExisting<TestSubDictionary>(SubDict));
         }
 
         [Fact]
-        public void GetValue_DirectDictionaryValueAlreadyCorrectType_ReturnsItUnchanged()
+        public void GetExisting_DirectDictionaryValueAlreadyCorrectType_ReturnsItUnchanged()
         {
             var (_, dict) = CreateOwned();
             var sub = new TestSubDictionary();
-            dict.Elements[TestKeyedDictionary.Keys.SubDict] = sub;
+            dict.Elements[SubDict] = sub;
 
-            var value = dict.Elements.GetValue(TestKeyedDictionary.Keys.SubDict);
-
-            Assert.Same(sub, value);
+            Assert.Same(sub, dict.Elements.GetExisting<TestSubDictionary>(SubDict));
         }
 
         [Fact]
-        public void GetValue_DirectArrayValueWrongType_CoercesToDeclaredType()
+        public void GetExistingArray_DirectArrayValueOfGeneralType_WrapsItInTheRequestedType()
         {
             var (_, dict) = CreateOwned();
-            dict.Elements[TestKeyedDictionary.Keys.SubArray] = new PdfArray();
+            dict.Elements[SubArray] = new PdfArray();
 
-            var value = dict.Elements.GetValue(TestKeyedDictionary.Keys.SubArray);
-
-            Assert.IsType<TestSubArray>(value);
+            Assert.IsType<TestSubArray>(dict.Elements.GetExistingArray<TestSubArray>(SubArray));
         }
 
         [Fact]
-        public void GetValue_DirectArrayValueForUndeclaredKey_ReturnsItUnchanged()
+        public void GetExisting_DirectDictionaryValueAsGeneralRequest_ReturnsAnySubclassUnchanged()
         {
-            // CoerceArray's "type is null" branch: an array value stored under a key this dictionary
-            // type never declared has no meta entry, so GetValueType returns null and the value is
-            // returned exactly as stored.
             var (_, dict) = CreateOwned();
-            var array = new PdfArray();
-            dict.Elements["/Undeclared"] = array;
+            var sub = new TestSubDictionary();
+            dict.Elements[SubDict] = sub;
 
-            var value = dict.Elements.GetValue("/Undeclared");
+            Assert.Same(sub, dict.Elements.GetExisting<PdfDictionary>(SubDict));
+        }
 
-            Assert.Same(array, value);
+        [Fact]
+        public void GetExisting_ValueThatIsNotADictionary_Throws()
+        {
+            var (_, dict) = CreateOwned();
+            dict.Elements.SetInteger(SubDict, 3);
+
+            Assert.Throws<InvalidCastException>(() => dict.Elements.GetExisting<TestSubDictionary>(SubDict));
+        }
+
+        [Fact]
+        public void GetExistingArray_ValueThatIsNotAnArray_Throws()
+        {
+            var (_, dict) = CreateOwned();
+            dict.Elements.SetInteger(SubArray, 3);
+
+            Assert.Throws<InvalidCastException>(() => dict.Elements.GetExistingArray<TestSubArray>(SubArray));
         }
     }
 }

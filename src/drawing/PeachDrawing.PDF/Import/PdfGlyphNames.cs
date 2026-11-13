@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Collections.Frozen;
 
 namespace PeachDrawing.PDF.Import;
 
@@ -60,7 +61,7 @@ internal static class PdfGlyphNames
         return sid == 0 ? null : StandardStrings[sid];
     }
 
-    static readonly Dictionary<string, int> CodePoints = BuildCodePoints();
+    static readonly FrozenDictionary<string, int> CodePoints = BuildCodePoints().ToFrozenDictionary(StringComparer.Ordinal);
 
     static Dictionary<string, int> BuildCodePoints()
     {

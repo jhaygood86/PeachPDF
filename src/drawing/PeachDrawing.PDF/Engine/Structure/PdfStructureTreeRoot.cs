@@ -5,8 +5,15 @@ namespace PeachDrawing.PDF.Engine.Structure;
 /// Ported from upstream PDFsharp's Pdf.Structure/PdfStructureTreeRoot.cs, adapted to this
 /// fork's PdfDictionary/DictionaryElements API.
 /// </summary>
-internal sealed class PdfStructureTreeRoot : PdfDictionary
+internal sealed class PdfStructureTreeRoot : PdfDictionary, IPdfDictionaryValue<PdfStructureTreeRoot>
 {
+    static PdfStructureTreeRoot IPdfDictionaryValue<PdfStructureTreeRoot>.Create(PdfDocument document) => new(document);
+    static PdfStructureTreeRoot IPdfDictionaryValue<PdfStructureTreeRoot>.Wrap(PdfDictionary existing) => new(existing);
+
+    private PdfStructureTreeRoot(PdfDictionary dict)
+        : base(dict)
+    { }
+
     public PdfStructureTreeRoot()
     {
         Elements.SetName(Keys.Type, "/StructTreeRoot");
@@ -53,34 +60,32 @@ internal sealed class PdfStructureTreeRoot : PdfDictionary
     /// <summary>
     /// Predefined keys of this dictionary.
     /// </summary>
-    internal sealed class Keys : KeysBase
+    internal sealed class Keys
     {
         // Reference: ISO 32000-1 Table 322 - Entries in the structure tree root
 
-        [PdfKey(PdfKeyType.Name | PdfKeyType.Required, FixedValue = "StructTreeRoot")]
+        /// <summary>(Required)</summary>
         public const string Type = "/Type";
 
-        [PdfKey(PdfKeyType.ArrayOrDictionary | PdfKeyType.Optional)]
+        /// <summary>(Optional)</summary>
         public const string K = "/K";
 
-        [PdfKey(PdfKeyType.Optional)]
+        /// <summary>(Optional)</summary>
         public const string IDTree = "/IDTree";
 
-        [PdfKey(PdfKeyType.NumberTree | PdfKeyType.Optional, typeof(PdfNumberTreeNode))]
+        /// <summary>(Optional)</summary>
         public const string ParentTree = "/ParentTree";
 
-        [PdfKey(PdfKeyType.Integer | PdfKeyType.Optional)]
+        /// <summary>(Optional)</summary>
         public const string ParentTreeNextKey = "/ParentTreeNextKey";
 
-        [PdfKey(PdfKeyType.Dictionary | PdfKeyType.Optional)]
+        /// <summary>(Optional)</summary>
         public const string RoleMap = "/RoleMap";
 
-        [PdfKey(PdfKeyType.Dictionary | PdfKeyType.Optional)]
+        /// <summary>(Optional)</summary>
         public const string ClassMap = "/ClassMap";
 
-        public static PdfDictionaryMetadata Meta { get; } = CreateMeta(typeof(Keys));
 
     }
 
-    internal override PdfDictionaryMetadata Meta => Keys.Meta;
 }

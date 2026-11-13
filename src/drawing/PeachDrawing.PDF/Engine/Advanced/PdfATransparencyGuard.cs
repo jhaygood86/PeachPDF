@@ -1,5 +1,3 @@
-#nullable enable
-
 using System;
 
 namespace PeachDrawing.PDF.Engine.Advanced;

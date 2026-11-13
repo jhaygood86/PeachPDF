@@ -51,7 +51,11 @@ namespace PeachBrackets.Html.Utils
         /// the clipping ancestor's rounded-corner curve, or null when it has no <c>border-radius</c>
         /// </param>
         /// <returns>the number of clips actually pushed (callers must pop exactly this many afterward)</returns>
-        public static int ClipGraphicsByOverflow(Canvas g, Rect? overflowClip, OverflowClipCurve? curve)
+        /// <param name="mayDrawText">
+        /// false when the content the clip surrounds is known to draw no text, so the canvas can leave out what a clip that text is drawn inside costs it
+        /// (see <see cref="Canvas.PushClipAroundShapes"/>); true, the default, whenever that is not known
+        /// </param>
+        public static int ClipGraphicsByOverflow(Canvas g, Rect? overflowClip, OverflowClipCurve? curve, bool mayDrawText = true)
         {
             if (overflowClip is not { } clip) return 0;
 
@@ -62,7 +66,7 @@ namespace PeachBrackets.Html.Utils
             g.PushClip(clip);
             var pushed = 1;
 
-            if (curve is { } c) pushed += PushRoundedClipIfRounded(g, c.Rect, c.Radii);
+            if (curve is { } c) pushed += PushRoundedClipIfRounded(g, c.Rect, c.Radii, mayDrawText);
 
             return pushed;
         }
@@ -130,13 +134,17 @@ namespace PeachBrackets.Html.Utils
         /// two don't each carry their own copy of the same "build the path, push it, count it" sequence.
         /// </summary>
         /// <returns>1 if a clip was pushed, 0 if <paramref name="radii"/> has no rounded corner</returns>
-        private static int PushRoundedClipIfRounded(Canvas g, Rect rect, BorderRadii radii)
+        private static int PushRoundedClipIfRounded(Canvas g, Rect rect, BorderRadii radii, bool mayDrawText = true)
         {
             if (!radii.IsRounded) return 0;
 
             using var path = GetRoundRect(g, rect,
                 radii);
-            g.PushClip(path);
+            if (mayDrawText)
+                g.PushClip(path);
+            else
+                g.PushClipAroundShapes(path);
+
             return 1;
         }
 

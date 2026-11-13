@@ -14,14 +14,14 @@ design is in [the recent fix](../recent-fixes/2026-11-05-live-animation-clock-an
   transitions, with `allow-discrete`, as a step that keeps the box for the whole interval), and an unregistered custom property or one whose syntax does not mix (a step).
 - **A `transform`, `filter` or `perspective` that appears on a box with positioned descendants** makes the box their containing block, which moves them; the in-place restyle
   refuses that change and reloads the document, the live clock does not and the descendants stay where they were laid out.
-- **A promoted box is only drawn apart from the page when that cannot change what covers what.** `DocumentPaintLayer.Animated` (see [the recent fix](../recent-fixes/2026-11-06-animated-layer-and-android-animation.md))
-  takes a box animating `transform` or `opacity` out of the surface a host keeps, so such a frame repaints none of it. It is conservative: a box under an ancestor that clips
-  (`overflow` other than `visible`) or establishes a stacking context (so a card inside a scrolling carousel, or inside an `opacity` group), a box overlapped right now by a later
-  positioned box, and any box when a fixed or sticky box overlaps it, stay in the content layer and repaint the rectangle they cover (old and new place) from the page behind them as
-  before. Outlines and collapsed table borders of an ancestor paint after its positioned children, so a box that moves under one of those edges is drawn over it. The placements,
-  links and text runs a paint records are written for a box when the animated layer draws it, not when the content layer is painted. The overlap test is made at the time of each step:
-  a box that crosses another one in between two steps is placed by where it is at each. Handling an ancestor's clip or transform in the animated layer (the participant hoisting in
-  `StackingOrder` already re-applies clips) would take more of these boxes off the page. Tracked in #2236.
+- **A promoted box is drawn apart from the page only when the whole group can be layered.** `DocumentPaintLayer.Animated` (see [the recent fix](../recent-fixes/2026-11-06-animated-layer-and-android-animation.md) and
+  [the one that widened it](../recent-fixes/2026-11-12-animated-layer-ancestors-and-overlap.md)) takes a box animating `transform` or `opacity`, with what has to be drawn with it, out of the surface a host keeps.
+  A box under clipping ancestors is drawn under their clips; one inside a stacking context (an `opacity` group, a filter, a transform) is drawn by painting that whole group; a positioned box painted
+  over it joins it. What still stays in the content layer and repaints the rectangle it covers: a group that blends (`mix-blend-mode`) or reads its backdrop (`backdrop-filter`), one that holds
+  a fixed or sticky box, a box a fixed or sticky box (which the viewport layer always draws on top) is meant to sit under, in-flow content that paints over a box with a negative `z-index`, and a
+  set that grew past a cap (twelve boxes, or a group over 640000 square points that is more than eight times the animated boxes in it). Outlines and collapsed table borders of an ancestor paint after its
+  positioned children, so a box that moves under one of those edges is drawn over it. The placements, links and text runs a paint records are written for a box when the animated layer draws it.
+  The test is made at each step, so a box that crosses another one between two steps is placed by where it is at each.
 - **A retained layer is recorded at the density it was first drawn at.** A box that scales up a lot is resampled, not re-recorded.
 - **A `background-image` GIF or WebP shows its first frame**; only `<img>` plays. (The image cache keys by address, not by the box that shows it.)
 - **A transition starts from every restyle that loads the document again** (the host's class, attribute and preference changes, a state rule that moves something) by comparing each

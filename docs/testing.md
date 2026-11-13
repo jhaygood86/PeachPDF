@@ -40,6 +40,22 @@ Beyond those automated assertions, the strongest check is to **rasterize the out
 
 Agreement between both is real evidence; a single lenient render that happens to look right is not. This two-renderer cross-check is **not part of the automated CI pipeline** — it's a manual verification step performed during development when a change touches graphics-state output, and it's a practice we recommend contributors run themselves before submitting such a change. (One way to do it is a short Python script using [`pymupdf`](https://pymupdf.readthedocs.io/) and [`pypdfium2`](https://github.com/pypdfium2-team/pypdfium2) to render the same page with each engine and compare the images.)
 
+## Web platform tests (a CI gate on pass counts)
+
+The suite above is written by the project; the [web-platform-tests](https://web-platform-tests.org) are the browsers' own. `PeachBrackets.WptRunner` (under `src/harness/`) runs the **reftests** of 16 CSS modules (CSS 2 flow, floats, positioning, tables and generated content, flexbox, grid, tables, position, backgrounds, color, values, text, transforms, multi-column and lists) through the public `PeachBrackets` API only: each test and each of its references is loaded as a screen document in an 800×600 viewport, painted onto a `PeachDrawing` bitmap with one CSS pixel per device pixel, and compared pixel for pixel, as the [reftest rules](https://web-platform-tests.org/writing-tests/reftests.html) describe — `match` and `mismatch` references, reference chains, `<meta name=fuzzy>` allowances. Tests that need script (testharness.js, `reftest-wait`, an inline script) are skipped. A test whose images match but show nothing (one flat white or transparent image) is reported as `blank` and never counts as a pass, so a renderer that draws nothing cannot score.
+
+The tests are not part of the repository: the runner fetches the commit pinned in `wpt/WPT_COMMIT` into a cache folder.
+
+```bash
+dotnet run --project harness/PeachBrackets.WptRunner -f net10.0 -- fetch
+dotnet run --project harness/PeachBrackets.WptRunner -f net10.0 -- run --wpt ~/.peachbrackets-wpt/wpt/<commit> --module css-flexbox --filter /abspos/
+dotnet run --project harness/PeachBrackets.WptRunner -f net10.0 -- run --wpt <checkout> --test css/css-flexbox/abspos/abspos-autopos-htb-ltr.html   # also writes PNGs of every image compared
+```
+
+`--out <dir>` writes one JSON file per module (the passing, blank, failing and skipped tests with the reason for each failure) and a `summary.md` with the most common failure reasons.
+
+The gate is a **floor per module** in `wpt/wpt-floors.json`: the [WPT workflow](https://github.com/jhaygood86/PeachPDF/blob/main/.github/workflows/wpt.yml) runs on pull requests that touch the engine or the drawing packages and fails when a module passes fewer tests than its floor. The pass rate is not expected to be 100%; the point is that it never falls and that a change which makes more tests pass raises its floor in the same pull request (`run --floors <file> --update-floors`, which never lowers a floor). The floors are measured on the CI runner's fonts, so a local run on another platform can differ by a few tests.
+
 ## The showcase harness
 
 `src/harness/PeachPDF.TestHarness` is a small runnable app that renders a gallery of feature showcases. It serves two purposes: it generates the PDFs behind the [Feature Showcase](showcase.html) on the documentation site, and it's a place to *visually* exercise a new capability. CI builds it on every source change so a break is caught before release day, not on it.

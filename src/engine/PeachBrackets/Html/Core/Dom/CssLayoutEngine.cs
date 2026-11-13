@@ -2313,6 +2313,7 @@ namespace PeachBrackets.Html.Dom
                 HeightenAtomicInlineRectangles(lineBox);
                 ExtendInlineBlockRectanglesToLineHeight(lineBox);
                 ApplyInlineRelativeOffsets(blockBox, lineBox);
+                ComputeInlineSplitPieces(lineBox);
                 lineBox.AssignRectanglesToBoxes();
             }
         }
@@ -3573,11 +3574,15 @@ namespace PeachBrackets.Html.Dom
         /// <c>CssBox</c>'s <c>left</c>/<c>right</c> placement resolves against.
         /// </summary>
         private static double? AbsolutePaddingBoxWidth(CssBox box) =>
-            AbsoluteContainingBlockOf(box) is { } ancestor ? CssBox.AbsoluteContainingBlockWidth(ancestor) : null;
+            AbsoluteContainingBlockOf(box) is { } ancestor ? GridAreaOf(box, ancestor)?.Width ?? CssBox.AbsoluteContainingBlockWidth(ancestor) : null;
+
+        /// <summary>The grid area an absolutely positioned child of a grid container is placed against, when that container is its containing block (css-grid-1 section 9).</summary>
+        private static Rect? GridAreaOf(CssBox box, CssBox containingBlock) =>
+            ReferenceEquals(containingBlock, box.ParentBox) ? box.GridContainingArea : null;
 
         /// <summary>The height counterpart of <see cref="AbsolutePaddingBoxWidth"/>.</summary>
         private static double? AbsolutePaddingBoxHeight(CssBox box) =>
-            AbsoluteContainingBlockOf(box) is { } ancestor ? CssBox.AbsoluteContainingBlockHeight(ancestor) : null;
+            AbsoluteContainingBlockOf(box) is { } ancestor ? GridAreaOf(box, ancestor)?.Height ?? CssBox.AbsoluteContainingBlockHeight(ancestor) : null;
 
         private static CssBox? AbsoluteContainingBlockOf(CssBox box)
         {
@@ -6121,6 +6126,10 @@ namespace PeachBrackets.Html.Dom
         /// </summary>
         internal static (double Left, double Right, double? FloatsBottom) ExtentBesideFloatsWithBottom(CssBox block, double top, double left, double right)
         {
+            // No float anywhere in the document: nothing can narrow the extent, so skip the transient line box.
+            if (block.HtmlContainer is { HasFloatedBoxes: false })
+                return (left, right, null);
+
             // The line box only carries the coordinates the lookups read, but its constructor adds it to the owner's
             // line boxes, so it is taken off again: a container left with a line box of its own was read as holding
             // inline content and its children's words were emitted a second time.
@@ -6874,6 +6883,10 @@ namespace PeachBrackets.Html.Dom
             // Without the second call a line whose only word arrived by wrapping contributes no height at
             // all - the common "paragraph's last line holds one word" shape, which came out one whole
             // line-height short.
+            // A lambda written inline in the word loop captures the loop's own variable, so the compiler allocates its closure on every
+            // iteration whether or not the branch that uses it runs; building it here allocates only when it is asked for.
+            Action GrowLineAfter(CssRect w) => () => GrowLineToItsExtent(w);
+
             void GrowLineToItsExtent(CssRect word)
             {
                 var line = coordinates.Line;
@@ -7329,7 +7342,7 @@ namespace PeachBrackets.Html.Dom
                             && IsAtLineStart(coordinates))
                         {
                             ShiftEmptyLineBelowCrowdingFloats(blockBox, box, coordinates, WidthThatCannotBeBrokenFrom(b, wordIndex, word), word.Height,
-                                rightSpacing, clonedTrailing, isRtl, () => GrowLineToItsExtent(word));
+                                rightSpacing, clonedTrailing, isRtl, GrowLineAfter(word));
 
                             // The run was to move to a new line because the cursor had been pushed past a float; the line is empty, so a new one
                             // could not help, and the shift has already put it where the run fits.
@@ -7515,7 +7528,7 @@ namespace PeachBrackets.Html.Dom
                                 if (blockBoxPermitsWrap && !word.IsLineBreak && (b.WhiteSpacePermitsWrapping || shiftsWordsThatCannotWrap))
                                 {
                                     ShiftEmptyLineBelowCrowdingFloats(blockBox, box, coordinates, WidthThatCannotBeBrokenFrom(b, wordIndex, word), word.Height,
-                                        rightSpacing, clonedTrailing, isRtl, () => GrowLineToItsExtent(word));
+                                        rightSpacing, clonedTrailing, isRtl, GrowLineAfter(word));
                                 }
                             }
 
@@ -9706,17 +9719,15 @@ namespace PeachBrackets.Html.Dom
 
             if (runs.Count == 1 && !runs[0].IsRtl) return;
 
-            // The original Left of the word right after `index` in document order - or, for the line's
-            // very last word, its own spacing-inclusive right edge, since there is no following slot to
-            // read a boundary from. This is the boundary between whatever run `index` belongs to and
-            // whatever comes next - never reflected, since it's spacing between two runs, not content
-            // that moves when one of them does.
-            double SlotBoundaryAfter(int index) =>
-                index + 1 < lineBox.Words.Count
-                    ? slots[index + 1]
-                    : slots[index] + lineBox.Words[index].FullWidth;
+            // A box's border and padding (and margin) on its inline-start and inline-end sides sit beside the words it opens and closes
+            // on, not between them: a word is reflected together with the room the flow reserved before it (the leading edges of the boxes
+            // that open at it) and after it (the trailing edges of the boxes that close at it), so reversing a run keeps a box's right edge
+            // at the right of its last word instead of carrying it into the gap between two words.
+            var lead = new double[lineBox.Words.Count];
+            var trail = new double[lineBox.Words.Count];
+            MeasureInlineEdgeSpacing(lineBox, slots, lead, trail);
 
-            var runNewStart = slots[0];
+            var runNewStart = slots[0] - lead[0];
 
             foreach (var run in runs)
             {
@@ -9725,18 +9736,22 @@ namespace PeachBrackets.Html.Dom
                 // and copies the levels array, so it works unchanged at this granularity. `runs` is
                 // already in final visual (left-to-right) order, so each run's new span simply follows
                 // the previous one's.
-                var runOldStart = slots[run.Start];
                 var lastIndexInRun = run.Start + run.Length - 1;
+                var runOldStart = slots[run.Start] - lead[run.Start];
 
-                // The run's own content span - first word's Left to last word's own Right, i.e. every
-                // word's width and every *internal* gap between this run's own words, but NOT the
+                // The run's own content span - first word's leading edge to last word's trailing edge, i.e. every
+                // word's width, the box edges beside them and every *internal* gap between this run's own words, but NOT the
                 // trailing gap to whatever comes after the run. That gap is spacing *between* runs, not
                 // part of either one's content, so it must never take part in the reflection below - an
                 // earlier version folded it into the run's own width, which reflected it onto the run's
                 // *leading* edge instead of leaving it trailing, doubling up the gap on one side of an
                 // RTL run and erasing it on the other.
-                var runContentWidth = slots[lastIndexInRun] + lineBox.Words[lastIndexInRun].Width - runOldStart;
-                var trailingGap = SlotBoundaryAfter(lastIndexInRun) - (runOldStart + runContentWidth);
+                var runContentEnd = slots[lastIndexInRun] + lineBox.Words[lastIndexInRun].Width + trail[lastIndexInRun];
+                var runContentWidth = runContentEnd - runOldStart;
+                var boundaryAfterRun = lastIndexInRun + 1 < lineBox.Words.Count
+                    ? slots[lastIndexInRun + 1] - lead[lastIndexInRun + 1]
+                    : slots[lastIndexInRun] + lineBox.Words[lastIndexInRun].FullWidth;
+                var trailingGap = Math.Max(0, boundaryAfterRun - runContentEnd);
 
                 // Within an RTL run both the word order and each word's own text reverse (mirroring
                 // characters where they have a mirror image), matching how Bidi's own
@@ -9745,16 +9760,202 @@ namespace PeachBrackets.Html.Dom
                 {
                     var idx = run.Start + k;
                     var word = lineBox.Words[idx];
-                    var offsetFromRunStart = slots[idx] - runOldStart;
+                    var offsetFromRunStart = slots[idx] - lead[idx] - runOldStart;
+                    var unitWidth = lead[idx] + word.Width + trail[idx];
 
-                    var newLeft = run.IsRtl
-                        ? runNewStart + runContentWidth - (offsetFromRunStart + word.Width)
+                    var newUnitLeft = run.IsRtl
+                        ? runNewStart + runContentWidth - (offsetFromRunStart + unitWidth)
                         : runNewStart + offsetFromRunStart;
 
-                    PlaceBidiRunWord(word, newLeft, run.Level, mirror: run.IsRtl);
+                    PlaceBidiRunWord(word, newUnitLeft + lead[idx], run.Level, mirror: run.IsRtl);
                 }
 
                 runNewStart += runContentWidth + trailingGap;
+            }
+        }
+
+        /// <summary>
+        /// Records, for each inline box of a bidi-reordered line whose own words are not visually contiguous, the pieces it is drawn as
+        /// (<see cref="CssLineBox.SplitPieces"/>): reordering can put another box's words between two of its words, and a box is drawn
+        /// around its own content only, not around what sits between (CSS 2.1 section 9.4.3, bidi: the box is split around the other text).
+        /// A piece reaches out to the border and padding of the boxes that open at its first word and close at its last, and carries the
+        /// box's own left or right edge only when the box itself opens or closes there.
+        /// </summary>
+        private static void ComputeInlineSplitPieces(CssLineBox line)
+        {
+            line.SplitPieces = null;
+
+            var words = line.Words;
+            if (words.Count < 3 || line.Rectangles.Count == 0) return;
+
+            var reordered = line.OwnerBox.Direction.Value == DirectionMode.Rtl;
+            foreach (var word in words)
+            {
+                if (word.BidiLevel != 0) { reordered = true; break; }
+            }
+
+            if (!reordered) return;
+
+            foreach (var (box, union) in line.Rectangles)
+            {
+                if (!box.IsInline || DomUtils.IsAtomicInline(box)) continue;
+
+                List<int>? own = null;
+                for (var i = 0; i < words.Count; i++)
+                {
+                    if (words[i] is not CssRectAtomicInline && IsWithin(words[i].OwnerBox, box))
+                        (own ??= []).Add(i);
+                }
+
+                if (own is null || own.Count < 2) continue;
+
+                var visual = new List<int>(own);
+                visual.Sort((a, b) => words[a].Left.CompareTo(words[b].Left));
+
+                // A new piece starts where a word that is not this box's own lies, visually, between two of its words.
+                var pieces = new List<(int First, int Last)>();
+                var first = visual[0];
+                for (var k = 1; k < visual.Count; k++)
+                {
+                    var gapLeft = words[visual[k - 1]].Right;
+                    var gapRight = words[visual[k]].Left;
+                    var intervened = false;
+
+                    foreach (var other in words)
+                    {
+                        if (other.Width <= 0 || (other is not CssRectAtomicInline && IsWithin(other.OwnerBox, box))) continue;
+                        if (other.Left >= gapLeft - 0.01 && other.Right <= gapRight + 0.01) { intervened = true; break; }
+                    }
+
+                    if (intervened)
+                    {
+                        pieces.Add((first, visual[k - 1]));
+                        first = visual[k];
+                    }
+                }
+
+                pieces.Add((first, visual[^1]));
+                if (pieces.Count < 2) continue;
+
+                var result = new List<InlineSplitPiece>(pieces.Count);
+                foreach (var (firstWord, lastWord) in pieces)
+                {
+                    var left = words[firstWord].Left;
+                    var right = words[lastWord].Right;
+                    var hasLeft = false;
+                    var hasRight = false;
+
+                    var before = InlineChainOf(line, firstWord - 1);
+                    foreach (var opening in InlineChainOf(line, firstWord))
+                    {
+                        if (before.Contains(opening)) continue;
+                        if (!(opening.BoxDecorationBreak.Value == BoxDecorationBreakMode.Clone || ReferenceEquals(opening.FirstHostingLineBox, line))) continue;
+                        if (!IsWithin(opening, box)) continue;
+                        left -= opening.ActualBorderLeftWidth + opening.ActualPaddingLeft;
+                        if (ReferenceEquals(opening, box)) hasLeft = true;
+                    }
+
+                    var after = InlineChainOf(line, lastWord + 1);
+                    foreach (var closing in InlineChainOf(line, lastWord))
+                    {
+                        if (after.Contains(closing)) continue;
+                        if (!(closing.BoxDecorationBreak.Value == BoxDecorationBreakMode.Clone || ReferenceEquals(closing.LastHostingLineBox, line))) continue;
+                        if (!IsWithin(closing, box)) continue;
+                        right += closing.ActualBorderRightWidth + closing.ActualPaddingRight;
+                        if (ReferenceEquals(closing, box)) hasRight = true;
+                    }
+
+                    result.Add(new InlineSplitPiece(left - union.X, right - union.X, hasLeft, hasRight));
+                }
+
+                (line.SplitPieces ??= [])[box] = result;
+            }
+        }
+
+        private static bool IsWithin(CssBox box, CssBox ancestor)
+        {
+            for (var b = box; b is not null; b = b.ParentBox)
+            {
+                if (ReferenceEquals(b, ancestor)) return true;
+            }
+
+            return false;
+        }
+
+        /// <summary>The inline boxes between a line's word and the block that owns the line (the ones that can carry spacing there); empty for an index outside the line.</summary>
+        private static HashSet<CssBox> InlineChainOf(CssLineBox line, int index)
+        {
+            var chain = new HashSet<CssBox>();
+            if (index < 0 || index >= line.Words.Count) return chain;
+
+            for (var b = line.Words[index].OwnerBox; b is not null && !ReferenceEquals(b, line.OwnerBox); b = b.ParentBox)
+            {
+                if (b.IsInline && !DomUtils.IsAtomicInline(b) && b.Position.Value is not (PositionMode.Absolute or PositionMode.Fixed) && !b.IsFloated)
+                    chain.Add(b);
+            }
+
+            return chain;
+        }
+
+        /// <summary>
+        /// For each word of a line in logical order, the room the flow reserved just before it for the boxes that open at it
+        /// (<paramref name="lead"/>) and just after it for the boxes that close at it (<paramref name="trail"/>): their margin, border and
+        /// padding on the physical left and right, counted only on the line that opens or closes the box (or on every line under
+        /// <c>box-decoration-break: clone</c>), as <see cref="CssLineBox.UpdateRectangle"/> counts it. Each is limited to the gap the
+        /// words actually have between them, so a figure the flow did not reserve in this shape can never overlap a neighbor.
+        /// </summary>
+        private static void MeasureInlineEdgeSpacing(CssLineBox lineBox, double[] slots, double[] lead, double[] trail)
+        {
+            var words = lineBox.Words;
+            var block = lineBox.OwnerBox;
+
+            static bool Spaced(CssBox box, CssBox block) =>
+                !ReferenceEquals(box, block) && box.IsInline && !DomUtils.IsAtomicInline(box)
+                && box.Position.Value is not (PositionMode.Absolute or PositionMode.Fixed) && !box.IsFloated;
+
+            HashSet<CssBox> ChainOf(int index)
+            {
+                var chain = new HashSet<CssBox>();
+                if (index < 0 || index >= words.Count) return chain;
+                for (var b = words[index].OwnerBox; b is not null && !ReferenceEquals(b, block); b = b.ParentBox)
+                {
+                    if (Spaced(b, block)) chain.Add(b);
+                }
+
+                return chain;
+            }
+
+            var previous = ChainOf(-1);
+            var current = ChainOf(0);
+
+            for (var i = 0; i < words.Count; i++)
+            {
+                var next = ChainOf(i + 1);
+
+                double closing = 0;
+                foreach (var b in current)
+                {
+                    if (!next.Contains(b) && (b.BoxDecorationBreak.Value == BoxDecorationBreakMode.Clone || ReferenceEquals(b.LastHostingLineBox, lineBox)))
+                        closing += b.ActualMarginRight + b.ActualBorderRightWidth + b.ActualPaddingRight;
+                }
+
+                double opening = 0;
+                foreach (var b in current)
+                {
+                    if (!previous.Contains(b) && (b.BoxDecorationBreak.Value == BoxDecorationBreakMode.Clone || ReferenceEquals(b.FirstHostingLineBox, lineBox)))
+                        opening += b.ActualMarginLeft + b.ActualBorderLeftWidth + b.ActualPaddingLeft;
+                }
+
+                if (i + 1 < words.Count)
+                    closing = Math.Min(closing, Math.Max(0, slots[i + 1] - (slots[i] + words[i].Width)));
+                trail[i] = closing;
+
+                if (i > 0)
+                    opening = Math.Min(opening, Math.Max(0, slots[i] - (slots[i - 1] + words[i - 1].Width) - trail[i - 1]));
+                lead[i] = opening;
+
+                previous = current;
+                current = next;
             }
         }
 

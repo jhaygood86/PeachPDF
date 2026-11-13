@@ -326,6 +326,7 @@ namespace PeachPDF.SourceGenerators.Model
                 {
                     "unsupported" => DataTypeSpec.Simple(DataTypeKind.Unsupported),
                     "length" => DataTypeSpec.Simple(DataTypeKind.Length),
+                    "nonnegative-length" => DataTypeSpec.Simple(DataTypeKind.NonNegativeLength),
                     "color" => DataTypeSpec.Simple(DataTypeKind.Color),
                     "current-color" => DataTypeSpec.Simple(DataTypeKind.CurrentColor),
                     "transform" => DataTypeSpec.Simple(DataTypeKind.Transform),

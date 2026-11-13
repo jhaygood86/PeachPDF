@@ -23,6 +23,19 @@ internal sealed class PdfWriter
         _stream = pdfStream;
     }
 
+    /// <summary>
+    /// Runs <paramref name="write"/> against a writer over a fresh memory stream and returns what it wrote. Used where a piece of the file has
+    /// to be measured or placed before it is written (the linearized layout) rather than streamed out in order.
+    /// </summary>
+    /// <param name="write">writes the piece</param>
+    /// <param name="security">the handler that encrypts strings and streams in indirect objects, or <see langword="null"/> for none</param>
+    internal static byte[] ToBytes(Action<PdfWriter> write, PdfAes256SecurityHandler? security = null)
+    {
+        using var stream = new MemoryStream();
+        write(new PdfWriter(stream) { Encryption = security });
+        return stream.ToArray();
+    }
+
     public void Close(bool closeUnderlyingStream)
     {
         if (_stream is not null && closeUnderlyingStream)
@@ -51,7 +64,7 @@ internal sealed class PdfWriter
     /// </summary>
     public void Write(bool value)
     {
-        WriteSeparator(CharCat.Character);
+        WriteSeparator();
         WriteRaw(value ? bool.TrueString : bool.FalseString);
         _lastCat = CharCat.Character;
     }
@@ -61,7 +74,7 @@ internal sealed class PdfWriter
     /// </summary>
     public void Write(PdfBoolean value)
     {
-        WriteSeparator(CharCat.Character);
+        WriteSeparator();
         WriteRaw(value.Value ? "true" : "false");
         _lastCat = CharCat.Character;
     }
@@ -103,7 +116,7 @@ internal sealed class PdfWriter
     /// </summary>
     public void Write(PdfString value)
     {
-        WriteSeparator(CharCat.Delimiter);
+        WriteSeparator();
         PdfStringEncoding encoding = (PdfStringEncoding)(value.Flags & PdfStringFlags.EncodingMask);
         bool hex = (value.Flags & PdfStringFlags.HexLiteral) != 0;
         if (StringsAreEncrypted)
@@ -141,7 +154,7 @@ internal sealed class PdfWriter
     /// </summary>
     public void Write(PdfName value)
     {
-        WriteSeparator(CharCat.Delimiter, '/');
+        WriteSeparator();
         string name = value.Value;
 
         // Every character that needs escaping takes three bytes: '#' and two hexadecimal digits.
@@ -156,7 +169,6 @@ internal sealed class PdfWriter
             {
                 char ch = name[idx];
                 Debug.Assert(ch < 256);
-                // TODO: is this all?
                 if (ch > ' ' && ch is not ('%' or '/' or '<' or '>' or '(' or ')' or '#'))
                 {
                     buffer[length++] = (byte)ch;
@@ -180,28 +192,28 @@ internal sealed class PdfWriter
 
     public void Write(PdfLiteral value)
     {
-        WriteSeparator(CharCat.Character);
+        WriteSeparator();
         WriteRaw(value.Value);
         _lastCat = CharCat.Character;
     }
 
     public void Write(PdfRectangle rect)
     {
-        WriteSeparator(CharCat.Delimiter, '/');
+        WriteSeparator();
         WriteRaw(string.Create(CultureInfo.InvariantCulture, $"[{rect.X1:0.###} {rect.Y1:0.###} {rect.X2:0.###} {rect.Y2:0.###}]"));
         _lastCat = CharCat.Delimiter;
     }
 
     public void Write(PdfReference iref)
     {
-        WriteSeparator(CharCat.Character);
+        WriteSeparator();
         WriteRaw(iref.ToString());
         _lastCat = CharCat.Character;
     }
 
     public void WriteDocString(string text)
     {
-        WriteSeparator(CharCat.Delimiter);
+        WriteSeparator();
         byte[] bytes = PdfEncoders.PdfDocumentEncoding.GetBytes(text);
         if (StringsAreEncrypted)
         {
@@ -237,14 +249,14 @@ internal sealed class PdfWriter
         {
             if (obj is PdfArray)
             {
-                WriteSeparator(CharCat.Delimiter);
+                WriteSeparator();
                 WriteRaw('[');
                 _lastCat = CharCat.Delimiter;
             }
             else if (obj is PdfDictionary)
             {
                 NewLine();
-                WriteSeparator(CharCat.Delimiter);
+                WriteSeparator();
                 WriteRaw("<<\n");
                 _lastCat = CharCat.NewLine;
             }
@@ -287,7 +299,7 @@ internal sealed class PdfWriter
             else
             {
                 Debug.Assert(!stackItem.HasStream, "Direct object with stream??");
-                WriteSeparator(CharCat.NewLine);
+                WriteSeparator();
                 WriteRaw(">>\n");
                 _lastCat = CharCat.NewLine;
             }
@@ -305,7 +317,7 @@ internal sealed class PdfWriter
     /// </summary>
     private void WriteNumber<T>(T value, string? format = null) where T : ISpanFormattable, IUtf8SpanFormattable
     {
-        WriteSeparator(CharCat.Character);
+        WriteSeparator();
         Span<byte> buffer = stackalloc byte[64];
         if (value.TryFormat(buffer, out int written, format, CultureInfo.InvariantCulture))
             _stream.Write(buffer[..written]);
@@ -418,22 +430,17 @@ internal sealed class PdfWriter
         WriteRaw(string.Create(CultureInfo.InvariantCulture, $"%PDF-{version / 10}.{version % 10}\n%\xD3\xF4\xCC\xE1\n"));
     }
 
-    public void WriteEof(PdfDocument document, long startxref)
+    public void WriteEof(long startxref)
     {
         WriteRaw("startxref\n");
         WriteRaw(startxref.ToString(CultureInfo.InvariantCulture));
         WriteRaw("\n%%EOF\n");
     }
 
-    void WriteSeparator(CharCat cat, char ch)
+    void WriteSeparator()
     {
         if (_lastCat == CharCat.Character)
             _stream.WriteByte((byte)' ');
-    }
-
-    void WriteSeparator(CharCat cat)
-    {
-        WriteSeparator(cat, '\0');
     }
 
     public void NewLine()

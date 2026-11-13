@@ -128,6 +128,12 @@ public class GpuTextTests
     private static void RoundedCard(Win2dCanvas canvas)
     {
         using var path = canvas.GetGraphicsPath();
+        RoundedCardPath(path);
+        canvas.PushClip(path);
+    }
+
+    private static void RoundedCardPath(GraphicsPath path)
+    {
         const float r = 10;
         const float w = (float)Width - 20, h = (float)Height - 20;
         path.Start(10 + r, 10);
@@ -140,7 +146,6 @@ public class GpuTextTests
         path.LineTo(10, 10 + r);
         path.AddBezierTo(10, 10, 10, 10, 10 + r, 10);
         path.CloseFigure();
-        canvas.PushClip(path);
     }
 
     [Fact]
@@ -191,6 +196,90 @@ public class GpuTextTests
         {
             for (var c = 0; c < 4; c++)
                 Assert.Equal(untouched[(y * stride) + (x * 4) + c], actual[(y * stride) + (x * 4) + c]);
+        }
+    }
+
+    [Fact]
+    public async Task AShapeOnlyGeometryClip_ClipsTheSamePixelsAsAnOrdinaryOne_AndHoldsNoSurface()
+    {
+        using var context = await ContextAsync();
+
+        void Shapes(Win2dCanvas canvas, bool hint)
+        {
+            using var path = canvas.GetGraphicsPath();
+            RoundedCardPath(path);
+            if (hint)
+                canvas.PushClipAroundShapes(path);
+            else
+                canvas.PushClip(path);
+
+            canvas.DrawRectangle(context.GetSolidBrush(PaintColor.FromArgb(255, 200, 40, 40)), 0, 0, Width, Height);
+            canvas.PopClip();
+        }
+
+        var ordinary = Render(context, gpu: true, (canvas, font) => Shapes(canvas, hint: false));
+        var hinted = Render(context, gpu: true, (canvas, font) => Shapes(canvas, hint: true));
+
+        Assert.Equal(ordinary, hinted);
+        Assert.Equal(0, context.Counts.Total);
+    }
+
+    [Fact]
+    public async Task TextInsideAShapeOnlyClip_StillDrawsAndStaysInsideTheGeometry()
+    {
+        using var context = await ContextAsync();
+        var untouched = Render(context, gpu: true, (canvas, font) => { });
+        var actual = Render(context, gpu: true, (canvas, font) =>
+        {
+            using var path = canvas.GetGraphicsPath();
+            RoundedCardPath(path);
+            canvas.PushClipAroundShapes(path);
+            canvas.DrawString(Sample, font, PaintColor.White, new PaintPoint(16, 14), new Core.Size(290, 20));
+            canvas.PopClip();
+        });
+
+        Assert.NotEqual(untouched, actual);
+        const int stride = (int)Width * 4;
+        foreach (var (x, y) in new[] { (0, 0), ((int)Width - 1, (int)Height - 1) })
+        {
+            for (var c = 0; c < 4; c++)
+                Assert.Equal(untouched[(y * stride) + (x * 4) + c], actual[(y * stride) + (x * 4) + c]);
+        }
+    }
+
+    [Fact]
+    public async Task TextInsideASurfaceClip_IsDrawnWhereItWouldBeWithoutTheClip_WhateverThePlaceOfTheClip()
+    {
+        using var context = await ContextAsync();
+
+        // The clip's surface is only as big as the clip and starts at its origin; the text in it is moved with it and must land on the same pixels.
+        foreach (var dpi in new[] { 96f, 144f })
+        {
+            var free = Render(context, gpu: true, (canvas, font) =>
+                canvas.DrawString(Sample, font, PaintColor.White, new PaintPoint(16, 14), new Core.Size(290, 20)), dpi);
+            var clipped = Render(context, gpu: true, (canvas, font) =>
+            {
+                RoundedCard(canvas);
+                canvas.DrawString(Sample, font, PaintColor.White, new PaintPoint(16, 14), new Core.Size(290, 20));
+                canvas.PopClip();
+            }, dpi);
+            var nested = Render(context, gpu: true, (canvas, font) =>
+            {
+                RoundedCard(canvas);
+                canvas.PushTransform(Matrix3x2.CreateTranslation(3, 2));
+                canvas.PushClip(new Rect(0, 0, Width, Height));
+                canvas.PushTransform(Matrix3x2.CreateTranslation(-3, -2));
+                canvas.DrawString(Sample, font, PaintColor.White, new PaintPoint(16, 14), new Core.Size(290, 20));
+                canvas.PopTransform();
+                canvas.PopClip();
+                canvas.PopTransform();
+                canvas.PopClip();
+            }, dpi);
+
+            var (meanClipped, maxClipped, _) = Compare(free, clipped);
+            Assert.True(meanClipped < 0.05 && maxClipped <= 3, $"{dpi} dpi: mean {meanClipped:F3}, max {maxClipped}");
+            var (meanNested, maxNested, _) = Compare(free, nested);
+            Assert.True(meanNested < 0.05 && maxNested <= 3, $"{dpi} dpi nested: mean {meanNested:F3}, max {maxNested}");
         }
     }
 

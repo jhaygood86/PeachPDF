@@ -31,6 +31,7 @@ namespace PeachPDF.SourceGenerators.Emit
         {
             DataTypeKind.Unsupported => "false",
             DataTypeKind.Length => "global::PeachBrackets.Html.Parse.CssValueParser.IsValidLength(value)",
+            DataTypeKind.NonNegativeLength => "global::PeachBrackets.Html.Parse.CssValueParser.IsValidNonNegativeLength(value)",
             DataTypeKind.Color => "parser.IsColorValid(value)",
             DataTypeKind.CurrentColor => "value.Equals(\"currentcolor\", global::System.StringComparison.OrdinalIgnoreCase)",
             DataTypeKind.Transform => "global::PeachBrackets.Html.Parse.CssValueParser.IsValidTransformValue(value)",

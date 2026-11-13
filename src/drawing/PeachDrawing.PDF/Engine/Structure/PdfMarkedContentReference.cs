@@ -42,28 +42,26 @@ internal sealed class PdfMarkedContentReference : PdfDictionary
     /// <summary>
     /// Predefined keys of this dictionary.
     /// </summary>
-    internal sealed class Keys : KeysBase
+    internal sealed class Keys
     {
         // Reference: ISO 32000-1 Table 324 - Entries in a marked-content reference dictionary
 
-        [PdfKey(PdfKeyType.Name | PdfKeyType.Required, FixedValue = "MCR")]
+        /// <summary>(Required)</summary>
         public const string Type = "/Type";
 
-        [PdfKey(PdfKeyType.Dictionary | PdfKeyType.Optional)]
+        /// <summary>(Optional)</summary>
         public const string Pg = "/Pg";
 
-        [PdfKey(PdfKeyType.Stream | PdfKeyType.Optional)]
+        /// <summary>(Optional)</summary>
         public const string Stm = "/Stm";
 
-        [PdfKey(PdfKeyType.Optional)]
+        /// <summary>(Optional)</summary>
         public const string StmOwn = "/StmOwn";
 
-        [PdfKey(PdfKeyType.Integer | PdfKeyType.Required)]
+        /// <summary>(Required)</summary>
         public const string MCID = "/MCID";
 
-        public static PdfDictionaryMetadata Meta { get; } = CreateMeta(typeof(Keys));
 
     }
 
-    internal override PdfDictionaryMetadata Meta => Keys.Meta;
 }

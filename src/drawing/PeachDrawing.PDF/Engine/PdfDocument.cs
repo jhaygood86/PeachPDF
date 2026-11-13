@@ -37,7 +37,7 @@ internal sealed class PdfDocument : PdfObject, IDisposable
     {
         //PdfDocument.Gob.AttatchDocument(Handle);
 
-        _creation = DateTime.Now;
+        _creation = PdfEntropy.Now();
         _state = DocumentState.Created;
         _version = 14;
         Initialize();
@@ -54,7 +54,7 @@ internal sealed class PdfDocument : PdfObject, IDisposable
     {
         //PdfDocument.Gob.AttatchDocument(Handle);
 
-        _creation = DateTime.Now;
+        _creation = PdfEntropy.Now();
         _state = DocumentState.Created;
         Initialize();
         Info.CreationDate = _creation;
@@ -163,11 +163,6 @@ internal sealed class PdfDocument : PdfObject, IDisposable
         if (!CanModify)
             throw new InvalidOperationException("The document cannot be modified.");
 
-        // TODO: more diagnostic checks
-        string message = "";
-        if (!CanSave(ref message))
-            throw new InvalidOperationException(message);
-
         PdfWriter? writer = null;
         try
         {
@@ -268,7 +263,7 @@ internal sealed class PdfDocument : PdfObject, IDisposable
             writer.WriteRaw("trailer\n");
             _trailer.Elements.SetInteger("/Size", count + 1);
             _trailer.WriteObject(writer);
-            writer.WriteEof(this, startxref);
+            writer.WriteEof(startxref);
 
         }
         finally
@@ -289,15 +284,15 @@ internal sealed class PdfDocument : PdfObject, IDisposable
     {
         PdfDocumentInformation info = Info;
 
-        string pdfSharpProducer = PdfProductInfo.Producer;
+        string defaultProducer = PdfProductInfo.Producer;
 
         // Set Creator if value is undefined.
         if (info.Elements[PdfDocumentInformation.Keys.Creator] is null)
-            info.Creator = pdfSharpProducer;
+            info.Creator = defaultProducer;
 
         string producer = info.Producer;
         if (producer.Length == 0)
-            producer = pdfSharpProducer;
+            producer = defaultProducer;
         info.Elements.SetString(PdfDocumentInformation.Keys.Producer, producer);
 
         // Prepare used fonts.
@@ -314,14 +309,6 @@ internal sealed class PdfDocument : PdfObject, IDisposable
         _irefTable.Renumber();
     }
 
-    /// <summary>
-    /// Determines whether the document can be saved.
-    /// </summary>
-    public bool CanSave(ref string message)
-    {
-        return true;
-    }
-
     internal bool HasVersion(string version)
     {
         return string.Compare(Catalog.Version, version) >= 0;
@@ -335,7 +322,7 @@ internal sealed class PdfDocument : PdfObject, IDisposable
         get
         {
             if (_options is null)
-                _options = new PdfDocumentOptions(this);
+                _options = new PdfDocumentOptions();
             return _options;
         }
     }
@@ -370,25 +357,23 @@ internal sealed class PdfDocument : PdfObject, IDisposable
         {
             if (CanModify)
                 return Pages.Count;
-            // PdfOpenMode is InformationOnly
+            // Not modifiable (an imported or read-only document): read the count from the page tree root.
             PdfDictionary pageTreeRoot = (PdfDictionary)Catalog.Elements.GetObject(PdfCatalog.Keys.Pages)!;
             return pageTreeRoot.Elements.GetInteger(PdfPages.Keys.Count);
         }
     }
 
-// TODO: make private
-
     /// <summary>
     /// Gets the full qualified file name if the document was read form a file, or an empty string otherwise.
     /// </summary>
     public string FullPath => _fullPath;
-    internal string _fullPath = string.Empty; // TODO: make private
+    internal string _fullPath = string.Empty;
 
     /// <summary>
     /// Gets a Guid that uniquely identifies this instance of PdfDocument.
     /// </summary>
     public Guid Guid => _guid;
-    Guid _guid = Guid.NewGuid();
+    Guid _guid = PdfEntropy.NewGuid();
 
     /// <summary>
     /// Returns a value indicating whether the document was newly created or opened from an existing document.
@@ -501,7 +486,7 @@ internal sealed class PdfDocument : PdfObject, IDisposable
     /// <summary>
     /// Gets the document form table that holds all form external objects used in the current document.
     /// </summary>
-    internal PdfFormXObjectTable FormTable  // TODO: Rename to ExternalDocumentTable.
+    internal PdfFormXObjectTable FormTable
     {
         get => _formTable ?? (_formTable = new PdfFormXObjectTable(this));
     }
@@ -550,170 +535,7 @@ internal sealed class PdfDocument : PdfObject, IDisposable
     public void AddNamedDestination(string destinationName, int destinationPage, PdfNamedDestinationParameters parameters)
         => Internals.Catalog.Names.AddNamedDestination(destinationName, destinationPage, parameters);
 
-    public void ConsolidateImages()
-    {
-        var images = ImageInfo.FindAll(this);
-
-        var mapXObjectToIdentity = new Dictionary<PdfDictionary, ImageIdentity>(ReferenceEqualityComparer.Instance);
-        var mapIdentityToPdfItem = new Dictionary<ImageIdentity, PdfItem>();
-
-        // Work out an identity for each image XObject and build lookups for all images.
-        foreach (ImageInfo img in images)
-        {
-            mapXObjectToIdentity[img.XObject] = img.Identity;
-            mapIdentityToPdfItem[img.Identity] = img.Item.Value;
-        }
-
-        // Set the PdfItem for each image to the one chosen for its identity.
-        foreach (ImageInfo img in images)
-        {
-            img.XObjects.Elements[img.Item.Key] = mapIdentityToPdfItem[mapXObjectToIdentity[img.XObject]];
-        }
-    }
-
-    /// <summary>
-    /// Everything that affects how an image XObject renders: its content-stream bytes, the dictionary attributes
-    /// that give those bytes meaning (/ColorSpace, /Width, /Height, /BitsPerComponent, /Decode, /Interpolate - the
-    /// same attributes <see cref="Advanced.PdfImageTable"/>'s own embed-time selector treats as part of an image's
-    /// identity) and any /SMask (recursively, since the mask is itself an image XObject that can differ the same
-    /// way). Two images are safe to consolidate only when the whole identity matches - matching content stream
-    /// bytes alone is not enough, since e.g. the same base color stream with and without an /SMask must not be
-    /// merged, or one page silently loses (or gains) transparency.
-    /// <para>
-    /// Equality compares the bytes themselves rather than a digest of them, so two different images can never be
-    /// taken for one another, and nothing here depends on a hash algorithm the host may not permit.
-    /// </para>
-    /// </summary>
-    internal sealed class ImageIdentity : IEquatable<ImageIdentity>
-    {
-        // How many bytes at each end of a stream feed the bucket hash; equality still compares every byte.
-        private const int HashedBytes = 64;
-
-        private readonly byte[] _data;
-        private readonly string _attributes;
-        private readonly List<byte[]> _referencedStreams;
-        private readonly ImageIdentity? _softMask;
-
-        private ImageIdentity(byte[] data, string attributes, List<byte[]> referencedStreams, ImageIdentity? softMask)
-        {
-            _data = data;
-            _attributes = attributes;
-            _referencedStreams = referencedStreams;
-            _softMask = softMask;
-        }
-
-        public static ImageIdentity Of(PdfDictionary xObject)
-        {
-            var referencedStreams = new List<byte[]>();
-            var sb = new StringBuilder();
-            sb.Append(DescribeItem(xObject.Elements["/ColorSpace"], referencedStreams));
-            sb.Append('|').Append(DescribeItem(xObject.Elements["/Width"], referencedStreams));
-            sb.Append('|').Append(DescribeItem(xObject.Elements["/Height"], referencedStreams));
-            sb.Append('|').Append(DescribeItem(xObject.Elements["/BitsPerComponent"], referencedStreams));
-            sb.Append('|').Append(DescribeItem(xObject.Elements["/Decode"], referencedStreams));
-            sb.Append('|').Append(DescribeItem(xObject.Elements["/Interpolate"], referencedStreams));
-
-            var softMask = xObject.Elements.GetDictionary("/SMask");
-            return new ImageIdentity(
-                xObject.Stream?.Value ?? [],
-                sb.ToString(),
-                referencedStreams,
-                softMask is not null ? Of(softMask) : null);
-        }
-
-        /// <summary>
-        /// Renders an arbitrary dictionary-value PdfItem (a /ColorSpace name, an /Indexed or /ICCBased
-        /// array, a plain scalar, or an indirect reference to any of these) into a string that differs
-        /// whenever the referenced content differs. Dereferences through PdfReference and recurses into
-        /// array elements and referenced streams so two distinct objects that describe the same content
-        /// (e.g. two indirect but byte-identical ICC profiles) still compare equal, rather than being
-        /// compared by object identity. A referenced stream's bytes are what matters for identity, not
-        /// which object number holds them, so they are collected into <paramref name="streams"/> in the
-        /// order met and stood for in the text by their position there.
-        /// </summary>
-        private static string DescribeItem(PdfItem? item, List<byte[]> streams)
-        {
-            switch (item)
-            {
-                case null:
-                    return "«null»";
-                case PdfReference reference:
-                    return DescribeItem(reference.Value, streams);
-                case PdfArray array:
-                    return "[" + string.Join(",", array.Select(element => DescribeItem(element, streams))) + "]";
-                case PdfDictionary dict:
-                    if (dict.Stream is null)
-                        return "«dict»";
-                    streams.Add(dict.Stream.Value);
-                    return "«stream#" + (streams.Count - 1) + "»";
-                default:
-                    return item.ToString() ?? "«null»";
-            }
-        }
-
-        public bool Equals(ImageIdentity? other)
-        {
-            if (ReferenceEquals(this, other))
-                return true;
-            if (other is null
-                || _attributes != other._attributes
-                || _referencedStreams.Count != other._referencedStreams.Count
-                || !_data.AsSpan().SequenceEqual(other._data))
-                return false;
-
-            for (int i = 0; i < _referencedStreams.Count; i++)
-            {
-                if (!_referencedStreams[i].AsSpan().SequenceEqual(other._referencedStreams[i]))
-                    return false;
-            }
-
-            return Equals(_softMask, other._softMask);
-        }
-
-        public override bool Equals(object? obj) => obj is ImageIdentity other && Equals(other);
-
-        public override int GetHashCode()
-        {
-            var hash = new HashCode();
-            hash.Add(_attributes);
-            hash.Add(_data.Length);
-            hash.AddBytes(_data.AsSpan(0, Math.Min(HashedBytes, _data.Length)));
-            hash.AddBytes(_data.AsSpan(Math.Max(0, _data.Length - HashedBytes)));
-            hash.Add(_softMask);
-            return hash.ToHashCode();
-        }
-    }
-
-    internal class ImageInfo
-    {
-        public PdfDictionary XObjects { get; }
-        public KeyValuePair<string, PdfItem> Item { get; }
-        public PdfDictionary XObject { get; }
-        public ImageIdentity Identity { get; }
-
-        public ImageInfo(PdfDictionary xObjects, KeyValuePair<string, PdfItem> item, PdfDictionary xObject)
-        {
-            XObjects = xObjects;
-            Item = item;
-            XObject = xObject;
-            Identity = ImageIdentity.Of(xObject);
-        }
-
-        /// <summary>
-        /// Get info for each image in the document.
-        /// </summary>
-        internal static List<ImageInfo> FindAll(PdfDocument doc) =>
-            [.. doc.Pages.Cast<PdfPage>()
-                .Select(page => page.Elements.GetDictionary("/Resources"))
-                .Select(resources => resources?.Elements?.GetDictionary("/XObject"))
-                .Where(xObjects => xObjects?.Elements is not null)
-                .SelectMany(xObjects =>
-                    from item in xObjects!.Elements
-                    let xObject = (item.Value as PdfReference)?.Value as PdfDictionary
-                    where xObject?.Elements?.GetString("/Subtype") == "/Image"
-                    select new ImageInfo(xObjects, item, xObject)
-                )];
-    }
+    public void ConsolidateImages() => PdfImageConsolidator.Consolidate(this);
 
     internal PdfTrailer _trailer = null!;
     internal PdfCrossReferenceTable _irefTable = null!;

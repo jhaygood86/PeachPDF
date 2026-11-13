@@ -149,9 +149,19 @@ namespace PeachBrackets.Html.Parse
             // applied later in CascadeApplyStyles, not here).
             if (!htmlContainer.IgnoreAuthorStyleSheets)
             {
-                using (EngineTelemetry.Source.StartActivity("css.collect"))
-                    await PrefetchStylesheetsAsync(root, htmlContainer);
+                // Root is only assigned once this method returns, so the tree being built is handed to the container for the length of the
+                // collection: a <link>/@import stylesheet resolves against the document's <base href>, not only the host's base address.
+                htmlContainer.ParsingRoot = root;
+                try
+                {
+                    using (EngineTelemetry.Source.StartActivity("css.collect"))
+                        await PrefetchStylesheetsAsync(root, htmlContainer);
                     (cssData, _) = await CascadeParseStyles(root, htmlContainer, cssData, cssDataChanged);
+                }
+                finally
+                {
+                    htmlContainer.ParsingRoot = null;
+                }
             }
 
             var mediaType = string.IsNullOrEmpty(htmlContainer.Media) ? "print" : htmlContainer.Media;
@@ -4715,10 +4725,8 @@ namespace PeachBrackets.Html.Parse
 
         private static void CorrectAbsolutelyPositionedInlineElements(CssBox box)
         {
-            // Inline <svg>/<math> are foreign content: their descendants are read directly by
-            // SvgTreeBuilder/MathTreeBuilder and are never laid out as HTML boxes, so HTML box-tree
-            // normalization must not descend into (and restructure) them. See CssBoxSvg / issue #159.
-            if (box is CssBoxSvg or CssBoxMath) return;
+            // An inline <svg>/<math> is a replaced element like an <img>, and takes the same absolute wrapper below; it is only its descendants that
+            // the walk must not enter (see the end of this method).
             if (box is { DerivedStyle.ActualDisplay: Keywords.Inline, Position.Value: PositionMode.Absolute })
             {
                 var blockBox = new CssBox(box.ParentBox, null);
@@ -4745,6 +4753,11 @@ namespace PeachBrackets.Html.Parse
 
                 box.ParentBox = blockBox;
             }
+
+            // Inline <svg>/<math> are foreign content: their descendants are read directly by
+            // SvgTreeBuilder/MathTreeBuilder and are never laid out as HTML boxes, so HTML box-tree
+            // normalization must not descend into (and restructure) them. See CssBoxSvg / issue #159.
+            if (box is CssBoxSvg or CssBoxMath) return;
 
             foreach (var childBox in box.Boxes.ToArray())
             {

@@ -74,7 +74,7 @@ namespace PeachBrackets.Html.Pages
         }
 
         /// <summary>Paints only the animated boxes drawn apart from the page; <paramref name="lease"/> supplies the canvas.</summary>
-        public void PaintAnimated(FragmentainerFragment fragmentainer, IReadOnlyList<PeachBrackets.Html.Fragments.BoxFragment> roots, Func<CanvasLease> lease)
+        public void PaintAnimated(FragmentainerFragment fragmentainer, IReadOnlyList<PeachBrackets.Html.Paint.StackingOrder.StackingParticipant> roots, Func<CanvasLease> lease)
         {
             using var animatedCanvas = lease();
             _container.PerformPaintAnimated(animatedCanvas, fragmentainer, roots);

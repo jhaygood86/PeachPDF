@@ -108,7 +108,7 @@
         {
           "type": "string",
           "enum": [
-            "unsupported", "length", "color", "current-color", "transform", "transform-list", "keyword", "integer", "number", "ratio", "custom-ident-or-auto",
+            "unsupported", "length", "nonnegative-length", "color", "current-color", "transform", "transform-list", "keyword", "integer", "number", "ratio", "custom-ident-or-auto",
             "svg-paint", "svg-opacity", "svg-length", "svg-length-list", "svg-transform", "svg-reference"
           ],
           "description": "Every property must declare a real, specific grammar here (or use 'cssom-grammar'/'parsed' below to delegate to an existing converter) — as of issue #909's allocation-reduction pass, this schema no longer has a 'cssom' escape hatch ('no dedicated grammar modeled, ask the real CSS-OM property for this name at full tokenizer cost') at all; every property that used to rely on it now either has a dedicated grammar type or calls a real existing converter/grammar directly via 'cssom-grammar'. 'ratio' is [ auto || <ratio> ] (aspect-ratio), validated span-based via AspectRatioGrammar.TryParseFast with no tokenizer at all. 'transform-list' is the real, permissive <transform-list> grammar (the 'transform' property's own real dispatch — see CssValueParser.IsSyntacticallyValidTransformList), distinct from the stricter 'transform' data type below which is paint-support-only and used for supportsDataType/@supports. 'custom-ident-or-auto' is \"auto | <custom-ident>\" (currently only 'page''s page-name grammar, CSS Paged Media 3 §4.2), validated span-based via CssValueParser.IsValidPageName — 'page' has no real PropertyFactory registration at all, so this is a deliberate, real narrowing from the former cssom clause's unconditional accept-anything (an unregistered name never reaches the tokenizer) to the actual spec grammar."
@@ -185,7 +185,7 @@
             "enumType": { "type": "string" },
             "keywordMap": { "type": "string" },
             "fallback": { "type": "string" },
-            "valueType": { "type": "string", "enum": ["integer", "number", "length", "length-or-unitless", "percentage"], "description": "The non-keyword side's grammar and TValue — must match a TryParse-shaped parser (int.TryParse, CssValueParser.TryParseNumber, Length.TryParse, CssValueParser.TryParseLengthOrUnitless, CssValueParser.TryParseNonNegativePercentage) RegistryEmitter knows how to call." },
+            "valueType": { "type": "string", "enum": ["integer", "number", "length", "nonnegative-length", "length-or-unitless", "percentage"], "description": "The non-keyword side's grammar and TValue — must match a TryParse-shaped parser (int.TryParse, CssValueParser.TryParseNumber, Length.TryParse, CssValueParser.TryParseLengthOrUnitless, CssValueParser.TryParseNonNegativePercentage) RegistryEmitter knows how to call." },
             "min": { "type": "number", "description": "Narrows an \"integer\" valueType's validation clause — same field/meaning as the plain \"integer\" DataTypeKind's own \"min\" (e.g. column-count's <integer> must be >= 1) — see KeywordOrValueGrammar." },
             "max": { "type": "number", "description": "Narrows an \"integer\" valueType's validation clause — same field/meaning as the plain \"integer\" DataTypeKind's own \"max\" — see KeywordOrValueGrammar." }
           }

@@ -77,9 +77,6 @@ internal sealed class PdfTilingPattern : PdfDictionaryWithContentStream
         Elements.SetInteger("/Length", Stream.Length);
     }
 
-    ///// <summary>
-    ///// Setups the shading pattern from the specified brush.
-    ///// </summary>
 
     /// <summary>
     /// Common keys for all streams.
@@ -90,14 +87,12 @@ internal sealed class PdfTilingPattern : PdfDictionaryWithContentStream
         /// (Optional) The type of PDF object that this dictionary describes; if present,
         /// must be Pattern for a pattern dictionary.
         /// </summary>
-        [PdfKey(PdfKeyType.Name | PdfKeyType.Required)]
         public const string Type = "/Type";
 
         /// <summary>
         /// (Required) A code identifying the type of pattern that this dictionary describes;
         /// must be 1 for a tiling pattern.
         /// </summary>
-        [PdfKey(PdfKeyType.Integer | PdfKeyType.Required)]
         public const string PatternType = "/PatternType";
 
         /// <summary>
@@ -113,7 +108,6 @@ internal sealed class PdfTilingPattern : PdfDictionaryWithContentStream
         /// otherwise, an error occurs. The content stream may paint an image mask, however,
         /// since it does not specify any color information.
         /// </summary>
-        [PdfKey(PdfKeyType.Integer | PdfKeyType.Required)]
         public const string PaintType = "/PaintType";
 
         /// <summary>
@@ -130,7 +124,6 @@ internal sealed class PdfTilingPattern : PdfDictionaryWithContentStream
         /// 3: Constant spacing and faster tiling. Pattern cells are spaced consistently as in tiling
         /// type 1 but with additional distortion permitted to enable a more efficient implementation. 
         /// </summary>
-        [PdfKey(PdfKeyType.Integer | PdfKeyType.Required)]
         public const string TilingType = "/TilingType";
 
         /// <summary>
@@ -138,14 +131,12 @@ internal sealed class PdfTilingPattern : PdfDictionaryWithContentStream
         /// coordinates of the left, bottom, right, and top edges, respectively, of the pattern
         /// cell's bounding box. These boundaries are used to clip the pattern cell.
         /// </summary>
-        [PdfKey(PdfKeyType.Rectangle | PdfKeyType.Optional)]
         public const string BBox = "/BBox";
 
         /// <summary>
         /// (Required) The desired horizontal spacing between pattern cells, measured in the
         /// pattern coordinate system.
         /// </summary>
-        [PdfKey(PdfKeyType.Real | PdfKeyType.Required)]
         public const string XStep = "/XStep";
 
         /// <summary>
@@ -154,31 +145,19 @@ internal sealed class PdfTilingPattern : PdfDictionaryWithContentStream
         /// pattern cell implied by the BBox entry. This allows tiling with irregularly shaped figures.
         /// XStep and YStep may be either positive or negative but not zero.
         /// </summary>
-        [PdfKey(PdfKeyType.Real | PdfKeyType.Required)]
         public const string YStep = "/YStep";
 
         /// <summary>
         /// (Required) A resource dictionary containing all of the named resources required by
         /// the pattern's content stream (see Section 3.7.2, "Resource Dictionaries").
         /// </summary>
-        [PdfKey(PdfKeyType.Dictionary | PdfKeyType.Required)]
         public new const string Resources = "/Resources";
 
         /// <summary>
         /// (Optional) An array of six numbers specifying the pattern matrix.
         /// Default value: the identity matrix [1 0 0 1 0 0].
         /// </summary>
-        [PdfKey(PdfKeyType.Array | PdfKeyType.Optional)]
         public const string Matrix = "/Matrix";
 
-        /// <summary>
-        /// Gets the KeysMeta for these keys.
-        /// </summary>
-        internal static PdfDictionaryMetadata Meta { get; } = CreateMeta(typeof(Keys));
     }
-
-    /// <summary>
-    /// Gets the KeysMeta of this dictionary type.
-    /// </summary>
-    internal override PdfDictionaryMetadata Meta => Keys.Meta;
 }

@@ -19,6 +19,7 @@ public sealed partial class Win2dCanvas
     {
         var list = new CanvasCommandList(_session);
         _context.Counts.CommandList(1);
+        Win2dPaintStatistics.Count(Win2dPaintStatistics.Counter.CommandList);
         try
         {
             var session = list.CreateDrawingSession();

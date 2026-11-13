@@ -130,7 +130,7 @@ downward. With the default of one unit per point, a canvas for a 400 x 300 point
 | `DefaultLanguage` | The language to assume when the document declares none; it drives hyphenation and language-dependent line breaking. |
 | `AnimationProgress` | Paint the document at a point in its animations, from 0 to 1, instead of its static look. |
 | `AnimationsEnabled` | Play the document's CSS animations, transitions and animated images over time; see [Animations and transitions](#animations-and-transitions). |
-| `SnapBoxDecorationsToCssPixels`, `SnapBorderWidthsToCssPixels` | Snap backgrounds, borders and border widths to whole CSS pixels, as a browser does. |
+| `SnapBoxDecorationsToCssPixels`, `SnapBorderWidthsToCssPixels` | Snap backgrounds, borders, border widths and the baseline of text to whole CSS pixels, as a browser does. On a canvas that lays the document out in CSS pixels (a `RasterRenderContext` with `PixelsPerPoint` of 96/72, as the WinUI view does), those land on whole device pixels. |
 | `CollectFormFields` | Collect form controls into `Annotations.FormFields`. |
 | `RecordTextRuns` | Let the document report where its text is (`TextRuns`), for selection, copy and find. |
 | `EnableIncrementalUpdates` | Allow `SetStyle` to restyle elements, and `ReplaceTextAsync` and its relatives to edit the text, of the laid-out document in place. |
@@ -440,9 +440,10 @@ while (document.HasRunningAnimations)
 - **The animated layer.** A host that keeps the page as a surface it does not repaint (a scroller, a set of tiles) paints `DocumentPaintLayer.Content` onto it and draws
   `DocumentPaintLayer.Animated` over it every frame, under `DocumentPaintLayer.ViewportAttached`. A promoted box is then not part of the surface at all: while it only moves or
   fades, `AnimationFrame.DirtyRegions` is empty for it and `AnimationFrame.OverlayChanged` says to draw the animated layer again. A box is drawn apart only when that cannot change
-  what covers what: nothing above it clips, transforms or composites it (an `overflow` other than `visible`, a stacking context), and no other positioned box that is drawn over
-  it, and no fixed or sticky box, overlaps where it is right now. A box that stops qualifying (another box moves over it) goes back to the content layer, and the frame says to
-  repaint where it is; one that never qualifies behaves as it always did. `DocumentPaintLayer.All` still draws every box in place, so a document that is painted in one pass,
+  what covers what: it is drawn under the `overflow` clips of its ancestors, with the whole stacking context (an `opacity` group, a filter, a transform) it is in, and with the positioned
+  boxes painted over it, so the layers draw what one pass would. It stays in the content layer when something it would sit over must sit over it instead (a fixed or sticky box meant to be under it,
+  in-flow content over a box with a negative `z-index`), when its group blends or reads its backdrop, or when the group is large. A box that stops qualifying goes back to the content layer,
+  and the frame says to repaint where it is; one that never qualifies behaves as it always did. `DocumentPaintLayer.All` still draws every box in place, so a document that is painted in one pass,
   or written to a PDF, is the same as before. The layer only exists on a `MediaType.Screen` document.
 - **Reduced motion.** The default `Preferences` report `prefers-reduced-motion: reduce`, so a style sheet that switches animation off for it does; pass
   `new UserPreferences { ReducedMotion = false }` along with `AnimationsEnabled` to let them play, and leave `AnimationsEnabled` off when the system asks for no motion.
@@ -602,6 +603,23 @@ A document asks for its images and web fonts one at a time, as layout reaches th
 their addresses first and can fetch them all at once; `HostResourceLoader.PrefetchAsync` does that (a few requests at a time) into the loader's response
 cache, so the requests that follow are answered from memory. `HtmlView` does this for you; a host with its own render context implements the interface
 the same way, or ignores it, and nothing changes.
+
+## The first document is slow: start-up time
+
+Most of the first document's time is the .NET JIT compiler, not the engine's own work: a news front page that loads and lays out in about 0.3 s once the code is warm
+takes about 1.6 s the first time in a process that is not compiled ahead of time. Three things change that, in the order they are worth doing:
+
+- **Compile ahead of time** when you publish the application (`PublishReadyToRun`, or Native AOT as the `peachpdf` command-line tool is): the same first load took about 0.85 s.
+- **A self-contained application can let the ahead-of-time compiler see the framework too**
+  (`<PublishReadyToRunCrossgen2ExtraArgs>--inputbubble</PublishReadyToRunCrossgen2ExtraArgs>` beside `SelfContained` and `PublishReadyToRun`), which precompiles the framework's generic
+  collections over the engine's own types: about 0.89 s down to 0.74 s. The compiled code is only valid for the exact framework it was compiled against, so this is for an application that ships its own runtime.
+- **`HtmlDocument.WarmUpAsync()`** runs a small document through load, layout and painting on a thread-pool thread, once per process, and returns the same task to every caller. Call it
+  when the application starts, or before it fetches the first page, so the compilation happens while the network is busy: the first load above fell from about 1.65 s to about 1.03 s
+  when it had a few hundred milliseconds to run in. An application that is compiled ahead of time gains little from it, and `HtmlView` calls it for you.
+- **`<TieredPGO>false</TieredPGO>`** in the application's project file turns off the extra instrumentation the runtime puts into code it compiles first, which a program that lives for a
+  few seconds never gets back: about 15% off the first load.
+
+The figures are for one machine and one page; measure on yours (a loop that loads the same document repeatedly shows the warm cost, one process per run the cold one).
 
 ## Timing a load
 

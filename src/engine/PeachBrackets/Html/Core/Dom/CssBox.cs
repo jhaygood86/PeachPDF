@@ -152,6 +152,7 @@ namespace PeachBrackets.Html.Dom
                 _parentBox = parentBox;
                 _parentBox.MaterializeForeignText();
                 _parentBox.Boxes.Add(this);
+                _parentBox.NoteAttached(this);
             }
 
             // Computed once here rather than walked live from NameComparison/GetAttribute (both hot
@@ -222,6 +223,7 @@ namespace PeachBrackets.Html.Dom
                 //Add to new parent
                 _parentBox?.MaterializeForeignText();
                 _parentBox?.Boxes.Add(this);
+                _parentBox?.NoteAttached(this);
             }
         }
 
@@ -322,6 +324,43 @@ namespace PeachBrackets.Html.Dom
         // Where a child was last found in Boxes. Walks that ask for each child's neighbours in turn (the previous sibling of every row of
         // a long table) would otherwise search the list from the start for each, which is quadratic in the number of siblings.
         private int _childIndexHint;
+
+        /// <summary>
+        /// True when no box in this box's subtree (itself included) is floated, as of the last <see cref="MarkFloatFreeSubtrees"/> and every attach
+        /// since (<see cref="NoteAttached"/>). The float scans, which look through every earlier sibling's whole subtree for each line, skip such a
+        /// subtree: it can hold nothing they look for. False is "unknown", the state of any box made after the mark, so it is always safe to scan.
+        /// </summary>
+        internal bool FloatFree { get; private set; }
+
+        /// <summary>
+        /// Sets <see cref="FloatFree"/> through the tree below <paramref name="box"/>, and returns it for <paramref name="box"/>. Runs at the start of each
+        /// layout pass when the document has a float at all.
+        /// </summary>
+        internal static bool MarkFloatFreeSubtrees(CssBox box)
+        {
+            var free = !box.IsFloated;
+
+            foreach (var child in box.Boxes)
+            {
+                if (!MarkFloatFreeSubtrees(child)) free = false;
+            }
+
+            box.FloatFree = free;
+            return free;
+        }
+
+        /// <summary>
+        /// Takes away the <see cref="FloatFree"/> of every box above <paramref name="child"/>, which has just been put among its parent's children,
+        /// when it is or may hold a float. A child with nothing below it that is not floated cannot, so a new line box's anonymous wrapper costs nothing.
+        /// </summary>
+        private void NoteAttached(CssBox child)
+        {
+            if (!child.IsFloated && (child.FloatFree || child.Boxes.Count == 0)) return;
+
+            // A box that is its own parent (a malformed tree some tests build) ends the walk rather than spinning on it.
+            for (var box = this; box is not null; box = ReferenceEquals(box._parentBox, box) ? null : box._parentBox)
+                box.FloatFree = false;
+        }
 
         /// <summary>Set when table layout put a <see cref="CssSpacingBox"/> (a rowspan continuation marker) among this box's children.</summary>
         internal bool HoldsSpacingBox { get; set; }
@@ -1729,6 +1768,9 @@ namespace PeachBrackets.Html.Dom
         /// </summary>
         internal double? StaticRightEdge { get => _rare?.StaticRightEdge; set { if (_rare is null) { if (value is null) return; _rare = new BoxRareState(); } _rare.StaticRightEdge = value; } }
 
+        /// <summary>The grid area an absolutely positioned child of a grid container is placed against, in the same coordinates as <see cref="Location"/>: the area its <c>grid-column</c>/<c>grid-row</c> lines name, where a line that does not exist is the padding edge (css-grid-1 section 9). Null when the child has no such area.</summary>
+        internal Rect? GridContainingArea { get => _rare?.GridContainingArea; set { if (_rare is null) { if (value is null) return; _rare = new BoxRareState(); } _rare.GridContainingArea = value; } }
+
         internal (double X, double Y)? InlineStaticPosition { get => _rare is null ? default((double X, double Y)?) : _rare.InlineStaticPosition; set { if (_rare is null) { if (EqualityComparer<(double X, double Y)?>.Default.Equals(value, default((double X, double Y)?))) return; _rare = new BoxRareState(); } _rare.InlineStaticPosition = value; } }
 
         /// <summary>
@@ -1889,7 +1931,10 @@ namespace PeachBrackets.Html.Dom
         public void SetAllBoxes(CssBox fromBox)
         {
             foreach (var childBox in fromBox.Boxes)
+            {
                 childBox._parentBox = this;
+                NoteAttached(childBox);
+            }
 
             Boxes.AddRange(fromBox.Boxes);
             fromBox.Boxes.Clear();
@@ -7934,17 +7979,32 @@ namespace PeachBrackets.Html.Dom
                     // and the same child at `bottom: 0; right: 0` agreed with Chrome before and
                     // after, as does every offset once the ancestor's padding is zero.
                     var inlineContainingBlock = DomUtils.InlineContainingBlockOf(nearestPositionedAncestor);
-                    var containingBlockOrigin = nearestPositionedAncestor.FirstColumnFragmentOrigin
-                                                ?? nearestPositionedAncestor.Location;
+                    // With no positioned ancestor the containing block is the initial containing block (CSS 2.1 section 10.1): the page area, whose
+                    // corner is where the container's margins end - not the root box, whose top also carries whatever margin its first descendant
+                    // collapsed through it (the body's 8px by default), which made `top: 220px` land at 228.
+                    var containingBlockOrigin = nearestPositionedAncestor.EffectiveParentBox is null
+                                                && !DomUtils.FormsAbsoluteContainingBlock(nearestPositionedAncestor)
+                                                && child.HtmlContainer is { } initialContainer
+                        ? new PaintPoint(initialContainer.MarginLeft, initialContainer.MarginTop)
+                        : nearestPositionedAncestor.FirstColumnFragmentOrigin ?? nearestPositionedAncestor.Location;
                     var containingBlockLeft = inlineContainingBlock?.Left
                                               ?? containingBlockOrigin.X + nearestPositionedAncestor.ActualBorderLeftWidth;
                     var containingBlockTop = inlineContainingBlock?.Top
                                              ?? containingBlockOrigin.Y + nearestPositionedAncestor.ActualBorderTopWidth;
 
-                    var left = containingBlockLeft + child.ActualMarginLeft +
-                               ResolveOffsetOrZero(child.Left, AbsoluteContainingBlockWidth(nearestPositionedAncestor), child);
+                    // A child of a grid container that is its containing block is placed against the grid area its grid-column/grid-row lines name
+                    // (css-grid-1 section 9), which the grid layout stated; its offsets and percentages resolve against that area, not the padding box.
+                    var gridArea = ReferenceEquals(nearestPositionedAncestor, child.ParentBox) ? child.GridContainingArea : null;
+                    if (gridArea is { } area)
+                    {
+                        containingBlockLeft = area.X;
+                        containingBlockTop = area.Y;
+                    }
 
-                    child._placedPercentageInsetTop = ResolveOffsetOrZero(child.Top, AbsoluteContainingBlockHeight(nearestPositionedAncestor), child);
+                    var left = containingBlockLeft + child.ActualMarginLeft +
+                               ResolveOffsetOrZero(child.Left, gridArea?.Width ?? AbsoluteContainingBlockWidth(nearestPositionedAncestor), child);
+
+                    child._placedPercentageInsetTop = ResolveOffsetOrZero(child.Top, gridArea?.Height ?? AbsoluteContainingBlockHeight(nearestPositionedAncestor), child);
                     var top = containingBlockTop + child.ActualMarginTop + child._placedPercentageInsetTop;
 
                     // With both offsets on an axis `auto` the box sits at its static position, where it would be in flow (CSS 2.1 sections 10.3.7
@@ -7955,6 +8015,14 @@ namespace PeachBrackets.Html.Dom
                         if (staticPosition.Left is { } staticLeft) left = staticLeft + child.ActualMarginLeft;
                         if (staticPosition.Top is { } staticTop) top = staticTop + child.ActualMarginTop;
                         child.StaticRightEdge = staticPosition.RightEdge;
+                    }
+
+                    // In a grid the static position rectangle is the grid area (css-grid-1 section 9: as if the box were the only item in it).
+                    if (gridArea is { } staticArea)
+                    {
+                        if (!child.Left.Value.IsValue) left = staticArea.X + child.ActualMarginLeft;
+                        if (!child.Top.Value.IsValue) top = staticArea.Y + child.ActualMarginTop;
+                        child.StaticRightEdge = null;
                     }
 
                     child.Location = new PaintPoint(left, top);
@@ -8286,8 +8354,10 @@ namespace PeachBrackets.Html.Dom
                     var nearestPositionedAncestor = DomUtils.GetNearestPositionedAncestor(this);
                     var inlineContainingBlock = DomUtils.InlineContainingBlockOf(nearestPositionedAncestor);
 
-                    var right = CssValueParser.ParseLength(Right.Value.Value!.Value, AbsoluteContainingBlockWidth(nearestPositionedAncestor), this);
-                    var actualRight = (inlineContainingBlock?.Right
+                    var rightArea = ReferenceEquals(nearestPositionedAncestor, ParentBox) ? GridContainingArea : null;
+                    var right = CssValueParser.ParseLength(Right.Value.Value!.Value, rightArea?.Width ?? AbsoluteContainingBlockWidth(nearestPositionedAncestor), this);
+                    var actualRight = (rightArea?.Right
+                                       ?? inlineContainingBlock?.Right
                                        ?? nearestPositionedAncestor.ClientRight + nearestPositionedAncestor.ActualPaddingRight) - right;
 
                     var delta = actualRight - ActualRight;
@@ -9457,6 +9527,88 @@ namespace PeachBrackets.Html.Dom
                 or Keywords.Grid or Keywords.InlineGrid;
 
         /// <summary>
+        /// The intrinsic width of a wrapping flex column with a definite height (css-flexbox-1 §9.9.1): the items are broken into lines (columns)
+        /// at that height, and the container is as wide as its lines side by side, plus the gaps between them. Only for items whose main size is
+        /// definite (a length <c>flex-basis</c>, or a <c>height</c>); content-sized items would need a layout to know where the lines break, and
+        /// the caller then measures the container as it always did.
+        /// </summary>
+        /// <returns>whether <paramref name="box"/> is such a container and every item's main size is known</returns>
+        private static bool TryMeasureFlexColumnWrapWidth(Canvas g, CssBox box, out double min, out double max)
+        {
+            min = max = 0;
+
+            if (box.DerivedStyle.ActualDisplay is not (Keywords.Flex or Keywords.InlineFlex)
+                || box.FlexDirection.Value is not (Css.FlexDirection.Column or Css.FlexDirection.ColumnReverse)
+                || box.FlexWrap.Value is Css.FlexWrap.NoWrap
+                || box.WritingMode.Value.IsVertical()
+                || !CssValueParser.IsValidLength(box.Height) || box.Height.EndsWith('%')
+                || box.Boxes.Count == 0)
+            {
+                return false;
+            }
+
+            var contentHeight = CssValueParser.ParseLength(box.Height, 0, box) + box.ActualBoxSizeIncludedHeight
+                - (box.ActualPaddingTop + box.ActualPaddingBottom + box.ActualBorderTopWidth + box.ActualBorderBottomWidth);
+            var rowGap = box.FlexRowGap.Value is { IsValue: true, Value: { } rowGapLength } ? CssValueParser.ParseLength(rowGapLength, 0, box) : 0;
+            var columnGap = box.FlexColumnGap.Value is { IsValue: true, Value: { } columnGapLength } ? CssValueParser.ParseLength(columnGapLength, 0, box) : 0;
+
+            var lines = 0;
+            double lineWidth = 0, lineUsed = 0, total = 0;
+            var itemsOnLine = 0;
+
+            foreach (var item in box.Boxes)
+            {
+                if (item.DerivedStyle.ActualDisplay == Keywords.None || item.IsExcludedFromFlow) continue;
+
+                var basis = item.FlexBasis.Value;
+                double mainSize;
+                if (basis.IsValue && basis.Value is not { IsCalc: false, Length: { Type: Length.Unit.Percent } })
+                    mainSize = CssValueParser.ParseLength(basis.Value!.Value, 0, item) + item.ActualBoxSizeIncludedHeight;
+                else if (CssValueParser.IsValidLength(item.Height) && !item.Height.EndsWith('%'))
+                    mainSize = CssValueParser.ParseLength(item.Height, 0, item) + item.ActualBoxSizeIncludedHeight;
+                else
+                    return false;
+
+                mainSize += item.ActualMarginTop + item.ActualMarginBottom;
+
+                item.GetMinMaxWidth(g, out var itemMin, out var itemMax);
+                if (CssValueParser.IsValidLength(item.Width) && !item.Width.EndsWith('%'))
+                {
+                    var declared = CssValueParser.ParseLength(item.Width, 0, item) + item.ActualBoxSizeIncludedWidth;
+                    itemMin = Math.Max(itemMin, declared);
+                    itemMax = Math.Max(itemMax, declared);
+                }
+
+                var margins = item.ActualMarginLeft + item.ActualMarginRight;
+                min = Math.Max(min, itemMin + margins);
+
+                // The item starts the next line when it does not fit after what is on this one (a line always holds at least one).
+                var needed = lineUsed + (itemsOnLine > 0 ? rowGap : 0) + mainSize;
+                if (itemsOnLine > 0 && needed > contentHeight + 0.01)
+                {
+                    total += lineWidth;
+                    lines++;
+                    lineWidth = 0;
+                    lineUsed = 0;
+                    itemsOnLine = 0;
+                    needed = mainSize;
+                }
+
+                lineUsed = needed;
+                lineWidth = Math.Max(lineWidth, itemMax + margins);
+                itemsOnLine++;
+            }
+
+            if (itemsOnLine == 0 && lines == 0) return false;
+
+            total += lineWidth;
+            lines += itemsOnLine > 0 ? 1 : 0;
+            max = total + columnGap * Math.Max(0, lines - 1);
+            return true;
+        }
+
+
+        /// <summary>
         /// Whether this box lays its children out along a horizontal flex line, so their
         /// intrinsic widths ADD UP instead of competing for "widest line wins".
         ///
@@ -9544,7 +9696,7 @@ namespace PeachBrackets.Html.Dom
             max = count * Math.Max(width, contentMax) + (count - 1) * gap;
 
             // With a column-width the container can drop to one column, but never below 1px (Chrome).
-            min = hasWidth ? Math.Max(Length.PointsPerPx, Math.Min(contentMin, width)) : count * contentMin + (count - 1) * gap;
+            min = hasWidth ? Math.Max(Length.PointsPerPx * g.PixelsPerPoint, Math.Min(contentMin, width)) : count * contentMin + (count - 1) * gap;
 
             // A spanner is as wide as the container, so the container is at least as wide as the widest of them, however narrow the columns.
             foreach (var child in box.Boxes)
@@ -9730,6 +9882,14 @@ namespace PeachBrackets.Html.Dom
                 // space. Left stale, the epilogue below would take a real gap back off - reached
                 // by an inline-level flex row on a line that is not reset before it, i.e. under
                 // white-space: nowrap (which inherits, so the row need not declare it).
+                trailingSpace = 0;
+            }
+            else if (TryMeasureFlexColumnWrapWidth(g, box, out var columnWrapMin, out var columnWrapMax))
+            {
+                // A wrapping flex column of a definite height is its lines side by side, so its intrinsic width is the sum of their widths, not the
+                // widest item the flat walk would stop at.
+                maxSum += columnWrapMax;
+                UpdateMinWidth(ref min, ref minDecoration, columnWrapMin, paddingSum);
                 trailingSpace = 0;
             }
             else if (box.DerivedStyle.ActualDisplay is Keywords.Grid or Keywords.InlineGrid && box.Boxes.Count > 0

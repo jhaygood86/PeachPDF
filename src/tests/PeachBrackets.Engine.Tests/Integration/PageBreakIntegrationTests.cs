@@ -637,13 +637,12 @@ body { margin: 0; }
             Assert.Equal(wrap!.ClientTop + 500, only!.Location.Y, 3);
         }
 
-        // A known boundary, characterized rather than left silent. With nothing on the ancestor chain to
-        // block collapse-through, the margin is not the first child's any more - it collapses all the
-        // way up and is carried by the root box, which has no containing block for a break to fall at
-        // the top of and no parent link for a break-before to travel up. So the truncation this fixes
-        // does not reach that shape, and the margin still paginates as blank space.
+        // The root element establishes a block formatting context and its margins do not collapse (CSS 2.1 sections 9.4.1 and 8.3.1), so nothing
+        // on the ancestor chain lets the first child's margin escape the <html> box: it is the first child's own margin and the break falls before
+        // it, exactly as when a border or padding blocks the collapse. (It used to collapse all the way up into the root box, which had no
+        // container for a break to fall at the top of, so the margin paginated as blank space.)
         [Fact]
-        public async Task FirstChildMarginCollapsingToTheRoot_IsNotTruncated_KnownBoundary()
+        public async Task FirstChildMarginCollapsingTowardTheRoot_IsTruncatedLikeAnyOther()
         {
             var (root, container) = await LayoutHarness.LayoutAsync(
                 FirstChildDocument(""), pageHeight: FirstChildPageHeight);
@@ -651,8 +650,7 @@ body { margin: 0; }
             var first = LayoutHarness.FindById(root, "first");
             Assert.NotNull(first);
 
-            Assert.True(first!.Location.Y > container.PageTopOf(1),
-                $"expected the untruncated margin to carry the box past slot 1's top, was {first.Location.Y}");
+            Assert.Equal(container.PageTopOf(1), first!.Location.Y, 3);
         }
 
         #endregion

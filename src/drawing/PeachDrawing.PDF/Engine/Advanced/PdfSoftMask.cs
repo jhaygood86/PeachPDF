@@ -34,13 +34,12 @@ internal sealed class PdfSoftMask : PdfDictionary
     /// <summary>
     /// Predefined keys of this dictionary.
     /// </summary>
-    internal class Keys : KeysBase
+    internal class Keys
     {
         /// <summary>
         /// (Optional) The type of PDF object that this dictionary describes;
         /// if present, must be Mask for a soft-mask dictionary.
         /// </summary>
-        [PdfKey(PdfKeyType.Name | PdfKeyType.Optional, FixedValue = "Mask")]
         public const string Type = "/Type";
 
         /// <summary>
@@ -49,7 +48,6 @@ internal sealed class PdfSoftMask : PdfDictionary
         /// Alpha: Use the group's computed alpha, disregarding its color.
         /// Luminosity: Convert the group's computed color to a single-component luminosity value.
         /// </summary>
-        [PdfKey(PdfKeyType.Name | PdfKeyType.Required)]
         public const string S = "/S";
 
         /// <summary>
@@ -58,7 +56,6 @@ internal sealed class PdfSoftMask : PdfDictionary
         /// group attributes dictionary must contain a CS entry defining the color space
         /// in which the compositing computation is to be performed.
         /// </summary>
-        [PdfKey(PdfKeyType.Stream | PdfKeyType.Required)]
         public const string G = "/G";
 
         /// <summary>
@@ -69,7 +66,6 @@ internal sealed class PdfSoftMask : PdfDictionary
         /// by the CS entry in the group attributes dictionary.
         /// Default value: the color space's initial value, representing black.
         /// </summary>
-        [PdfKey(PdfKeyType.Array | PdfKeyType.Optional)]
         public const string BC = "/BC";
 
         /// <summary>
@@ -82,7 +78,6 @@ internal sealed class PdfSoftMask : PdfDictionary
         /// specified in place of a function object to designate the identity function.
         /// Default value: Identity.
         /// </summary>
-        [PdfKey(PdfKeyType.FunctionOrName | PdfKeyType.Optional)]
         public const string TR = "/TR";
     }
 }

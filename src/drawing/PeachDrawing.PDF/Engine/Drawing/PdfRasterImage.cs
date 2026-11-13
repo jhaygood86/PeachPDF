@@ -26,7 +26,6 @@ internal enum PdfImageState
 /// </summary>
 internal class PdfRasterImage : IDisposable
 {
-    // The hierarchy is adapted to WPF/Silverlight/WinRT
     //
     // PdfRasterImage                           <-- ImageSource
     //   PdfForm
@@ -59,14 +58,6 @@ internal class PdfRasterImage : IDisposable
         _path = "*" + Guid.NewGuid().ToString("B");
         ImageSource.ImageSourceImpl ??= CreateDefaultImageSourceImpl();
         _source = ImageSource.FromStream(_path, stream);
-        Initialize();
-    }
-
-    PdfRasterImage(Func<byte[]> data)
-    {
-        // Create a dummy unique path.
-        _path = "*" + Guid.NewGuid().ToString("B");
-        _source = ImageSource.FromBinary(_path, data);
         Initialize();
     }
 

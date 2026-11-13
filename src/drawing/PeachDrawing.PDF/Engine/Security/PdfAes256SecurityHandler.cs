@@ -32,8 +32,8 @@ internal sealed class PdfAes256SecurityHandler
     readonly bool _encryptMetadata;
 
     public PdfAes256SecurityHandler(PdfEncryptionOptions options)
-        : this(options, RandomNumberGenerator.GetBytes(32), RandomNumberGenerator.GetBytes(8), RandomNumberGenerator.GetBytes(8),
-            RandomNumberGenerator.GetBytes(8), RandomNumberGenerator.GetBytes(8), RandomNumberGenerator.GetBytes(4))
+        : this(options, PdfEntropy.GetBytes(32), PdfEntropy.GetBytes(8), PdfEntropy.GetBytes(8),
+            PdfEntropy.GetBytes(8), PdfEntropy.GetBytes(8), PdfEntropy.GetBytes(4))
     {
     }
 
@@ -53,7 +53,7 @@ internal sealed class PdfAes256SecurityHandler
         // With no owner password the restrictions must still be unliftable, so key the owner entries off randomness
         // nobody keeps.
         byte[] ownerPassword = string.IsNullOrEmpty(options.OwnerPassword)
-            ? RandomNumberGenerator.GetBytes(32)
+            ? PdfEntropy.GetBytes(32)
             : PreparePassword(options.OwnerPassword);
 
         // U = hash(password || validation salt) || validation salt || key salt; UE wraps the file key.
@@ -76,7 +76,7 @@ internal sealed class PdfAes256SecurityHandler
     /// <summary>Encrypts a string or stream: a fresh random IV followed by the AES-256-CBC (PKCS#7) ciphertext.</summary>
     public byte[] Encrypt(byte[] plaintext)
     {
-        byte[] iv = RandomNumberGenerator.GetBytes(AesBlockSize);
+        byte[] iv = PdfEntropy.GetBytes(AesBlockSize);
         using Aes aes = Aes.Create();
         aes.Key = _fileKey;
         byte[] cipher = aes.EncryptCbc(plaintext, iv, PaddingMode.PKCS7);

@@ -1,0 +1,79 @@
+name: Web Platform Tests
+
+# Runs the web-platform-tests reftests of the CSS modules listed in
+# src/harness/PeachBrackets.WptRunner/wpt/modules.json through PeachBrackets and fails when a module passes fewer tests than its
+# committed floor (wpt/wpt-floors.json). A change that makes more tests pass raises the floor in the same pull request:
+#   dotnet run --project src/harness/PeachBrackets.WptRunner -f net10.0 -- run --wpt <checkout> --floors <floors file> --update-floors
+# The floors only rise; the WPT checkout is fetched at the commit pinned in wpt/WPT_COMMIT and is never committed.
+
+on:
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'src/engine/PeachBrackets/**'
+      - 'src/drawing/**'
+      - 'src/harness/PeachBrackets.WptRunner/**'
+      - '.github/workflows/wpt.yml'
+  push:
+    branches: [ main ]
+    paths:
+      - 'src/engine/PeachBrackets/**'
+      - 'src/drawing/**'
+      - 'src/harness/PeachBrackets.WptRunner/**'
+      - '.github/workflows/wpt.yml'
+
+concurrency:
+  group: wpt-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: pwsh
+
+jobs:
+  wpt:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: ./.github/actions/setup-dotnet
+
+    # The same font set the test workflow installs, so text metrics do not depend on whatever the runner image ships.
+    - name: Install fonts
+      run: sudo apt-get update && sudo apt-get install -y fontconfig fonts-liberation fonts-dejavu-core
+
+    - name: Cache the WPT checkout
+      id: wpt-cache
+      uses: actions/cache@v4
+      with:
+        path: ~/.peachbrackets-wpt
+        key: wpt-${{ hashFiles('src/harness/PeachBrackets.WptRunner/wpt/WPT_COMMIT') }}
+
+    - name: Build the runner
+      run: dotnet build src/harness/PeachBrackets.WptRunner/PeachBrackets.WptRunner.csproj --configuration Release --framework net10.0
+
+    - name: Fetch web-platform-tests
+      if: steps.wpt-cache.outputs.cache-hit != 'true'
+      run: dotnet src/harness/PeachBrackets.WptRunner/bin/Release/net10.0/PeachBrackets.WptRunner.dll fetch
+
+    - name: Run the reftests against the floors
+      run: |
+        $commit = (Get-Content src/harness/PeachBrackets.WptRunner/wpt/WPT_COMMIT -Raw).Trim()
+        dotnet src/harness/PeachBrackets.WptRunner/bin/Release/net10.0/PeachBrackets.WptRunner.dll run `
+          --wpt "$HOME/.peachbrackets-wpt/wpt/$commit" `
+          --floors src/harness/PeachBrackets.WptRunner/wpt/wpt-floors.json `
+          --out wpt-results
+
+    - name: Upload the results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: wpt-results
+        path: wpt-results
+        if-no-files-found: ignore

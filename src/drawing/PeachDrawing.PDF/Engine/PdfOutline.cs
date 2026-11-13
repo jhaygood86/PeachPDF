@@ -17,8 +17,15 @@ namespace PeachDrawing.PDF.Engine;
 /// <summary>
 /// Represents an outline item in the outlines tree. An 'outline' is also known as a 'bookmark'.
 /// </summary>
-internal sealed class PdfOutline : PdfDictionary  // Reference: 8.2.2 Document Outline / Page 584
+internal sealed class PdfOutline : PdfDictionary, IPdfDictionaryValue<PdfOutline>  // Reference: 8.2.2 Document Outline / Page 584
 {
+    static PdfOutline IPdfDictionaryValue<PdfOutline>.Create(PdfDocument document) => new(document);
+    static PdfOutline IPdfDictionaryValue<PdfOutline>.Wrap(PdfDictionary existing) => new(existing);
+
+    private PdfOutline(PdfDictionary dict)
+        : base(dict)
+    { }
+
     /// <summary>
     /// Initializes a new instance of the <see cref="PdfOutline"/> class.
     /// </summary>
@@ -386,7 +393,7 @@ internal sealed class PdfOutline : PdfDictionary  // Reference: 8.2.2 Document O
 
     PdfArray CreateDestArray()
     {
-        PdfArray? dest = null;
+        PdfArray? dest;
         switch (PageDestinationType)
         {
             // [page /XYZ left top zoom]
@@ -453,19 +460,9 @@ internal sealed class PdfOutline : PdfDictionary  // Reference: 8.2.2 Document O
 
     internal override void WriteObject(PdfWriter writer)
     {
-        // TODO: Proof that there is nothing to do here.
         bool hasKids = HasChildren;
         if (_parent is not null || hasKids)
         {
-            ////// Everything done in PrepareForSave
-            ////if (_parent == null)
-            ////{
-            ////    // This is the outline dictionary (the root)
-            ////}
-            ////else
-            ////{
-            ////    // This is an outline item dictionary
-            ////}
             base.WriteObject(writer);
         }
     }
@@ -473,7 +470,7 @@ internal sealed class PdfOutline : PdfDictionary  // Reference: 8.2.2 Document O
     /// <summary>
     /// Predefined keys of this dictionary.
     /// </summary>
-    internal sealed class Keys : KeysBase
+    internal sealed class Keys
     {
         // ReSharper disable InconsistentNaming
 
@@ -481,70 +478,51 @@ internal sealed class PdfOutline : PdfDictionary  // Reference: 8.2.2 Document O
         /// (Optional) The type of PDF object that this dictionary describes; if present,
         /// must be Outlines for an outline dictionary.
         /// </summary>
-        [PdfKey(PdfKeyType.Name | PdfKeyType.Optional, FixedValue = "Outlines")]
         public const string Type = "/Type";
 
         // Outline and outline item are combined
-        ///// <summary>
-        ///// (Required if there are any open or closed outline entries; must be an indirect reference)
-        ///// An outline item dictionary representing the first top-level item in the outline.
-        ///// </summary>
         //[PdfKey(PdfKeyType.Dictionary)]
         //public const string First = "/First";
         //
-        ///// <summary>
-        ///// (Required if there are any open or closed outline entries; must be an indirect reference)
-        ///// An outline item dictionary representing the last top-level item in the outline.
-        ///// </summary>
         //[PdfKey(PdfKeyType.Dictionary)]
         //public const string Last = "/Last";
         //
-        ///// <summary>
-        ///// (Required if the document has any open outline entries) The total number of open items at all
-        ///// levels of the outline. This entry should be omitted if there are no open outline items.
-        ///// </summary>
         //[PdfKey(PdfKeyType.Integer)]
         //public const string Count = "/Count";
 
         /// <summary>
         /// (Required) The text to be displayed on the screen for this item.
         /// </summary>
-        [PdfKey(PdfKeyType.String | PdfKeyType.Required)]
         public const string Title = "/Title";
 
         /// <summary>
         /// (Required; must be an indirect reference) The parent of this item in the outline hierarchy.
         /// The parent of a top-level item is the outline dictionary itself.
         /// </summary>
-        [PdfKey(PdfKeyType.Dictionary | PdfKeyType.Required)]
         public const string Parent = "/Parent";
 
         /// <summary>
         /// (Required for all but the first item at each level; must be an indirect reference)
         /// The previous item at this outline level.
         /// </summary>
-        [PdfKey(PdfKeyType.Dictionary | PdfKeyType.Required)]
         public const string Prev = "/Prev";
 
         /// <summary>
         /// (Required for all but the last item at each level; must be an indirect reference)
         /// The next item at this outline level.
         /// </summary>
-        [PdfKey(PdfKeyType.Dictionary | PdfKeyType.Required)]
         public const string Next = "/Next";
 
         /// <summary>
         /// (Required if the item has any descendants; must be an indirect reference)
         ///  The first of this item’s immediate children in the outline hierarchy.
         /// </summary>
-        [PdfKey(PdfKeyType.Dictionary | PdfKeyType.Required)]
         public const string First = "/First";
 
         /// <summary>
         /// (Required if the item has any descendants; must be an indirect reference)
         /// The last of this item’s immediate children in the outline hierarchy.
         /// </summary>
-        [PdfKey(PdfKeyType.Dictionary | PdfKeyType.Required)]
         public const string Last = "/Last";
 
         /// <summary>
@@ -553,21 +531,18 @@ internal sealed class PdfOutline : PdfDictionary  // Reference: 8.2.2 Document O
         /// negative integer whose absolute value specifies how many descendants would appear if the 
         /// item were reopened.
         /// </summary>
-        [PdfKey(PdfKeyType.Integer | PdfKeyType.Required)]
         public const string Count = "/Count";
 
         /// <summary>
         /// (Optional; not permitted if an A entry is present) The destination to be displayed when this 
         /// item is activated.
         /// </summary>
-        [PdfKey(PdfKeyType.ArrayOrNameOrString | PdfKeyType.Optional)]
         public const string Dest = "/Dest";
 
         /// <summary>
         /// (Optional; not permitted if a Dest entry is present) The action to be performed when
         /// this item is activated.
         /// </summary>
-        [PdfKey(PdfKeyType.Dictionary | PdfKeyType.Optional)]
         public const string A = "/A";
 
         /// <summary>
@@ -578,7 +553,6 @@ internal sealed class PdfOutline : PdfDictionary  // Reference: 8.2.2 Document O
         /// an item should also specify a destination (Dest) corresponding to an area of a page where the
         /// contents of the designated structure element are displayed.
         /// </summary>
-        [PdfKey(PdfKeyType.Dictionary | PdfKeyType.Optional)]
         public const string SE = "/SE";
 
         /// <summary>
@@ -586,26 +560,15 @@ internal sealed class PdfOutline : PdfDictionary  // Reference: 8.2.2 Document O
         /// components in the DeviceRGB color space of the color to be used for the outline entry’s text.
         /// Default value: [0.0 0.0 0.0].
         /// </summary>
-        [PdfKey(PdfKeyType.Array | PdfKeyType.Optional)]
         public const string C = "/C";
 
         /// <summary>
         /// (Optional; PDF 1.4) A set of flags specifying style characteristics for displaying the outline
         /// item’s text. Default value: 0.
         /// </summary>
-        [PdfKey(PdfKeyType.Integer | PdfKeyType.Optional)]
         public const string F = "/F";
 
-        /// <summary>
-        /// Gets the KeysMeta for these keys.
-        /// </summary>
-        public static PdfDictionaryMetadata Meta { get; } = CreateMeta(typeof(Keys));
 
         // ReSharper restore InconsistentNaming
     }
-
-    /// <summary>
-    /// Gets the KeysMeta of this dictionary type.
-    /// </summary>
-    internal override PdfDictionaryMetadata Meta => Keys.Meta;
 }
