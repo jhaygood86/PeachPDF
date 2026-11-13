@@ -10,7 +10,7 @@ namespace PeachBrackets.WptRunner;
 /// The render seam: one WPT file in, the pixels of an 800x600 screen viewport out, through PeachBrackets' public API only.
 /// One CSS pixel is one device pixel (the canvas is scaled by 4/3 because the layout unit is the point).
 /// </summary>
-internal sealed partial class WptRenderer(string wptRoot)
+internal sealed partial class WptRenderer(string wptRoot) : IReftestRenderer
 {
     public const int ViewportWidth = 800;
     public const int ViewportHeight = 600;

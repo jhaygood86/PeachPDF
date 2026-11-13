@@ -1,11 +1,19 @@
 namespace PeachBrackets.WptRunner;
 
+/// <summary>What the evaluator needs from a renderer: where a WPT-relative path lives on disk, and its pixels.</summary>
+internal interface IReftestRenderer
+{
+    string FullPath(string wptPath);
+
+    Task<RgbaImage> RenderAsync(string wptPath);
+}
+
 internal enum Outcome { Pass, Fail, Blank, Skipped }
 
 internal readonly record struct TestResult(Outcome Outcome, string? Reason = null);
 
 /// <summary>Applies the WPT reftest rules to one test: at least one <c>match</c> reference (and its chain) must be equal within the fuzzy allowance and every <c>mismatch</c> reference must differ.</summary>
-internal sealed class ReftestEvaluator(WptRenderer renderer, string dumpDirectory = "")
+internal sealed class ReftestEvaluator(IReftestRenderer renderer, string dumpDirectory = "")
 {
     private readonly Dictionary<string, ReftestInfo> _infos = [];
 

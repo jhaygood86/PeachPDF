@@ -159,7 +159,7 @@ jobs:
     - name: Build small test projects
       if: matrix.suite == 'small'
       run: |
-        foreach ($p in 'PeachPDF.Cli.Tests', 'PeachDrawing.Core.Tests', 'PeachDrawing.Tests', 'PeachDrawing.PDF.Tests', 'PeachDrawing.Svg.Tests', 'PeachDrawing.Skia.Tests', 'PeachBrackets.Tests', 'PeachPDF.SourceGenerators.Tests', 'PeachDrawing.Text.Brotli.Tests') {
+        foreach ($p in 'PeachPDF.Cli.Tests', 'PeachDrawing.Core.Tests', 'PeachDrawing.Tests', 'PeachDrawing.PDF.Tests', 'PeachDrawing.Svg.Tests', 'PeachDrawing.Skia.Tests', 'PeachBrackets.Tests', 'PeachBrackets.WptRunner.Tests', 'PeachPDF.SourceGenerators.Tests', 'PeachDrawing.Text.Brotli.Tests') {
           dotnet build "src/tests/$p/$p.csproj" --configuration Release
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         }
@@ -228,6 +228,10 @@ jobs:
     - name: Test HTML engine (PeachBrackets)
       if: matrix.suite == 'small'
       run: dotnet test --project ${{ github.workspace }}/src/tests/PeachBrackets.Tests/PeachBrackets.Tests.csproj --no-build --configuration Release --report-trx --report-trx-filename brackets-test-results.trx --coverlet --coverlet-output-format cobertura --coverlet-exclude-by-file "**/PeachPdfProductInfo.g.cs" --coverlet-exclude-by-file "**/PeachPDF.Cli/Program.cs" --coverlet-file-prefix brackets-test-results --results-directory coverage
+
+    - name: Test WPT reftest runner (PeachBrackets.WptRunner)
+      if: matrix.suite == 'small'
+      run: dotnet test --project ${{ github.workspace }}/src/tests/PeachBrackets.WptRunner.Tests/PeachBrackets.WptRunner.Tests.csproj --no-build --configuration Release --report-trx --report-trx-filename wpt-runner-test-results.trx --coverlet --coverlet-output-format cobertura --coverlet-exclude-by-file "**/PeachPdfProductInfo.g.cs" --coverlet-exclude-by-file "**/PeachPDF.Cli/Program.cs" --coverlet-file-prefix wpt-runner-test-results --results-directory coverage
 
     # The css-properties.json -> CssPropertyRegistry.g.cs/SvgPropertyRegistry.g.cs source generator's
     # tests (JSON reader, PPGxxx diagnostics, generated-output shape).

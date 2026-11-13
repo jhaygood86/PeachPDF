@@ -37,6 +37,7 @@
   <Project Path="tests/PeachBrackets.Android.Tests/PeachBrackets.Android.Tests.csproj" />
   <Project Path="tests/PeachBrackets.Apple.Tests/PeachBrackets.Apple.Tests.csproj" />
   <Project Path="tests/PeachBrackets.Tests/PeachBrackets.Tests.csproj" />
+  <Project Path="tests/PeachBrackets.WptRunner.Tests/PeachBrackets.WptRunner.Tests.csproj" />
   <Project Path="tests/PeachBrackets.Engine.Tests/PeachBrackets.Engine.Tests.csproj" />
   <Project Path="PeachPDF/PeachPDF.csproj" />
 </Solution>
