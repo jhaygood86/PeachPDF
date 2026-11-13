@@ -43,7 +43,6 @@ internal sealed partial class PdfGraphics : IDisposable
             ? page.Contents.PrependContent()
             : page.Contents.AppendContent();
         _renderer = new PdfGraphicsRenderer(page, this, options);
-        _pageSizePoints = new Size(page.Width, page.Height);
         _pageSize = new Size(page.Width, page.Height);
 
         Initialize();
@@ -52,7 +51,6 @@ internal sealed partial class PdfGraphics : IDisposable
     PdfGraphics(Size size)
     {
         _gsStack = new GraphicsStateStack(this);
-        _pageSizePoints = new Size(size.Width, size.Height);
         _pageSize = new Size(size.Width, size.Height);
 
         Initialize();
@@ -169,8 +167,6 @@ internal sealed partial class PdfGraphics : IDisposable
     }
 
     Size _pageSize;
-
-    Size _pageSizePoints;
 
     // ----- DrawString ---------------------------------------------------------------------------
 

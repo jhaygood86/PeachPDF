@@ -369,7 +369,7 @@ internal sealed class PdfDocument : PdfObject, IDisposable
         {
             if (CanModify)
                 return Pages.Count;
-            // PdfOpenMode is InformationOnly
+            // Not modifiable (an imported or read-only document): read the count from the page tree root.
             PdfDictionary pageTreeRoot = (PdfDictionary)Catalog.Elements.GetObject(PdfCatalog.Keys.Pages)!;
             return pageTreeRoot.Elements.GetInteger(PdfPages.Keys.Count);
         }

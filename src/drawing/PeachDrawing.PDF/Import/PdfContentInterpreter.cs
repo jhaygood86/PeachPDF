@@ -999,7 +999,7 @@ internal sealed class PdfContentInterpreter
     {
         if (!Matrix3x2.Invert(Cur.Ctm, out var inverse)) return null;
         var toCurrent = shadingToBase * _streamBase * inverse;
-        var brush = PdfShading.CreateBrush(_doc, shading, res, toCurrent, alpha, _canvas.RenderContext, out var why);
+        var brush = PdfShadingBrushFactory.CreateBrush(_doc, shading, res, toCurrent, alpha, _canvas.RenderContext, out var why);
         if (brush is null) _unsupported.Add(why!);
         return brush;
     }

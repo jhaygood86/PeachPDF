@@ -12,13 +12,6 @@ internal sealed class PdfViewerPreferences : PdfDictionary
     { }
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="PdfViewerPreferences"/> class.
-    /// </summary>
-    PdfViewerPreferences(PdfDictionary dict)
-        : base(dict)
-    { }
-
-    /// <summary>
     /// Gets or sets a value indicating whether the window's title bar
     /// should display the document title taken from the Title entry of the document
     /// information dictionary. If false, the title bar should instead display the name

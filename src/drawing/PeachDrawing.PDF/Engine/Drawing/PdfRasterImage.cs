@@ -61,14 +61,6 @@ internal class PdfRasterImage : IDisposable
         Initialize();
     }
 
-    PdfRasterImage(Func<byte[]> data)
-    {
-        // Create a dummy unique path.
-        _path = "*" + Guid.NewGuid().ToString("B");
-        _source = ImageSource.FromBinary(_path, data);
-        Initialize();
-    }
-
     /// <summary>
     /// The built-in raster image source used when no caller has set <see cref="ImageSource.ImageSourceImpl"/>.
     /// See PeachImageSource.cs.

@@ -11,7 +11,7 @@ namespace PeachDrawing.PDF.Import;
 /// sampled into gradient stops; a shading that does not extend past its ends paints as if it did (the brush has no
 /// notion of "stop painting here"), and the other shading types (function-based, meshes) are not read yet.
 /// </summary>
-internal static class PdfShading
+internal static class PdfShadingBrushFactory
 {
     const int Samples = 48;
 

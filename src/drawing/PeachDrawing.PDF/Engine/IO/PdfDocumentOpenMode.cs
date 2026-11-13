@@ -25,11 +25,4 @@ internal enum PdfDocumentOpenMode
     /// original internal structure of the document and is useful for analyzing existing PDF files.
     /// </summary>
     ReadOnly,
-
-    /// <summary>
-    /// The PDF stream is partially read for information purposes only. The only valid operation is to
-    /// call the Info property at the imported document. This option is very fast and needs less memory
-    /// and is e.g. useful for browsing information about a collection of PDF documents in a user interface.
-    /// </summary>
-    InformationOnly,
 }
