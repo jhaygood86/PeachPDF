@@ -12,6 +12,11 @@ jobs:
   publish:
     runs-on: ubuntu-latest
 
+    # This is the maintenance branch's copy of the workflow: it publishes a 0.9.x maintenance release. Run it
+    # only against a maintenance branch (`gh workflow run publish.yml --ref maintenance/0.9`); main's copy
+    # publishes the current series.
+    if: startsWith(github.ref_name, 'maintenance/')
+
     steps:
     - name: Checkout
       uses: actions/checkout@v4
@@ -50,21 +55,22 @@ jobs:
         if [[ "${{ steps.version.outputs.prerelease }}" == "true" ]]; then
           PRERELEASE_FLAG="--prerelease"
         fi
+        # A maintenance release is never the repository's latest release: that stays the current series, however
+        # recently this one was created.
         gh release create "v${{ steps.version.outputs.value }}" \
           --title "v${{ steps.version.outputs.value }}" \
+          --target "${{ github.sha }}" \
           --generate-notes \
+          --latest=false \
           $PRERELEASE_FLAG
 
     - name: Trigger release binaries build
       env:
         GH_TOKEN: ${{ github.token }}
-      run: gh workflow run release-binaries.yml --ref main -f tag="v${{ steps.version.outputs.value }}"
+      # From this branch, not main: the binaries are built with this branch's workflow and sources (net10.0).
+      run: gh workflow run release-binaries.yml --ref "${{ github.ref_name }}" -f tag="v${{ steps.version.outputs.value }}"
 
-    - name: Trigger docs deploy
-      if: steps.version.outputs.prerelease != 'true'
-      env:
-        GH_TOKEN: ${{ github.token }}
-      run: gh workflow run pages.yml --ref main
+    # No docs deploy: the site documents the current series, and a maintenance release does not change it.
 
     - name: Build
       run: |

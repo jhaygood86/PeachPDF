@@ -149,9 +149,19 @@ namespace PeachBrackets.Html.Parse
             // applied later in CascadeApplyStyles, not here).
             if (!htmlContainer.IgnoreAuthorStyleSheets)
             {
-                using (EngineTelemetry.Source.StartActivity("css.collect"))
-                    await PrefetchStylesheetsAsync(root, htmlContainer);
+                // Root is only assigned once this method returns, so the tree being built is handed to the container for the length of the
+                // collection: a <link>/@import stylesheet resolves against the document's <base href>, not only the host's base address.
+                htmlContainer.ParsingRoot = root;
+                try
+                {
+                    using (EngineTelemetry.Source.StartActivity("css.collect"))
+                        await PrefetchStylesheetsAsync(root, htmlContainer);
                     (cssData, _) = await CascadeParseStyles(root, htmlContainer, cssData, cssDataChanged);
+                }
+                finally
+                {
+                    htmlContainer.ParsingRoot = null;
+                }
             }
 
             var mediaType = string.IsNullOrEmpty(htmlContainer.Media) ? "print" : htmlContainer.Media;
@@ -569,7 +579,7 @@ namespace PeachBrackets.Html.Parse
         /// shared instance.
         /// </param>
         /// <returns>
-        /// The fragment's own synthetic root box (<see cref="HtmlParser.ParseDocument(string, CssBox?, bool)"/>'s
+        /// The fragment's own synthetic root box (<see cref="HtmlParser.ParseDocument(string, CssBox?, bool, bool)"/>'s
         /// default fresh <see cref="CssBox.CreateBlock()"/>) - never itself attached anywhere; the caller
         /// grafts its children onto the real tree (<see cref="CssBox.SetAllBoxes"/>) - together with the
         /// <c>display: contents</c> shells the fragment's own splice already removed from it, which no

@@ -2,9 +2,9 @@ name: Tests
 
 on:
   pull_request:
-    branches: [ main ]
+    branches: [ main, 'maintenance/**' ]
   push:
-    branches: [ main ]
+    branches: [ main, 'maintenance/**' ]
 
 # A newer push to the same PR supersedes an in-flight run; pushes to main always run to completion.
 concurrency:
