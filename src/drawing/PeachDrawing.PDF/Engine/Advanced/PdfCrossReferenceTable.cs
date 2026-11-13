@@ -167,7 +167,6 @@ internal sealed class PdfCrossReferenceTable  // Must not be derive from PdfObje
         // TODO: remove PdfBooleanObject, PdfIntegerObject etc.
         int removed = ObjectTable.Count;
         //CheckConsistence();
-        // TODO: Is this really so easy?
         PdfReference[] irefs = TransitiveClosure(_document._trailer);
 
         _maxObjectNumber = 0;

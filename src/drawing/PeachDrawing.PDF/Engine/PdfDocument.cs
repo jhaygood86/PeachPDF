@@ -163,7 +163,6 @@ internal sealed class PdfDocument : PdfObject, IDisposable
         if (!CanModify)
             throw new InvalidOperationException("The document cannot be modified.");
 
-        // TODO: more diagnostic checks
         string message = "";
         if (!CanSave(ref message))
             throw new InvalidOperationException(message);
@@ -376,13 +375,11 @@ internal sealed class PdfDocument : PdfObject, IDisposable
         }
     }
 
-// TODO: make private
-
     /// <summary>
     /// Gets the full qualified file name if the document was read form a file, or an empty string otherwise.
     /// </summary>
     public string FullPath => _fullPath;
-    internal string _fullPath = string.Empty; // TODO: make private
+    internal string _fullPath = string.Empty;
 
     /// <summary>
     /// Gets a Guid that uniquely identifies this instance of PdfDocument.
@@ -501,7 +498,7 @@ internal sealed class PdfDocument : PdfObject, IDisposable
     /// <summary>
     /// Gets the document form table that holds all form external objects used in the current document.
     /// </summary>
-    internal PdfFormXObjectTable FormTable  // TODO: Rename to ExternalDocumentTable.
+    internal PdfFormXObjectTable FormTable
     {
         get => _formTable ?? (_formTable = new PdfFormXObjectTable(this));
     }

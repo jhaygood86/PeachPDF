@@ -82,7 +82,6 @@ internal sealed partial class PdfGraphics : IDisposable
             _renderer.DrawImage(image, destRect, srcRect);
     }
 
-    //TODO?
     //public void DrawImage(PdfRasterImage image, Rectangle destRect, double srcX, double srcY, double srcWidth, double srcHeight, GraphicsUnit srcUnit);
     //public void DrawImage(PdfRasterImage image, Rectangle destRect, double srcX, double srcY, double srcWidth, double srcHeight, GraphicsUnit srcUnit);
 

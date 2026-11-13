@@ -71,7 +71,6 @@ internal sealed class PdfType0Font : PdfFont
             for (int idx = 0; idx < count; idx++)
                 glyphWidths[idx] = PdfTypefaceMetrics.GlyphWidth(typeface, glyphIndices[idx]);
 
-            //TODO: optimize order of indices
 
             for (int idx = 0; idx < count; idx++)
                 w.Append(System.Globalization.CultureInfo.InvariantCulture, $"{glyphIndices[idx]}[{glyphWidths[idx]}]");

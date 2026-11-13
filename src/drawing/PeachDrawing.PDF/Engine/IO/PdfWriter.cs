@@ -156,7 +156,6 @@ internal sealed class PdfWriter
             {
                 char ch = name[idx];
                 Debug.Assert(ch < 256);
-                // TODO: is this all?
                 if (ch > ' ' && ch is not ('%' or '/' or '<' or '>' or '(' or ')' or '#'))
                 {
                     buffer[length++] = (byte)ch;

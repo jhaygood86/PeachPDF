@@ -12,7 +12,7 @@ namespace PeachDrawing.PDF.Engine.Advanced;
 /// Provides access to the internal document data structures. This class prevents the public
 /// interfaces from pollution with to much internal functions.
 /// </summary>
-internal sealed class PdfInternals  // TODO: PdfDocumentInternals... PdfPageInternals etc.
+internal sealed class PdfInternals
 {
     internal PdfInternals(PdfDocument document)
     {

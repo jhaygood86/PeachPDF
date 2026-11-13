@@ -281,9 +281,6 @@ internal sealed class PdfPage : PdfDictionary, IContentStream
         set { _elements.SetName(Keys.Tabs, value); }
     }
 
-    // TODO: PdfAnnotations
-    // TODO: PdfActions
-    // TODO: PdfPageTransition
 
     /// <summary>
     /// The content stream currently used by an PdfGraphics object for rendering.

@@ -94,7 +94,6 @@ internal sealed class PdfDocumentInformation : PdfDictionary
         set { Elements.SetDateTime(Keys.ModDate, value); }
     }
 
-    // TODO CustomProperties and meta data
 
     /// <summary>
     /// Predefined keys of this dictionary.

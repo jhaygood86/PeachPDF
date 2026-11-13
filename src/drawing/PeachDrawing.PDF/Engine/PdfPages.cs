@@ -50,7 +50,7 @@ internal sealed class PdfPages : PdfDictionary, IEnumerable<PdfPage>
     /// <summary>
     /// Finds a page by its id. Transforms it to PdfPage if necessary.
     /// </summary>
-    internal PdfPage? FindPage(PdfObjectId id)  // TODO: public?
+    internal PdfPage? FindPage(PdfObjectId id)
     {
         PdfPage? page = null;
         foreach (PdfItem item in PagesArray)
@@ -109,7 +109,6 @@ internal sealed class PdfPages : PdfDictionary, IEnumerable<PdfPage>
                     throw new InvalidOperationException("The page cannot be added to this document because the document already owned this page.");
             }
 
-            // TODO: check this case
             // Because the owner of the inserted page is this document we assume that the page was former part of it 
             // and it is therefore well-defined.
             Owner._irefTable.Add(page);
@@ -202,9 +201,7 @@ internal sealed class PdfPages : PdfDictionary, IEnumerable<PdfPage>
     /// </summary>
     internal override void PrepareForSave()
     {
-        // TODO: Close all open content streams
 
-        // TODO: Create the page tree.
         // Arrays have a limit of 8192 entries, but I successfully tested documents
         // with 50000 pages and no page tree.
         // ==> wait for bug report.

@@ -337,7 +337,7 @@ internal class PdfForm : PdfRasterImage, IContentStream
     /// The PdfFormXObject gets invalid when PageNumber or transform changed. This is because a modification
     /// of an PdfForm must not change objects that are already been drawn.
     /// </summary>
-    internal PdfFormXObject _pdfForm = null!;  // TODO: make private
+    internal PdfFormXObject _pdfForm = null!;
 
     internal PdfGraphicsRenderer PdfRenderer = null!;
 

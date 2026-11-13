@@ -28,7 +28,6 @@ internal class PdfTrailer : PdfDictionary  // Reference: 3.4.4  File Trailer / P
         set { Elements.SetInteger(Keys.Size, value); }
     }
 
-    // TODO: needed when linearized...
     //public int Prev
     //{
     //  get {return Elements.GetInteger(Keys.Prev);}

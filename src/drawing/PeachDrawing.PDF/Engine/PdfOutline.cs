@@ -453,7 +453,6 @@ internal sealed class PdfOutline : PdfDictionary  // Reference: 8.2.2 Document O
 
     internal override void WriteObject(PdfWriter writer)
     {
-        // TODO: Proof that there is nothing to do here.
         bool hasKids = HasChildren;
         if (_parent is not null || hasKids)
         {

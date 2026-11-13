@@ -85,7 +85,6 @@ internal class PdfEmbeddedFile : PdfDictionary
         base.WriteObject(writer);
     }
 
-    // TODO : Add properties for the subdictionnary Params and the subsubdictionnary Mac
 
     /// <summary>
     /// Predefined keys of this embedded file.

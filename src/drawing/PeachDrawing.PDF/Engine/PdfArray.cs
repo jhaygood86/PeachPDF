@@ -366,7 +366,6 @@ internal class PdfArray : PdfObject, IEnumerable<PdfItem>
         /// </summary>
         public void Add(PdfItem value)
         {
-            // TODO: ??? 
             //Debug.Assert((value is PdfObject && ((PdfObject)value).Reference == null) | !(value is PdfObject),
             //  "You try to set an indirect object directly into an array.");
 

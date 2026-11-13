@@ -31,5 +31,5 @@ internal enum PdfDocumentOpenMode
     /// call the Info property at the imported document. This option is very fast and needs less memory
     /// and is e.g. useful for browsing information about a collection of PDF documents in a user interface.
     /// </summary>
-    InformationOnly,  // TODO: not yet implemented
+    InformationOnly,
 }

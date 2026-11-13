@@ -277,7 +277,7 @@ internal sealed partial class PdfGraphicsRenderer
         // Ensure that the graphics state stack level is at least 2, because otherwise an error
         // occurs when someone set the clip region before something was drawn.
         if (_gfxState.Level < GraphicsStackLevelWorldSpace)
-            RealizeTransform();  // TODO: refactor this function
+            RealizeTransform();
 
         // Only intersecting is supported: the clip never grows, it is narrowed for the rest of the current graphics state.
         if (_clipLevel == 0)
@@ -299,7 +299,6 @@ internal sealed partial class PdfGraphicsRenderer
     public void WriteComment(string comment)
     {
         comment = comment.Replace("\n", "\n% ");
-        // TODO: Some more checks necessary?
         Append("% " + comment + "\n");
     }
 

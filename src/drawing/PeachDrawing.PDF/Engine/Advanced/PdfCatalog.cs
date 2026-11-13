@@ -19,7 +19,7 @@ internal sealed class PdfCatalog : PdfDictionary
     {
         Elements.SetName(Keys.Type, "/Catalog");
 
-        _version = "1.4";  // HACK in PdfCatalog
+        _version = "1.4";
     }
 
     internal PdfCatalog(PdfDictionary dictionary)
