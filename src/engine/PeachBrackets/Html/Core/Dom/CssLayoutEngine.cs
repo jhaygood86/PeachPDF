@@ -7228,6 +7228,29 @@ namespace PeachBrackets.Html.Dom
                 var childContentStartX = coordinates.CurrentX;
                 var childDeclaredContentWidth = ResolveAtomicInlineDeclaredWidth(b, box, coordinates.CurrentY);
 
+                // An inline-block with a declared width is one unbreakable unit on its line (CSS 2.1 section 9.4.2), and its width is known before its
+                // content is flowed: when its margin box does not fit what is left of the line, the line is closed and the box starts the next one. The
+                // block-content path below preflights the same way; this is the path whose content fits one line inside the box.
+                if (childDeclaredContentWidth is { } preflightContentWidth && childOpensHere && !laysOutAsAtomicBox && !excludedFromLineSpacing
+                    && !b.IsFloated)
+                {
+                    var preflightWidth = preflightContentWidth + b.ActualPaddingLeft + b.ActualBorderLeftWidth
+                                         + b.ActualPaddingRight + b.ActualBorderRightWidth;
+                    var preflight = await FitAtomicInlineOnLine(g, blockBox, box, b, preflightWidth, coordinates, lineSpacing, lineStartX,
+                        leftSpacing, clonedTrailing, clonesDecorations, isRtl);
+
+                    if (preflight == AtomicInlineLineFit.ClampedStop) return;
+
+                    if (preflight == AtomicInlineLineFit.Wrapped)
+                    {
+                        childContentStartX = coordinates.CurrentX;
+                        lineBeforeChild = coordinates.Line;
+
+                        // The line the box opened was given the top inset again, as the box's content now starts on it.
+                        if (preShiftedForAtomicInset) coordinates.CurrentY += atomicTopInset;
+                    }
+                }
+
                 // !ReferenceEquals(b, box): a floated box with no children of its own but real words
                 // (a replaced element - <img align="left">'s presentational float is the reachable case,
                 // via DomParser.CorrectReplacedElementBoxes' IsReplacedBlockWrapper) hits FlowBox's own

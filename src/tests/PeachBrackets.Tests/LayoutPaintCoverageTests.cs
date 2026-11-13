@@ -88,6 +88,30 @@ public class LayoutPaintCoverageTests
     }
 
     [Fact]
+    public async Task ADeclaredWidthInlineBlockThatDoesNotFitTheLineStartsTheNextOne()
+    {
+        // Two 70px boxes in a 100px container: the second cannot share the first's line, so it sits beneath it rather than beside it.
+        using var canvas = await PageRaster.RenderAsync(
+            "<div style='width:100px;font-size:0'><div style='display:inline-block;width:70px;height:20px;background:rgb(0,128,0)'>x</div>" +
+            "<div style='display:inline-block;width:70px;height:20px;background:rgb(0,128,0)'>y</div></div>");
+
+        Assert.Equal(Green, PageRaster.Rgb(canvas, 20, 18));
+        Assert.Equal(Green, PageRaster.Rgb(canvas, 20, 38));
+        Assert.Equal(White, PageRaster.Rgb(canvas, 90, 18));
+    }
+
+    [Fact]
+    public async Task ADeclaredWidthInlineBlockThatFitsStaysOnTheLine()
+    {
+        using var canvas = await PageRaster.RenderAsync(
+            "<div style='width:200px;font-size:0'><div style='display:inline-block;width:70px;height:20px;background:rgb(0,128,0)'>x</div>" +
+            "<div style='display:inline-block;width:70px;height:20px;background:rgb(0,128,0)'>y</div></div>");
+
+        Assert.Equal(Green, PageRaster.Rgb(canvas, 20, 18));
+        Assert.Equal(Green, PageRaster.Rgb(canvas, 90, 18));
+    }
+
+    [Fact]
     public async Task AutoFillRowsRepeatAsOftenAsTheyFit_AndKeepTheirEmptyTracks()
     {
         using var canvas = await PageRaster.RenderAsync(

@@ -932,9 +932,9 @@ Two knock-on gaps remain:
   (a declared, non-percentage `width` as-is, or otherwise its own max-content width bounded by the
   containing block) against what is left of the line and, if it does not fit, closes the line for it,
   the same way an ordinary word wraps ([CSS 2.1 §9.4.2](https://www.w3.org/TR/CSS21/visuren.html#inline-formatting)).
-  The approximated one-line path described above is the one shape this does not yet cover: it can
-  still discover that the box's declared width does not fit only after flowing some of its content,
-  rather than moving the opaque box as a unit.
+  The approximated one-line path described above preflights a declared `width` the same way. One
+  with an `auto` width still flows its content word by word, so it can discover that it does not
+  fit only after placing some of it, rather than moving the opaque box as a unit.
 
 ### Pointer Interaction
 
