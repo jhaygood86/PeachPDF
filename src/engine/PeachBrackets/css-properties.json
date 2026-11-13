@@ -5353,14 +5353,14 @@
       "name": "row-gap",
       "comment": "CssKeywordOrValue<NormalKeyword, LengthOrCalc>-backed (issue #598's follow-up: typed union storage instead of a raw string) — see CssKeywordOrValueParser.FromCssText.",
       "inherited": false,
-      "cssom": {"converter": "Converters.LengthOrPercentOrNormalConverter .OrGlobalValue()", "animatable": true, "registryAnimatable": true},
+      "cssom": {"converter": "Converters.NonNegativeLengthOrPercentOrNormalConverter .OrGlobalValue()", "animatable": true, "registryAnimatable": true},
       "initialValue": "normal",
       "cssDataType": {
         "type": "keyword-or-value",
         "enumType": "NormalKeyword",
         "keywordMap": "Map.NormalKeywords",
         "fallback": "NormalKeyword.Normal",
-        "valueType": "length"
+        "valueType": "nonnegative-length"
       },
       "html": {
         "propertyPath": "FlexRowGap",
@@ -5373,14 +5373,14 @@
       "name": "column-gap",
       "comment": "CssKeywordOrValue<NormalKeyword, LengthOrCalc>-backed (issue #598's follow-up). See CssLayoutEngineColumns.ResolveColumns for multicol's spec-mandated 'normal' => 1em special case (flex/grid instead resolve 'normal' to 0) — unaffected by this storage change, just a call-site consumption detail to preserve.",
       "inherited": false,
-      "cssom": {"converter": "Converters.LengthOrPercentOrNormalConverter .OrGlobalValue()", "animatable": true, "registryAnimatable": true},
+      "cssom": {"converter": "Converters.NonNegativeLengthOrPercentOrNormalConverter .OrGlobalValue()", "animatable": true, "registryAnimatable": true},
       "initialValue": "normal",
       "cssDataType": {
         "type": "keyword-or-value",
         "enumType": "NormalKeyword",
         "keywordMap": "Map.NormalKeywords",
         "fallback": "NormalKeyword.Normal",
-        "valueType": "length"
+        "valueType": "nonnegative-length"
       },
       "html": {
         "propertyPath": "FlexColumnGap",

@@ -51,6 +51,23 @@ namespace PeachBrackets.Engine.Tests.CSS
             Assert.Equal(0, b.ActualPaddingLeft, 3);
         }
 
+        [Theory]
+        [InlineData("column-gap: -5pt")]
+        [InlineData("gap: -5pt")]
+        [InlineData("gap: 2pt -5pt")]
+        public async Task ANegativeGap_IsInvalid_SoTheEarlierGapApplies(string negative)
+        {
+            // Two 95pt columns and a 10pt gap: the rule sits in the middle of the gap, 100pt from the left edge.
+            var html = LayoutHarness.Wrap(
+                "<style>#b { width: 200pt; columns: 2; column-rule: 1pt solid black; column-gap: 10pt; " + negative + " }</style>" +
+                "<div id='b'><div style='height: 20pt'></div><div style='height: 20pt'></div></div>");
+
+            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var b = LayoutHarness.FindById(root, "b")!;
+
+            Assert.Equal(100, b.ColumnRuleSegments![0].X - b.Location.X, 1);
+        }
+
         [Fact]
         public async Task APositivePadding_StillApplies_AfterAnInvalidNegativeOne()
         {
