@@ -1,5 +1,6 @@
 // Derived from PDFsharp (MIT) - see LICENSE.md
 
+using PeachDrawing.PDF.Engine.Internal;
 using PeachDrawing.Text.Shaping;
 
 using System;
@@ -87,7 +88,7 @@ internal class PdfFont : PdfDictionary
     internal static string CreateEmbeddedFontSubsetName(string name)
     {
         StringBuilder s = new(64);
-        byte[] bytes = Guid.NewGuid().ToByteArray();
+        byte[] bytes = PdfEntropy.NewGuid().ToByteArray();
         for (int idx = 0; idx < 6; idx++)
             s.Append((char)('A' + bytes[idx] % 26));
         s.Append('+');

@@ -37,7 +37,7 @@ internal sealed class PdfDocument : PdfObject, IDisposable
     {
         //PdfDocument.Gob.AttatchDocument(Handle);
 
-        _creation = DateTime.Now;
+        _creation = PdfEntropy.Now();
         _state = DocumentState.Created;
         _version = 14;
         Initialize();
@@ -54,7 +54,7 @@ internal sealed class PdfDocument : PdfObject, IDisposable
     {
         //PdfDocument.Gob.AttatchDocument(Handle);
 
-        _creation = DateTime.Now;
+        _creation = PdfEntropy.Now();
         _state = DocumentState.Created;
         Initialize();
         Info.CreationDate = _creation;
@@ -388,7 +388,7 @@ internal sealed class PdfDocument : PdfObject, IDisposable
     /// Gets a Guid that uniquely identifies this instance of PdfDocument.
     /// </summary>
     public Guid Guid => _guid;
-    Guid _guid = Guid.NewGuid();
+    Guid _guid = PdfEntropy.NewGuid();
 
     /// <summary>
     /// Returns a value indicating whether the document was newly created or opened from an existing document.

@@ -1,6 +1,7 @@
 // Derived from PDFsharp (MIT) - see LICENSE.md
 
 using PeachDrawing.Core;
+using PeachDrawing.PDF.Engine.Internal;
 using PeachDrawing.PDF.Engine.Drawing;
 using System;
 
@@ -38,8 +39,8 @@ internal abstract class PdfAnnotation : PdfDictionary
     void Initialize()
     {
         Elements.SetName(Keys.Type, "/Annot");
-        Elements.SetString(Keys.NM, Guid.NewGuid().ToString("D"));
-        Elements.SetDateTime(Keys.M, DateTime.Now);
+        Elements.SetString(Keys.NM, PdfEntropy.NewGuid().ToString("D"));
+        Elements.SetDateTime(Keys.M, PdfEntropy.Now());
 
         // Every PDF/A part (e.g. ISO 19005-2 §6.3.2) requires every non-Popup annotation
         // dictionary to contain the /F flags key - there is no legal "absent" default for PDF/A,
@@ -58,7 +59,7 @@ internal abstract class PdfAnnotation : PdfDictionary
         set
         {
             Elements.SetInteger(Keys.F, (int)value);
-            Elements.SetDateTime(Keys.M, DateTime.Now);
+            Elements.SetDateTime(Keys.M, PdfEntropy.Now());
         }
     }
 
@@ -82,7 +83,7 @@ internal abstract class PdfAnnotation : PdfDictionary
         set
         {
             Elements.SetRectangle(Keys.Rect, value);
-            Elements.SetDateTime(Keys.M, DateTime.Now);
+            Elements.SetDateTime(Keys.M, PdfEntropy.Now());
         }
     }
 

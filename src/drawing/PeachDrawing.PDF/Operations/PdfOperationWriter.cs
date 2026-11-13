@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using PeachDrawing.PDF.Engine;
 using PeachDrawing.PDF.Engine.Advanced;
+using PeachDrawing.PDF.Engine.Internal;
 using PeachDrawing.PDF.Import;
 
 namespace PeachDrawing.PDF
@@ -22,7 +23,7 @@ namespace PeachDrawing.PDF
             AddAttachments(options, sources, operation.Attachments);
             if (operation.MetadataElements.Count > 0)
             {
-                options.CreationDate ??= DateTimeOffset.UtcNow;
+                options.CreationDate ??= PdfEntropy.UtcNow();
                 foreach (var element in operation.MetadataElements)
                     options.CustomXmpProperties.Add(new System.Xml.Linq.XElement(element));
             }

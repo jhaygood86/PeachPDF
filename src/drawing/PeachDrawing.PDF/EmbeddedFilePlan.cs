@@ -2,6 +2,7 @@
 
 using PeachDrawing.PDF.Engine;
 using PeachDrawing.PDF.Engine.Advanced;
+using PeachDrawing.PDF.Engine.Internal;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -201,7 +202,7 @@ namespace PeachDrawing.PDF
             {
                 // .LocalDateTime for the same reason the creation date uses it: PdfDate writes the offset of the DateTime's own Kind, so
                 // a UTC-Kind value would print the local machine's offset.
-                var modified = (file.ModificationDate ?? fallbackDate ?? DateTimeOffset.UtcNow).LocalDateTime;
+                var modified = (file.ModificationDate ?? fallbackDate ?? PdfEntropy.UtcNow()).LocalDateTime;
 
                 var embeddedFile = new EngineEmbeddedFile(document, file.Data)
                 {
