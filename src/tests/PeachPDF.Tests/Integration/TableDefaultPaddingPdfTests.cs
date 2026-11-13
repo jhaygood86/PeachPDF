@@ -81,7 +81,6 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(98, fills[Green].Width, 0.05);
             Assert.Equal(98, fills[Red].Width, 0.05);
         }
-
         [Fact]
         public async Task ACellHoldingATableOfManyRowsIsStillAsWideAsTheTable()
         {
@@ -142,6 +141,7 @@ namespace PeachPDF.Tests.Integration
             // Chrome: the first column is its content (67.5pt) and the second takes the rest of the 300pt table.
             Assert.Equal(67.5, fills[Red].Width, 0.05);
             Assert.Equal(232.5, fills[Green].Width, 0.05);
+            Assert.Equal(300, fills[Red].Width + fills[Green].Width, 0.05);
         }
 
         [Theory]

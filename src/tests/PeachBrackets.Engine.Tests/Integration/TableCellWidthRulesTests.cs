@@ -9,8 +9,10 @@ namespace PeachBrackets.Engine.Tests.Integration
     /// </summary>
     public class TableCellWidthRulesTests
     {
-        private const string Content60 = "<div style='display:inline-block;width:60px;height:10px'></div>";
-        private const string Content20 = "<div style='display:inline-block;width:20px;height:10px'></div>";
+        private static string Block(int px) => $"<div style='display:inline-block;width:{px}px;height:10px'></div>";
+
+        private static readonly string Content60 = Block(60);
+        private static readonly string Content20 = Block(20);
 
         private static async Task<double> WidthOfAsync(string body, string id)
         {
@@ -75,22 +77,23 @@ namespace PeachBrackets.Engine.Tests.Integration
         {
             // The outer cell asks for 80px; what it holds would like 80px + its own padding and spacing, but the column only has to be as wide as the
             // cell's content cannot shrink below, and a cell's declared width is not that. Chrome: the outer cell is 80px plus its 1px padding.
-            var body = $"<table id='t'><tr><td id='o' width='80'><table><tr><td width='80'>{Content20}</td></tr></table></td></tr></table>";
+            var body = $"<table id='t'><tr><td id='o' width='80'><table id='n'><tr><td id='i' width='80'>{Content20}</td></tr></table></td></tr></table>";
 
             Assert.Equal(61.5, await WidthOfAsync(body, "o"), 0.05);
             Assert.Equal(64.5, await WidthOfAsync(body, "t"), 0.05);
+            // The nested table itself is half a point narrower than Chrome's 60pt here (an accepted residual), so only the outer cell is pinned.
         }
 
         [Fact]
         public async Task ANestedCellWiderThanTheOuterCellsDeclaredWidthStillWidensIt()
         {
             // Its content cannot shrink below 120px, so that is the minimum whatever the outer cell asked for.
-            var body = "<table id='t'><tr><td id='o' width='80'><table><tr><td width='80'><div style='display:inline-block;width:120px;height:10px'></div></td></tr></table></td></tr></table>";
+            var body = $"<table id='t'><tr><td id='o' width='80'><table id='n'><tr><td id='i' width='80'>{Block(120)}</td></tr></table></td></tr></table>";
 
             Assert.Equal(96, await WidthOfAsync(body, "o"), 0.05);
+            Assert.Equal(94.5, await WidthOfAsync(body, "n"), 0.05);
+            Assert.Equal(91.5, await WidthOfAsync(body, "i"), 0.05);
         }
-
-        private static string Block(int px) => $"<div style='display:inline-block;width:{px}px;height:10px'></div>";
 
         [Fact]
         public async Task APercentageColumnNarrowerThanItsContentTakesTheDifferenceFromTheUnsizedOnesNotTheTable()
