@@ -439,17 +439,7 @@ internal partial class PdfDictionary
         /// Gets the dictionary a key holds as a <typeparamref name="TItem"/>, or <see langword="null"/> when the key has no value.
         /// </summary>
         internal TItem? GetExisting<TItem>(string key) where TItem : PdfDictionary, IPdfDictionaryValue<TItem>
-        {
-            if (Resolve(key) is not { } value)
-                return null;
-
-            return value switch
-            {
-                TItem typed => typed,
-                PdfDictionary dictionary => TItem.Wrap(dictionary),
-                _ => throw new InvalidCastException($"The value of {key} is a {value.GetType().Name}, not a dictionary."),
-            };
-        }
+            => GetExistingAs<TItem, PdfDictionary>(key, static dictionary => TItem.Wrap(dictionary), "a dictionary");
 
         /// <summary>
         /// The array counterpart of <see cref="GetOrCreate{TItem}"/>.
@@ -465,6 +455,15 @@ internal partial class PdfDictionary
         /// The array counterpart of <see cref="GetExisting{TItem}"/>.
         /// </summary>
         internal TItem? GetExistingArray<TItem>(string key) where TItem : PdfArray, IPdfArrayValue<TItem>
+            => GetExistingAs<TItem, PdfArray>(key, static array => TItem.Wrap(array), "an array");
+
+        /// <summary>
+        /// What the two getters share: the value of <paramref name="key"/> with a reference followed, returned as it is when it already
+        /// is a <typeparamref name="TItem"/> and passed to <paramref name="wrap"/> when it is only a <typeparamref name="TBase"/>.
+        /// </summary>
+        TItem? GetExistingAs<TItem, TBase>(string key, Func<TBase, TItem> wrap, string expected)
+            where TBase : PdfItem
+            where TItem : TBase
         {
             if (Resolve(key) is not { } value)
                 return null;
@@ -472,8 +471,8 @@ internal partial class PdfDictionary
             return value switch
             {
                 TItem typed => typed,
-                PdfArray array => TItem.Wrap(array),
-                _ => throw new InvalidCastException($"The value of {key} is a {value.GetType().Name}, not an array."),
+                TBase general => wrap(general),
+                _ => throw new InvalidCastException($"The value of {key} is a {value.GetType().Name}, not {expected}."),
             };
         }
 

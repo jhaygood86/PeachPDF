@@ -1,18 +1,14 @@
 // Derived from PDFsharp (MIT) - see LICENSE.md
 
-using System.Linq;
 using System.Numerics;
 using PeachDrawing.PDF.Engine.Drawing;
-using PeachDrawing.Text.Outlines;
 using PeachDrawing.Text.Shaping;
 using PeachDrawing.Text;
 using PeachDrawing.Core;
-using PeachDrawing.PDF.Engine.Internal;
 using PeachDrawing.PDF.Engine;
 using PeachDrawing.PDF.Engine.Advanced;
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Globalization;
 using System.Text;
 
@@ -269,7 +265,7 @@ internal sealed partial class PdfGraphicsRenderer
 
     /// <summary>
     /// The <c>PdfGenerateConfig.PortableColorFilters</c> form of <see cref="DrawImageWithColorMatrix"/>:
-    /// the same colour math written as blend-mode fills instead of an ExtGState <c>/TR</c>, which MuPDF-based
+    /// the same color math written as blend-mode fills instead of an ExtGState <c>/TR</c>, which MuPDF-based
     /// readers ignore. See <see cref="PdfColorMatrixBlendLayers"/> for how a matrix becomes layers.
     /// </summary>
     /// <remarks>
@@ -284,7 +280,7 @@ internal sealed partial class PdfGraphicsRenderer
     /// <para>
     /// Exact where the content is opaque, which the dual-renderer check against PDFium and MuPDF confirmed. Where it
     /// is only partly opaque (an <c>rgba()</c> fill, an antialiased edge) a blend mode's backdrop is not opaque, and the
-    /// PDF blend formula lets the fill colour in with weight <c>1 - alpha</c>: the colour is off there, and the group
+    /// PDF blend formula lets the fill color in with weight <c>1 - alpha</c>: the color is off there, and the group
     /// cannot un-premultiply it. That is why this is opt-in rather than the default, which stays the
     /// alpha-independent <c>/TR</c>.
     /// </para>
@@ -370,11 +366,11 @@ internal sealed partial class PdfGraphicsRenderer
     /// <remarks>
     /// Unlike <see cref="DrawImageMasked"/>'s <c>/Luminosity</c> mask, the mask form's own transparency
     /// group is NOT given a <c>/CS /DeviceGray</c> entry: ISO 32000-1 §11.6.5.2 only requires (and
-    /// only consults) a group colour space when deriving a luminosity value from it - "If the
+    /// only consults) a group color space when deriving a luminosity value from it - "If the
     /// subtype S is Luminosity, the group attributes dictionary shall contain a CS entry defining
-    /// the colour space in which the compositing computation is to be performed" - and the BC
+    /// the color space in which the compositing computation is to be performed" - and the BC
     /// (backdrop color) entry is likewise "consulted only if the subtype S is Luminosity". An Alpha
-    /// mask's value is the group's own computed alpha, which has no colour space to speak of, so
+    /// mask's value is the group's own computed alpha, which has no color space to speak of, so
     /// forcing DeviceGray here would be asserting a requirement the spec does not impose.
     /// </remarks>
     internal void DrawImageAlphaMasked(PdfForm image, PdfForm maskImage, Rect destRect, bool invert = false)

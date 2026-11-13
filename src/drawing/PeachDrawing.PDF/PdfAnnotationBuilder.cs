@@ -46,10 +46,10 @@ public sealed class PdfAnnotationDefinition
     /// <summary>A short description of the annotation's subject.</summary>
     public string? Subject { get; init; }
 
-    /// <summary>The annotation's colour (its border, a note's background, a highlight's fill), or <see langword="null"/>.</summary>
+    /// <summary>The annotation's color (its border, a note's background, a highlight's fill), or <see langword="null"/>.</summary>
     public PaintColor? Color { get; init; }
 
-    /// <summary>The colour that fills the inside of a closed shape, or <see langword="null"/>.</summary>
+    /// <summary>The color that fills the inside of a closed shape, or <see langword="null"/>.</summary>
     public PaintColor? InteriorColor { get; init; }
 
     /// <summary>The opacity the annotation is drawn with, from 0 to 1, or <see langword="null"/> for opaque.</summary>

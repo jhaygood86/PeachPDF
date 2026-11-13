@@ -143,6 +143,7 @@ internal class PdfTrailer : PdfDictionary  // Reference: 3.4.4  File Trailer / P
         /// reference) The byte offset from the beginning of the file to the beginning of the previous 
         /// cross-reference section.
         /// </summary>
+        /// <remarks>(Optional)</remarks>
         public const string Prev = "/Prev";
 
         /// <summary>

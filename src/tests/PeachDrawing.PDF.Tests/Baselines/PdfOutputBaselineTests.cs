@@ -152,9 +152,14 @@ namespace PeachDrawing.PDF.Tests.Baselines
             }
 
             var expected = LoadBaseline();
-            var diffs = actual.Where(p => !expected.TryGetValue(p.Key, out var hash) || hash != p.Value).Select(p => p.Key)
-                .Concat(expected.Keys.Except(actual.Keys)).ToList();
-            Assert.True(diffs.Count == 0, "PDF output baseline drift: " + string.Join(", ", diffs));
+            var diffs = actual.Where(p => !expected.TryGetValue(p.Key, out var hash) || hash != p.Value)
+                .Select(p => $"{p.Key} (expected {(expected.TryGetValue(p.Key, out var known) ? known[..12] : "none")}, wrote {p.Value[..12]})")
+                .Concat(expected.Keys.Except(actual.Keys).Select(name => name + " (no longer in the corpus)")).ToList();
+            Assert.True(diffs.Count == 0,
+                "PDF output baseline drift in " + string.Join(", ", diffs) +
+                ". A change in what the writer emits must be explained; documents that embed Flate-compressed streams (compressed, fonts, images) " +
+                "can also differ when the runtime's zlib does, which regenerating on one machine would hide. Regenerate with PEACH_UPDATE_BASELINE=1 " +
+                "only after checking which of the two it is.");
         }
     }
 }

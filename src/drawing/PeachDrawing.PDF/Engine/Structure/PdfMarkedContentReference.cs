@@ -46,14 +46,19 @@ internal sealed class PdfMarkedContentReference : PdfDictionary
     {
         // Reference: ISO 32000-1 Table 324 - Entries in a marked-content reference dictionary
 
+        /// <summary>(Required)</summary>
         public const string Type = "/Type";
 
+        /// <summary>(Optional)</summary>
         public const string Pg = "/Pg";
 
+        /// <summary>(Optional)</summary>
         public const string Stm = "/Stm";
 
+        /// <summary>(Optional)</summary>
         public const string StmOwn = "/StmOwn";
 
+        /// <summary>(Required)</summary>
         public const string MCID = "/MCID";
 
 

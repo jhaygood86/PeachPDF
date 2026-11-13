@@ -178,11 +178,11 @@ internal sealed class PdfExtGState : PdfDictionary
 
         /// <summary>
         /// (Optional) The transfer function, which maps the interval [0.0 1.0] to itself, applied to
-        /// each device colour component before it is halftoned/rendered. May be a single function
+        /// each device color component before it is halftoned/rendered. May be a single function
         /// (applied identically to every colorant), an array of functions (one per colorant), or the
         /// name Default. See <see cref="TransferFunction"/> and <see cref="PdfType4Function"/> -
         /// crucially, this is a PER-COMPONENT function (it never sees more than one colorant's value
-        /// at a time), so it cannot express a cross-channel colour transform.
+        /// at a time), so it cannot express a cross-channel color transform.
         /// </summary>
         public const string TR = "/TR";
 

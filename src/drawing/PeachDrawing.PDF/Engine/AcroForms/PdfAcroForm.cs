@@ -48,18 +48,25 @@ internal sealed class PdfAcroForm : PdfDictionary, IPdfDictionaryValue<PdfAcroFo
     /// </summary>
     internal sealed class Keys
     {
+        /// <summary>(Required)</summary>
         public const string Fields = "/Fields";
 
+        /// <summary>(Optional)</summary>
         public const string NeedAppearances = "/NeedAppearances";
 
+        /// <summary>(Optional)</summary>
         public const string SigFlags = "/SigFlags";
 
+        /// <summary>(Optional)</summary>
         public const string CO = "/CO";
 
+        /// <summary>(Optional)</summary>
         public const string DR = "/DR";
 
+        /// <summary>(Optional)</summary>
         public const string DA = "/DA";
 
+        /// <summary>(Optional)</summary>
         public const string Q = "/Q";
 
 

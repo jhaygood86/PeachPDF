@@ -5,12 +5,12 @@ using System.Xml.Linq;
 namespace PeachDrawing.PDF;
 /// <summary>
 /// What a <see cref="PdfComposer"/> writes into the file besides the pages: the document information, the PDF version and
-/// conformance level, colour management, encryption, embedded files and how streams and images are compressed.
+/// conformance level, color management, encryption, embedded files and how streams and images are compressed.
 /// </summary>
 /// <remarks>
 /// The options are read when they are applied - by the <see cref="PdfComposer"/> constructor, or by
 /// <see cref="PdfComposer.Configure"/> - so changing the object afterwards does not change a document in progress. A document's
-/// format settings (version, conformance, colour, encryption, embedded files) are fixed by the first application: applying options
+/// format settings (version, conformance, color, encryption, embedded files) are fixed by the first application: applying options
 /// that ask for different ones to the same composer is rejected, rather than leaving a file whose header disagrees with how some of
 /// its pages were written. The document information may change from one application to the next.
 /// </remarks>
@@ -75,8 +75,8 @@ public sealed class PdfComposerOptions
     public PdfXConformance XConformance { get; set; }
 
     /// <summary>
-    /// Colour management: the output intent PDF/X requires, and the colour conversions to apply. <see langword="null"/> (the
-    /// default) writes every colour in the space it was made in, and PDF/A files get the bundled sRGB output intent.
+    /// Color management: the output intent PDF/X requires, and the color conversions to apply. <see langword="null"/> (the
+    /// default) writes every color in the space it was made in, and PDF/A files get the bundled sRGB output intent.
     /// </summary>
     public ColorOptions? ColorOptions { get; set; }
 
@@ -176,7 +176,7 @@ public sealed class PdfComposerOptions
     public bool FlattenTransparency { get; set; }
 
     /// <summary>
-    /// Whether per-channel colour effects (brightness, contrast, invert and the like) are written as blend-mode layers every PDF
+    /// Whether per-channel color effects (brightness, contrast, invert and the like) are written as blend-mode layers every PDF
     /// reader composites itself, instead of as a PDF transfer function (an ExtGState <c>/TR</c>). Defaults to
     /// <see langword="false"/>. The transfer function is exact for any content but some readers ignore it (MuPDF, and so the viewers
     /// built on it, draw the element unfiltered); the blend-mode layers filter the element in every reader, but are exact only where

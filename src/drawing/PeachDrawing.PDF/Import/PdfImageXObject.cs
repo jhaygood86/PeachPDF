@@ -9,13 +9,13 @@ namespace PeachDrawing.PDF.Import;
 
 /// <summary>
 /// Turns an image XObject into a <see cref="PeachDrawing.Core.Image"/> a canvas can draw: JPEG data passes through
-/// untouched, anything else is unpacked (bit depth, <c>/Decode</c>, colour space), given its alpha (<c>/SMask</c>, a stencil
-/// or colour-key <c>/Mask</c>, or the fill colour of an image mask) and handed over as PNG. JPEG 2000 is decoded to pixels; CCITT
+/// untouched, anything else is unpacked (bit depth, <c>/Decode</c>, color space), given its alpha (<c>/SMask</c>, a stencil
+/// or color-key <c>/Mask</c>, or the fill color of an image mask) and handed over as PNG. JPEG 2000 is decoded to pixels; CCITT
 /// fax and JBIG2 data are decoded to the one-bit samples the filters produce and then read like any other 1-bit image.
 /// </summary>
 internal static class PdfImageXObject
 {
-    /// <summary>Whether the image's pixels depend on the current fill colour (a stencil), so a decoded copy cannot be reused.</summary>
+    /// <summary>Whether the image's pixels depend on the current fill color (a stencil), so a decoded copy cannot be reused.</summary>
     public static bool IsStencil(PdfSourceDocument doc, PdfDictionary image) =>
         doc.Resolve(image.GetRaw("ImageMask") ?? image.GetRaw("IM")) is PdfBoolean { Value: true };
 
@@ -269,7 +269,7 @@ internal static class PdfImageXObject
         }
     }
 
-    /// <summary>A JPEG 2000 image: decoded to RGBA (the codestream carries its own colour), then given the image's soft or stencil mask.</summary>
+    /// <summary>A JPEG 2000 image: decoded to RGBA (the codestream carries its own color), then given the image's soft or stencil mask.</summary>
     static Image? FromJpx(PdfSourceDocument doc, PdfDictionary image, RenderContext context, byte[] jpx, out string? why)
     {
         why = null;

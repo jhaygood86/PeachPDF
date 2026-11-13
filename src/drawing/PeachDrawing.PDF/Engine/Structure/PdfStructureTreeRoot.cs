@@ -64,18 +64,25 @@ internal sealed class PdfStructureTreeRoot : PdfDictionary, IPdfDictionaryValue<
     {
         // Reference: ISO 32000-1 Table 322 - Entries in the structure tree root
 
+        /// <summary>(Required)</summary>
         public const string Type = "/Type";
 
+        /// <summary>(Optional)</summary>
         public const string K = "/K";
 
+        /// <summary>(Optional)</summary>
         public const string IDTree = "/IDTree";
 
+        /// <summary>(Optional)</summary>
         public const string ParentTree = "/ParentTree";
 
+        /// <summary>(Optional)</summary>
         public const string ParentTreeNextKey = "/ParentTreeNextKey";
 
+        /// <summary>(Optional)</summary>
         public const string RoleMap = "/RoleMap";
 
+        /// <summary>(Optional)</summary>
         public const string ClassMap = "/ClassMap";
 
 

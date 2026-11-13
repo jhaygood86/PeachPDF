@@ -36,7 +36,7 @@ public static class PdfAnnotationAppearance
     public static bool IsFileAttachmentIcon(PdfAnnotationIcon icon) =>
         icon is PdfAnnotationIcon.Paperclip or PdfAnnotationIcon.PushPin or PdfAnnotationIcon.Graph or PdfAnnotationIcon.Tag;
 
-    /// <summary>The colour a note or an attached-file icon is filled with when none is given.</summary>
+    /// <summary>The color a note or an attached-file icon is filled with when none is given.</summary>
     public static PaintColor DefaultIconColor { get; } = PaintColor.FromArgb(255, 255, 214, 64);
 
     /// <summary>Draws <paramref name="icon"/> filling a box of <paramref name="size"/> points.</summary>
@@ -56,7 +56,7 @@ public static class PdfAnnotationAppearance
     /// <param name="subtype">the annotation type: <c>Highlight</c>, <c>Underline</c>, <c>Squiggly</c> or <c>StrikeOut</c></param>
     /// <param name="quadPoints">four points per region, in points from the page's top-left corner with y down</param>
     /// <param name="bounds">the annotation's box on the page, in the same space</param>
-    /// <param name="color">the colour of the mark</param>
+    /// <param name="color">the color of the mark</param>
     public static Action<Canvas> Markup(string subtype, IReadOnlyList<PaintPoint> quadPoints, Rect bounds, PaintColor color)
     {
         ArgumentNullException.ThrowIfNull(subtype);
@@ -99,7 +99,7 @@ public static class PdfAnnotationAppearance
     /// <summary>Draws the outline of a rectangle (<c>Square</c>) or its inscribed ellipse (<c>Circle</c>) filling <paramref name="size"/>.</summary>
     /// <param name="ellipse"><see langword="true"/> for the ellipse</param>
     /// <param name="size">the size of the annotation, in points</param>
-    /// <param name="color">the outline colour</param>
+    /// <param name="color">the outline color</param>
     /// <param name="lineWidth">the outline width, in points</param>
     public static Action<Canvas> Outline(bool ellipse, Size size, PaintColor color, double lineWidth = 1)
     {
@@ -123,7 +123,7 @@ public static class PdfAnnotationAppearance
     /// <summary>Draws a straight line between two corners of the annotation box (<c>Line</c>).</summary>
     /// <param name="from">the start, in points from the annotation's top-left corner</param>
     /// <param name="to">the end, in the same space</param>
-    /// <param name="color">the line colour</param>
+    /// <param name="color">the line color</param>
     /// <param name="lineWidth">the line width, in points</param>
     public static Action<Canvas> Line(PaintPoint from, PaintPoint to, PaintColor color, double lineWidth = 1)
     {
@@ -138,7 +138,7 @@ public static class PdfAnnotationAppearance
 
     /// <summary>Draws freehand strokes (<c>Ink</c>).</summary>
     /// <param name="strokes">each stroke a run of points, in points from the annotation's top-left corner</param>
-    /// <param name="color">the stroke colour</param>
+    /// <param name="color">the stroke color</param>
     /// <param name="lineWidth">the stroke width, in points</param>
     public static Action<Canvas> Ink(IReadOnlyList<IReadOnlyList<PaintPoint>> strokes, PaintColor color, double lineWidth = 1)
     {
@@ -163,7 +163,7 @@ public static class PdfAnnotationAppearance
     /// <summary>Draws a box of text (<c>FreeText</c>): <paramref name="text"/> on a pale background with a thin border.</summary>
     /// <param name="text">the text</param>
     /// <param name="font">the font to draw it with</param>
-    /// <param name="textColor">the colour of the text and the border</param>
+    /// <param name="textColor">the color of the text and the border</param>
     /// <param name="size">the size of the annotation, in points</param>
     public static Action<Canvas> FreeText(string text, Font font, PaintColor textColor, Size size)
     {
@@ -183,7 +183,7 @@ public static class PdfAnnotationAppearance
     /// <summary>Draws a rubber stamp: <paramref name="label"/> in capitals inside a double border.</summary>
     /// <param name="label">the text of the stamp</param>
     /// <param name="font">the font to draw it with</param>
-    /// <param name="color">the colour of the text and the border</param>
+    /// <param name="color">the color of the text and the border</param>
     /// <param name="size">the size of the annotation, in points</param>
     public static Action<Canvas> Stamp(string label, Font font, PaintColor color, Size size)
     {

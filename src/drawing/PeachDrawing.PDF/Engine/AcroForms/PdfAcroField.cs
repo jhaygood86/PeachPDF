@@ -81,24 +81,34 @@ internal abstract class PdfAcroField : PdfAnnotation
     /// </summary>
     internal new class Keys : PdfAnnotation.Keys
     {
+        /// <summary>(Optional)</summary>
         public const string FT = "/FT";
 
+        /// <summary>(Optional)</summary>
         public const string Parent = "/Parent";
 
+        /// <summary>(Optional)</summary>
         public const string Kids = "/Kids";
 
+        /// <summary>(Optional)</summary>
         public const string TU = "/TU";
 
+        /// <summary>(Optional)</summary>
         public const string Ff = "/Ff";
 
+        /// <summary>(Optional)</summary>
         public const string V = "/V";
 
+        /// <summary>(Optional)</summary>
         public const string DV = "/DV";
 
+        /// <summary>(Optional)</summary>
         public const string DA = "/DA";
 
+        /// <summary>(Optional)</summary>
         public const string MaxLen = "/MaxLen";
 
+        /// <summary>(Optional)</summary>
         public const string Opt = "/Opt";
 
 

@@ -177,25 +177,35 @@ internal sealed class PdfStructureElement : PdfDictionary
     {
         // Reference: ISO 32000-1 Table 323 - Entries in a structure element dictionary
 
+        /// <summary>(Optional)</summary>
         public const string Type = "/Type";
 
+        /// <summary>(Required)</summary>
         public const string S = "/S";
 
+        /// <summary>(Required)</summary>
         public const string P = "/P";
 
+        /// <summary>(Optional)</summary>
         public const string ID = "/ID";
 
+        /// <summary>(Optional)</summary>
         public const string Pg = "/Pg";
 
+        /// <summary>(Optional)</summary>
         public const string K = "/K";
 
+        /// <summary>(Optional)</summary>
         public const string Lang = "/Lang";
 
+        /// <summary>(Optional)</summary>
         public const string Alt = "/Alt";
 
+        /// <summary>(Optional)</summary>
         public const string ActualText = "/ActualText";
 
         // PDF 2.0 addition (ISO 32000-2 §14.13, "Associated files") - not in ISO 32000-1 Table 323.
+        /// <summary>(Optional)</summary>
         public const string AF = "/AF";
 
 

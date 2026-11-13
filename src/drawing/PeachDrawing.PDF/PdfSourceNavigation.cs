@@ -23,7 +23,7 @@ public sealed record PdfSourceMetadata(string? Title, string? Author, string? Su
 /// <param name="PdfX">the PDF/X level named by the file</param>
 public sealed record PdfSourceConformance(PdfAConformance PdfA, PdfXConformance PdfX);
 
-/// <summary>The output intent of an opened PDF: the print or display condition its colours are meant for, with the ICC profile that describes it.</summary>
+/// <summary>The output intent of an opened PDF: the print or display condition its colors are meant for, with the ICC profile that describes it.</summary>
 /// <param name="Identifier">the output condition identifier, such as the name of a characterised printing condition</param>
 /// <param name="Info">a human-readable description of the condition, or <see langword="null"/></param>
 /// <param name="Profile">the ICC profile</param>

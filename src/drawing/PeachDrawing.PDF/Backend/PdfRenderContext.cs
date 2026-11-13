@@ -77,7 +77,7 @@ public class PdfRenderContext : RenderContext
     }
 
     /// <summary>
-    /// Adds a font to the context so pages can draw with it. TrueType, OpenType, WOFF and WOFF2 are recognised by their content.
+    /// Adds a font to the context so pages can draw with it. TrueType, OpenType, WOFF and WOFF2 are recognized by their content.
     /// </summary>
     /// <param name="stream">the font file; it is read to the end, and not closed</param>
     /// <param name="fontFamilyName">the family name to register it under, or <see langword="null"/> to take the name from the font file</param>
@@ -110,7 +110,7 @@ public class PdfRenderContext : RenderContext
 
     private void AddFont(ReadOnlyMemory<byte> data, string? fontFamilyName, FontFaceDescriptors descriptors, IReadOnlyList<RuneInterval>? unicodeRanges)
     {
-        // The font set recognises WOFF/WOFF2/TrueType/OpenType by content and reads the family name from the
+        // The font set recognizes WOFF/WOFF2/TrueType/OpenType by content and reads the family name from the
         // file when the caller gave none.
         var family = _fontSet.AddData(data, new AddOptions
         {

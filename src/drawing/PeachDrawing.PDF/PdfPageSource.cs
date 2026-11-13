@@ -14,7 +14,7 @@ namespace PeachDrawing.PDF;
 /// <remarks>
 /// <para>
 /// Painting re-draws the page's content rather than copying the file's objects, so it works the same on every canvas.
-/// On a <see cref="PdfCanvas"/> the text, paths, clips, colour and alpha come out as ordinary content of the new
+/// On a <see cref="PdfCanvas"/> the text, paths, clips, color and alpha come out as ordinary content of the new
 /// document, with fonts re-embedded and text keeping the text map of the original.
 /// </para>
 /// <para>
@@ -191,7 +191,7 @@ public sealed class PdfPageSource
     /// <returns>the levels, <c>None</c> where it claims none</returns>
     public PdfSourceConformance GetConformance() => _navigation.Conformance();
 
-    /// <summary>The file's output intent, the condition its colours are meant for, when it has one with a readable ICC profile.</summary>
+    /// <summary>The file's output intent, the condition its colors are meant for, when it has one with a readable ICC profile.</summary>
     /// <returns>the output intent, or <see langword="null"/></returns>
     public PdfSourceOutputIntent? GetOutputIntent() => _navigation.OutputIntent();
 

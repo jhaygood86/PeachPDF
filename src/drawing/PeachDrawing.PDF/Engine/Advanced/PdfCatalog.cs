@@ -270,24 +270,34 @@ internal sealed class PdfCatalog : PdfDictionary, IPdfDictionaryValue<PdfCatalog
         /// </summary>
         public const string PageLabels = "/PageLabels";
 
+        /// <summary>(Optional; PDF 1.2)</summary>
         public const string Names = "/Names";
 
+        /// <summary>(Optional; PDF 1.1)</summary>
         public const string Dests = "/Dests";
 
+        /// <summary>(Optional; PDF 1.2)</summary>
         public const string ViewerPreferences = "/ViewerPreferences";
 
+        /// <summary>(Optional)</summary>
         public const string PageLayout = "/PageLayout";
 
+        /// <summary>(Optional)</summary>
         public const string PageMode = "/PageMode";
 
+        /// <summary>(Optional)</summary>
         public const string Outlines = "/Outlines";
 
+        /// <summary>(Optional; PDF 1.1)</summary>
         public const string Threads = "/Threads";
 
+        /// <summary>(Optional; PDF 1.1)</summary>
         public const string OpenAction = "/OpenAction";
 
+        /// <summary>(Optional; PDF 1.4)</summary>
         public const string AA = "/AA";
 
+        /// <summary>(Optional; PDF 1.1)</summary>
         public const string URI = "/URI";
 
         /// <summary>
@@ -305,6 +315,7 @@ internal sealed class PdfCatalog : PdfDictionary, IPdfDictionaryValue<PdfCatalog
         /// (Optional; must be an indirect reference) The document's interactive form (AcroForm)
         /// dictionary.
         /// </summary>
+        /// <remarks>(PDF 1.2)</remarks>
         public const string AcroForm = "/AcroForm";
 
         /// <summary>

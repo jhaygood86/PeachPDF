@@ -1,20 +1,16 @@
 // Derived from PDFsharp (MIT) - see LICENSE.md
 
-using System.Linq;
 using System.Numerics;
 using PeachDrawing.PDF.Engine.Drawing;
-using PeachDrawing.Text.Outlines;
 using PeachDrawing.Text.Shaping;
 using PeachDrawing.Text;
 using PeachDrawing.Core;
-using PeachDrawing.PDF.Engine.Internal;
 using PeachDrawing.PDF.Engine;
 using PeachDrawing.PDF.Engine.Advanced;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
-using System.Text;
 
 // ReSharper disable RedundantNameQualifier
 // ReSharper disable CompareOfFloatsByEqualityOperator

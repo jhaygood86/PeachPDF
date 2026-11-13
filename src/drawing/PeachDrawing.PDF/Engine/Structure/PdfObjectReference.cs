@@ -48,10 +48,13 @@ internal sealed class PdfObjectReference : PdfDictionary
     {
         // Reference: ISO 32000-1 Table 325 - Entries in an object reference dictionary
 
+        /// <summary>(Required)</summary>
         public const string Type = "/Type";
 
+        /// <summary>(Optional)</summary>
         public const string Pg = "/Pg";
 
+        /// <summary>(Required)</summary>
         public const string Obj = "/Obj";
 
 

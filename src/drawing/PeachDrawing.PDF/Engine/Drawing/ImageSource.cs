@@ -112,7 +112,7 @@ internal readonly struct PngPassthroughData
     /// source's <c>tRNS</c> chunk when it's expressible as one - Grayscale/Truecolor <c>tRNS</c> is
     /// always a single exact chroma-key value, and a Palette <c>tRNS</c> qualifies whenever every
     /// listed entry is exactly 0 or 255 <em>and</em> the transparent indices form a single contiguous
-    /// run (PDF's colour-key mask for an Indexed colour space is exactly one <c>[min max]</c> range,
+    /// run (PDF's color-key mask for an Indexed color space is exactly one <c>[min max]</c> range,
     /// per ISO 32000-1 §8.9.6.4 - see <c>PeachImageSource.TryBuildPaletteColorKeyMask</c>).
     /// Null when the source has no <c>tRNS</c>, or (Palette only) when it has one but nothing in it is
     /// actually transparent. Mutually exclusive with <see cref="AlphaIdatData"/> - a source reaches

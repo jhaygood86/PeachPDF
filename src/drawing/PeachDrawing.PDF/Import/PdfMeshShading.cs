@@ -16,7 +16,7 @@ internal static class PdfMeshShading
     const int PatchDivisions = 14;
     const int MaxPixels = 2048;
 
-    /// <summary>A vertex of the mesh: a position in shading space and a colour (or, with a function, a parameter in <c>R</c>).</summary>
+    /// <summary>A vertex of the mesh: a position in shading space and a color (or, with a function, a parameter in <c>R</c>).</summary>
     readonly record struct Vertex(double X, double Y, double R, double G, double B, double A);
 
     /// <summary>Whether <paramref name="type"/> is a mesh shading this class reads.</summary>
@@ -63,7 +63,7 @@ internal static class PdfMeshShading
             return c;
         }
 
-        // A function maps a colour parameter through a lookup table; otherwise the components are converted directly.
+        // A function maps a color parameter through a lookup table; otherwise the components are converted directly.
         var lut = function is null ? null : BuildLut(function, space, alpha);
 
         Vertex ToVertex(double x, double y, double[] c)
@@ -245,7 +245,7 @@ internal static class PdfMeshShading
             int first = 0;
             if (flag != 0 && prevC is not null)
             {
-                // The new patch shares an edge with the previous one: its first four points and two colours come from there.
+                // The new patch shares an edge with the previous one: its first four points and two colors come from there.
                 (int I, int J)[] edge = flag switch
                 {
                     1 => [(0, 3), (1, 3), (2, 3), (3, 3)],
@@ -273,7 +273,7 @@ internal static class PdfMeshShading
             Array.Copy(p, prevP, p.Length);
             prevC = [c[0], c[1], c[2], c[3]];
             c = new double[4][];
-            // The corner colours of the new patch must start from the saved ones for edge-sharing flags; they are refilled above.
+            // The corner colors of the new patch must start from the saved ones for edge-sharing flags; they are refilled above.
         }
     }
 
@@ -314,7 +314,7 @@ internal static class PdfMeshShading
                         x += w * p[i, j].X;
                         y += w * p[i, j].Y;
                     }
-                // Corner colours c11 c14 c44 c41 sit at (u,v) = (0,0) (0,1) (1,1) (1,0).
+                // Corner colors c11 c14 c44 c41 sit at (u,v) = (0,0) (0,1) (1,1) (1,0).
                 double w11 = (1 - u) * (1 - v), w14 = (1 - u) * v, w44 = u * v, w41 = u * (1 - v);
                 grid[a, b] = new Vertex(x, y,
                     w11 * corner[0].R + w14 * corner[1].R + w44 * corner[2].R + w41 * corner[3].R,

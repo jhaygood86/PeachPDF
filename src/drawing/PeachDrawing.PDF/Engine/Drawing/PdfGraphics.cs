@@ -177,7 +177,7 @@ internal sealed partial class PdfGraphics : IDisposable
     /// When true, <see cref="DrawString(string, TypefaceFont, Brush, Rect, PdfStringFormat, double, FontPalette?, ShapeSettings?, string?)"/>
     /// shows text in PDF text rendering mode 3 (neither filled nor stroked): the glyphs are laid out, embedded and
     /// extractable exactly as visible text is, but paint nothing. Used to keep text selectable and searchable over content
-    /// that was drawn as a bitmap. Text decorations and colour-glyph artwork are not painted either.
+    /// that was drawn as a bitmap. Text decorations and color-glyph artwork are not painted either.
     /// </summary>
     public bool InvisibleText { get; set; }
 

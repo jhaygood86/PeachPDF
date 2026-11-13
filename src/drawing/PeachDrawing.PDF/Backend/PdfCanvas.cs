@@ -286,8 +286,8 @@ public sealed class PdfCanvas : Canvas
     /// the one real PDF-writing path that acts on it.</summary>
     public override void DrawString(string str, Font font, PaintColor color, PaintPoint point, Size size, double letterSpacing, FontPalette? fontPalette, ShapeSettings? features, string? logicalText)
     {
-        // Invisible text paints nothing, so its colour is irrelevant - and an opaque one keeps it clear of the alpha and
-        // colour-space guards a real colour would pass through.
+        // Invisible text paints nothing, so its color is irrelevant - and an opaque one keeps it clear of the alpha and
+        // color-space guards a real color would pass through.
         var xBrush = ToXBrush(_renderContext.GetSolidBrush(InvisibleText ? PaintColor.Black : color));
         _g.InvisibleText = InvisibleText;
         var xPoint = Units.ToPoints(point, PixelsPerPoint);
@@ -919,12 +919,12 @@ public sealed class PdfCanvas : Canvas
     /// PDF-specific half of what <c>pen conversion</c> used to do directly.
     /// </summary>
     /// <remarks>
-    /// A solid-colour pen goes through <see cref="Pen"/>'s <c>PaintColor</c> constructor rather than its
+    /// A solid-color pen goes through <see cref="Pen"/>'s <c>PaintColor</c> constructor rather than its
     /// <c>Brush</c> one, and must: <c>PdfGraphicsState.RealizePen</c> (the PDF writer's own
-    /// stroke-alpha/colour realization) reads <c>pen.PaintColor</c> - the <c>_color</c> field the
+    /// stroke-alpha/color realization) reads <c>pen.PaintColor</c> - the <c>_color</c> field the
     /// <c>PaintColor</c> constructor sets - not anything derived from <c>pen.Brush</c>, so a solid pen
     /// built via the brush constructor would keep <c>_color</c>'s default (opaque) value and silently
-    /// lose the colour's real alpha (e.g. from an SVG <c>stroke-opacity</c>). Only a gradient-painted
+    /// lose the color's real alpha (e.g. from an SVG <c>stroke-opacity</c>). Only a gradient-painted
     /// pen (<see cref="RenderContext.GetPen(Brush)"/>, e.g. SVG <c>stroke="url(#gradient)"</c>) needs the
     /// brush constructor - mirroring the split PdfRenderContext's own <c>CreatePen(PaintColor)</c>/
     /// <c>CreatePen(Brush)</c> used to make explicitly, before both collapsed into this one method.

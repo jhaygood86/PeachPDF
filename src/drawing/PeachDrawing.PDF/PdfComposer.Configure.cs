@@ -8,7 +8,7 @@ namespace PeachDrawing.PDF;
 public sealed partial class PdfComposer
 {
     /// <summary>
-    /// Applies <paramref name="options"/> to the document: fixes its format (version, conformance, colour management,
+    /// Applies <paramref name="options"/> to the document: fixes its format (version, conformance, color management,
     /// encryption, embedded files, compression), writes the document information, and writes whatever the claimed conformance
     /// level requires (the output intent, the XMP packet).
     /// </summary>
@@ -53,8 +53,8 @@ public sealed partial class PdfComposer
         settings.Linearize = options.Linearize;
         settings.BrotliCompression = options.BrotliCompression;
         settings.JxlPassthrough = options.JxlPassthrough;
-        // Undefined (not the engine default of Rgb) lets each colour write in whichever space it actually carries - RGB as
-        // /DeviceRGB, CMYK as /DeviceCMYK - rather than every CMYK colour being collapsed to a lossy RGB round trip. For an
+        // Undefined (not the engine default of Rgb) lets each color write in whichever space it actually carries - RGB as
+        // /DeviceRGB, CMYK as /DeviceCMYK - rather than every CMYK color being collapsed to a lossy RGB round trip. For an
         // all-RGB document this is byte-identical to Rgb mode.
         settings.ColorMode = PdfColorMode.Undefined;
         settings.DownscaleImages = options.DownscaleImages;
@@ -372,7 +372,7 @@ public sealed partial class PdfComposer
             _document.Catalog.SetOutputIntent(outputIntent);
         }
 
-        // A document with no PDF/A or PDF/X level can still say what its colours are meant for: an output intent with the profile and
+        // A document with no PDF/A or PDF/X level can still say what its colors are meant for: an output intent with the profile and
         // condition it was given. It uses the same subtype a press-ready file does; the level claims (the XMP packet's identification
         // and the information dictionary's version) are what say a file conforms, and none is written here.
         if (!pdfAConformanceRequested && !pdfXConformanceRequested && options.ColorOptions?.OutputIntentProfile is { Length: > 0 } plainProfile
@@ -422,8 +422,8 @@ public sealed partial class PdfComposer
     }
 
     /// <summary>
-    /// Each non-default colour conversion mode needs its own destination ICC profile set and parseable: validated once, up front
-    /// (fail loudly, don't write a placeholder) rather than discovered deep in a colour guard partway through painting.
+    /// Each non-default color conversion mode needs its own destination ICC profile set and parseable: validated once, up front
+    /// (fail loudly, don't write a placeholder) rather than discovered deep in a color guard partway through painting.
     /// </summary>
     private static void ValidateColorOptions(ColorOptions? colorOptions)
     {

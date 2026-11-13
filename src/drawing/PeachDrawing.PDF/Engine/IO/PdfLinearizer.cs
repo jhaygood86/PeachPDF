@@ -385,10 +385,12 @@ internal static class PdfLinearizer
         }
 
         // The placeholder is as wide as the real value, so it is overwritten in place.
-        var at = section.AsSpan().IndexOf(PrevPlaceholderText);
-        if (at < 0)
+        // Only what follows the /Prev key is searched: the digits could just as well occur in an offset or in the /ID before it.
+        var prev = section.AsSpan().IndexOf("/Prev"u8);
+        var offset = prev < 0 ? -1 : section.AsSpan(prev).IndexOf(PrevPlaceholderText);
+        if (offset < 0)
             throw new InvalidOperationException("The first-page trailer lost its /Prev placeholder.");
-        Encoding.ASCII.GetBytes(D10(mainXrefOffset), section.AsSpan(at));
+        Encoding.ASCII.GetBytes(D10(mainXrefOffset), section.AsSpan(prev + offset));
         return section;
     }
 

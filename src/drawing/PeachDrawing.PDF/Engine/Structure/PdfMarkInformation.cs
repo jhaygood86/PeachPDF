@@ -38,10 +38,13 @@ internal sealed class PdfMarkInformation : PdfDictionary, IPdfDictionaryValue<Pd
     {
         // Reference: ISO 32000-1 Table 321 - Entries in the mark information dictionary
 
+        /// <summary>(Optional)</summary>
         public const string Marked = "/Marked";
 
+        /// <summary>(Optional)</summary>
         public const string UserProperties = "/UserProperties";
 
+        /// <summary>(Optional)</summary>
         public const string Suspects = "/Suspects";
 
 

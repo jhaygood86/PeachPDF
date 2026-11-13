@@ -1,11 +1,8 @@
 // Derived from PDFsharp (MIT) - see LICENSE.md
 
-using System.Numerics;
 using PeachDrawing.Core;
 using PeachDrawing.PDF.Engine.Drawing;
-using PeachDrawing.PDF.Engine.Rendering;
 using PeachDrawing.PDF.Engine.Internal;
-using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Text;
