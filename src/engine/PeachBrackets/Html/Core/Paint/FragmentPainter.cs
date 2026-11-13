@@ -1183,7 +1183,7 @@ namespace PeachBrackets.Html.Paint
             if (!_textOnly && (box.ColumnRuleSegments is { Count: > 0 } || box.BlockAxisColumnRuleSegments is { Count: > 0 })
                 && box.ActualColumnRuleWidth > 0)
             {
-                PaintColumnRules(g, box, fragment.OriginY, clip);
+                PaintColumnRules(g, box, fragment.OriginY, clip, container.SnapBoxDecorationsToCssPixels);
             }
 
             PaintWords(g, box, fragment);

@@ -421,7 +421,8 @@ namespace PeachBrackets.Engine.Tests.Integration
 
             var g = new TestRecordingGraphics();
             FragmentPaintHarness.PaintBox(container, mc, g);
-            var horizontal = g.Log.OfType<TestRecordingGraphics.DrawLineCall>().Where(l => System.Math.Abs(l.Y1 - l.Y2) < 0.01 && l.X1 != l.X2).ToList();
+            var horizontal = g.Log.OfType<TestRecordingGraphics.DrawPolygonCall>()
+                .Where(p => p.Points.Max(q => q.X) - p.Points.Min(q => q.X) > p.Points.Max(q => q.Y) - p.Points.Min(q => q.Y)).ToList();
             Assert.Equal(2, horizontal.Count);
         }
 
