@@ -158,6 +158,21 @@ public class LayoutPaintCoverageTests
         Assert.NotEqual(White, PageRaster.Rgb(canvas, 95, 75));
     }
 
+    [Theory]
+    [InlineData("bottom")]
+    [InlineData("top")]
+    public async Task AnEdgeAlignedInlineBlockWithADeclaredHeightMakesTheLineThatTall(string align)
+    {
+        // The line is 40px tall for the box, so the box fills it from its top edge down, and what follows is below it.
+        using var canvas = await PageRaster.RenderAsync(
+            $"<div style='font-size:0'><div style='display:inline-block;vertical-align:{align};width:30px;height:40px;background:rgb(0,128,0)'>x</div></div>" +
+            "<div style='height:10px;background:rgb(0,0,255)'></div>");
+
+        Assert.Equal(Green, PageRaster.Rgb(canvas, 10, 2));
+        Assert.Equal(Green, PageRaster.Rgb(canvas, 10, 37));
+        Assert.Equal((0, 0, 255), PageRaster.Rgb(canvas, 10, 45));
+    }
+
     [Fact]
     public async Task ADeclaredWidthInlineBlockThatDoesNotFitTheLineStartsTheNextOne()
     {

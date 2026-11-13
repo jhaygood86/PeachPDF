@@ -139,9 +139,10 @@ namespace PeachPDF.Tests.Integration
             var naturalClip = ClipRectOf(await PageContentAsync(naturalHtml));
             var grownClip = ClipRectOf(await PageContentAsync(grownHtml));
 
-            Assert.Equal(naturalClip.Bottom, grownClip.Bottom, 1);
+            // The line is as tall as the box (CSS 2.1 section 10.8.1), so the extra height is above the baseline of the text beside it, which moves down with the
+            // line's bottom edge: the box's bottom edge is no longer where it was, but the box is the declared height and reaches at least as high as it did.
             Assert.Equal(80.0, grownClip.Top - grownClip.Bottom, 1);
-            Assert.True(grownClip.Top > naturalClip.Top,
+            Assert.True(grownClip.Top >= naturalClip.Top - 0.1,
                 $"growth must extend upward: natural top {naturalClip.Top}, grown top {grownClip.Top}");
         }
 
