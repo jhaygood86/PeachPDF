@@ -152,7 +152,7 @@ internal readonly struct PngPassthroughData
 /// decompress-then-recompress round trip - but GIF's own LZW bitstream isn't literally byte-for-byte
 /// reusable as PDF's (different bit-packing order and code-width growth timing despite the same
 /// underlying code values), so the actual embed re-packs it - see
-/// <c>PeachDrawing.PDF.Engine.Advanced.PdfImage.RepackGifLzwForPdf</c>'s own remarks for the full
+/// <c>PeachDrawing.PDF.Engine.Advanced.PdfGifLzw.RepackGifLzwForPdf</c>'s own remarks for the full
 /// explanation. See <see cref="ImageSource.IImageSource.GifPassthrough"/> for when this applies.
 /// </summary>
 internal readonly struct GifPassthroughData
@@ -315,7 +315,7 @@ internal abstract class ImageSource
         /// <c>MinCodeSize</c> is exactly 8 (GIF then starts codes at the same 9-bit width/Clear-code-256
         /// convention PDF's <c>/LZWDecode</c> always uses - the code *values* and widths line up, even
         /// though the bit-packing itself still needs re-packing, since GIF and PDF pack codes in
-        /// opposite bit order - see <c>PdfImage.RepackGifLzwForPdf</c>), and the frame covers the full
+        /// opposite bit order - see <c>PdfGifLzw.RepackGifLzwForPdf</c>), and the frame covers the full
         /// logical canvas (pass-through has no canvas-compositing step, unlike the existing full
         /// decode). A declared transparent color
         /// index maps onto <see cref="GifPassthroughData.ColorKeyMask"/>, PDF's color-key mask
