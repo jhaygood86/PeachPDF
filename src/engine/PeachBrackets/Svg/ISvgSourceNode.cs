@@ -135,6 +135,16 @@ namespace PeachBrackets.Svg
         double? RootFontSizePx => null;
 
         /// <summary>
+        /// The <c>width</c> and <c>height</c> the embedding document's CSS gives this root <c>&lt;svg&gt;</c>, in CSS px, when it is a plain length (not
+        /// <c>auto</c> or a percentage): the size of the viewport a percentage inside it resolves against when the element has no <c>width</c>/<c>height</c>
+        /// attribute or <c>viewBox</c> of its own. Null (the default) for a standalone SVG.
+        /// </summary>
+        double? CssWidthPx => null;
+
+        /// <summary>See <see cref="CssWidthPx"/>.</summary>
+        double? CssHeightPx => null;
+
+        /// <summary>
         /// What the font of the embedding document's root element measures, as a multiple of its em, for <c>rex</c>/<c>rch</c>/<c>rcap</c>/<c>ric</c>/<c>rlh</c>
         /// (CSS Values 4 §6.1.2). Null (the default) when there is no such font: a standalone SVG measures its own root <c>&lt;svg&gt;</c>'s.
         /// </summary>

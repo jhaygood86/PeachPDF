@@ -535,8 +535,9 @@ namespace PeachBrackets.Svg
                 _document.Width = SvgValueParsers.ParseLength(rootWidth, null, _rootBasis);
             if (root.GetAttribute("height") is { } rootHeight && rootHeight.AsSpan().ContainsAny("emxchlcp"))
                 _document.Height = SvgValueParsers.ParseLength(rootHeight, null, _rootBasis);
-            _viewportWidth = _document.ViewBox?.Width ?? _document.Width;
-            _viewportHeight = _document.ViewBox?.Height ?? _document.Height;
+            // An inline <svg> sized only by CSS has no attribute or viewBox to give the viewport a percentage resolves against; its CSS size is it.
+            _viewportWidth = _document.ViewBox?.Width ?? _document.Width ?? root.CssWidthPx;
+            _viewportHeight = _document.ViewBox?.Height ?? _document.Height ?? root.CssHeightPx;
             _rootViewportWidth = _viewportWidth;
             _rootViewportHeight = _viewportHeight;
 
