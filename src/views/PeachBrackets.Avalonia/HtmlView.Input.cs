@@ -86,6 +86,12 @@ public sealed partial class HtmlView
             _touchAllowed = document.GetInteractionAt(page, x, y).TouchActions;
 
         RequestPointerState(page, x, y, pressed: true);
+        if (BeginRangeDrag(page, x, y))
+        {
+            _pressedInField = true;
+            return;
+        }
+
         if (PressInTextField(page, x, y, e.ClickCount))
         {
             _pressedInField = true;
@@ -128,6 +134,12 @@ public sealed partial class HtmlView
 
         if (_pressedInField)
         {
+            if (DragRange(position))
+            {
+                _lastPoint = position;
+                return;
+            }
+
             if (TryLocate(position, out var fieldPage, out var fieldX, out var fieldY))
                 DragInTextField(fieldPage, fieldX, fieldY);
 
