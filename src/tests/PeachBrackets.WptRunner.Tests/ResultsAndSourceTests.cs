@@ -70,15 +70,14 @@ public sealed class ResultsAndSourceTests : IDisposable
     }
 
     [Fact]
-    public void Prepare_SetsABase_AndMakesStylesheetsAndImportsAbsolute()
+    public void Prepare_SetsABase_AndLeavesReferencesRelativeForTheEngineToResolve()
     {
         var html = WptRenderer.Prepare("css/a/t.html",
-            "<html><head><link rel=stylesheet href=\"/fonts/ahem.css\"><style>@import \"local.css\"; @import url('../up.css');</style></head><body>x</body></html>");
+            "<html><head><link rel=stylesheet href=\"/fonts/ahem.css\"><style>@import \"local.css\";</style></head><body>x</body></html>");
 
         Assert.Contains("<base href=\"http://wpt.test/css/a/\">", html);
-        Assert.Contains("href=\"http://wpt.test/fonts/ahem.css\"", html);
-        Assert.Contains("@import \"http://wpt.test/css/a/local.css\"", html);
-        Assert.Contains("@import url('http://wpt.test/css/up.css'", html);
+        Assert.Contains("href=\"/fonts/ahem.css\"", html);
+        Assert.Contains("@import \"local.css\"", html);
     }
 
     [Fact]

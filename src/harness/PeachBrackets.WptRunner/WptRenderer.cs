@@ -25,15 +25,6 @@ internal sealed partial class WptRenderer(string wptRoot) : IReftestRenderer
     [GeneratedRegex(@"<\?xml[^>]*\?>", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex XmlDeclaration();
 
-    [GeneratedRegex(@"<link\b[^>]*\brel\s*=\s*[""']?stylesheet[^>]*>", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
-    private static partial Regex StylesheetLink();
-
-    [GeneratedRegex("""\bhref\s*=\s*(?:(["'])(.*?)\1|([^\s>]+))""", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
-    private static partial Regex HrefAttribute();
-
-    [GeneratedRegex("""(@import\s+(?:url\(\s*)?(["']?))([^"')\s;]+)(\2)""", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
-    private static partial Regex ImportRule();
-
     public string FullPath(string wptPath) => Path.Combine(wptRoot, wptPath.Replace('/', Path.DirectorySeparatorChar));
 
     public async Task<RgbaImage> RenderAsync(string wptPath)
@@ -73,7 +64,7 @@ internal sealed partial class WptRenderer(string wptRoot) : IReftestRenderer
         return new RgbaImage(buffer.Width, buffer.Height, pixels);
     }
 
-    /// <summary>Makes the source loadable as the WPT server would serve it: XML syntax a browser's XML parser would take is rewritten, and a base URL is set so relative references resolve.</summary>
+    /// <summary>Makes the source loadable as the WPT server would serve it: XML syntax a browser's XML parser would take is rewritten, and a base URL is set so relative references (stylesheets, images, fonts) resolve.</summary>
     internal static string Prepare(string wptPath, string source)
     {
         if (wptPath.EndsWith(".xht", StringComparison.OrdinalIgnoreCase) || wptPath.EndsWith(".xhtml", StringComparison.OrdinalIgnoreCase))
@@ -85,17 +76,6 @@ internal sealed partial class WptRenderer(string wptRoot) : IReftestRenderer
         var directory = ReftestParser.DirectoryOf(wptPath);
         var baseUri = new Uri($"{Origin}/{directory}/");
         var baseTag = $"<base href=\"{baseUri}\">";
-
-        // The engine resolves a <link> stylesheet before it knows the document's <base> (and a RasterRenderContext has no base of its own),
-        // so a stylesheet link is made absolute here; images and fonts the stylesheet names resolve against the stylesheet's own address.
-        source = StylesheetLink().Replace(source, link => HrefAttribute().Replace(link.Value, href =>
-        {
-            var quote = href.Groups[1].Value.Length > 0 ? href.Groups[1].Value : "\"";
-            var value = href.Groups[2].Success ? href.Groups[2].Value : href.Groups[3].Value;
-            return Uri.TryCreate(baseUri, System.Net.WebUtility.HtmlDecode(value), out var absolute) ? $"href={quote}{absolute.AbsoluteUri}{quote}" : href.Value;
-        }, 1));
-        source = ImportRule().Replace(source, import =>
-            Uri.TryCreate(baseUri, import.Groups[3].Value, out var absolute) ? $"{import.Groups[1].Value}{absolute.AbsoluteUri}{import.Groups[4].Value}" : import.Value);
 
         if (HeadTag().Match(source) is { Success: true } head)
             return source.Insert(head.Index + head.Length, baseTag);

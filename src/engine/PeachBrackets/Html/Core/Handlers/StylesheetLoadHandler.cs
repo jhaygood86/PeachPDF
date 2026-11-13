@@ -57,9 +57,9 @@ namespace PeachBrackets.Html.Handlers
                 // Content-Type, so it passes the same gate as a fetched one (no separate file-system path).
                 var uri = CommonUtils.ResolveAgainstDocumentBase(htmlContainer, src, importingBaseUri);
 
-                if (uri is null)
+                if (uri is not { IsAbsoluteUri: true })
                 {
-                    // An unresolvable reference (e.g. a malformed URL) is treated as "not a stylesheet" -
+                    // An unresolvable reference (a malformed URL, or a relative one with no base address to resolve it against) is treated as "not a stylesheet" -
                     // return empty and keep rendering, matching the missing/wrong-content-type handling below.
                     return (string.Empty, null);
                 }
