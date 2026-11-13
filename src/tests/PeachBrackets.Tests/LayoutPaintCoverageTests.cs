@@ -44,6 +44,33 @@ public class LayoutPaintCoverageTests
         Assert.Equal(Green, PageRaster.Rgb(canvas, 10, 10));
     }
 
+    [Theory]
+    [InlineData("align-self:center;justify-self:center", 35, 35, true)]
+    [InlineData("align-self:end;justify-self:end", 85, 85, true)]
+    [InlineData("align-self:flex-end", 10, 85, true)]
+    [InlineData("align-self:start", 10, 10, true)]
+    [InlineData("safe center", 10, 10, false)]
+    public async Task AnAbsoluteGridChildIsAlignedInItsStaticPositionRectangle(string alignment, int x, int y, bool declaration)
+    {
+        var style = declaration ? alignment : "align-self:safe center";
+        using var canvas = await PageRaster.RenderAsync(
+            "<div style='display:grid;width:100px;height:100px'>" +
+            $"<div style='position:absolute;width:30px;height:30px;background:rgb(0,128,0);{style}'></div></div>");
+
+        Assert.Equal(Green, PageRaster.Rgb(canvas, x, y));
+    }
+
+    [Fact]
+    public async Task TheContainersAlignItemsAppliesToAnAbsoluteChildWithoutItsOwnAlignSelf()
+    {
+        using var canvas = await PageRaster.RenderAsync(
+            "<div style='display:grid;width:100px;height:100px;align-items:end;justify-items:center'>" +
+            "<div style='position:absolute;width:30px;height:30px;background:rgb(0,128,0)'></div></div>");
+
+        Assert.Equal(Green, PageRaster.Rgb(canvas, 50, 85));
+        Assert.Equal(White, PageRaster.Rgb(canvas, 50, 10));
+    }
+
     [Fact]
     public async Task AWrappingFlexColumnWithADefiniteHeightIsAsWideAsItsColumns()
     {

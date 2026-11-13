@@ -2829,6 +2829,8 @@ namespace PeachBrackets.Html.Dom
 
         public static double GetActualMarginLeft(CssBox box, double? boxWidth = null, double? blockTop = null)
         {
+            if (!box.MarginApplies) return 0;
+
             var marginLeft = box.MarginLeft.Value;
             if (marginLeft.IsValue)
             {
@@ -2871,6 +2873,8 @@ namespace PeachBrackets.Html.Dom
 
         public static double GetActualMarginRight(CssBox box, double? boxWidth = null, double? blockTop = null)
         {
+            if (!box.MarginApplies) return 0;
+
             var marginRight = box.MarginRight.Value;
             if (marginRight.IsValue)
             {
@@ -5034,9 +5038,14 @@ namespace PeachBrackets.Html.Dom
             // Zero for an auto width, where the content's own advance is all there is.
             var contentWidth = box.AvailableWidth;
 
-            if (usedContentWidth < contentWidth)
+            // A declared width (zero included) is the box's width: content wider than it overflows the box rather than widening it
+            // (css 2.1 §10.3.9), so the line advances by the declared width alone.
+            var declaredWidth = CssValueParser.IsValidLength(box.Width) && !CssValueParser.DependsOnPercentage(box.Width);
+
+            if (declaredWidth || usedContentWidth < contentWidth)
             {
                 coordinates.CurrentX = startX + contentWidth;
+                if (declaredWidth) usedContentWidth = Math.Min(usedContentWidth, contentWidth);
             }
 
             var leadingSpacing = box.ActualBorderLeftWidth + box.ActualPaddingLeft;
@@ -6333,6 +6342,7 @@ namespace PeachBrackets.Html.Dom
             }
 
             if (available <= 0) return false;
+
 
             // A hair of slack, so a box whose content measures its own width exactly - the overwhelmingly
             // common `width` set to fit its label - is not pushed onto the atomic path by rounding.
@@ -8091,7 +8101,13 @@ namespace PeachBrackets.Html.Dom
                 // inline-flow path instead.
                 if (childDeclaredContentWidth is { } declaredContentWidth)
                 {
-                    coordinates.CurrentX = Math.Max(coordinates.CurrentX, childContentStartX + declaredContentWidth);
+                    // A box that kept to its line advances the line by its declared width exactly: its content wider than that overflows the box
+                    // (css 2.1 section 10.3.9) and does not push what follows it along.
+                    // A box that kept to its line and holds words advances the line by its declared width exactly: its content wider than that
+                    // overflows the box (css 2.1 section 10.3.9) and does not push what follows it along.
+                    coordinates.CurrentX = b.Words.Count > 0 && ReferenceEquals(lineBeforeChild, coordinates.Line)
+                        ? childContentStartX + declaredContentWidth
+                        : Math.Max(coordinates.CurrentX, childContentStartX + declaredContentWidth);
                 }
 
                 // A box whose content was all placed in an earlier fragmentainer is not re-closed here

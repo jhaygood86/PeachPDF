@@ -1490,7 +1490,7 @@
       "name": "counter-reset",
       "comment": "cssDataType 'cssom-grammar' calls CounterResetProperty.ValueGrammar.Convert directly (the real grammar, exposed alongside the property's own .OrDefault()-wrapped Converter) instead of the full cssom round trip.",
       "inherited": false,
-      "cssom": {"converter": "Continuous( WithOrder(IdentifierConverter.Required(), IntegerConverter.Option(0)))"},
+      "cssom": {"converter": "Continuous( WithOrder(CounterNameOrReversedConverter.Required(), IntegerConverter.Option(0)))"},
       "initialValue": "none",
       "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.CounterResetProperty.ValueGrammar.Convert" },
       "html": {

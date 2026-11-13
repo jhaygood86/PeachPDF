@@ -389,17 +389,28 @@ namespace PeachBrackets.Css
             return percent?.NormalizedValue;
         }
 
+        /// <summary>
+        /// One component of <c>rgb()</c>: a <c>&lt;number&gt;</c> (not only an integer) or a <c>&lt;percentage&gt;</c> of 255, clamped to the range and
+        /// rounded to the nearest 8-bit value (css-color-4 section 5.1).
+        /// </summary>
         public static byte? ToRgbComponent(this IReadOnlyList<Token> value)
         {
-            var element = value.ToNaturalInteger();
+            var element = value.OnlyOrDefault();
 
-            if (element.HasValue) return (byte)Math.Min(element.Value, 255);
+            double component;
+            switch (element)
+            {
+                case { Type: TokenType.Number } number:
+                    component = number.Value;
+                    break;
+                case { Type: TokenType.Percentage } percentage:
+                    component = percentage.Value * 255.0 / 100.0;
+                    break;
+                default:
+                    return null;
+            }
 
-            var percent = value.ToPercent();
-
-            if (!percent.HasValue) return null;
-
-            return (byte)(255f * percent.Value.NormalizedValue);
+            return (byte)Math.Clamp(Math.Round(component, MidpointRounding.AwayFromZero), 0, 255);
         }
 
         public static Angle? ToAngle(this IReadOnlyList<Token> value)

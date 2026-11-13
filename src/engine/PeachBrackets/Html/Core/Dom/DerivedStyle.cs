@@ -715,6 +715,8 @@ namespace PeachBrackets.Html.Dom
         /// </summary>
         private double ResolvePadding(string value, ref double cache)
         {
+            if (!Owner.PaddingApplies) return 0;
+
             // Only a percentage needs the containing block's width, and reading it for every padding would recurse:
             // that width is itself the containing block's size minus the containing block's padding.
             if (!value.Contains('%'))

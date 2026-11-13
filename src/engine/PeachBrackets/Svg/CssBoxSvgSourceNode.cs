@@ -202,6 +202,17 @@ namespace PeachBrackets.Svg
         /// like any other element's, against this.</summary>
         public double? InheritedFontSizePx => HasFonts && _box.ParentBox is { } parent ? parent.GetEmHeight() / Length.PointsPerPx : null;
 
+        /// <summary>The plain-length CSS <c>width</c> of the inline <c>&lt;svg&gt;</c>, in CSS px.</summary>
+        public double? CssWidthPx => HasFonts ? CssLengthPx(_box.Width) : null;
+
+        /// <summary>The plain-length CSS <c>height</c> of the inline <c>&lt;svg&gt;</c>, in CSS px.</summary>
+        public double? CssHeightPx => HasFonts ? CssLengthPx(_box.Height) : null;
+
+        private double? CssLengthPx(string value) =>
+            Html.Parse.CssValueParser.IsValidLength(value) && !value.EndsWith('%') && !Html.Parse.CssValueParser.DependsOnPercentage(value)
+                ? Html.Parse.CssValueParser.ParseLength(value, 0, _box) / Length.PointsPerPx
+                : null;
+
         /// <summary>The font size of the HTML root element, which is <c>rem</c>.</summary>
         public double? RootFontSizePx => HasFonts ? _box.GetRemHeight() / Length.PointsPerPx : null;
 

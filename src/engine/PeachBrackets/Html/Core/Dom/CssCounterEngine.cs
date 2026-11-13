@@ -113,7 +113,7 @@ namespace PeachBrackets.Html.Dom
                 // reversed(<counter-name>). A non-reversed bare name just uses the CSS-default initial
                 // value of 0.
                 var initialValue = entry.Value
-                    ?? (entry.IsReversed ? CountScopeIncrements(box, entry.Name) + 1 : 0);
+                    ?? (entry.IsReversed ? ReversedInitialValue(box, entry.Name) : 0);
 
                 var parentScopeCounter = box.GetCounterOrNull(entry.Name);
                 box.Counters[entry.Name] = new CssCounter(entry.Name, initialValue, entry.IsReversed, true, parentScopeCounter, ScopeParentOf(box, entry.Name));
@@ -198,6 +198,46 @@ namespace PeachBrackets.Html.Dom
 
         private static bool CounterNameAppears(string counterPropertyValue, string counterName) =>
             CounterListGrammar.Mentions(counterPropertyValue, counterName);
+
+        /// <summary>
+        /// The initial value of a bare <c>reversed(name)</c> counter (css-lists-3 §4.4): the value the counter must start at so that the
+        /// first element which sets it lands on the value it sets, and otherwise so that the last incrementing element lands on 1. In
+        /// document order, every element in the scope adds its increment (the explicit <c>counter-increment</c> for the name, or the
+        /// reversed default of -1 for a list item), and an element's own <c>counter-set</c> follows its increment, so the start is
+        /// <c>set value - the sum so far</c>; when nothing sets it the last incrementing element lands on the negation of its own increment
+        /// (1 for the default -1), so it is <c>-(last increment) - the whole sum</c>: the count of elements plus one when every increment is
+        /// the default.
+        /// </summary>
+        private static int ReversedInitialValue(CssBox scopeBox, string counterName)
+        {
+            var sum = 0;
+            var lastIncrement = -1;
+            return ReversedInitialValueRecursive(scopeBox, counterName, ref sum, ref lastIncrement) ?? -lastIncrement - sum;
+        }
+
+        private static int? ReversedInitialValueRecursive(CssBox box, string counterName, ref int sum, ref int lastIncrement)
+        {
+            foreach (var child in box.Boxes)
+            {
+                if (WouldIncrementCounter(child, counterName))
+                {
+                    var explicitIncrement = CounterListGrammar.Parse(child.CounterIncrement).FirstOrDefault(e => e.Name == counterName);
+                    lastIncrement = explicitIncrement.Name is not null ? explicitIncrement.Value ?? 1 : -1;
+                    sum += lastIncrement;
+                }
+
+                var setEntry = CounterListGrammar.Parse(GetEffectiveCounterSet(child)).FirstOrDefault(e => e.Name == counterName);
+                if (setEntry.Name is not null) return (setEntry.Value ?? 0) - sum;
+
+                if (!CounterNameAppears(GetEffectiveCounterReset(child), counterName))
+                {
+                    var nested = ReversedInitialValueRecursive(child, counterName, ref sum, ref lastIncrement);
+                    if (nested is not null) return nested;
+                }
+            }
+
+            return null;
+        }
 
         /// <summary>
         /// Counts descendants of <paramref name="scopeBox"/> that would increment

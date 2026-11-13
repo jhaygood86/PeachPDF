@@ -15,6 +15,7 @@ using PeachDrawing.Core;
 using PeachBrackets.Html.Dom;
 using PeachBrackets.Html.Utils;
 using System;
+using System.Collections.Generic;
 
 namespace PeachBrackets.Html.Handlers
 {
@@ -78,6 +79,9 @@ namespace PeachBrackets.Html.Handlers
             if (tileWidth <= 0 || tileHeight <= 0)
                 return;
 
+            var (horizontalRepeat, verticalRepeat) = SplitRepeat(backgroundRepeat);
+            (tileWidth, tileHeight) = RoundTiles(horizontalRepeat, verticalRepeat, sizeValue, positioningRect, tileWidth, tileHeight);
+
             var (offsetX, offsetY) = BackgroundLayerResolver.ResolvePosition(
                 positionValue, positioningRect.Width, positioningRect.Height, tileWidth, tileHeight, box);
 
@@ -123,20 +127,31 @@ namespace PeachBrackets.Html.Handlers
             // positioningRect's full extent - see visibleRect's own doc comment above.
             var tileBounds = Rect.Intersect(positioningRect, visibleRect);
 
-            switch (backgroundRepeat)
+            if (horizontalRepeat is "space" or "round" || verticalRepeat is "space" or "round")
             {
-                case "no-repeat":
-                    ImageOrientationPainter.Draw(g, image, destRect, srcRect, sampling, orientation);
-                    break;
-                case "repeat-x":
-                    DrawRepeatX(g, image, tileBounds, srcRect, destRect, sampling, orientation);
-                    break;
-                case "repeat-y":
-                    DrawRepeatY(g, image, tileBounds, srcRect, destRect, sampling, orientation);
-                    break;
-                default:
-                    DrawRepeat(g, image, tileBounds, srcRect, destRect, sampling, orientation);
-                    break;
+                var xs = AxisPositions(horizontalRepeat, positioningRect.X, positioningRect.Width, destRect.X, destRect.Width, tileBounds.X, tileBounds.Right);
+                var ys = AxisPositions(verticalRepeat, positioningRect.Y, positioningRect.Height, destRect.Y, destRect.Height, tileBounds.Y, tileBounds.Bottom);
+                foreach (var y in ys)
+                    foreach (var x in xs)
+                        ImageOrientationPainter.Draw(g, image, new Rect(x, y, destRect.Width, destRect.Height), srcRect, sampling, orientation);
+            }
+            else
+            {
+                switch (backgroundRepeat)
+                {
+                    case "no-repeat":
+                        ImageOrientationPainter.Draw(g, image, destRect, srcRect, sampling, orientation);
+                        break;
+                    case "repeat-x":
+                        DrawRepeatX(g, image, tileBounds, srcRect, destRect, sampling, orientation);
+                        break;
+                    case "repeat-y":
+                        DrawRepeatY(g, image, tileBounds, srcRect, destRect, sampling, orientation);
+                        break;
+                    default:
+                        DrawRepeat(g, image, tileBounds, srcRect, destRect, sampling, orientation);
+                        break;
+                }
             }
 
             g.PopClip();
@@ -144,6 +159,84 @@ namespace PeachBrackets.Html.Handlers
 
 
         #region Private methods
+
+        /// <summary>The horizontal and vertical repeat of a normalized <c>background-repeat</c> value (<c>repeat-x</c> and <c>repeat-y</c> being the two-value forms they name).</summary>
+        private static (string Horizontal, string Vertical) SplitRepeat(string normalized)
+        {
+            switch (normalized)
+            {
+                case "repeat-x": return ("repeat", "no-repeat");
+                case "repeat-y": return ("no-repeat", "repeat");
+            }
+
+            var parts = normalized.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            return parts.Length >= 2 ? (parts[0], parts[1]) : (normalized, normalized);
+        }
+
+        /// <summary>
+        /// <c>round</c> (CSS Backgrounds 3 section 3.4): the tile is rescaled so a whole number of them fills the positioning area along that axis. When the
+        /// other axis' size is <c>auto</c> and it does not round itself, it is rescaled by the same factor to keep the image's proportions.
+        /// </summary>
+        private static (double Width, double Height) RoundTiles(string horizontal, string vertical, string sizeValue, Rect area, double width, double height)
+        {
+            var parts = (sizeValue ?? string.Empty).Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            var heightIsAuto = parts.Length < 2 || parts[1].Equals("auto", StringComparison.OrdinalIgnoreCase);
+            var widthIsAuto = parts.Length < 1 || parts[0].Equals("auto", StringComparison.OrdinalIgnoreCase);
+            var (newWidth, newHeight) = (width, height);
+
+            if (horizontal == "round" && area.Width > 0)
+            {
+                newWidth = area.Width / Math.Max(1, Math.Round(area.Width / width));
+                if (vertical != "round" && heightIsAuto) newHeight = height * newWidth / width;
+            }
+
+            if (vertical == "round" && area.Height > 0)
+            {
+                newHeight = area.Height / Math.Max(1, Math.Round(area.Height / height));
+                if (horizontal != "round" && widthIsAuto) newWidth = width * newHeight / height;
+            }
+
+            return (newWidth, newHeight);
+        }
+
+        /// <summary>
+        /// Where the tiles start along one axis. <c>space</c> puts as many whole tiles as fit across the positioning area with the leftover shared between
+        /// them (one tile that fits is placed where <c>background-position</c> puts it; none that fit is that tile, clipped); <c>round</c> (already resized)
+        /// and <c>repeat</c> repeat from the positioned tile across the area that shows; <c>no-repeat</c> is the one tile.
+        /// </summary>
+        private static List<double> AxisPositions(string mode, double areaStart, double areaSize, double tileStart, double tileSize, double visibleStart, double visibleEnd)
+        {
+            var positions = new List<double>();
+            switch (mode)
+            {
+                case "space":
+                {
+                    var count = (int)Math.Floor((areaSize + 0.01) / tileSize);
+                    if (count <= 1)
+                    {
+                        positions.Add(tileStart);
+                        break;
+                    }
+
+                    var gap = (areaSize - count * tileSize) / (count - 1);
+                    for (var i = 0; i < count && i < MaxTilesPerAxis; i++)
+                        positions.Add(areaStart + i * (tileSize + gap));
+                    break;
+                }
+                case "no-repeat":
+                    positions.Add(tileStart);
+                    break;
+                default:
+                {
+                    var x = FirstTileStart(tileStart, tileSize, visibleStart);
+                    for (var i = 0; i < MaxTilesPerAxis && x < visibleEnd; i++, x += tileSize)
+                        positions.Add(x);
+                    break;
+                }
+            }
+
+            return positions;
+        }
 
         /// <summary>
         /// Hard cap on tiles drawn per axis, guarding against a pathologically tiny resolved

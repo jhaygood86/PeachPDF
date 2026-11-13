@@ -1413,10 +1413,24 @@ namespace PeachBrackets.Html.Dom
         public double? AlgorithmicDefiniteHeight { get => _rare is null ? default(double?) : _rare.AlgorithmicDefiniteHeight; set { if (_rare is null) { if (EqualityComparer<double?>.Default.Equals(value, default(double?))) return; _rare = new BoxRareState(); } _rare.AlgorithmicDefiniteHeight = value; } }
 
         /// <summary>
+        /// Whether <c>margin</c> applies to this box: to every element except the internal table display types, which are all of the table-* ones
+        /// other than <c>table</c>, <c>inline-table</c> and <c>table-caption</c> (CSS 2.1 section 8.3).
+        /// </summary>
+        internal bool MarginApplies => DerivedStyle.ActualDisplay is not (Keywords.TableRowGroup or Keywords.TableHeaderGroup or Keywords.TableFooterGroup
+            or Keywords.TableRow or Keywords.TableColumnGroup or Keywords.TableColumn or Keywords.TableCell);
+
+        /// <summary>
+        /// Whether <c>padding</c> applies to this box: to every element except table row groups, header and footer groups, rows, column groups and
+        /// columns (CSS 2.1 section 8.4); a cell does take padding.
+        /// </summary>
+        internal bool PaddingApplies => DerivedStyle.ActualDisplay is not (Keywords.TableRowGroup or Keywords.TableHeaderGroup or Keywords.TableFooterGroup
+            or Keywords.TableRow or Keywords.TableColumnGroup or Keywords.TableColumn);
+
+        /// <summary>
         /// Gets the actual top's Margin
         /// </summary>
         public double ActualMarginTop =>
-            MarginTop.Value is { IsValue: true, Value: { } marginTop }
+            !MarginApplies ? 0 : MarginTop.Value is { IsValue: true, Value: { } marginTop }
                 ? CssValueParser.ParseLength(marginTop, ContainingBlock.AvailableWidth, this) + _blockStepMarginTop
                 : _blockStepMarginTop;
 
@@ -1435,7 +1449,7 @@ namespace PeachBrackets.Html.Dom
         /// Gets the actual Margin of the bottom
         /// </summary>
         public double ActualMarginBottom =>
-            MarginBottom.Value is { IsValue: true, Value: { } marginBottom }
+            !MarginApplies ? 0 : MarginBottom.Value is { IsValue: true, Value: { } marginBottom }
                 ? CssValueParser.ParseLength(marginBottom, ContainingBlock.AvailableWidth, this) + _blockStepMarginBottom
                 : _blockStepMarginBottom;
 
@@ -8141,6 +8155,46 @@ namespace PeachBrackets.Html.Dom
             return left is null && top is null && rightEdge is null ? null : (left, top, rightEdge);
         }
 
+        /// <summary>
+        /// An absolutely positioned child of a grid container sits at its static position, which is as if it were the only item in the grid area (css-grid-1
+        /// section 9) and is aligned in it by its <c>align-self</c> and <c>justify-self</c> (the container's <c>*-items</c> where those are <c>auto</c>) on each
+        /// axis where both insets are <c>auto</c>. The area is the one its grid lines name when the grid is its containing block, else the grid's content box.
+        /// Horizontal, left-to-right grids only.
+        /// </summary>
+        private void AlignStaticPositionInGrid()
+        {
+            if (ParentBox is not { } grid || grid.DerivedStyle.ActualDisplay is not (Keywords.Grid or Keywords.InlineGrid)
+                || grid.WritingMode.Value.IsVertical() || WritingMode.Value.IsVertical() || grid.Direction.Value == DirectionMode.Rtl)
+            {
+                return;
+            }
+
+            var area = GridContainingArea ?? new Rect(grid.ClientLeft, grid.ClientTop, grid.ClientRight - grid.ClientLeft, grid.ClientBottom - grid.ClientTop);
+
+            static double Factor(string alignment, double free)
+            {
+                var safe = alignment.StartsWith("safe", StringComparison.OrdinalIgnoreCase);
+                if (safe && free < 0) return 0;
+                if (alignment.Contains("center", StringComparison.OrdinalIgnoreCase)) return 0.5;
+                if (alignment.Contains("last", StringComparison.OrdinalIgnoreCase) || alignment.EndsWith("end", StringComparison.OrdinalIgnoreCase)) return 1;
+                return 0;
+            }
+
+            if (Left.Value.IsKeyword && Right.Value.IsKeyword)
+            {
+                var free = area.Width - (ActualBoxSizingWidth + ActualMarginLeft + ActualMarginRight);
+                var factor = Factor(CssLayoutEngineGrid.ResolveSelfAlignment(JustifySelf.ToString(), grid.JustifyItems.ToString()), free);
+                if (factor > 0) OffsetLeft(free * factor);
+            }
+
+            if (Top.Value.IsKeyword && Bottom.Value.IsKeyword)
+            {
+                var free = area.Height - (ActualBoxSizingHeight + ActualMarginTop + ActualMarginBottom);
+                var factor = Factor(CssLayoutEngineGrid.ResolveSelfAlignment(AlignSelf.ToString(), grid.AlignItems.ToString()), free);
+                if (factor > 0) OffsetTop(free * factor);
+            }
+        }
+
         private CssBox? PreviousInFlowSibling(CssBox child) =>
             ReferenceEquals(child.ParentBox, this) ? DomUtils.GetPreviousSibling(child, false) : null;
 
@@ -8374,6 +8428,8 @@ namespace PeachBrackets.Html.Dom
                 {
                     PlaceAbsoluteBottomEdge(null);
                 }
+
+                AlignStaticPositionInGrid();
             }
 
             // A fixed box's containing block is the viewport (the first page's content area in paged media), so `right`/`bottom` measure from that area's far
