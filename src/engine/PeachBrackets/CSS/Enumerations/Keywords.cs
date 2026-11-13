@@ -205,6 +205,7 @@
         public const string InlineStart = "inline-start";
         public const string InlineEnd = "inline-end";
         public const string BorderBox = "border-box";
+        public const string BorderArea = "border-area";
         public const string PaddingBox = "padding-box";
         public const string ContentBox = "content-box";
         public const string MarginBox = "margin-box";

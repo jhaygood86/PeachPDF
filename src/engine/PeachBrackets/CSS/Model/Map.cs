@@ -304,7 +304,8 @@ namespace PeachBrackets.Css
                 {Keywords.BorderBox, BackgroundClipKeyword.BorderBox},
                 {Keywords.PaddingBox, BackgroundClipKeyword.PaddingBox},
                 {Keywords.ContentBox, BackgroundClipKeyword.ContentBox},
-                {Keywords.Text, BackgroundClipKeyword.Text}
+                {Keywords.Text, BackgroundClipKeyword.Text},
+                {Keywords.BorderArea, BackgroundClipKeyword.BorderArea}
             }.Freeze();
         public static readonly KeywordMap<ITimingFunction> TimingFunctions =
             new KeywordMap<ITimingFunction>(StringComparer.OrdinalIgnoreCase)

@@ -112,6 +112,52 @@ public class LayoutPaintCoverageTests
         Assert.Equal(White, PageRaster.Rgb(canvas, 70, 10));
     }
 
+    private static readonly string BluePng = SolidPng(0, 0, 255);
+
+    private static string SolidPng(int r, int g, int b)
+    {
+        var raster = new PeachDrawing.RasterRenderContext();
+        using var canvas = raster.CreateCanvas(8, 8);
+        canvas.DrawRectangle(raster.GetSolidBrush(PeachDrawing.Core.PaintColor.FromArgb(255, r, g, b)), 0, 0, 8, 8);
+        using var stream = new MemoryStream();
+        canvas.Save(stream, "png", new PeachImage.Formats.Png.PngEncoderOptions());
+        return "data:image/png;base64," + Convert.ToBase64String(stream.ToArray());
+    }
+
+    [Fact]
+    public async Task ABackgroundClippedToTheBorderAreaPaintsOnlyUnderTheBorder()
+    {
+        using var canvas = await PageRaster.RenderAsync(
+            "<div style=\"width:60px;height:40px;border:20px solid transparent;background:rgb(0,128,0);background-clip:border-area\"></div>");
+
+        Assert.Equal(Green, PageRaster.Rgb(canvas, 10, 40));
+        Assert.Equal(Green, PageRaster.Rgb(canvas, 90, 40));
+        Assert.Equal(White, PageRaster.Rgb(canvas, 50, 40));
+    }
+
+    [Fact]
+    public async Task AnImageBackgroundClippedToTheBorderAreaLeavesThePaddingBoxEmpty()
+    {
+        using var canvas = await PageRaster.RenderAsync(
+            $"<div style=\"width:60px;height:40px;border:20px solid transparent;background:url({BluePng});background-size:100% 100%;background-clip:border-area\"></div>",
+            loadResources: true);
+
+        Assert.NotEqual(White, PageRaster.Rgb(canvas, 10, 40));
+        Assert.Equal(White, PageRaster.Rgb(canvas, 50, 40));
+    }
+
+    [Fact]
+    public async Task ARepeatedBackgroundFillsTheAreaUnderATransparentBorder()
+    {
+        // The default origin is the padding box and the default clip the border box: the tiles go on outward under the border.
+        using var canvas = await PageRaster.RenderAsync(
+            $"<div style=\"width:60px;height:40px;border:20px solid transparent;background:url({BluePng});background-size:20px 20px\"></div>",
+            loadResources: true);
+
+        Assert.NotEqual(White, PageRaster.Rgb(canvas, 5, 5));
+        Assert.NotEqual(White, PageRaster.Rgb(canvas, 95, 75));
+    }
+
     [Fact]
     public async Task ADeclaredWidthInlineBlockThatDoesNotFitTheLineStartsTheNextOne()
     {
