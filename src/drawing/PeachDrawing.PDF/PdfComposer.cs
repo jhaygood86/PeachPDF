@@ -48,6 +48,9 @@ public sealed partial class PdfComposer : IDisposable
     /// <summary>The engine's document, for the rest of the package.</summary>
     internal PdfDocument Document => _document;
 
+    /// <summary>The names taken by the operations appended to this document so far (see <c>PdfOperationWriter.Append</c>).</summary>
+    internal PdfAppendState AppendState { get; } = new();
+
     /// <summary>The number of pages added so far.</summary>
     public int PageCount => _pages.Count;
 

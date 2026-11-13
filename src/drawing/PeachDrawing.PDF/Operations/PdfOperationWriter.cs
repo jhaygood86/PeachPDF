@@ -34,19 +34,6 @@ internal static class PdfOperationWriter
         composer.Save(stream);
     }
 
-    /// <summary>The names an output file has taken so far, shared by every operation added to one composer so that they never collide.</summary>
-    private sealed class AppendState
-    {
-        public HashSet<string> DestinationNames { get; } = [with(StringComparer.Ordinal)];
-
-        public HashSet<string> FieldNames { get; } = [with(StringComparer.Ordinal)];
-
-        /// <summary>How many operations were added before this one; it keeps the generated link-target names of one operation from another's.</summary>
-        public int Calls { get; set; }
-    }
-
-    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<PdfComposer, AppendState> States = [];
-
     /// <summary>
     /// Adds the pages of <paramref name="operation"/> after the pages the composer already has, with the navigation of the files they came
     /// from. The document-level steps (encrypting, linearizing, attachments, metadata) belong to the file being written, not to a part of it.
@@ -59,7 +46,7 @@ internal static class PdfOperationWriter
     {
         var pages = operation.OutputPages;
         var sources = pages.Select(p => p.Source).Distinct().ToList();
-        var state = States.GetOrCreateValue(composer);
+        var state = composer.AppendState;
         var call = state.Calls++;
         var first = composer.PageCount;
         var warnings = new SortedSet<string>(StringComparer.Ordinal);
@@ -281,7 +268,7 @@ internal static class PdfOperationWriter
         List<PdfPageSource> sources,
         Dictionary<(PdfPageSource, int), int> drawnAt,
         Dictionary<PdfPageSource, Dictionary<string, string>> nameMap,
-        AppendState state,
+        PdfAppendState state,
         int call,
         int first,
         bool carryPageFeatures)
