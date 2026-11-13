@@ -101,6 +101,34 @@ public class LayoutPaintCoverageTests
         Assert.Equal(White, PageRaster.Rgb(canvas, 90, 55));
     }
 
+    private static string SvgUri(string markup) => "data:image/svg+xml," + Uri.EscapeDataString(markup);
+
+    [Theory]
+    [InlineData("<svg xmlns='http://www.w3.org/2000/svg' width='20'><rect width='100%' height='100%' fill='green'/></svg>")]
+    [InlineData("<svg xmlns='http://www.w3.org/2000/svg' height='20'><rect width='100%' height='100%' fill='green'/></svg>")]
+    [InlineData("<svg xmlns='http://www.w3.org/2000/svg' width='20' viewBox='0 0 10 20'><rect width='10' height='20' fill='green'/></svg>")]
+    [InlineData("<svg xmlns='http://www.w3.org/2000/svg' height='20' viewBox='0 0 20 10'><rect width='20' height='10' fill='green'/></svg>")]
+    public async Task ASvgBackgroundThatStatesOneAxisTakesTheOtherFromTheAreaOrItsViewBox(string markup)
+    {
+        // Whatever the missing axis becomes, the painting area (100x60) shows the svg's top-left corner in green and the far corner empty.
+        using var canvas = await PageRaster.RenderAsync(
+            $"<div style=\"width:100px;height:60px;background:url('{SvgUri(markup)}') no-repeat\"></div>", loadResources: true);
+
+        Assert.Equal(Green, PageRaster.Rgb(canvas, 5, 5));
+        Assert.Equal(White, PageRaster.Rgb(canvas, 95, 55));
+    }
+
+    [Theory]
+    [InlineData("full-size-kana", "ぁっゃ", "あつや")]
+    [InlineData("none", "ぁっゃ", "ぁっゃ")]
+    public async Task FullSizeKanaDrawsTheFullSizeForms(string transform, string text, string sameAs)
+    {
+        using var transformed = await PageRaster.RenderAsync($"<div style='font-size:20px;text-transform:{transform}'>{text}</div>");
+        using var plain = await PageRaster.RenderAsync($"<div style='font-size:20px'>{sameAs}</div>");
+
+        Assert.True(transformed.ToPixelBuffer().PremultipliedRgba.Span.SequenceEqual(plain.ToPixelBuffer().PremultipliedRgba.Span));
+    }
+
     [Fact]
     public async Task ASvgBackgroundWithNoSizeTakesTheSizeBackgroundSizeGivesIt()
     {

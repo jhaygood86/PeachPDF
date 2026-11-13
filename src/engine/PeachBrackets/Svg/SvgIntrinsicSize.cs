@@ -76,11 +76,8 @@ namespace PeachBrackets.Svg
         /// not the 300x150 a replaced box falls back to (<see cref="ResolveForBox"/>). The ratio comes from <c>width</c> and <c>height</c> when both are
         /// given, otherwise from the <c>viewBox</c>, which also derives the missing axis from the one that is stated.
         /// </summary>
-        public static (double? Width, double? Height, double? Ratio) ResolveForBackground(SvgDocument? document)
+        public static (double? Width, double? Height, double? Ratio) ResolveForBackground(SvgDocument document)
         {
-            if (document is null)
-                return (null, null, null);
-
             double? width = document.Width is > 0 ? document.Width : null;
             double? height = document.Height is > 0 ? document.Height : null;
             var viewBoxRatio = ViewBoxRatio(document);
