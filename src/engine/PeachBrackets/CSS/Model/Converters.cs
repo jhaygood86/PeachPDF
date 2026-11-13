@@ -674,6 +674,9 @@ namespace PeachBrackets.Css
         public static readonly IValueConverter AutoSizeConverter = NonNegativeLengthOrPercentConverter.OrAuto().OrStretch().OrIntrinsicKeywords().Or(CalcSizeConverter);
         public static readonly IValueConverter OptionalSizeConverter = NonNegativeLengthOrPercentConverter.OrNone().OrStretch().OrIntrinsicKeywords().Or(CalcSizeConverter);
         public static readonly IValueConverter SizeConverter = NonNegativeLengthOrPercentConverter.OrStretch().OrIntrinsicKeywords().Or(CalcSizeConverter);
+        // counter-reset's name: a counter name, or reversed(<counter-name>) (css-lists-3 §4.4), whose start the cascade resolves from the list.
+        public static readonly IValueConverter CounterNameOrReversedConverter =
+            IdentifierConverter.Or(new FunctionValueConverter("reversed", IdentifierConverter));
         public static readonly IValueConverter LengthOrPercentOrNormalConverter = LengthOrPercentConverter.Or(Keywords.Normal);
         public static readonly IValueConverter NonNegativeLengthOrPercentOrNormalConverter = NonNegativeLengthOrPercentConverter.Or(Keywords.Normal);
         public static readonly IValueConverter OptionalPercentOrFractionConverter = PercentOrFractionConverter.OrDefault(1f);

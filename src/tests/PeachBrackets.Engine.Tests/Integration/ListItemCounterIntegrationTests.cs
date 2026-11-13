@@ -81,6 +81,20 @@ namespace PeachBrackets.Engine.Tests.Integration
         }
 
         [Fact]
+        public async Task AnAuthorReversedCounterReset_IsAccepted_AndCountsDownFromTheItemCount()
+        {
+            // counter-reset: reversed(<name>) is part of the property's grammar; written as an author rule it used to be dropped as invalid,
+            // leaving the counter unreset.
+            var root = await BuildAndLayout(Wrap(
+                "<style>ol { counter-reset: reversed(foo) } li { counter-increment: foo -1 } li::marker { content: counter(foo) \". \" }</style>" +
+                "<ol><li id='a'>a</li><li id='b'>b</li><li id='c'>c</li></ol>"));
+
+            string Marker(string id) => ((CssBoxMarker)FindById(root, id)!.Boxes.Single(x => x.IsMarkerPseudoElement)).Text;
+
+            Assert.Equal(["3. ", "2. ", "1. "], [Marker("a"), Marker("b"), Marker("c")]);
+        }
+
+        [Fact]
         public async Task OlReversedWithStart_CountsDownFromStart()
         {
             var root = await BuildAndLayout(Wrap("<ol reversed start='10'><li id='a'>a</li><li id='b'>b</li></ol>"));
