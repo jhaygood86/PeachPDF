@@ -8,7 +8,6 @@ using PeachDrawing.PDF.Engine;
 using PeachDrawing.PDF.Engine.Advanced;
 using System;
 
-#pragma warning disable 1587
 // ReSharper disable UseNullPropagation
 // ReSharper disable RedundantNameQualifier
 // ReSharper disable UseNameofExpression
@@ -36,7 +35,7 @@ internal sealed partial class PdfGraphics : IDisposable
         if (page.Owner.IsReadOnly)
             throw new InvalidOperationException("Cannot create PdfGraphics for a page of a document that cannot be modified. Use PdfDocumentOpenMode.Modify.");
 
-        _gsStack = new GraphicsStateStack(this);
+        _gsStack = new GraphicsStateStack();
         if (options == PdfPageAppendMode.Replace)
             page.Contents.Elements.Clear();
 
@@ -44,7 +43,6 @@ internal sealed partial class PdfGraphics : IDisposable
             ? page.Contents.PrependContent()
             : page.Contents.AppendContent();
         _renderer = new PdfGraphicsRenderer(page, this, options);
-        _pageSizePoints = new Size(page.Width, page.Height);
         _pageSize = new Size(page.Width, page.Height);
 
         Initialize();
@@ -52,8 +50,7 @@ internal sealed partial class PdfGraphics : IDisposable
 
     PdfGraphics(Size size)
     {
-        _gsStack = new GraphicsStateStack(this);
-        _pageSizePoints = new Size(size.Width, size.Height);
+        _gsStack = new GraphicsStateStack();
         _pageSize = new Size(size.Width, size.Height);
 
         Initialize();
@@ -69,7 +66,7 @@ internal sealed partial class PdfGraphics : IDisposable
         _form = form;
         form.AssociateGraphics(this);
 
-        _gsStack = new GraphicsStateStack(this);
+        _gsStack = new GraphicsStateStack();
         _drawGraphics = false;
         if (form.Owner is not null)
             _renderer = new PdfGraphicsRenderer(form, this);
@@ -171,8 +168,6 @@ internal sealed partial class PdfGraphics : IDisposable
 
     Size _pageSize;
 
-    Size _pageSizePoints;
-
     // ----- DrawString ---------------------------------------------------------------------------
 
     /// <summary>
@@ -182,7 +177,7 @@ internal sealed partial class PdfGraphics : IDisposable
     /// When true, <see cref="DrawString(string, TypefaceFont, Brush, Rect, PdfStringFormat, double, FontPalette?, ShapeSettings?, string?)"/>
     /// shows text in PDF text rendering mode 3 (neither filled nor stroked): the glyphs are laid out, embedded and
     /// extractable exactly as visible text is, but paint nothing. Used to keep text selectable and searchable over content
-    /// that was drawn as a bitmap. Text decorations and colour-glyph artwork are not painted either.
+    /// that was drawn as a bitmap. Text decorations and color-glyph artwork are not painted either.
     /// </summary>
     public bool InvisibleText { get; set; }
 

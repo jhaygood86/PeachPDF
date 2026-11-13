@@ -44,22 +44,20 @@ internal sealed class PdfObjectReference : PdfDictionary
     /// <summary>
     /// Predefined keys of this dictionary.
     /// </summary>
-    internal sealed class Keys : KeysBase
+    internal sealed class Keys
     {
         // Reference: ISO 32000-1 Table 325 - Entries in an object reference dictionary
 
-        [PdfKey(PdfKeyType.Name | PdfKeyType.Required, FixedValue = "OBJR")]
+        /// <summary>(Required)</summary>
         public const string Type = "/Type";
 
-        [PdfKey(PdfKeyType.Dictionary | PdfKeyType.Optional)]
+        /// <summary>(Optional)</summary>
         public const string Pg = "/Pg";
 
-        [PdfKey(PdfKeyType.Dictionary | PdfKeyType.Required)]
+        /// <summary>(Required)</summary>
         public const string Obj = "/Obj";
 
-        public static PdfDictionaryMetadata Meta { get; } = CreateMeta(typeof(Keys));
 
     }
 
-    internal override PdfDictionaryMetadata Meta => Keys.Meta;
 }

@@ -14,8 +14,11 @@ namespace PeachDrawing.PDF.Engine;
 /// <summary>
 /// Represents a PDF array object.
 /// </summary>
-internal class PdfArray : PdfObject, IEnumerable<PdfItem>
+internal class PdfArray : PdfObject, IEnumerable<PdfItem>, IPdfArrayValue<PdfArray>
 {
+    static PdfArray IPdfArrayValue<PdfArray>.Create(PdfDocument document) => new(document);
+    static PdfArray IPdfArrayValue<PdfArray>.Wrap(PdfArray existing) => existing;
+
     /// <summary>
     /// Initializes a new instance of the <see cref="PdfArray"/> class.
     /// </summary>
@@ -366,7 +369,6 @@ internal class PdfArray : PdfObject, IEnumerable<PdfItem>
         /// </summary>
         public void Add(PdfItem value)
         {
-            // TODO: ??? 
             //Debug.Assert((value is PdfObject && ((PdfObject)value).Reference == null) | !(value is PdfObject),
             //  "You try to set an indirect object directly into an array.");
 

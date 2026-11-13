@@ -8,7 +8,6 @@ using PeachDrawing.PDF.Engine;
 using PeachDrawing.PDF.Engine.Advanced;
 using System;
 
-#pragma warning disable 1587
 // ReSharper disable UseNullPropagation
 // ReSharper disable RedundantNameQualifier
 // ReSharper disable UseNameofExpression
@@ -35,9 +34,6 @@ internal sealed partial class PdfGraphics : IDisposable
         ArgumentNullException.ThrowIfNull(image);
 
         CheckFormConsistency(image);
-
-        double width = image.PointWidth;
-        double height = image.PointHeight;
 
         if (_renderer is not null)
             _renderer.DrawImage(image, x, y, image.PointWidth, image.PointHeight);
@@ -83,7 +79,6 @@ internal sealed partial class PdfGraphics : IDisposable
             _renderer.DrawImage(image, destRect, srcRect);
     }
 
-    //TODO?
     //public void DrawImage(PdfRasterImage image, Rectangle destRect, double srcX, double srcY, double srcWidth, double srcHeight, GraphicsUnit srcUnit);
     //public void DrawImage(PdfRasterImage image, Rectangle destRect, double srcX, double srcY, double srcWidth, double srcHeight, GraphicsUnit srcUnit);
 

@@ -39,14 +39,12 @@ namespace PeachDrawing.PDF.Engine.Drawing;
 /// </summary>
 internal sealed class InternalGraphicsState
 {
-    public InternalGraphicsState(PdfGraphics gfx)
+    public InternalGraphicsState()
     {
-        _gfx = gfx;
     }
 
-    public InternalGraphicsState(PdfGraphics gfx, PdfGraphicsStateToken state)
+    public InternalGraphicsState(PdfGraphicsStateToken state)
     {
-        _gfx = gfx;
         State = state;
         State.InternalState = this;
     }
@@ -77,8 +75,6 @@ internal sealed class InternalGraphicsState
     }
 
     public bool Invalid;
-
-    readonly PdfGraphics _gfx;
 
     internal PdfGraphicsStateToken State = null!;
 }

@@ -93,19 +93,6 @@ namespace PeachPDF.Tests.PdfEngineTests.ObjectModel
         }
 
         [Fact]
-        public void KeysMeta_IsCreatedOnce_AndNeverNull()
-        {
-            Assert.NotNull(PdfFileSpecification.Keys.Meta);
-            Assert.Same(PdfFileSpecification.Keys.Meta, PdfFileSpecification.Keys.Meta);
-
-            Assert.NotNull(PdfEmbeddedFile.Keys.Meta);
-            Assert.Same(PdfEmbeddedFile.Keys.Meta, PdfEmbeddedFile.Keys.Meta);
-
-            Assert.Same(PdfFileSpecification.Keys.Meta, MakeFileSpec(new PdfDocument()).Meta);
-            Assert.Same(PdfEmbeddedFile.Keys.Meta, new PdfEmbeddedFile(new PdfDocument(), [1]).Meta);
-        }
-
-        [Fact]
         public void NameDictionary_AddEmbeddedFile_CreatesAFlatTreeLazily()
         {
             var document = new PdfDocument();

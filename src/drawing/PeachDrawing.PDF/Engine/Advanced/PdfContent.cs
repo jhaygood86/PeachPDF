@@ -81,14 +81,5 @@ internal sealed class PdfContent : PdfDictionary
     /// </summary>
     internal sealed class Keys : PdfStream.Keys
     {
-        /// <summary>
-        /// Gets the KeysMeta for these keys.
-        /// </summary>
-        public static PdfDictionaryMetadata Meta { get; } = CreateMeta(typeof(Keys));
     }
-
-    /// <summary>
-    /// Gets the KeysMeta of this dictionary type.
-    /// </summary>
-    internal override PdfDictionaryMetadata Meta => Keys.Meta;
 }

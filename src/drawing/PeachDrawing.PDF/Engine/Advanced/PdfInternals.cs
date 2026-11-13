@@ -12,7 +12,7 @@ namespace PeachDrawing.PDF.Engine.Advanced;
 /// Provides access to the internal document data structures. This class prevents the public
 /// interfaces from pollution with to much internal functions.
 /// </summary>
-internal sealed class PdfInternals  // TODO: PdfDocumentInternals... PdfPageInternals etc.
+internal sealed class PdfInternals
 {
     internal PdfInternals(PdfDocument document)
     {
@@ -160,16 +160,7 @@ internal sealed class PdfInternals  // TODO: PdfDocumentInternals... PdfPageInte
     /// </summary>
     public PdfObject[] GetClosure(PdfObject obj)
     {
-        return GetClosure(obj, int.MaxValue);
-    }
-
-    /// <summary>
-    /// Returns an array containing the specified object as first element follows by its transitive
-    /// closure limited by the specified number of iterations.
-    /// </summary>
-    public PdfObject[] GetClosure(PdfObject obj, int depth)
-    {
-        PdfReference[] references = _document._irefTable.TransitiveClosure(obj, depth);
+        PdfReference[] references = _document._irefTable.TransitiveClosure(obj);
         int count = references.Length + 1;
         PdfObject[] objects = new PdfObject[count];
         objects[0] = obj;

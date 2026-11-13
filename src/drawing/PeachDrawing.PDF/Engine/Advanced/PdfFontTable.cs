@@ -8,19 +8,6 @@ using System.Diagnostics;
 
 namespace PeachDrawing.PDF.Engine.Advanced;
 
-internal enum FontType
-{
-    /// <summary>
-    /// TrueType with WinAnsi encoding.
-    /// </summary>
-    TrueType = 1,
-
-    /// <summary>
-    /// TrueType with Identity-H or Identity-V encoding (unicode).
-    /// </summary>
-    Type0 = 2,
-}
-
 /// <summary>
 /// Contains all used fonts of a document.
 /// </summary>
@@ -47,20 +34,6 @@ internal sealed class PdfFontTable : PdfResourceTable
             Debug.Assert(pdfFont.Owner == Owner);
             _fonts[selector] = pdfFont;
         }
-        return pdfFont;
-    }
-
-    /// <summary>
-    /// Tries to gets a PdfFont from the font dictionary.
-    /// Returns null if no such PdfFont exists.
-    /// </summary>
-    public PdfFont TryGetFont(string idName)
-    {
-        Debug.Assert(false);
-        //FontSelector selector = new FontSelector(idName);
-        string selector = null;
-        PdfFont pdfFont;
-        _fonts.TryGetValue(selector, out pdfFont);
         return pdfFont;
     }
 

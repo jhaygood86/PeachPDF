@@ -10,6 +10,8 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Text;
+using static PeachDrawing.PDF.Engine.Advanced.PdfShadingFunctions;
+using static PeachDrawing.PDF.Engine.Advanced.PdfConicMesh;
 
 namespace PeachDrawing.PDF.Engine.Advanced;
 
@@ -418,131 +420,6 @@ internal sealed class PdfShading : PdfDictionary
         AlphaExtGState = extGState;
     }
 
-    /// <summary>
-    /// One slice of a PDF Type 3 stitching function's domain: a plain Type 2 function
-    /// interpolating between <paramref name="LeftIndex"/> and <paramref name="RightIndex"/>
-    /// (the same index for both is a solid-color pad segment, see <see cref="BuildStitchSegments"/>).
-    /// </summary>
-    private readonly record struct StitchSegment(double Lo, double Hi, int LeftIndex, int RightIndex);
-
-    /// <summary>
-    /// A gradient's colors interpolate strictly between its first and last stop positions; CSS
-    /// requires the color at (and beyond) each end stop to hold solid outside that range (CSS
-    /// Images 4 §3.5.5) rather than the interpolation stretching to fill the shading's whole
-    /// [0,1] domain. Splits <paramref name="positions"/> into the segments a Type 3 stitching
-    /// function needs to reproduce that: an optional leading solid-<c>colors[0]</c> pad when
-    /// <c>positions[0] &gt; 0</c>, one interpolating segment per adjacent stop pair, and an
-    /// optional trailing solid-<c>colors[^1]</c> pad when <c>positions[^1] &lt; 1</c>.
-    /// </summary>
-    private static List<StitchSegment> BuildStitchSegments(double[] positions)
-    {
-        const double eps = 1e-6;
-        int n = positions.Length;
-        var segments = new List<StitchSegment>(n + 1);
-
-        if (positions[0] > eps)
-            segments.Add(new StitchSegment(0.0, positions[0], 0, 0));
-
-        for (int i = 0; i < n - 1; i++)
-            segments.Add(new StitchSegment(positions[i], positions[i + 1], i, i + 1));
-
-        if (positions[n - 1] < 1.0 - eps)
-            segments.Add(new StitchSegment(positions[n - 1], 1.0, n - 1, n - 1));
-
-        return segments;
-    }
-
-    /// <summary>
-    /// Whether a gradient's stops need the full Type 3 stitching-function machinery rather than
-    /// the cheaper plain Type 2 (single C0-to-C1 interpolation across the whole [0,1] domain)
-    /// shortcut - true whenever there are more than 2 stops, or the first/last stop isn't
-    /// already sitting at the domain edge (0/1) where the shortcut is exact.
-    /// </summary>
-    private static bool RequiresStitchingFunction(double[] positions)
-    {
-        const double eps = 1e-6;
-        return positions.Length > 2 || positions[0] > eps || positions[^1] < 1.0 - eps;
-    }
-
-    private static string BuildBoundsLiteral(IReadOnlyList<StitchSegment> segments)
-    {
-        var bounds = new StringBuilder("[");
-        for (int i = 0; i < segments.Count - 1; i++)
-        {
-            if (i > 0) bounds.Append(' ');
-            bounds.Append(segments[i].Hi.ToString("G6", CultureInfo.InvariantCulture));
-        }
-        bounds.Append(']');
-        return bounds.ToString();
-    }
-
-    private static string BuildEncodeLiteral(int segmentCount)
-    {
-        var encode = new StringBuilder("[");
-        for (int i = 0; i < segmentCount; i++)
-        {
-            if (i > 0) encode.Append(' ');
-            encode.Append("0 1");
-        }
-        encode.Append(']');
-        return encode.ToString();
-    }
-
-    private static PdfDictionary BuildAlphaStitchingFunction(PaintColor[] colors, double[] positions)
-    {
-        var segments = BuildStitchSegments(positions);
-        var stitching = new PdfDictionary();
-        stitching.Elements["/FunctionType"] = new PdfInteger(3);
-        stitching.Elements["/Domain"] = new PdfLiteral("[0 1]");
-        stitching.Elements["/Bounds"] = new PdfLiteral(BuildBoundsLiteral(segments));
-        stitching.Elements["/Encode"] = new PdfLiteral(BuildEncodeLiteral(segments.Count));
-
-        var functions = new PdfArray();
-        foreach (var seg in segments)
-        {
-            var fn = new PdfDictionary();
-            fn.Elements["/FunctionType"] = new PdfInteger(2);
-            fn.Elements["/Domain"] = new PdfLiteral("[0 1]");
-            fn.Elements["/C0"] = new PdfLiteral("[" + AlphaToString(colors[seg.LeftIndex].Opacity()) + "]");
-            fn.Elements["/C1"] = new PdfLiteral("[" + AlphaToString(colors[seg.RightIndex].Opacity()) + "]");
-            fn.Elements["/N"] = new PdfInteger(1);
-            functions.Elements.Add(fn);
-        }
-        stitching.Elements["/Functions"] = functions;
-        return stitching;
-    }
-
-    private static string AlphaToString(double a) =>
-        a.ToString("0.###", CultureInfo.InvariantCulture);
-
-    private static PdfDictionary BuildStitchingFunction(PaintColor[] colors, double[] positions, PdfColorMode colorMode)
-    {
-        var segments = BuildStitchSegments(positions);
-        var stitching = new PdfDictionary();
-        stitching.Elements["/FunctionType"] = new PdfInteger(3);
-        stitching.Elements["/Domain"] = new PdfLiteral("[0 1]");
-        stitching.Elements["/Bounds"] = new PdfLiteral(BuildBoundsLiteral(segments));
-        stitching.Elements["/Encode"] = new PdfLiteral(BuildEncodeLiteral(segments.Count));
-
-        // Sub-functions: one Type 2 per segment (interpolating between two real stops, or a
-        // solid-color pad at either end - see BuildStitchSegments).
-        var functions = new PdfArray();
-        foreach (var seg in segments)
-        {
-            PaintColor c0 = ColorSpaceHelper.EnsureColorMode(colorMode, colors[seg.LeftIndex]);
-            PaintColor c1 = ColorSpaceHelper.EnsureColorMode(colorMode, colors[seg.RightIndex]);
-            var fn = new PdfDictionary();
-            fn.Elements["/FunctionType"] = new PdfInteger(2);
-            fn.Elements["/Domain"] = new PdfLiteral("[0 1]");
-            fn.Elements["/C0"] = new PdfLiteral("[" + PdfEncoders.ToString(c0, colorMode) + "]");
-            fn.Elements["/C1"] = new PdfLiteral("[" + PdfEncoders.ToString(c1, colorMode) + "]");
-            fn.Elements["/N"] = new PdfInteger(1);
-            functions.Elements.Add(fn);
-        }
-        stitching.Elements["/Functions"] = functions;
-        return stitching;
-    }
-
     // ── Conic gradient (Type 4 Gouraud-shaded free-form triangle mesh) ──────────────────────
 
     private void SetupConicFromBrush(ConicGradientBrush brush, PdfGraphicsRenderer renderer)
@@ -581,119 +458,6 @@ internal sealed class PdfShading : PdfDictionary
         CreateStream(data);
 
         BuildConicAlphaExtGStateIfNeeded(colors, angles, vc.X, vc.Y, R, xMin, xMax, yMin, yMax);
-    }
-
-    private static byte[] BuildConicMeshData(PaintColor[] colors, double[] angles,
-        double cx, double cy, double R,
-        double xMin, double xMax, double yMin, double yMax,
-        bool cmyk, bool alphaOnly)
-    {
-        var data = new System.Collections.Generic.List<byte>(4096);
-
-        for (int s = 0; s < colors.Length - 1; s++)
-        {
-            double a1 = angles[s], a2 = angles[s + 1];
-            PaintColor c1 = colors[s], c2 = colors[s + 1];
-            int nTri = Math.Max(1, (int)Math.Ceiling(Math.Abs(a2 - a1) * (180.0 / Math.PI)));
-            if (nTri > 180) nTri = 180;
-
-            for (int t = 0; t < nTri; t++)
-            {
-                double tA = (double)t / nTri;
-                double tB = (double)(t + 1) / nTri;
-                double angleA = a1 + (a2 - a1) * tA;
-                double angleB = a1 + (a2 - a1) * tB;
-
-                PaintColor colorA = cmyk ? LerpXColorCmyk(c1, c2, tA) : LerpXColor(c1, c2, tA);
-                PaintColor colorB = cmyk ? LerpXColorCmyk(c1, c2, tB) : LerpXColor(c1, c2, tB);
-
-                // In PDF view space: 0=top, clockwise: x=sin(angle), y=+cos(angle)
-                double oAX = cx + R * Math.Sin(angleA);
-                double oAY = cy + R * Math.Cos(angleA);
-                double oBX = cx + R * Math.Sin(angleB);
-                double oBY = cy + R * Math.Cos(angleB);
-
-                AppendConicVertex(data, 0, cx, cy, colorA, xMin, xMax, yMin, yMax, cmyk, alphaOnly);
-                AppendConicVertex(data, 0, oAX, oAY, colorA, xMin, xMax, yMin, yMax, cmyk, alphaOnly);
-                AppendConicVertex(data, 0, oBX, oBY, colorB, xMin, xMax, yMin, yMax, cmyk, alphaOnly);
-            }
-        }
-
-        return [.. data];
-    }
-
-    private static void AppendConicVertex(System.Collections.Generic.List<byte> data, int flag,
-        double x, double y, PaintColor color,
-        double xMin, double xMax, double yMin, double yMax,
-        bool cmyk, bool alphaOnly)
-    {
-        data.Add((byte)flag);
-        AppendUInt32BE(data, EncodeCoordinate(x, xMin, xMax));
-        AppendUInt32BE(data, EncodeCoordinate(y, yMin, yMax));
-        if (alphaOnly)
-        {
-            data.Add(color.A);
-        }
-        else if (cmyk)
-        {
-            var (cyan, magenta, yellow, black) = color.ToCmyk();
-            data.Add((byte)Math.Round(Math.Clamp(cyan, 0, 1) * 255));
-            data.Add((byte)Math.Round(Math.Clamp(magenta, 0, 1) * 255));
-            data.Add((byte)Math.Round(Math.Clamp(yellow, 0, 1) * 255));
-            data.Add((byte)Math.Round(Math.Clamp(black, 0, 1) * 255));
-        }
-        else
-        {
-            var (red, green, blue) = color.ToRgb();
-            data.Add(red);
-            data.Add(green);
-            data.Add(blue);
-        }
-    }
-
-    private static uint EncodeCoordinate(double val, double min, double max)
-    {
-        if (max <= min) return 0;
-        double t = Math.Clamp((val - min) / (max - min), 0.0, 1.0);
-        return (uint)Math.Round(t * 4294967295.0);
-    }
-
-    private static void AppendUInt32BE(System.Collections.Generic.List<byte> data, uint value)
-    {
-        data.Add((byte)(value >> 24));
-        data.Add((byte)(value >> 16));
-        data.Add((byte)(value >> 8));
-        data.Add((byte)(value & 0xFF));
-    }
-
-    private static PaintColor LerpXColor(PaintColor a, PaintColor b, double t)
-    {
-        t = Math.Clamp(t, 0.0, 1.0);
-        var (aRed, aGreen, aBlue) = a.ToRgb();
-        var (bRed, bGreen, bBlue) = b.ToRgb();
-        return PaintColor.FromArgb(
-            (int)Math.Round(a.Opacity() * 255 + t * (b.Opacity() - a.Opacity()) * 255),
-            (int)Math.Round(aRed + t * (bRed - aRed)),
-            (int)Math.Round(aGreen + t * (bGreen - aGreen)),
-            (int)Math.Round(aBlue + t * (bBlue - aBlue)));
-    }
-
-    /// <summary>
-    /// CMYK counterpart of <see cref="LerpXColor"/> - interpolates C/M/Y/K directly rather than R/G/B
-    /// (meaningless for a CMYK-tagged <see cref="PaintColor"/>), used for a conic gradient whose stops are
-    /// all CMYK-tagged (see <see cref="ResolveShadingColorMode"/>).
-    /// </summary>
-    private static PaintColor LerpXColorCmyk(PaintColor a, PaintColor b, double t)
-    {
-        t = Math.Clamp(t, 0.0, 1.0);
-        var (aCyan, aMagenta, aYellow, aBlack) = a.ToCmyk();
-        var (bCyan, bMagenta, bYellow, bBlack) = b.ToCmyk();
-        return PdfColors.FromCmyk(
-            a.Opacity() + t * (b.Opacity() - a.Opacity()),
-            aCyan + t * (bCyan - aCyan),
-            aMagenta + t * (bMagenta - aMagenta),
-            aYellow + t * (bYellow - aYellow),
-            aBlack + t * (bBlack - aBlack));
     }
 
     private void BuildConicAlphaExtGStateIfNeeded(PaintColor[] colors, double[] angles,
@@ -759,7 +523,7 @@ internal sealed class PdfShading : PdfDictionary
     /// <summary>
     /// Common keys for all streams.
     /// </summary>
-    internal sealed class Keys : KeysBase
+    internal sealed class Keys
     {
         /// <summary>
         /// (Required) The shading type:
@@ -771,14 +535,12 @@ internal sealed class PdfShading : PdfDictionary
         /// 6 Coons patch mesh
         /// 7 Tensor-product patch mesh
         /// </summary>
-        [PdfKey(PdfKeyType.Integer | PdfKeyType.Required)]
         public const string ShadingType = "/ShadingType";
 
         /// <summary>
         /// (Required) The color space in which color values are expressed. This may be any device, 
         /// CIE-based, or special color space except a Pattern space.
         /// </summary>
-        [PdfKey(PdfKeyType.NameOrArray | PdfKeyType.Required)]
         public const string ColorSpace = "/ColorSpace";
 
         /// <summary>
@@ -789,7 +551,6 @@ internal sealed class PdfShading : PdfDictionary
         /// the effect is as if the painting operation were performed twice: first with the 
         /// background color and then with the shading.
         /// </summary>
-        [PdfKey(PdfKeyType.Array | PdfKeyType.Optional)]
         public const string Background = "/Background";
 
         /// <summary>
@@ -799,7 +560,6 @@ internal sealed class PdfShading : PdfDictionary
         /// clipping boundary when the shading is painted, in addition to the current clipping path
         /// and any other clipping boundaries in effect at that time.
         /// </summary>
-        [PdfKey(PdfKeyType.Rectangle | PdfKeyType.Optional)]
         public const string BBox = "/BBox";
 
         /// <summary>
@@ -813,7 +573,6 @@ internal sealed class PdfShading : PdfDictionary
         /// is ignored.
         /// Default value: false.
         /// </summary>
-        [PdfKey(PdfKeyType.Boolean | PdfKeyType.Optional)]
         public const string AntiAlias = "/AntiAlias";
 
         // ---- Type 2 ----------------------------------------------------------
@@ -822,7 +581,6 @@ internal sealed class PdfShading : PdfDictionary
         /// (Required) An array of four numbers [x0 y0 x1 y1] specifying the starting and
         /// ending coordinates of the axis, expressed in the shading's target coordinate space.
         /// </summary>
-        [PdfKey(PdfKeyType.Array | PdfKeyType.Required)]
         public const string Coords = "/Coords";
 
         /// <summary>
@@ -832,7 +590,6 @@ internal sealed class PdfShading : PdfDictionary
         /// the axis. The variable t becomes the input argument to the color function(s).
         /// Default value: [0.0 1.0].
         /// </summary>
-        [PdfKey(PdfKeyType.Array | PdfKeyType.Optional)]
         public const string Domain = "/Domain";
 
         /// <summary>
@@ -843,7 +600,6 @@ internal sealed class PdfShading : PdfDictionary
         /// dictionary. If the value returned by the function for a given color component is out
         /// of range, it is adjusted to the nearest valid value.
         /// </summary>
-        [PdfKey(PdfKeyType.Function | PdfKeyType.Required)]
         public const string Function = "/Function";
 
         /// <summary>
@@ -851,17 +607,7 @@ internal sealed class PdfShading : PdfDictionary
         /// beyond the starting and ending points of the axis, respectively.
         /// Default value: [false false].
         /// </summary>
-        [PdfKey(PdfKeyType.Array | PdfKeyType.Optional)]
         public const string Extend = "/Extend";
 
-        /// <summary>
-        /// Gets the KeysMeta for these keys.
-        /// </summary>
-        internal static PdfDictionaryMetadata Meta { get; } = CreateMeta(typeof(Keys));
     }
-
-    /// <summary>
-    /// Gets the KeysMeta of this dictionary type.
-    /// </summary>
-    internal override PdfDictionaryMetadata Meta => Keys.Meta;
 }

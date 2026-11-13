@@ -139,20 +139,18 @@ internal sealed class PdfFontDescriptor : PdfDictionary
     /// <summary>
     /// Predefined keys of this dictionary.
     /// </summary>
-    internal sealed class Keys : KeysBase
+    internal sealed class Keys
     {
         /// <summary>
         /// (Required) The type of PDF object that this dictionary describes; must be
         /// FontDescriptor for a font descriptor.
         /// </summary>
-        [PdfKey(PdfKeyType.Name | PdfKeyType.Required, FixedValue = "FontDescriptor")]
         public const string Type = "/Type";
 
         /// <summary>
         /// (Required) The PostScript name of the font. This name should be the same as the 
         /// value of BaseFont in the font or CIDFont dictionary that refers to this font descriptor.
         /// </summary>
-        [PdfKey(PdfKeyType.Name | PdfKeyType.Required)]
         public const string FontName = "/FontName";
 
         /// <summary>
@@ -160,7 +158,6 @@ internal sealed class PdfFontDescriptor : PdfDictionary
         /// A string specifying the preferred font family name. For example, for the font 
         /// Times Bold Italic, the FontFamily is Times.
         /// </summary>
-        [PdfKey(PdfKeyType.String | PdfKeyType.Optional)]
         public const string FontFamily = "/FontFamily";
 
         /// <summary>
@@ -171,7 +168,6 @@ internal sealed class PdfFontDescriptor : PdfDictionary
         /// Note: The specific interpretation of these values varies from font to font. 
         /// For example, Condensed in one font may appear most similar to Normal in another.
         /// </summary>
-        [PdfKey(PdfKeyType.Name | PdfKeyType.Optional)]
         public const string FontStretch = "/FontStretch";
 
         /// <summary>
@@ -183,13 +179,11 @@ internal sealed class PdfFontDescriptor : PdfDictionary
         /// Note: The specific interpretation of these values varies from font to font. 
         /// For example, 300 in one font may appear most similar to 500 in another.
         /// </summary>
-        [PdfKey(PdfKeyType.Real | PdfKeyType.Optional)]
         public const string FontWeight = "/FontWeight";
 
         /// <summary>
         /// (Required) A collection of flags defining various characteristics of the font.
         /// </summary>
-        [PdfKey(PdfKeyType.Integer | PdfKeyType.Required)]
         public const string Flags = "/Flags";
 
         /// <summary>
@@ -198,7 +192,6 @@ internal sealed class PdfFontDescriptor : PdfDictionary
         /// is the smallest rectangle enclosing the shape that would result if all of the 
         /// glyphs of the font were placed with their origins coincident and then filled.
         /// </summary>
-        [PdfKey(PdfKeyType.Rectangle | PdfKeyType.Required)]
         public const string FontBBox = "/FontBBox";
 
         /// <summary>
@@ -207,35 +200,30 @@ internal sealed class PdfFontDescriptor : PdfDictionary
         /// degrees, and the 3-o'clock position is -90 degrees.) The value is negative for fonts 
         /// that slope to the right, as almost all italic fonts do.
         /// </summary>
-        [PdfKey(PdfKeyType.Real | PdfKeyType.Required)]
         public const string ItalicAngle = "/ItalicAngle";
 
         /// <summary>
         /// (Required, except for Type 3 fonts) The maximum height above the baseline reached 
         /// by glyphs in this font, excluding the height of glyphs for accented characters.
         /// </summary>
-        [PdfKey(PdfKeyType.Real | PdfKeyType.Required)]
         public const string Ascent = "/Ascent";
 
         /// <summary>
         /// (Required, except for Type 3 fonts) The maximum depth below the baseline reached 
         /// by glyphs in this font. The value is a negative number.
         /// </summary>
-        [PdfKey(PdfKeyType.Real | PdfKeyType.Required)]
         public const string Descent = "/Descent";
 
         /// <summary>
         /// (Optional) The spacing between baselines of consecutive lines of text.
         /// Default value: 0.
         /// </summary>
-        [PdfKey(PdfKeyType.Real | PdfKeyType.Optional)]
         public const string Leading = "/Leading";
 
         /// <summary>
         /// (Required for fonts that have Latin characters, except for Type 3 fonts) The vertical
         /// coordinate of the top of flat capital letters, measured from the baseline.
         /// </summary>
-        [PdfKey(PdfKeyType.Real | PdfKeyType.Required)]
         public const string CapHeight = "/CapHeight";
 
         /// <summary>
@@ -243,33 +231,28 @@ internal sealed class PdfFontDescriptor : PdfDictionary
         /// lowercase letters (like the letter x), measured from the baseline, in fonts that have 
         /// Latin characters. Default value: 0.
         /// </summary>
-        [PdfKey(PdfKeyType.Real | PdfKeyType.Optional)]
         public const string XHeight = "/XHeight";
 
         /// <summary>
         /// (Required, except for Type 3 fonts) The thickness, measured horizontally, of the dominant 
         /// vertical stems of glyphs in the font.
         /// </summary>
-        [PdfKey(PdfKeyType.Real | PdfKeyType.Required)]
         public const string StemV = "/StemV";
 
         /// <summary>
         /// (Optional) The thickness, measured vertically, of the dominant horizontal stems 
         /// of glyphs in the font. Default value: 0.
         /// </summary>
-        [PdfKey(PdfKeyType.Real | PdfKeyType.Optional)]
         public const string StemH = "/StemH";
 
         /// <summary>
         /// (Optional) The average width of glyphs in the font. Default value: 0.
         /// </summary>
-        [PdfKey(PdfKeyType.Real | PdfKeyType.Optional)]
         public const string AvgWidth = "/AvgWidth";
 
         /// <summary>
         /// (Optional) The maximum width of glyphs in the font. Default value: 0.
         /// </summary>
-        [PdfKey(PdfKeyType.Real | PdfKeyType.Optional)]
         public const string MaxWidth = "/MaxWidth";
 
         /// <summary>
@@ -278,26 +261,22 @@ internal sealed class PdfFontDescriptor : PdfDictionary
         /// map to glyphs whose actual widths are the same as the value of the MissingWidth entry.
         /// Default value: 0.
         /// </summary>
-        [PdfKey(PdfKeyType.Real | PdfKeyType.Optional)]
         public const string MissingWidth = "/MissingWidth";
 
         /// <summary>
         /// (Optional) A stream containing a Type 1 font program.
         /// </summary>
-        [PdfKey(PdfKeyType.Stream | PdfKeyType.Optional)]
         public const string FontFile = "/FontFile";
 
         /// <summary>
         /// (Optional; PDF 1.1) A stream containing a TrueType font program.
         /// </summary>
-        [PdfKey(PdfKeyType.Stream | PdfKeyType.Optional)]
         public const string FontFile2 = "/FontFile2";
 
         /// <summary>
         /// (Optional; PDF 1.2) A stream containing a font program whose format is specified 
         /// by the Subtype entry in the stream dictionary.
         /// </summary>
-        [PdfKey(PdfKeyType.Stream | PdfKeyType.Optional)]
         public const string FontFile3 = "/FontFile3";
 
         /// <summary>
@@ -307,17 +286,7 @@ internal sealed class PdfFontDescriptor : PdfDictionary
         /// should be omitted; it is assumed to exist in the font subset. If this entry is absent,
         /// the only indication of a font subset is the subset tag in the FontName entry.
         /// </summary>
-        [PdfKey(PdfKeyType.String | PdfKeyType.Optional)]
         public const string CharSet = "/CharSet";
 
-        /// <summary>
-        /// Gets the KeysMeta for these keys.
-        /// </summary>
-        internal static PdfDictionaryMetadata Meta { get; } = CreateMeta(typeof(Keys));
     }
-
-    /// <summary>
-    /// Gets the KeysMeta of this dictionary type.
-    /// </summary>
-    internal override PdfDictionaryMetadata Meta => Keys.Meta;
 }

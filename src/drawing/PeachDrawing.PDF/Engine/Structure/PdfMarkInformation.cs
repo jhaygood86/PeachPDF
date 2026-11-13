@@ -5,8 +5,15 @@ namespace PeachDrawing.PDF.Engine.Structure;
 /// document conforms to Tagged PDF conventions. Ported from upstream PDFsharp's
 /// Pdf.Structure/PdfMarkInformation.cs.
 /// </summary>
-internal sealed class PdfMarkInformation : PdfDictionary
+internal sealed class PdfMarkInformation : PdfDictionary, IPdfDictionaryValue<PdfMarkInformation>
 {
+    static PdfMarkInformation IPdfDictionaryValue<PdfMarkInformation>.Create(PdfDocument document) => new(document);
+    static PdfMarkInformation IPdfDictionaryValue<PdfMarkInformation>.Wrap(PdfDictionary existing) => new(existing);
+
+    private PdfMarkInformation(PdfDictionary dict)
+        : base(dict)
+    { }
+
     public PdfMarkInformation()
     { }
 
@@ -27,22 +34,20 @@ internal sealed class PdfMarkInformation : PdfDictionary
     /// <summary>
     /// Predefined keys of this dictionary.
     /// </summary>
-    internal sealed class Keys : KeysBase
+    internal sealed class Keys
     {
         // Reference: ISO 32000-1 Table 321 - Entries in the mark information dictionary
 
-        [PdfKey(PdfKeyType.Boolean | PdfKeyType.Optional)]
+        /// <summary>(Optional)</summary>
         public const string Marked = "/Marked";
 
-        [PdfKey(PdfKeyType.Boolean | PdfKeyType.Optional)]
+        /// <summary>(Optional)</summary>
         public const string UserProperties = "/UserProperties";
 
-        [PdfKey(PdfKeyType.Boolean | PdfKeyType.Optional)]
+        /// <summary>(Optional)</summary>
         public const string Suspects = "/Suspects";
 
-        public static PdfDictionaryMetadata Meta { get; } = CreateMeta(typeof(Keys));
 
     }
 
-    internal override PdfDictionaryMetadata Meta => Keys.Meta;
 }

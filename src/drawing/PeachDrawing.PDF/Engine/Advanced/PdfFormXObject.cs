@@ -19,16 +19,6 @@ internal sealed class PdfFormXObject : PdfXObject, IContentStream
         Elements.SetName(Keys.Subtype, "/Form");
     }
 
-    internal PdfFormXObject(PdfDocument thisDocument, PdfForm form)
-        : base(thisDocument)
-    {
-        // BUG: form is not used
-        Elements.SetName(Keys.Type, "/XObject");
-        Elements.SetName(Keys.Subtype, "/Form");
-
-        //if (form.IsTemplate)
-        //{ }
-    }
 
     /// <summary>
     /// Gets the PdfResources object of this form.
@@ -89,14 +79,12 @@ internal sealed class PdfFormXObject : PdfXObject, IContentStream
         /// (Optional) The type of PDF object that this dictionary describes; if present,
         /// must be XObject for a form XObject.
         /// </summary>
-        [PdfKey(PdfKeyType.Name | PdfKeyType.Optional)]
         public const string Type = "/Type";
 
         /// <summary>
         /// (Required) The type of XObject that this dictionary describes; must be Form
         /// for a form XObject.
         /// </summary>
-        [PdfKey(PdfKeyType.Name | PdfKeyType.Required)]
         public const string Subtype = "/Subtype";
 
         /// <summary>
@@ -104,7 +92,6 @@ internal sealed class PdfFormXObject : PdfXObject, IContentStream
         /// describes. The only valid value defined at the time of publication is 1.
         /// Default value: 1.
         /// </summary>
-        [PdfKey(PdfKeyType.Integer | PdfKeyType.Optional)]
         public const string FormType = "/FormType";
 
         /// <summary>
@@ -113,7 +100,6 @@ internal sealed class PdfFormXObject : PdfXObject, IContentStream
         /// form XObject's bounding box. These boundaries are used to clip the form XObject
         /// and to determine its size for caching.
         /// </summary>
-        [PdfKey(PdfKeyType.Rectangle | PdfKeyType.Required)]
         public const string BBox = "/BBox";
 
         /// <summary>
@@ -121,14 +107,12 @@ internal sealed class PdfFormXObject : PdfXObject, IContentStream
         /// form space into user space.
         /// Default value: the identity matrix [1 0 0 1 0 0].
         /// </summary>
-        [PdfKey(PdfKeyType.Array | PdfKeyType.Optional)]
         public const string Matrix = "/Matrix";
 
         /// <summary>
         /// (Optional but strongly recommended; PDF 1.2) A dictionary specifying any
         /// resources (such as fonts and images) required by the form XObject.
         /// </summary>
-        [PdfKey(PdfKeyType.Dictionary | PdfKeyType.Optional, typeof(PdfResources))]
         public const string Resources = "/Resources";
 
         /// <summary>
@@ -139,7 +123,6 @@ internal sealed class PdfFormXObject : PdfXObject, IContentStream
         /// external page imported by that entry, which allows such an imported page to be
         /// treated as a group without further modification.
         /// </summary>
-        [PdfKey(PdfKeyType.Dictionary | PdfKeyType.Optional)]
         public const string Group = "/Group";
 
         // further keys:
@@ -153,14 +136,5 @@ internal sealed class PdfFormXObject : PdfXObject, IContentStream
         //OC
         //Name
 
-        /// <summary>
-        /// Gets the KeysMeta for these keys.
-        /// </summary>
-        internal static PdfDictionaryMetadata Meta { get; } = CreateMeta(typeof(Keys));
     }
-
-    /// <summary>
-    /// Gets the KeysMeta of this dictionary type.
-    /// </summary>
-    internal override PdfDictionaryMetadata Meta => Keys.Meta;
 }

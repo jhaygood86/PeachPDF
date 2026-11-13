@@ -208,11 +208,5 @@ namespace PeachPDF.Tests.PdfEngineTests.ObjectModel
             Assert.Equal(4, limits!.Elements.GetInteger(0));
             Assert.Equal(4, limits.Elements.GetInteger(1));
         }
-
-        [Fact]
-        public void Keys_Meta_IsAccessible()
-        {
-            Assert.NotNull(new PdfNumberTreeNode().Meta);
-        }
     }
 }

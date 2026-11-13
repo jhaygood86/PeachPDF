@@ -8,7 +8,6 @@ using PeachDrawing.PDF.Engine;
 using PeachDrawing.PDF.Engine.Advanced;
 using System;
 
-#pragma warning disable 1587
 // ReSharper disable UseNullPropagation
 // ReSharper disable RedundantNameQualifier
 // ReSharper disable UseNameofExpression
@@ -104,7 +103,7 @@ internal sealed partial class PdfGraphics : IDisposable
         ArgumentNullException.ThrowIfNull(font);
         ArgumentNullException.ThrowIfNull(stringFormat);
 
-        Size size = FontHelper.MeasureString(text, font, PdfStringFormats.SharedDefault, features ?? ShapeSettings.Default);
+        Size size = FontHelper.MeasureString(text, font, features ?? ShapeSettings.Default);
         return size;
     }
 

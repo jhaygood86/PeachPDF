@@ -112,7 +112,7 @@ internal readonly struct PngPassthroughData
     /// source's <c>tRNS</c> chunk when it's expressible as one - Grayscale/Truecolor <c>tRNS</c> is
     /// always a single exact chroma-key value, and a Palette <c>tRNS</c> qualifies whenever every
     /// listed entry is exactly 0 or 255 <em>and</em> the transparent indices form a single contiguous
-    /// run (PDF's colour-key mask for an Indexed colour space is exactly one <c>[min max]</c> range,
+    /// run (PDF's color-key mask for an Indexed color space is exactly one <c>[min max]</c> range,
     /// per ISO 32000-1 §8.9.6.4 - see <c>PeachImageSource.TryBuildPaletteColorKeyMask</c>).
     /// Null when the source has no <c>tRNS</c>, or (Palette only) when it has one but nothing in it is
     /// actually transparent. Mutually exclusive with <see cref="AlphaIdatData"/> - a source reaches
@@ -152,7 +152,7 @@ internal readonly struct PngPassthroughData
 /// decompress-then-recompress round trip - but GIF's own LZW bitstream isn't literally byte-for-byte
 /// reusable as PDF's (different bit-packing order and code-width growth timing despite the same
 /// underlying code values), so the actual embed re-packs it - see
-/// <c>PeachDrawing.PDF.Engine.Advanced.PdfImage.RepackGifLzwForPdf</c>'s own remarks for the full
+/// <c>PeachDrawing.PDF.Engine.Advanced.PdfGifLzw.RepackGifLzwForPdf</c>'s own remarks for the full
 /// explanation. See <see cref="ImageSource.IImageSource.GifPassthrough"/> for when this applies.
 /// </summary>
 internal readonly struct GifPassthroughData
@@ -315,7 +315,7 @@ internal abstract class ImageSource
         /// <c>MinCodeSize</c> is exactly 8 (GIF then starts codes at the same 9-bit width/Clear-code-256
         /// convention PDF's <c>/LZWDecode</c> always uses - the code *values* and widths line up, even
         /// though the bit-packing itself still needs re-packing, since GIF and PDF pack codes in
-        /// opposite bit order - see <c>PdfImage.RepackGifLzwForPdf</c>), and the frame covers the full
+        /// opposite bit order - see <c>PdfGifLzw.RepackGifLzwForPdf</c>), and the frame covers the full
         /// logical canvas (pass-through has no canvas-compositing step, unlike the existing full
         /// decode). A declared transparent color
         /// index maps onto <see cref="GifPassthroughData.ColorKeyMask"/>, PDF's color-key mask

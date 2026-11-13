@@ -73,27 +73,23 @@ internal sealed class PdfShadingPattern : PdfDictionaryWithContentStream
         /// (Optional) The type of PDF object that this dictionary describes; if present,
         /// must be Pattern for a pattern dictionary.
         /// </summary>
-        [PdfKey(PdfKeyType.Name | PdfKeyType.Required)]
         public const string Type = "/Type";
 
         /// <summary>
         /// (Required) A code identifying the type of pattern that this dictionary describes;
         /// must be 2 for a shading pattern.
         /// </summary>
-        [PdfKey(PdfKeyType.Integer | PdfKeyType.Required)]
         public const string PatternType = "/PatternType";
 
         /// <summary>
         /// (Required) A shading object (see below) defining the shading pattern's gradient fill.
         /// </summary>
-        [PdfKey(PdfKeyType.Dictionary | PdfKeyType.Required)]
         public const string Shading = "/Shading";
 
         /// <summary>
         /// (Optional) An array of six numbers specifying the pattern matrix.
         /// Default value: the identity matrix [1 0 0 1 0 0].
         /// </summary>
-        [PdfKey(PdfKeyType.Array | PdfKeyType.Optional)]
         public const string Matrix = "/Matrix";
 
         /// <summary>
@@ -102,17 +98,7 @@ internal sealed class PdfShadingPattern : PdfDictionaryWithContentStream
         /// that are not so specified are inherited from the graphics state that was in effect
         /// at the beginning of the content stream in which the pattern is defined as a resource.
         /// </summary>
-        [PdfKey(PdfKeyType.Dictionary | PdfKeyType.Optional)]
         public const string ExtGState = "/ExtGState";
 
-        /// <summary>
-        /// Gets the KeysMeta for these keys.
-        /// </summary>
-        internal static PdfDictionaryMetadata Meta { get; } = CreateMeta(typeof(Keys));
     }
-
-    /// <summary>
-    /// Gets the KeysMeta of this dictionary type.
-    /// </summary>
-    internal override PdfDictionaryMetadata Meta => Keys.Meta;
 }

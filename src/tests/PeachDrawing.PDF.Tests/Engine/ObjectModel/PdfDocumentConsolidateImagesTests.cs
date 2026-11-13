@@ -6,7 +6,7 @@ using Xunit;
 namespace PeachPDF.Tests.PdfEngineTests.ObjectModel
 {
     // Regression coverage for a data-integrity bug: ConsolidateImages() used to compute image identity
-    // from the content-stream bytes alone (PdfDocument.ImageInfo.XObjectMD5), ignoring the image
+    // from the content-stream bytes alone (the image consolidation identity in PdfImageConsolidator), ignoring the image
     // dictionary's other attributes - most importantly /SMask. Two unrelated images whose base color
     // stream happened to encode to identical bytes, but where only one carried a soft mask (e.g. a PNG
     // alpha channel), would get merged into a single XObject, silently adding or dropping transparency on

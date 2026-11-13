@@ -12,7 +12,6 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
-using System.Reflection;
 using System.Text;
 
 namespace PeachDrawing.PDF.Engine;
@@ -20,8 +19,11 @@ namespace PeachDrawing.PDF.Engine;
 /// <summary>
 /// Represents a PDF dictionary object.
 /// </summary>
-internal partial class PdfDictionary : PdfObject, IEnumerable<KeyValuePair<string, PdfItem>>
+internal partial class PdfDictionary : PdfObject, IEnumerable<KeyValuePair<string, PdfItem>>, IPdfDictionaryValue<PdfDictionary>
 {
+    static PdfDictionary IPdfDictionaryValue<PdfDictionary>.Create(PdfDocument document) => new(document);
+    static PdfDictionary IPdfDictionaryValue<PdfDictionary>.Wrap(PdfDictionary existing) => existing;
+
     // Reference: 3.2.6  Dictionary Objects / Page 59
 
     /// <summary>
@@ -180,8 +182,4 @@ internal override void WriteObject(PdfWriter writer)
         return _stream;
     }
 
-    /// <summary>
-    /// When overridden in a derived class, gets the KeysMeta of this dictionary type.
-    /// </summary>
-    internal virtual PdfDictionaryMetadata? Meta => null;
 }

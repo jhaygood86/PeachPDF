@@ -44,7 +44,6 @@ internal sealed class PdfGraphicsState
     int _realizedLineJoin = -1;
     double _realizedMiterLimit = -1;
     DashStyle _realizedDashStyle = (DashStyle)(-1);
-    string _realizedDashPattern = null!;
     PaintColor _realizedStrokeColor = PaintColor.Empty;
 
     public void RealizePen(Pen pen, PdfColorMode colorMode)
@@ -135,11 +134,7 @@ internal sealed class PdfGraphicsState
                         pdf.AppendFormat(CultureInfo.InvariantCulture, "]{0:" + format + "} d\n", pen.DashOffset);
                         string pattern = pdf.ToString();
 
-                        // BUG: drice2@ageone.de reported a realizing problem
-                        // HACK: I remove the if clause
-                        //if (_realizedDashPattern != pattern)
                         {
-                            _realizedDashPattern = pattern;
                             _renderer.Append(pattern);
                         }
                     }
@@ -489,9 +484,6 @@ internal sealed class PdfGraphicsState
 
     public Matrix3x2 WorldTransform = Matrix3x2.Identity;
 
-    ///// <summary>
-    ///// The world transform in PDF world space.
-    ///// </summary>
 
     public void AddTransform(Matrix3x2 value)
     {

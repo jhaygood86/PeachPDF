@@ -55,6 +55,7 @@
     <None Include="..\PeachPDF.Tests\TestSupport\Jxl\*.jxl" LinkBase="TestSupport\Jxl">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <None Include="Baselines\PdfOutputBaseline.txt" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <!--

@@ -41,7 +41,7 @@ internal sealed class PdfFormXObjectTable : PdfResourceTable
         }
 
         Debug.Assert(form.GetType() == typeof(PdfForm));
-        form._pdfForm = new PdfFormXObject(Owner, form);
+        form._pdfForm = new PdfFormXObject(Owner);
         return form._pdfForm;
     }
 }

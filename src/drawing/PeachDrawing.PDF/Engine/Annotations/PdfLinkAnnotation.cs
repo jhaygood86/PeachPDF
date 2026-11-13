@@ -129,7 +129,6 @@ internal sealed class PdfLinkAnnotation : PdfAnnotation
 
     internal override void WriteObject(PdfWriter writer)
     {
-        PdfPage? dest = null;
         //pdf.AppendFormat(CultureInfo.InvariantCulture,
         //  "{0} 0 obj\n<<\n/Type/Annot\n/Subtype/Link\n" +
         //  "/Rect[{1} {2} {3} {4}]\n/BS<</Type/Border>>\n/Border[0 0 0]\n/C[0 0 0]\n",
@@ -158,7 +157,7 @@ internal sealed class PdfLinkAnnotation : PdfAnnotation
                 if (destIndex > Owner.PageCount)
                     destIndex = Owner.PageCount;
                 destIndex--;
-                dest = Owner.Pages[destIndex];
+                PdfPage dest = Owner.Pages[destIndex];
                 //pdf.AppendFormat("/Dest[{0} 0 R/XYZ null null 0]\n", dest.ObjectId);
                 Elements[Keys.Dest] = new PdfLiteral("[{0} 0 R/XYZ null null 0]", dest.ObjectNumber);
                 break;
@@ -195,7 +194,6 @@ internal sealed class PdfLinkAnnotation : PdfAnnotation
         /// (Optional; not permitted if an A entry is present) A destination to be displayed
         /// when the annotation is activated.
         /// </summary>
-        [PdfKey(PdfKeyType.ArrayOrNameOrString | PdfKeyType.Optional)]
         public const string Dest = "/Dest";
 
         /// <summary>
@@ -208,7 +206,6 @@ internal sealed class PdfLinkAnnotation : PdfAnnotation
         /// Default value: I.
         /// Note: In PDF 1.1, highlighting is always done by inverting colors inside the annotation rectangle.
         /// </summary>
-        [PdfKey("1.2", PdfKeyType.Name | PdfKeyType.Optional)]
         public const string H = "/H";
 
         /// <summary>
@@ -217,7 +214,6 @@ internal sealed class PdfLinkAnnotation : PdfAnnotation
         /// the data from the original URI action so that it can be changed back in case the target page for 
         /// the go-to action is subsequently deleted.
         /// </summary>
-        [PdfKey("1.3", PdfKeyType.Dictionary | PdfKeyType.Optional)]
         public const string PA = "/PA";
 
         /// <summary>
@@ -225,17 +221,7 @@ internal sealed class PdfLinkAnnotation : PdfAnnotation
         /// user space that comprise the region in which the link should be activated, so a link over a rotated or
         /// skewed shape is not the whole of its bounding box.
         /// </summary>
-        [PdfKey("1.6", PdfKeyType.Array | PdfKeyType.Optional)]
         public const string QuadPoints = "/QuadPoints";
 
-        /// <summary>
-        /// Gets the KeysMeta for these keys.
-        /// </summary>
-        public static PdfDictionaryMetadata Meta { get; } = CreateMeta(typeof(Keys));
     }
-
-    /// <summary>
-    /// Gets the KeysMeta of this dictionary type.
-    /// </summary>
-    internal override PdfDictionaryMetadata Meta => Keys.Meta;
 }

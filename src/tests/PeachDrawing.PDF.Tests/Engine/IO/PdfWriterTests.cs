@@ -271,7 +271,7 @@ namespace PeachPDF.Tests.PdfEngineTests.IO
             var doc = new PdfDocument();
             var (writer, stream) = CreateWriter();
 
-            writer.WriteEof(doc, 1234);
+            writer.WriteEof(1234);
 
             var text = ReadAll(stream);
             Assert.StartsWith("startxref\n1234\n%%EOF\n", text);

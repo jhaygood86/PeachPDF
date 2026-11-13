@@ -5,6 +5,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Globalization;
 
 namespace PeachDrawing.PDF.Engine.Advanced;
 
@@ -120,6 +121,17 @@ internal sealed class PdfCrossReferenceTable  // Must not be derive from PdfObje
     private int _maxObjectNumber;
 
     /// <summary>
+    /// The entry of the head of the free list, which every cross-reference section that starts at object 0 begins with.
+    /// </summary>
+    internal const string FreeListHeadEntry = "0000000000 65535 f \n";
+
+    /// <summary>
+    /// One in-use entry of a cross-reference section. Acrobat is very pedantic: it must be exactly 20 bytes per line.
+    /// </summary>
+    internal static string InUseEntry(long offset, int generation = 0)
+        => string.Create(CultureInfo.InvariantCulture, $"{offset:0000000000} {generation:00000} n \n");
+
+    /// <summary>
     /// Writes the xref section in pdf stream.
     /// </summary>
     internal void WriteObject(PdfWriter writer)
@@ -128,18 +140,11 @@ internal sealed class PdfCrossReferenceTable  // Must not be derive from PdfObje
 
         PdfReference[] irefs = AllReferences;
 
-        int count = irefs.Length;
-        writer.WriteRaw(string.Format("0 {0}\n", count + 1));
-        writer.WriteRaw(string.Format("{0:0000000000} {1:00000} {2} \n", 0, 65535, "f"));
-        //PdfEncoders.WriteAnsi(stream, text);
+        writer.WriteRaw(string.Create(CultureInfo.InvariantCulture, $"0 {irefs.Length + 1}\n"));
+        writer.WriteRaw(FreeListHeadEntry);
 
-        for (int idx = 0; idx < count; idx++)
-        {
-            PdfReference iref = irefs[idx];
-
-            // Acrobat is very pedantic; it must be exactly 20 bytes per line.
-            writer.WriteRaw(string.Format("{0:0000000000} {1:00000} {2} \n", iref.Position, iref.GenerationNumber, "n"));
-        }
+        foreach (PdfReference iref in irefs)
+            writer.WriteRaw(InUseEntry(iref.Position, iref.GenerationNumber));
     }
 
     /// <summary>
@@ -167,7 +172,6 @@ internal sealed class PdfCrossReferenceTable  // Must not be derive from PdfObje
         // TODO: remove PdfBooleanObject, PdfIntegerObject etc.
         int removed = ObjectTable.Count;
         //CheckConsistence();
-        // TODO: Is this really so easy?
         PdfReference[] irefs = TransitiveClosure(_document._trailer);
 
         _maxObjectNumber = 0;
@@ -203,21 +207,12 @@ internal sealed class PdfCrossReferenceTable  // Must not be derive from PdfObje
         //CheckConsistence();
     }
 
-    ///// <summary>
-    ///// The garbage collector for PDF objects.
-    ///// </summary>
 
     /// <summary>
     /// Calculates the transitive closure of the specified PdfObject, i.e. all indirect objects
     /// recursively reachable from the specified object, in the order they are discovered.
     /// </summary>
-    public PdfReference[] TransitiveClosure(PdfObject pdfObject) => TransitiveClosure(pdfObject, short.MaxValue);
-
-    /// <summary>
-    /// Calculates the transitive closure of the specified PdfObject. The depth is kept for compatibility: the walk
-    /// has never been limited by it.
-    /// </summary>
-    public PdfReference[] TransitiveClosure(PdfObject pdfObject, int depth)
+    public PdfReference[] TransitiveClosure(PdfObject pdfObject)
     {
         var seen = new HashSet<PdfReference>();
         var found = new List<PdfReference>();

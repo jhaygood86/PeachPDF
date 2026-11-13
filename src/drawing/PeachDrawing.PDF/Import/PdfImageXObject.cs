@@ -9,13 +9,13 @@ namespace PeachDrawing.PDF.Import;
 
 /// <summary>
 /// Turns an image XObject into a <see cref="PeachDrawing.Core.Image"/> a canvas can draw: JPEG data passes through
-/// untouched, anything else is unpacked (bit depth, <c>/Decode</c>, colour space), given its alpha (<c>/SMask</c>, a stencil
-/// or colour-key <c>/Mask</c>, or the fill colour of an image mask) and handed over as PNG. JPEG 2000 is decoded to pixels; CCITT
+/// untouched, anything else is unpacked (bit depth, <c>/Decode</c>, color space), given its alpha (<c>/SMask</c>, a stencil
+/// or color-key <c>/Mask</c>, or the fill color of an image mask) and handed over as PNG. JPEG 2000 is decoded to pixels; CCITT
 /// fax and JBIG2 data are decoded to the one-bit samples the filters produce and then read like any other 1-bit image.
 /// </summary>
 internal static class PdfImageXObject
 {
-    /// <summary>Whether the image's pixels depend on the current fill colour (a stencil), so a decoded copy cannot be reused.</summary>
+    /// <summary>Whether the image's pixels depend on the current fill color (a stencil), so a decoded copy cannot be reused.</summary>
     public static bool IsStencil(PdfSourceDocument doc, PdfDictionary image) =>
         doc.Resolve(image.GetRaw("ImageMask") ?? image.GetRaw("IM")) is PdfBoolean { Value: true };
 
@@ -35,12 +35,12 @@ internal static class PdfImageXObject
             if (stencil) { why = "DCT stencil mask"; return null; }
             if (image.GetRaw("SMask") is null && image.GetRaw("Mask") is null)
                 return FromStream(context, decoded.Data, out why);
-            return FromMaskedJpeg(doc, image, resources, context, decoded.Data, out why);
+            return FromMaskedJpeg(doc, image, context, decoded.Data, out why);
         }
         if (decoded.ImageFilter == "JPXDecode")
         {
             if (stencil) { why = "JPX stencil mask"; return null; }
-            return FromJpx(doc, image, resources, context, decoded.Data, out why);
+            return FromJpx(doc, image, context, decoded.Data, out why);
         }
         bool bilevel = decoded.ImageFilter is "CCITTFaxDecode" or "JBIG2Decode";
         if (bilevel)
@@ -127,8 +127,8 @@ internal static class PdfImageXObject
             {
                 rgba[i * 4] = converted[i * 3]; rgba[i * 4 + 1] = converted[i * 3 + 1]; rgba[i * 4 + 2] = converted[i * 3 + 2]; rgba[i * 4 + 3] = 255;
             }
-            if (doc.Resolve(image.GetRaw("SMask")) is PdfDictionary bulkSoft) ApplyAlpha(doc, bulkSoft, rgba, width, height, resources, soft: true);
-            else if (doc.Resolve(image.GetRaw("Mask")) is PdfDictionary bulkMask) ApplyAlpha(doc, bulkMask, rgba, width, height, resources, soft: false);
+            if (doc.Resolve(image.GetRaw("SMask")) is PdfDictionary bulkSoft) ApplyAlpha(doc, bulkSoft, rgba, width, height, soft: true);
+            else if (doc.Resolve(image.GetRaw("Mask")) is PdfDictionary bulkMask) ApplyAlpha(doc, bulkMask, rgba, width, height, soft: false);
             return FromPixels(context, rgba, width, height, out why);
         }
 
@@ -159,8 +159,8 @@ internal static class PdfImageXObject
             }
         }
 
-        if (doc.Resolve(image.GetRaw("SMask")) is PdfDictionary smask) ApplyAlpha(doc, smask, rgba, width, height, resources, soft: true);
-        else if (doc.Resolve(image.GetRaw("Mask")) is PdfDictionary stencilMask) ApplyAlpha(doc, stencilMask, rgba, width, height, resources, soft: false);
+        if (doc.Resolve(image.GetRaw("SMask")) is PdfDictionary smask) ApplyAlpha(doc, smask, rgba, width, height, soft: true);
+        else if (doc.Resolve(image.GetRaw("Mask")) is PdfDictionary stencilMask) ApplyAlpha(doc, stencilMask, rgba, width, height, soft: false);
 
         return FromPixels(context, rgba, width, height, out why);
     }
@@ -180,7 +180,7 @@ internal static class PdfImageXObject
     }
 
     /// <summary>Sets the alpha of <paramref name="rgba"/> from a soft-mask image or a stencil mask, sampling the mask nearest-neighbour onto the image grid.</summary>
-    static void ApplyAlpha(PdfSourceDocument doc, PdfDictionary mask, byte[] rgba, int width, int height, PdfDictionary? resources, bool soft)
+    static void ApplyAlpha(PdfSourceDocument doc, PdfDictionary mask, byte[] rgba, int width, int height, bool soft)
     {
         int mw = doc.IntOf(mask.GetRaw("Width")), mh = doc.IntOf(mask.GetRaw("Height"));
         var decoded = doc.DecodeStream(mask);
@@ -269,8 +269,8 @@ internal static class PdfImageXObject
         }
     }
 
-    /// <summary>A JPEG 2000 image: decoded to RGBA (the codestream carries its own colour), then given the image's soft or stencil mask.</summary>
-    static Image? FromJpx(PdfSourceDocument doc, PdfDictionary image, PdfDictionary? resources, RenderContext context, byte[] jpx, out string? why)
+    /// <summary>A JPEG 2000 image: decoded to RGBA (the codestream carries its own color), then given the image's soft or stencil mask.</summary>
+    static Image? FromJpx(PdfSourceDocument doc, PdfDictionary image, RenderContext context, byte[] jpx, out string? why)
     {
         why = null;
         byte[] rgba;
@@ -299,13 +299,13 @@ internal static class PdfImageXObject
         if (doc.IntOf(image.GetRaw("SMaskInData")) == 0)
             for (int i = 3; i < rgba.Length; i += 4) rgba[i] = 255;
 
-        if (doc.Resolve(image.GetRaw("SMask")) is PdfDictionary soft) ApplyAlpha(doc, soft, rgba, width, height, resources, soft: true);
-        else if (doc.Resolve(image.GetRaw("Mask")) is PdfDictionary stencilMask) ApplyAlpha(doc, stencilMask, rgba, width, height, resources, soft: false);
+        if (doc.Resolve(image.GetRaw("SMask")) is PdfDictionary soft) ApplyAlpha(doc, soft, rgba, width, height, soft: true);
+        else if (doc.Resolve(image.GetRaw("Mask")) is PdfDictionary stencilMask) ApplyAlpha(doc, stencilMask, rgba, width, height, soft: false);
         return FromPixels(context, rgba, width, height, out why);
     }
 
     /// <summary>A JPEG with a soft mask or stencil mask: its pixels are decoded so the mask can become the alpha channel.</summary>
-    static Image? FromMaskedJpeg(PdfSourceDocument doc, PdfDictionary image, PdfDictionary? resources, RenderContext context, byte[] jpeg, out string? why)
+    static Image? FromMaskedJpeg(PdfSourceDocument doc, PdfDictionary image, RenderContext context, byte[] jpeg, out string? why)
     {
         why = null;
         byte[] rgba;
@@ -330,8 +330,8 @@ internal static class PdfImageXObject
             return null;
         }
 
-        if (doc.Resolve(image.GetRaw("SMask")) is PdfDictionary soft) ApplyAlpha(doc, soft, rgba, width, height, resources, soft: true);
-        else if (doc.Resolve(image.GetRaw("Mask")) is PdfDictionary stencilMask) ApplyAlpha(doc, stencilMask, rgba, width, height, resources, soft: false);
+        if (doc.Resolve(image.GetRaw("SMask")) is PdfDictionary soft) ApplyAlpha(doc, soft, rgba, width, height, soft: true);
+        else if (doc.Resolve(image.GetRaw("Mask")) is PdfDictionary stencilMask) ApplyAlpha(doc, stencilMask, rgba, width, height, soft: false);
         return FromPixels(context, rgba, width, height, out why);
     }
 

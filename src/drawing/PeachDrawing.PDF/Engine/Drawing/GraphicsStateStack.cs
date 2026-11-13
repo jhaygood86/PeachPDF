@@ -10,9 +10,9 @@ namespace PeachDrawing.PDF.Engine.Drawing;
 /// </summary>
 internal sealed class GraphicsStateStack
 {
-    public GraphicsStateStack(PdfGraphics gfx)
+    public GraphicsStateStack()
     {
-        _current = new InternalGraphicsState(gfx);
+        _current = new InternalGraphicsState();
     }
 
     public int Count => _stack.Count;

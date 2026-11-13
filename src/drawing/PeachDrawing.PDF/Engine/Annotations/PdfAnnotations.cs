@@ -11,8 +11,11 @@ namespace PeachDrawing.PDF.Engine.Annotations;
 /// <summary>
 /// Represents the annotations array of a page.
 /// </summary>
-internal sealed class PdfAnnotations : PdfArray
+internal sealed class PdfAnnotations : PdfArray, IPdfArrayValue<PdfAnnotations>
 {
+    static PdfAnnotations IPdfArrayValue<PdfAnnotations>.Create(PdfDocument document) => new(document);
+    static PdfAnnotations IPdfArrayValue<PdfAnnotations>.Wrap(PdfArray existing) => new(existing);
+
     internal PdfAnnotations(PdfDocument document)
         : base(document)
     { }

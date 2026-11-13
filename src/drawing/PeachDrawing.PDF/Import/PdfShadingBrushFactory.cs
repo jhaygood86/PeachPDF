@@ -7,11 +7,11 @@ using PeachDrawing.PDF.Engine;
 namespace PeachDrawing.PDF.Import;
 
 /// <summary>
-/// Turns an axial (type 2) or radial (type 3) shading into a canvas gradient brush. The shading's colour function is
+/// Turns an axial (type 2) or radial (type 3) shading into a canvas gradient brush. The shading's color function is
 /// sampled into gradient stops; a shading that does not extend past its ends paints as if it did (the brush has no
 /// notion of "stop painting here"), and the other shading types (function-based, meshes) are not read yet.
 /// </summary>
-internal static class PdfShading
+internal static class PdfShadingBrushFactory
 {
     const int Samples = 48;
 
