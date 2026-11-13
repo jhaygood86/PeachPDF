@@ -5,6 +5,7 @@ using PeachDrawing.PDF.Engine.Drawing;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Collections.Frozen;
 
 namespace PeachDrawing.PDF;
 /// <summary>
@@ -21,8 +22,8 @@ public sealed class PdfComposerPage
     private readonly PdfGraphics _graphics;
     private readonly List<PdfCanvas> _canvases = [];
     private readonly HashSet<string> _customStringDictionaries = [with(StringComparer.Ordinal)];
-    private static readonly HashSet<string> ReservedPageKeys =
-    [
+    private static readonly FrozenSet<string> ReservedPageKeys = new[]
+    {
         PdfPage.Keys.Type,
         PdfPage.Keys.Parent,
         PdfPage.Keys.LastModified,
@@ -53,7 +54,7 @@ public sealed class PdfComposerPage
         PdfPage.Keys.PresSteps,
         PdfPage.Keys.UserUnit,
         PdfPage.Keys.VP
-    ];
+    }.ToFrozenSet(StringComparer.Ordinal);
     private bool _finished;
 
     internal PdfComposerPage(PdfComposer composer, PdfPage page, int index, PdfRenderContext renderContext)

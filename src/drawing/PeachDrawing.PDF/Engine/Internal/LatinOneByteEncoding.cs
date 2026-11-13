@@ -53,11 +53,9 @@ internal sealed class LatinOneByteEncoding : Encoding
     {
         for (int count = charCount; count > 0; charIndex++, byteIndex++, count--)
         {
-            //Debug.Assert((uint)chars[charIndex] < 256, "Raw string contains invalid character with a value > 255.");
+            // The low byte of every char: a raw PDF string only ever holds chars up to 255 (a char above that is truncated, not
+            // replaced with '?' the way Encoding.Latin1 would, which is why this is not Encoding.Latin1).
             bytes[byteIndex] = (byte)chars[charIndex];
-            //#warning Here is a HACK that must not be ignored!
-            // HACK: 
-            // bytes[byteIndex] = (byte)chars[charIndex];
         }
         return charCount;
     }

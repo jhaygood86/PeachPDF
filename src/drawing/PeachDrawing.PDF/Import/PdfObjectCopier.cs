@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text;
 using PeachDrawing.PDF.Engine;
 using PeachDrawing.PDF.Engine.Advanced;
+using System.Collections.Frozen;
 
 namespace PeachDrawing.PDF.Import;
 
@@ -34,7 +35,7 @@ sealed class PdfObjectCopier
         "/Trans", "/Dur", "/Tabs", "/PZ", "/Metadata",
     ];
 
-    static readonly string[] InheritedKeys = ["/MediaBox", "/CropBox", "/Rotate", "/Resources"];
+    static readonly FrozenSet<string> InheritedKeys = new[] { "/MediaBox", "/CropBox", "/Rotate", "/Resources" }.ToFrozenSet(StringComparer.Ordinal);
 
     readonly PdfSourceDocument _source;
     readonly PdfDocument _destination;
@@ -74,7 +75,7 @@ sealed class PdfObjectCopier
     {
         foreach (var key in PageKeys)
         {
-            var value = Array.IndexOf(InheritedKeys, key) >= 0 ? _source.InheritedAttribute(sourcePage, key) : _source.Resolve(sourcePage.GetRaw(key));
+            var value = InheritedKeys.Contains(key) ? _source.InheritedAttribute(sourcePage, key) : _source.Resolve(sourcePage.GetRaw(key));
             if (value is null or PdfNull)
                 continue;
 
