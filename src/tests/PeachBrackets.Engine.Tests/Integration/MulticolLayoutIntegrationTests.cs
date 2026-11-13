@@ -338,6 +338,22 @@ namespace PeachBrackets.Engine.Tests.Integration
         }
 
         [Fact]
+        public async Task BlockEndPaddingAndBorder_SitBelowTheColumns()
+        {
+            // Four 20pt items in two columns: the columns are 40pt tall, and the box's own padding and border follow them. Before, the
+            // box ended where the columns did and its bottom border was painted over the content.
+            var html = Wrap(@"
+                <div id='mc' style='columns:2; column-gap:0; width:200pt; padding-top:3pt; padding-bottom:7pt; border-top:2pt solid black; border-bottom:5pt solid black'>
+                    <div style='height:20pt'></div><div style='height:20pt'></div>
+                    <div style='height:20pt'></div><div style='height:20pt'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html, pageHeight: 1000);
+            var mc = FindById(root, "mc")!;
+
+            Assert.Equal(2 + 3 + 40 + 7 + 5, mc.ActualBottom - mc.Location.Y, 0.5);
+        }
+
+        [Fact]
         public async Task ColumnRule_ActuallyPainted_DrawsALine()
         {
             // Regression coverage per this repo's painting-test convention: a passing layout-level
@@ -354,7 +370,8 @@ namespace PeachBrackets.Engine.Tests.Integration
             var spy = new DrawLineSpyGraphics();
             FragmentPaintHarness.PaintBox(container, mc, spy);
 
-            Assert.True(spy.DrawLineCallCount > 0);
+            // A solid rule is the filled segment a border of the same style would be.
+            Assert.True(spy.DrawPolygonCallCount > 0);
         }
 
         [Theory]
@@ -955,6 +972,7 @@ namespace PeachBrackets.Engine.Tests.Integration
         private sealed class DrawLineSpyGraphics : Canvas
         {
             public int DrawLineCallCount { get; private set; }
+            public int DrawPolygonCallCount { get; private set; }
 
             public DrawLineSpyGraphics() : base(new HtmlRenderContext(), new Rect(0, 0, double.MaxValue, double.MaxValue)) { }
 
@@ -999,7 +1017,7 @@ namespace PeachBrackets.Engine.Tests.Integration
             public override void DrawImage(Image image, Rect destRect) { }
             public override void DrawPath(Pen pen, GraphicsPath path) { }
             public override void DrawPath(Brush brush, GraphicsPath path) { }
-            public override void DrawPolygon(Brush brush, PaintPoint[] points) { }
+            public override void DrawPolygon(Brush brush, PaintPoint[] points) => DrawPolygonCallCount++;
             public override void Dispose() { }
         }
 

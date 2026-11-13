@@ -159,8 +159,9 @@ namespace PeachDrawing.Core
                     continue;
                 }
 
-                // HACK: Unclear what to do here.
-                if (value < 32)
+                // A carriage return is part of a line break the caller has already handled. Any other control character is measured as the
+                // glyph it is drawn with (the font's missing-glyph shape): it must be visible, so it takes room.
+                if (value == 13)
                 {
                     adjustedLength--;
 

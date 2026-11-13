@@ -51,8 +51,19 @@ public sealed class RasterRenderContext : RenderContext
     {
         _ = dpi;
         var surface = new RasterSurface(widthPx, heightPx, gridX: 0, gridY: 0, pixelsPerUnitX: 1, pixelsPerUnitY: 1);
-        return new RasterCanvas(this, surface, pixelsPerPoint: 1);
+        return new RasterCanvas(this, surface, pixelsPerPoint: PixelsPerPoint);
     }
+
+    /// <summary>
+    /// Layout units per point, as <see cref="RenderContext.LayoutUnitsPerPoint"/> reports it: <c>1</c> (the default) means a layout unit is a point, which
+    /// a canvas from <see cref="CreateCanvas"/> then draws as one device pixel. A document laid out against this context at <c>96.0 / 72.0</c> has CSS
+    /// pixels as its layout unit, so a canvas from <see cref="CreateCanvas"/> shows it at one CSS pixel per device pixel with no transform in between, and
+    /// the engine's snapping of boxes and borders to whole CSS pixels lands on whole device pixels. Set it before the document is loaded.
+    /// </summary>
+    public double PixelsPerPoint { get; set; } = 1.0;
+
+    /// <inheritdoc/>
+    public override double LayoutUnitsPerPoint => PixelsPerPoint;
 
     /// <inheritdoc/>
     public override string GetCssMediaType(IEnumerable<string> mediaTypesAvailable) => "screen";
@@ -110,11 +121,17 @@ public sealed class RasterRenderContext : RenderContext
 
     private static bool IsItalic(PaintFontStyle style) => (style & PaintFontStyle.Italic) == PaintFontStyle.Italic;
 
-    private TypefaceFont MatchAndCreateFont(string family, double size, PaintFontStyle style, double weight, double stretch, double? obliqueSkewSinus)
+    /// <summary>A plain <see cref="TypefaceFont"/> where a layout unit is a point; otherwise a <see cref="RasterFont"/> over one built in points, which reports its metrics in layout units.</summary>
+    private Font NewFont(PeachDrawing.Text.Typeface typeface, double size, SyntheticStyle synthesis, double? obliqueSkewSinus) =>
+        PixelsPerPoint == 1.0
+            ? new TypefaceFont(typeface, size, synthesis, obliqueSkewSinus)
+            : new RasterFont(new TypefaceFont(typeface, size / PixelsPerPoint, synthesis, obliqueSkewSinus), PixelsPerPoint);
+
+    private Font MatchAndCreateFont(string family, double size, PaintFontStyle style, double weight, double stretch, double? obliqueSkewSinus)
     {
         var query = TypefaceQuery.From(weight, stretch, IsItalic(style), null, null, obliqueSkewSinus);
         var match = _fontSet.MatchOrFallback(family, query);
-        return new TypefaceFont(match.Typeface, size, Restrict(match.Synthesis, style), obliqueSkewSinus);
+        return NewFont(match.Typeface, size, Restrict(match.Synthesis, style), obliqueSkewSinus);
     }
 
     /// <inheritdoc/>
@@ -128,7 +145,7 @@ public sealed class RasterRenderContext : RenderContext
             return null;
         }
 
-        return new TypefaceFont(match.Typeface, size, Restrict(match.Synthesis, style), obliqueSkewSinus);
+        return NewFont(match.Typeface, size, Restrict(match.Synthesis, style), obliqueSkewSinus);
     }
 
     /// <inheritdoc/>
@@ -142,7 +159,7 @@ public sealed class RasterRenderContext : RenderContext
             if (!fallbackFamily.TryMatch(TypefaceQuery.From(weight, stretch, IsItalic(style), codepoint, null, obliqueSkewSinus), out var match))
                 return null;
 
-            return new TypefaceFont(match.Typeface, size, Restrict(match.Synthesis, style), obliqueSkewSinus);
+            return NewFont(match.Typeface, size, Restrict(match.Synthesis, style), obliqueSkewSinus);
         }
         catch
         {

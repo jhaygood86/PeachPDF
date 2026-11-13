@@ -60,6 +60,7 @@ since there is no CSS cascade here to resolve a generic keyword against.
   device pixels, with the plain unit convention below. `dpi` is accepted for forward-compatible signature
   parity with a future encoder that tags physical resolution on save; it does not otherwise affect drawing
   today.
+- **`PixelsPerPoint`** (default `1`) is the layout units per point, as the Win2D, Skia and CoreGraphics render contexts have it. At the default a document laid out against the context has the point as its layout unit; set it to `96.0 / 72.0` before loading a document and its layout unit is the CSS pixel, so a canvas from `CreateCanvas` shows one CSS pixel per device pixel with no transform in between, and the engine's pixel snapping lands on whole device pixels.
 - **`AddFont(Stream, fontFamilyName)`** registers a font (TrueType, OpenType, WOFF or WOFF2 - recognized by
   its content) directly under a family name, bypassing CSS `@font-face` entirely - the standalone
   equivalent of `RenderContext.AddFontFamilyFromUrl`.

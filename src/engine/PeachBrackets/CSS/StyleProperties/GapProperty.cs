@@ -2,7 +2,7 @@
 {
     internal class GapProperty : ShorthandProperty
     {
-        private static readonly IValueConverter StyleConverter = Converters.LengthOrPercentOrNormalConverter
+        private static readonly IValueConverter StyleConverter = Converters.NonNegativeLengthOrPercentOrNormalConverter
                                                                            .OrGlobalValue()
                                                                            .Periodic(PropertyNames.RowGap, PropertyNames.ColumnGap);
 

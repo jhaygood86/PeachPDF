@@ -2,7 +2,7 @@
 {
     internal sealed class PaddingProperty : ShorthandProperty
     {
-        private static readonly IValueConverter StyleConverter = Converters.LengthOrPercentConverter.Periodic(
+        private static readonly IValueConverter StyleConverter = Converters.NonNegativeLengthOrPercentConverter.Periodic(
                 PropertyNames.PaddingTop, PropertyNames.PaddingRight, PropertyNames.PaddingBottom,
                 PropertyNames.PaddingLeft)
             .OrDefault(Length.Zero);

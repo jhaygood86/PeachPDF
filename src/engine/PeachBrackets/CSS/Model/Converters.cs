@@ -85,6 +85,11 @@ namespace PeachBrackets.Css
 
         public static IValueConverter Any = new AnyValueConverter();
 
+        // CSS Box 4 padding: <length-percentage [0,∞]> - a negative value is invalid and the declaration is dropped.
+        public static readonly IValueConverter NonNegativeLengthOrPercentConverter =
+            new StructValueConverter<Length>(ValueExtensions.ToNonNegativeDistance)
+                .Or(new CalcValueConverter(CalcCategory.LengthPercentage));
+
         public static readonly IValueConverter LengthOrPercentConverter =
             new StructValueConverter<Length>(ValueExtensions.ToDistance)
                 .Or(new CalcValueConverter(CalcCategory.LengthPercentage));
@@ -661,10 +666,16 @@ namespace PeachBrackets.Css
             Construct(() => new FunctionValueConverter(FunctionNames.CalcSize, Any));
 
         // width/height and their min/max: a length, a percentage, auto/none, stretch or calc-size(). (flex-basis keeps the narrower converters above.)
-        public static readonly IValueConverter AutoSizeConverter = AutoLengthOrPercentOrStretchConverter.Or(CalcSizeConverter);
-        public static readonly IValueConverter OptionalSizeConverter = OptionalLengthOrPercentOrStretchConverter.Or(CalcSizeConverter);
-        public static readonly IValueConverter SizeConverter = LengthOrPercentOrStretchConverter.Or(CalcSizeConverter);
+        // CSS Sizing 3: these take <length-percentage [0,∞]>, so a negative value is invalid.
+        // The intrinsic-size keywords are the same sizes as the calc-size() of that basis (CalcSizeValue reads them as such).
+        private static IValueConverter OrIntrinsicKeywords(this IValueConverter converter) =>
+            converter.Or(Keywords.MinContent).Or(Keywords.MaxContent).Or(Keywords.FitContent);
+
+        public static readonly IValueConverter AutoSizeConverter = NonNegativeLengthOrPercentConverter.OrAuto().OrStretch().OrIntrinsicKeywords().Or(CalcSizeConverter);
+        public static readonly IValueConverter OptionalSizeConverter = NonNegativeLengthOrPercentConverter.OrNone().OrStretch().OrIntrinsicKeywords().Or(CalcSizeConverter);
+        public static readonly IValueConverter SizeConverter = NonNegativeLengthOrPercentConverter.OrStretch().OrIntrinsicKeywords().Or(CalcSizeConverter);
         public static readonly IValueConverter LengthOrPercentOrNormalConverter = LengthOrPercentConverter.Or(Keywords.Normal);
+        public static readonly IValueConverter NonNegativeLengthOrPercentOrNormalConverter = NonNegativeLengthOrPercentConverter.Or(Keywords.Normal);
         public static readonly IValueConverter OptionalPercentOrFractionConverter = PercentOrFractionConverter.OrDefault(1f);
         public static readonly IValueConverter OptionalPercentOrNumberConverter =
             PercentOrNumberConverter.Or(new CalcValueConverter(CalcCategory.Number | CalcCategory.Percentage)).OrDefault(1f);

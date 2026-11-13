@@ -73,13 +73,15 @@ namespace PeachBrackets.Html.Fragments
     /// is what this reports.
     /// </param>
     /// <param name="HasBottomEdge">whether this rectangle's bottom edge is the box's own, not a break</param>
+    /// <param name="SnapsEveryEdge">whether the pixel snapping moves the open edges too: true where a rectangle ends at other content (a piece of a box split by bidi reordering), not at a break the next fragment continues from</param>
     internal sealed record SliceGeometry(
         Rect UnbrokenStrip,
         Rect FragmentRect,
         bool HasLeftEdge,
         bool HasRightEdge,
         bool HasTopEdge = true,
-        bool HasBottomEdge = true);
+        bool HasBottomEdge = true,
+        bool SnapsEveryEdge = false);
 
     /// <summary>
     /// One line's worth of a box's own decoration area — the fragmentainer-local equivalent of a

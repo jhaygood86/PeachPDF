@@ -35,7 +35,10 @@ namespace PeachBrackets.Css
                 // TryFoldPixels folds through Length.ToPixels, whose result is layout POINTS —
                 // convert back to CSS px for the canonical "<N>px" text (calc(12px + 4px) → "16px"),
                 // so re-parsing the folded text applies the spec px ratio exactly once, not twice.
-                return new Length((float)(points / Length.PointsPerPx), Length.Unit.Px).ToString(null, CultureInfo.InvariantCulture);
+                var folded = new Length((float)(points / Length.PointsPerPx), Length.Unit.Px).ToString(null, CultureInfo.InvariantCulture);
+                // A negative result stays a calc(): as a bare length it would be a negative literal, which a property with a [0,inf] range drops as
+                // invalid, where a calc() is valid and clamps to the range when it is computed (css-values-4 section 10.2).
+                return points < 0 ? "calc(" + folded + ")" : folded;
             }
 
             return SerializeExpression(node);

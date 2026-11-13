@@ -47,7 +47,7 @@ namespace PeachBrackets.Html.Paint.Content
 
             // A backdrop repaint stops here: what is behind this element's content includes its background and borders, not the content.
             if (!painter.StopsBeforeContent(fragment))
-                DrawContent(painter, g, fragment, box, ContentRect(box, fragment, rect));
+                DrawContent(painter, g, fragment, box, ContentRect(g, box, fragment, rect));
 
             // An outline applies to a replaced element like any other (css-ui-4 §3.1) and is painted
             // after its content; a deferred one replays this element's ancestor overflow clip.
@@ -64,7 +64,7 @@ namespace PeachBrackets.Html.Paint.Content
         /// rectangle (the box's principal rectangle if the word did not land on this page), deflated by
         /// the box's border and padding and snapped to whole units.
         /// </summary>
-        private Rect ContentRect(CssBox box, BoxFragment fragment, Rect fallback)
+        private Rect ContentRect(Canvas g, CssBox box, BoxFragment fragment, Rect fallback)
         {
             var word = ContentWord(box);
 
@@ -73,8 +73,17 @@ namespace PeachBrackets.Html.Paint.Content
 
             r.Height -= box.ActualBorderTopWidth + box.ActualBorderBottomWidth + box.ActualPaddingTop + box.ActualPaddingBottom;
             r.Y += box.ActualBorderTopWidth + box.ActualPaddingTop;
-            r.X = Math.Floor(r.X);
-            r.Y = Math.Floor(r.Y);
+            if (box.HtmlContainer is { SnapBoxDecorationsToCssPixels: true } && g.CurrentTransform.IsIdentity)
+            {
+                // Rounded to the pixel like the box's own edges, so a picture sits where a block of its size would.
+                r.X = DecorationPixelSnapping.SnapCoordinate(g, r.X);
+                r.Y = DecorationPixelSnapping.SnapCoordinate(g, r.Y);
+            }
+            else
+            {
+                r.X = Math.Floor(r.X);
+                r.Y = Math.Floor(r.Y);
+            }
 
             return r;
         }

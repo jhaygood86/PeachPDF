@@ -4,7 +4,7 @@ using System.Text.RegularExpressions;
 namespace PeachBrackets.Html.Parse
 {
     /// <summary>
-    /// <c>calc-size(&lt;basis&gt;, &lt;calc-sum&gt;)</c> (CSS Values 5 §10.8.1): a size computed from another size, where the keyword
+    /// <c>calc-size(&lt;basis&gt;, &lt;calc-sum&gt;)</c> (CSS Values 5 §10.8.1), and the bare <c>min-content</c>/<c>max-content</c>/<c>fit-content</c> sizes (which are the same size): a size computed from another size, where the keyword
     /// <c>size</c> inside the expression stands for the basis. Layout turns it into an ordinary <c>calc()</c> by
     /// measuring the basis (see <c>CssBox.CalcSizing</c>), so everything downstream sees a plain length.
     /// </summary>
@@ -17,6 +17,16 @@ namespace PeachBrackets.Html.Parse
             if (value is null) return false;
 
             var text = value.AsSpan().Trim();
+
+            // `max-content` and the other intrinsic keywords are the size itself: calc-size(<keyword>, size).
+            if (text.Equals("min-content", StringComparison.OrdinalIgnoreCase) || text.Equals("max-content", StringComparison.OrdinalIgnoreCase)
+                || text.Equals("fit-content", StringComparison.OrdinalIgnoreCase))
+            {
+                basis = text.ToString();
+                expression = "size";
+                return true;
+            }
+
             const string open = "calc-size(";
             if (text.Length <= open.Length + 1 || !text.StartsWith(open, StringComparison.OrdinalIgnoreCase) || text[^1] != ')') return false;
 

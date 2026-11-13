@@ -103,7 +103,18 @@ namespace PeachBrackets.Css
         public static Length? ToNonNegativeDistance(this IReadOnlyList<Token> value)
         {
             var distance = value.ToDistance();
-            return distance is { Value: >= 0 } ? distance : null;
+            if (distance is { Value: >= 0 }) return distance;
+
+            // A calc() that evaluates below zero is not invalid: the result is clamped to the property's range when it is computed (css-values-4 section 10.2).
+            if (distance is not null)
+            {
+                foreach (var token in value)
+                {
+                    if (token.Type == TokenType.Function) return distance;
+                }
+            }
+
+            return null;
         }
 
         public static Length ToLength(this FontSize fontSize)

@@ -316,6 +316,12 @@ namespace PeachDrawing.Text.Internal.Text
 
                 int glyphIndex = descriptor.CharCodeToGlyphIndex(lookup);
 
+                // A control character is drawn as the font's missing-glyph shape whatever the font maps it to (css-text-3 §4.1: a control
+                // other than tab and the segment breaks must be visible); many fonts map the C0 controls to blank glyphs, which would
+                // hide it. A tab and the line breaks are not drawn as glyphs and are handled before the text reaches here.
+                if (rune.Value is < 0x20 and not (0x09 or 0x0A or 0x0D) or 0x7F or (>= 0x80 and <= 0x9F))
+                    glyphIndex = 0;
+
                 // A character asked to be drawn in a presentation - by the selector after it, or by
                 // font-variant-emoji standing in for one - takes the font's dedicated glyph for that
                 // sequence when its cmap format 14 has one (a non-default UVS record).

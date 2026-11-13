@@ -118,9 +118,32 @@ namespace PeachBrackets.Html.Paint
                 };
             }
 
-            var rect = Snap(g, geometry.DecorationRect,
-                geometry.HasLeftEdge, geometry.HasTopEdge, geometry.HasRightEdge, geometry.HasBottomEdge);
+            var rect = geometry.SnapsEveryEdge
+                ? Snap(g, geometry.DecorationRect)
+                : Snap(g, geometry.DecorationRect,
+                    geometry.HasLeftEdge, geometry.HasTopEdge, geometry.HasRightEdge, geometry.HasBottomEdge);
             return geometry with { DecorationRect = rect, ClipRect = rect };
+        }
+
+        /// <summary><paramref name="value"/> rounded to the nearest whole CSS pixel, as an edge of a box is; unchanged under a transform.</summary>
+        internal static double SnapCoordinate(Canvas g, double value)
+        {
+            if (!g.CurrentTransform.IsIdentity) return value;
+
+            var pixel = Length.PointsPerPx * g.PixelsPerPoint;
+            return pixel <= 0 ? value : SnapEdge(value, pixel);
+        }
+
+        /// <summary>
+        /// The top of a run of text moved so that its baseline (<paramref name="top"/> plus <paramref name="ascent"/>) lies on a whole CSS pixel, or
+        /// <paramref name="top"/> itself under a transform, where the position on the device grid is not the position in layout space.
+        /// </summary>
+        internal static double SnapBaseline(Canvas g, double top, double ascent)
+        {
+            if (!g.CurrentTransform.IsIdentity) return top;
+
+            var pixel = Length.PointsPerPx * g.PixelsPerPoint;
+            return pixel <= 0 ? top : SnapEdge(top + ascent, pixel) - ascent;
         }
 
         // Rounds half up, with a bias far above float noise (~1e-13) and far below anything layout can mean:

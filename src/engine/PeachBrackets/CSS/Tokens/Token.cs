@@ -153,19 +153,18 @@ namespace PeachBrackets.Css
                     return result;
                 }
 
-                var allDigits = true;
-                foreach (var c in Data)
+                // A well-formed integer too large for 32 bits: CSS Values 4 lets an implementation clamp it to what it supports.
+                var negative = Data.StartsWith('-');
+                var digitsFrom = negative || Data.StartsWith('+') ? 1 : 0;
+                var allDigits = Data.Length > digitsFrom;
+                for (var i = digitsFrom; i < Data.Length && allDigits; i++)
                 {
-                    if (!char.IsDigit(c))
-                    {
-                        allDigits = false;
-                        break;
-                    }
+                    allDigits = char.IsDigit(Data[i]);
                 }
 
                 if (allDigits)
                 {
-                    return int.MaxValue;
+                    return negative ? int.MinValue : int.MaxValue;
                 }
 
                 throw new ParseException($"Unrecognized integer value '{Data}.'");

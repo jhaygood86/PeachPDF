@@ -129,6 +129,8 @@ PeachDrawing.RasterRenderContext : sealed class
   method ValueTask AddFont(Stream stream, String fontFamilyName)
   method virtual String GetCssMediaType(IEnumerable<String> mediaTypesAvailable)
   method virtual ValueTask<RNetworkResponse> GetResourceStream(Uri uri)
+  property Double LayoutUnitsPerPoint { get; }
+  property Double PixelsPerPoint { get; set; }
   property Func<Uri, ValueTask<RNetworkResponse>> ResourceLoader { get; set; }
 PeachDrawing.RasterSurfaceEncoding : static class
   method static Boolean IsOpaque(RasterSurface surface)

@@ -204,7 +204,8 @@ namespace PeachBrackets.Engine.Tests.Integration
             var g = new TestRecordingGraphics();
             FragmentPaintHarness.PaintBox(container, cols, g);
 
-            var rules = g.Log.OfType<TestRecordingGraphics.DrawLineCall>()
+            // A rule is the filled segment a border of the same style would be.
+            var rules = g.Log.OfType<TestRecordingGraphics.DrawPolygonCall>()
                 .Where(l => l.PaintColor == PaintColor.FromArgb(10, 20, 30));
 
             Assert.Equal(expectedRules, rules.Count());

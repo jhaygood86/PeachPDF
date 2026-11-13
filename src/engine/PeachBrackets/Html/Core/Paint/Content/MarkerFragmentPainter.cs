@@ -93,6 +93,10 @@ namespace PeachBrackets.Html.Paint.Content
 
         private static void PaintShape(Canvas g, CssBoxMarker box, Rect rect)
         {
+            // A marker shape is a box like any other: with the pixel snapping on, its edges land on whole pixels.
+            if (box.HtmlContainer is { SnapBoxDecorationsToCssPixels: true })
+                rect = DecorationPixelSnapping.Snap(g, rect);
+
             if (box.MarkerShape == Keywords.Square)
             {
                 using var squareBrush = g.GetSolidBrush(box.ActualColor);

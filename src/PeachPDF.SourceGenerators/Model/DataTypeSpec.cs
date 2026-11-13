@@ -6,6 +6,8 @@ namespace PeachPDF.SourceGenerators.Model
     {
         Unsupported,
         Length,
+        /// <summary>A length or percentage that may not be negative (<c>[0,∞]</c>): CssValueParser.IsValidNonNegativeLength.</summary>
+        NonNegativeLength,
         Color,
         CurrentColor,
         Transform,

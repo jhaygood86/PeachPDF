@@ -1,0 +1,22 @@
+{
+  "formatVersion": 1,
+  "wptCommit": "ffc4686d117de150daf1287809302e3edea82dc6",
+  "floors": {
+    "css-backgrounds": 310,
+    "css-color": 158,
+    "css-flexbox": 524,
+    "css-grid": 386,
+    "css-lists": 23,
+    "css-multicol": 141,
+    "css-position": 32,
+    "css-tables": 51,
+    "css-text": 615,
+    "css-transforms": 447,
+    "css-values": 83,
+    "css2-floats": 171,
+    "css2-flow": 1658,
+    "css2-generated": 212,
+    "css2-positioning": 405,
+    "css2-tables": 94
+  }
+}

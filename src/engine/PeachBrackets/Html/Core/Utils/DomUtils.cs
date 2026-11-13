@@ -1336,6 +1336,9 @@ namespace PeachBrackets.Html.Utils
         internal static bool EstablishesIndependentFormattingContext(CssBox box)
         {
             if (box.ParentBox is null) return true;
+            // The root element establishes a block formatting context (CSS 2.1 section 9.4.1), and its margins do not collapse (section 8.3.1): what its
+            // first descendant's margin would collapse through its top stays inside it, so the <html> box starts at the top of the page area.
+            if (box.ParentBox.ParentBox is null && box.HtmlTag is { } rootTag && rootTag.Name.Equals("html", StringComparison.OrdinalIgnoreCase)) return true;
             if (box.IsFloated || box.IsPageFloated) return true;
             if (box.Position.Value is PositionMode.Absolute or PositionMode.Fixed) return true;
             if (box.Overflow.Value is not Overflow.Visible) return true;

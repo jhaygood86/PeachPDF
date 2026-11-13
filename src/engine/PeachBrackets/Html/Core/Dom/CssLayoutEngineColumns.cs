@@ -451,7 +451,11 @@ namespace PeachBrackets.Html.Dom
                 ? ruleSegments
                 : [.. columnsBox.ColumnRuleSegments, .. ruleSegments];
 
-            columnsBox.ActualBottom = Math.Max(boxTop, contentBottomOverall);
+            // The box's own block-end padding and border sit below its columns - the content bottom is where the
+            // columns end, not the box - unless the box goes on into the next fragmentainer, which they belong to
+            // the end of instead (css-break-3 §5.5; box-decoration-break: slice).
+            columnsBox.ActualBottom = Math.Max(boxTop, contentBottomOverall)
+                + (carry is null ? columnsBox.ActualPaddingBottom + columnsBox.ActualBorderBottomWidth : 0);
 
             // The column loop narrowed the container to one column at a time, and the shared child loop
             // walks every box - so an out-of-flow child resolved its position against a *column*. The

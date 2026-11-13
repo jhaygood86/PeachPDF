@@ -48,6 +48,11 @@ namespace PeachPDF.SourceGenerators.Emit
             "length" => new Resolved(
                 "global::PeachBrackets.Html.Parse.CssValueParser.TryParseLengthOrCalc(value, out _)",
                 "global::PeachBrackets.Css.LengthOrCalc", "global::PeachBrackets.Html.Parse.CssValueParser.TryParseLengthOrCalc"),
+            // The same, for a property whose length may not be negative (column-gap, row-gap: <length-percentage [0,∞]>): a negative
+            // declaration is invalid and dropped, not stored.
+            "nonnegative-length" => new Resolved(
+                "global::PeachBrackets.Html.Parse.CssValueParser.TryParseLengthOrCalc(value, out _) && global::PeachBrackets.Html.Parse.CssValueParser.IsValidNonNegativeLength(value)",
+                "global::PeachBrackets.Css.LengthOrCalc", "global::PeachBrackets.Html.Parse.CssValueParser.TryParseLengthOrCalc"),
             // line-height's own non-keyword grammar (<length-percentage> | <number>) - a superset of
             // "length" that also accepts a bare unitless multiplier (CSS Inline Layout 3 §4). See
             // LengthOrUnitless's own doc comment for why the unitless side needs no separate deferred-calc
