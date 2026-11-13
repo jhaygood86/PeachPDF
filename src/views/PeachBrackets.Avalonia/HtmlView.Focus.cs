@@ -162,6 +162,8 @@ public sealed partial class HtmlView
         if (focusedId is not null && document.GetAccessibilityTree().FindById(focusedId) is { } focused)
             RevealNode(focused);
 
+        // A field that took the focus offers its input method client.
+        UpdateTextInputClient();
         FocusChanged?.Invoke(this, EventArgs.Empty);
     }
 
