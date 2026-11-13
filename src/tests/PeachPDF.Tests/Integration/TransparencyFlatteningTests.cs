@@ -71,6 +71,17 @@ namespace PeachPDF.Tests.Integration
             await Assert.ThrowsAnyAsync<InvalidOperationException>(() => Generate(body, PdfA1(TransparencyPolicy.Reject)));
         }
 
+        [Theory]
+        [InlineData("<div style=\"background:rgba(255,0,0,.5);height:20pt\">a</div><div style=\"background:rgba(255,0,0,.5);height:20pt\">b</div>")]
+        [InlineData("<div style=\"border:4pt solid rgba(0,0,255,.5);height:20pt\">a</div><div style=\"border:4pt solid rgba(0,0,255,.5);height:20pt\">b</div>")]
+        public async Task PdfA1_WithFlatten_FlattensARepeatedTranslucentPaint(string body)
+        {
+            // The probe must answer from a clean graphics state, or a fill that repeats the previous probe's is never seen as translucent.
+            var pdf = await Generate(body, PdfA1());
+
+            Assert.False(HasTransparency(pdf));
+        }
+
         [Fact]
         public async Task ABackdropFilter_IsLegalUnderPdfA1WithoutFlattening_BecauseItsBitmapIsOpaque()
         {
