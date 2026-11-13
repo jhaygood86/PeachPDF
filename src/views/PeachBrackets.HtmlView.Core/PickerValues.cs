@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 
-namespace PeachBrackets.Apple.Logic;
+namespace PeachBrackets.HtmlViewCore;
 
 /// <summary>
 /// The values a date or time input holds and the dialog that sets them: which kinds of control get a picker, and how the text of a value

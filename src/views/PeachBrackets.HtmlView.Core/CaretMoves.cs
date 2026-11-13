@@ -1,7 +1,7 @@
 using System;
 using System.Globalization;
 
-namespace PeachBrackets.Android.Logic;
+namespace PeachBrackets.HtmlViewCore;
 
 /// <summary>A way the caret of a text field moves.</summary>
 internal enum EditMove

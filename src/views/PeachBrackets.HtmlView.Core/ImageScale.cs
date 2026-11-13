@@ -1,4 +1,4 @@
-namespace PeachBrackets.Apple.Logic;
+namespace PeachBrackets.HtmlViewCore;
 
 /// <summary>
 /// The numbers a view hands <c>HtmlDocument</c> so a <c>srcset</c> image is chosen for how large it is shown: the device pixel ratio, and when

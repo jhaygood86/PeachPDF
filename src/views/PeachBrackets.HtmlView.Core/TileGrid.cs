@@ -1,4 +1,4 @@
-namespace PeachBrackets.Apple.Logic;
+namespace PeachBrackets.HtmlViewCore;
 
 /// <summary>A tile's place in the grid that covers the page: its column and row, counted from the page's top-left.</summary>
 /// <param name="Column">the column, from 0</param>
@@ -123,6 +123,19 @@ internal sealed class TileCache<T>(int capacity, Action<T> release) where T : cl
             _index.Remove(oldest.Value.Key);
             release(oldest.Value.Value);
         }
+    }
+
+    /// <summary>Lets go of one tile, so it is painted again the next time it is needed. Nothing happens when it is not kept.</summary>
+    /// <param name="key">the tile</param>
+    /// <returns>whether the tile was kept</returns>
+    public bool Remove(TileKey key)
+    {
+        if (!_index.Remove(key, out var node))
+            return false;
+
+        _order.Remove(node);
+        release(node.Value.Value);
+        return true;
     }
 
     /// <summary>Lets go of every tile.</summary>

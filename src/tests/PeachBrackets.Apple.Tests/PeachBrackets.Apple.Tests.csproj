@@ -38,4 +38,5 @@
     <Using Include="Xunit" />
   </ItemGroup>
 
+  <Import Project="..\..\views\PeachBrackets.HtmlView.Core\PeachBrackets.HtmlView.Core.props" />
 </Project>

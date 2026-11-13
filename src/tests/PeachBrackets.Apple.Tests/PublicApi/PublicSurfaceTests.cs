@@ -166,7 +166,7 @@ public class PublicSurfaceTests
     {
         for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir is not null; dir = dir.Parent)
         {
-            var candidate = Path.Combine(dir.FullName, "engine", "PeachBrackets.Apple");
+            var candidate = Path.Combine(dir.FullName, "views", "PeachBrackets.Apple");
             if (Directory.Exists(candidate)) return candidate;
         }
 

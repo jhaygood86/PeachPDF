@@ -1,0 +1,11 @@
+<Project>
+  <!--
+    The platform-free parts every PeachBrackets HtmlView shares (tile grid, caret moves, IME edits, picker values, ...).
+    This is source, not a package: a view or its test project imports this file, which compiles the sources in as internal
+    types and imports their namespace, so nothing here is public API and no assembly grants access to it.
+  -->
+  <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)*.cs" Link="HtmlViewCore\%(Filename)%(Extension)" />
+    <Using Include="PeachBrackets.HtmlViewCore" />
+  </ItemGroup>
+</Project>

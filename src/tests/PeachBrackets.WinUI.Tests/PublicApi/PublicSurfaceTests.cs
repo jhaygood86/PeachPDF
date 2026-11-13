@@ -122,7 +122,7 @@ namespace PeachBrackets.WinUI.Tests.PublicApi
         {
             for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir is not null; dir = dir.Parent)
             {
-                var candidate = Path.Combine(dir.FullName, "engine", "PeachBrackets.WinUI", SnapshotFile);
+                var candidate = Path.Combine(dir.FullName, "views", "PeachBrackets.WinUI", SnapshotFile);
                 if (File.Exists(candidate)) return candidate;
             }
 
