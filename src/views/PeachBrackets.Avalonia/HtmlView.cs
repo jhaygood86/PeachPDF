@@ -74,6 +74,7 @@ public sealed partial class HtmlView : Control
     /// <summary>Creates a control with nothing in it.</summary>
     public HtmlView()
     {
+        InitializeTouch();
         if (Environment.GetEnvironmentVariable("PEACH_NO_ENGINE_WARMUP") is null)
             _ = HtmlDocument.WarmUpAsync();
     }
@@ -383,6 +384,7 @@ public sealed partial class HtmlView : Control
         _reflowTimer?.Stop();
         UntrackScaling();
         StopAnimationLoop();
+        ReleaseCursors();
         lock (_documentLock)
         {
             ResetTiles();

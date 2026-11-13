@@ -83,7 +83,10 @@ public sealed partial class HtmlView
         }
 
         if (_pressedType == PointerType.Touch)
+        {
             _touchAllowed = document.GetInteractionAt(page, x, y).TouchActions;
+            BeginTouchPress(page, x, y);
+        }
 
         RequestPointerState(page, x, y, pressed: true);
         if (PressInTextField(page, x, y, e.ClickCount))
@@ -128,7 +131,7 @@ public sealed partial class HtmlView
 
         if (_pressedInField)
         {
-            if (TryLocate(position, out var fieldPage, out var fieldX, out var fieldY))
+            if (TryLocate(position, out var fieldPage, out var fieldX, out var fieldY) && !DragScrollbar(fieldPage, fieldX, fieldY))
                 DragInTextField(fieldPage, fieldX, fieldY);
 
             _lastPoint = position;
@@ -138,7 +141,7 @@ public sealed partial class HtmlView
         if (_pressedType == PointerType.Touch)
         {
             if (_dragged)
-                TouchDragBy(_lastPoint.X - position.X, _lastPoint.Y - position.Y, e);
+                e.Handled |= TouchDragBy(_lastPoint.X - position.X, _lastPoint.Y - position.Y);
         }
         else if (_selecting && TryLocate(position, out var page, out var x, out var y))
         {
@@ -340,8 +343,11 @@ public sealed partial class HtmlView
 
     private void SetCursorKind(StandardCursorType kind)
     {
+        _pendingImageCursor = null;
         if (_shownCursor == kind)
             return;
+
+        _shownImageKey = null;
 
         _shownCursor = kind;
         Cursor = new Cursor(kind);
@@ -390,21 +396,8 @@ public sealed partial class HtmlView
         }
     }
 
-    // A finger that moves over the page scrolls it, as far as the document's touch-action lets it.
-    private void TouchDragBy(double dx, double dy, PointerEventArgs e)
-    {
-        if (IsAutoHeight)
-            return;
-
-        var (x, y) = ViewportMath.FilterPan(dx, dy, _touchAllowed);
-        if (x == 0 && y == 0)
-            return;
-
-        TouchScroll(x * _dpi, y * _dpi);
-        e.Handled = true;
-    }
-
-    private void TouchScroll(double dx, double dy) => ScrollTo(_scrollX + dx, _scrollY + dy);
+    // TouchDragBy (a finger that moves over the page) is in HtmlView.Touch.cs.
+    private void TouchScroll(double dx, double dy) => ScrollPageUnderFinger(dx, dy);
 
     // ---- the pointer state: :hover and :active ----
 
