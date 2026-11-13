@@ -20,12 +20,6 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <IsAotCompatible>true</IsAotCompatible>
     <PublishAot>true</PublishAot>
-    <!--
-      The .NET 11.0.0 ILCompiler crashes with an access violation in its dependency analyzer (a List<T>
-      enumerator, on win-x64) when it compiles in parallel - 3 of 3 publishes failed, each with a different exit
-      code - and succeeds single-threaded. Remove once a fixed ILCompiler ships.
-    -->
-    <IlcDegreeOfParallelism>1</IlcDegreeOfParallelism>
     <IsPackable>false</IsPackable>
     <InvariantGlobalization>true</InvariantGlobalization>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
