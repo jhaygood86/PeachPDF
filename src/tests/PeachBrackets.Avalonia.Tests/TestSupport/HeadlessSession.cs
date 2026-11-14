@@ -29,11 +29,47 @@ internal static class HeadlessSession
     // unawaited, and a failing body would pass unnoticed.
     public static Task Run(Func<Task> body) => Session.Value.Dispatch<int>(async () =>
     {
-        await body();
+        await RunTrackedAsync(async () =>
+        {
+            await body();
+            return 0;
+        });
         return 0;
     }, CancellationToken.None);
 
-    public static Task<T> Run<T>(Func<Task<T>> body) => Session.Value.Dispatch<T>(body, CancellationToken.None);
+    public static Task<T> Run<T>(Func<Task<T>> body) => Session.Value.Dispatch<T>(() => RunTrackedAsync(body), CancellationToken.None);
+
+    // The windows a test opened, so they are closed when it ends: the timers, animation loops and reloads of one test must not run on into the next (every test shares
+    // the one application). Per test, not per thread: the bodies of several tests interleave on the UI thread whenever they await.
+    private static readonly AsyncLocal<List<Window>?> Opened = new();
+
+    private static async Task<T> RunTrackedAsync<T>(Func<Task<T>> body)
+    {
+        var windows = Opened.Value = [];
+        try
+        {
+            return await body();
+        }
+        finally
+        {
+            foreach (var window in windows)
+            {
+                if (window.IsVisible)
+                    window.Close();
+            }
+
+            Dispatcher.UIThread.RunJobs();
+        }
+    }
+
+    private static void Track(Window window) => Opened.Value?.Add(window);
+
+    /// <summary>Waits until the view's first layout-driven reload (the window's size arriving after the first load) has finished, so its document is not replaced mid-test.</summary>
+    private static async Task SettleLoadAsync(HtmlView view)
+    {
+        await PumpUntilAsync(() => !view.IsReloading, 10000);
+        Dispatcher.UIThread.RunJobs();
+    }
 
     /// <summary>Opens a window of the given size holding a view that has loaded <paramref name="html"/>.</summary>
     public static async Task<(Window Window, HtmlView View)> ShowAsync(string html, double width = 400, double height = 300, Action<HtmlView>? configure = null)
@@ -41,12 +77,13 @@ internal static class HeadlessSession
         var view = new HtmlView { Html = html };
         configure?.Invoke(view);
         var window = new Window { Width = width, Height = height, Content = view, SizeToContent = SizeToContent.Manual };
+        Track(window);
         var loaded = new TaskCompletionSource();
         view.DocumentLoaded += (_, _) => loaded.TrySetResult();
         view.DocumentFailed += (_, e) => loaded.TrySetException(e.Exception);
         window.Show();
         await loaded.Task.WaitAsync(TimeSpan.FromSeconds(60));
-        Dispatcher.UIThread.RunJobs();
+        await SettleLoadAsync(view);
         return (window, view);
     }
 
@@ -54,12 +91,17 @@ internal static class HeadlessSession
     public static async Task<(Window Window, HtmlView View, Exception? Failure)> ShowViewAsync(HtmlView view, double width = 400, double height = 300)
     {
         var window = new Window { Width = width, Height = height, Content = view, SizeToContent = SizeToContent.Manual };
+        Track(window);
         var done = new TaskCompletionSource<Exception?>();
         view.DocumentLoaded += (_, _) => done.TrySetResult(null);
         view.DocumentFailed += (_, e) => done.TrySetResult(e.Exception);
         window.Show();
         var failure = await done.Task.WaitAsync(TimeSpan.FromSeconds(60));
-        Dispatcher.UIThread.RunJobs();
+        if (failure is null)
+            await SettleLoadAsync(view);
+        else
+            Dispatcher.UIThread.RunJobs();
+
         return (window, view, failure);
     }
 
@@ -91,6 +133,9 @@ internal static class HeadlessSession
     /// <summary>The color of one pixel, as (red, green, blue).</summary>
     public static (byte R, byte G, byte B) PixelAt(WriteableBitmap bitmap, int x, int y)
     {
+        if (x < 0 || y < 0 || x >= bitmap.PixelSize.Width || y >= bitmap.PixelSize.Height)
+            throw new ArgumentOutOfRangeException(nameof(x), $"({x}, {y}) is outside the {bitmap.PixelSize.Width} x {bitmap.PixelSize.Height} frame.");
+
         using var buffer = bitmap.Lock();
         var bytes = new byte[4];
         System.Runtime.InteropServices.Marshal.Copy(buffer.Address + (y * buffer.RowBytes) + (x * 4), bytes, 0, 4);

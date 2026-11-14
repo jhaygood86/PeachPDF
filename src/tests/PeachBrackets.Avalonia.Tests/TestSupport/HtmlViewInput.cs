@@ -34,14 +34,23 @@ internal static class HtmlViewInput
         await SettleAsync(view);
     }
 
-    /// <summary>Waits until every focus and restyle the view queued has run.</summary>
+    /// <summary>
+    /// Waits until the view is done with what the input set going: the focus and restyle work it queued, the pointer state being applied, a content-visibility
+    /// update, the images chosen again after a zoom, a reload. It has to be seen idle on two looks in a row, since one piece of work can queue the next.
+    /// </summary>
     public static async Task SettleAsync(HtmlView view)
     {
-        for (var i = 0; i < 4; i++)
+        var deadline = Environment.TickCount64 + 30000;
+        var idleLooks = 0;
+        while (idleLooks < 2)
         {
             Dispatcher.UIThread.RunJobs();
             await view.FocusIdle.WaitAsync(TimeSpan.FromSeconds(30));
-            await Task.Delay(10);
+            idleLooks = view.IsIdle ? idleLooks + 1 : 0;
+            if (Environment.TickCount64 > deadline)
+                throw new TimeoutException("The view did not go idle.");
+
+            await Task.Delay(5);
         }
 
         Dispatcher.UIThread.RunJobs();
