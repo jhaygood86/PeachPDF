@@ -23,3 +23,19 @@ WinUI/Android/Apple views moved from `src/engine/` to `src/views/`, and the plat
 
 **Evidence.** Avalonia.Tests 91+ pass in Debug; Skia (173), Android logic (184), Apple logic (137) and `PeachBrackets.Tests` (1309) pass on `--framework net10.0`; the solution rebuilds with 0 warnings
 (the Blazor demo's cached `obj` once held a half-written static-web-assets file after an interrupted build: delete its `obj`).
+
+## Review pass on the Avalonia view (lifecycle, render thread, fetches)
+
+- **The render thread must read no Avalonia property.** `RenderTile` read `PageBackground` on the render thread; on a real GPU every frame threw
+  "calling thread cannot access this object" and the window stayed transparent. Headless Skia has no `GRContext`, so the tile path never ran. `Render()` now
+  captures a `PaintState` (scroll, scale, background) and the paint path reads only that; `TilesOnCpuForTests` + `CapturePaintForTests` run the real tile path
+  into raster surfaces from a pool thread (`TheTilePathPaintsOnARenderThreadWithoutTouchingTheControl` fails if a property read comes back). A paint
+  failure is reported once as `DocumentFailed`. Tiles are invalidated by a generation count (a flag cleared by the render thread lost updates).
+- **A document swap ends everything that held the old one.** `ResetInteractionState` (fling, track repeat, thumb drag, press, blink and upgrade timers,
+  flyouts, focus target) runs from `Adopt`, `ClearDocument` and detach. The pointer-state pump is deliberately not reset (its finally would clear the flag
+  while a second pump ran); it re-reads the current document each round. Waiting work compares the document (or `_documentEpoch`) after each await and
+  ends quietly when it was replaced.
+- A changed `FontSet` makes the new context in the next load and swaps it in with the document (`Adopt`); the context is never null while attached.
+- Sources and cursor images load through `HostResourceLoader` (`HostBytes`: size cap, cancellation per load version); the document's own calls on the UI
+  thread outside `_documentLock` still race the render thread in principle (a `HtmlDocument` is not thread safe) - left as is, as in the Android view.
+- Test harness: `HtmlView.IsIdle` replaces fixed settle loops; windows opened by a test are closed when it ends (per-test `AsyncLocal`).
