@@ -65,3 +65,19 @@ declaration with `LogicalDeclarationOrder`. The old `SvgOnlyProperty` registrati
 generated entry replaces it. Gained: `grid-track-ignores-max-size-001/002`. Lost (passed only because test and reference both dropped the declaration, now
 exposing real gaps): `replaced-element-016` (canvas percentage block-size) and `subgrid/scrollbar-gutter-001/002` (inline-grid in vertical-rl, scrollbar
 gutters in subgrids).
+
+## Row-axis baseline model, inline-block line sizing
+
+- `CssLayoutEngineGrid.Baseline.cs`: an item's baseline is a `BaselineSpan(Above, Below)` to its **margin box** edges (the old code measured the ascent from the
+  border box and put the top margin into the descent, which only worked while every item had the same margins). First and `last baseline` are separate
+  groups per row; a last-baseline item falls back to the end edge and the group lines up by its distance to the row end. An item with no line in that
+  axis - an empty box, or an orthogonal one whose row axis is its inline axis - synthesizes the baseline from the bottom border edge (its bottom margin
+  stays below it). Lanes sizing and placement use the same model.
+- Two line-box defects found by checking test and reference against Chrome (the references are inline-blocks, rendered by this engine, so a wrong
+  reference fails a correct grid): an inline-block's bottom padding, border and margin never grew the line below the baseline (`GrowLineBelowBaselineForAtomicInset`,
+  single-line content only), and an orthogonal inline-block took a baseline from its own lines instead of resting its bottom margin edge on the line's
+  baseline (`AtomicInlineBaselineOf`, `BaselineIsBottomMarginEdge`).
+- Gained `grid-self-baseline-horiz-001`, `-changes-grid-area-size-003/006`; `row-fill-reverse-align-items-002` and `row-fill-reverse-align-self-indefinite-size-001`
+  were passing only because `last baseline` was treated as `first` on both sides (the flex reference still does).
+- Not done: baseline sharing across row-spanning items, the column axis for orthogonal items (central baseline of the first line), vertical writing modes,
+  and a multi-line inline-block's bottom inset (the reference of `grid-self-baseline-horiz-002` still falls short by that).

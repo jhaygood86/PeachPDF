@@ -7925,7 +7925,7 @@ namespace PeachBrackets.Html.Dom
                         // the break just means it isn't that pass (#343). A line-clamp stop takes the
                         // same early return (nothing after it should ever be visited), but never applies
                         // clone's re-opened decorations - there is no later pass to open them for.
-                        if (clonesAtomicDecorations && coordinates.Break is not null) ApplyAtomicInlineVerticalInsets(b, coordinates, atomicBottomInset);
+                        if (clonesAtomicDecorations && coordinates.Break is not null) ApplyAtomicInlineVerticalInsets(b, coordinates, atomicBottomInset, blockBox, g.PixelsPerPoint);
                         return;
                     }
 
@@ -7942,7 +7942,7 @@ namespace PeachBrackets.Html.Dom
                     // none for has already had its bookkeeping done by the pass that placed it.
                     if (!ReferenceEquals(b, box) && coordinates.PlacedSince(childStartOrdinal))
                     {
-                        ApplyAtomicInlineVerticalInsets(b, coordinates, atomicBottomInset);
+                        ApplyAtomicInlineVerticalInsets(b, coordinates, atomicBottomInset, blockBox, g.PixelsPerPoint);
                     }
                 }
                 else if (b.DerivedStyle.ActualDisplay == Keywords.InlineTable
@@ -8101,7 +8101,7 @@ namespace PeachBrackets.Html.Dom
                         // with its own bottom border/padding, same as the true-final-pass case below - the
                         // break just means it isn't that pass (#343). A line-clamp stop takes the same
                         // early return but never applies clone's re-opened decorations - see the branch above.
-                        if (clonesAtomicDecorations && coordinates.Break is not null) ApplyAtomicInlineVerticalInsets(b, coordinates, atomicBottomInset);
+                        if (clonesAtomicDecorations && coordinates.Break is not null) ApplyAtomicInlineVerticalInsets(b, coordinates, atomicBottomInset, blockBox, g.PixelsPerPoint);
                         return;
                     }
 
@@ -8109,7 +8109,7 @@ namespace PeachBrackets.Html.Dom
                     // box it placed none for has already had it.
                     if (coordinates.PlacedSince(childStartOrdinal))
                     {
-                        ApplyAtomicInlineVerticalInsets(b, coordinates, atomicBottomInset);
+                        ApplyAtomicInlineVerticalInsets(b, coordinates, atomicBottomInset, blockBox, g.PixelsPerPoint);
                     }
 
                     // An inline whose subtree took no word ordinal and holds no atomic inline is empty on its
@@ -9071,7 +9071,7 @@ namespace PeachBrackets.Html.Dom
         /// <param name="coordinates">the current line coordinates</param>
         /// <param name="bottomInset">b's own border-bottom+padding-bottom, precomputed by the caller (0
         /// when b is not an atomic inline-level box)</param>
-        private static void ApplyAtomicInlineVerticalInsets(CssBox b, CssLineBoxCoordinates coordinates, double bottomInset)
+        private static void ApplyAtomicInlineVerticalInsets(CssBox b, CssLineBoxCoordinates coordinates, double bottomInset, CssBox blockBox, double pixelsPerPoint)
         {
             if (bottomInset <= 0 || b.Position.Value is PositionMode.Absolute or PositionMode.Fixed)
                 return;
@@ -9082,6 +9082,47 @@ namespace PeachBrackets.Html.Dom
             {
                 coordinates.MaxBottom = Math.Max(coordinates.MaxBottom, maxWordBottom + bottomInset);
             }
+
+            GrowLineBelowBaselineForAtomicInset(b, coordinates, bottomInset, blockBox, pixelsPerPoint);
+        }
+
+        /// <summary>
+        /// An atomic inline whose content is one line sits on the baseline of that line, so everything under the baseline in its margin box -
+        /// the descent of its last line and its bottom padding, border and margin - belongs to the line box's extent below the baseline
+        /// (CSS 2.1 section 10.8.1). <see cref="CssLayoutEngine.CommitLineExtent"/> sized the line from the words' own strut alone, which left a deep
+        /// bottom padding hanging out of the line.
+        /// </summary>
+        private static void GrowLineBelowBaselineForAtomicInset(CssBox b, CssLineBoxCoordinates coordinates, double bottomInset, CssBox blockBox, double pixelsPerPoint)
+        {
+            var line = coordinates.Line;
+            if (line.BaselineAlignedExtent is not { } held || !TryLastWordOnOneLine(b, out var lastWord)) return;
+
+            var below = LineBoxContributionOf(lastWord, blockBox, pixelsPerPoint, reserveDoubleOverlineReach: false).BelowBaseline + bottomInset;
+            if (below > held.BelowBaseline) CommitLineExtent(coordinates, held with { BelowBaseline = below });
+        }
+
+        /// <summary>The last word flowed inside <paramref name="box"/>, when all of its words share one top (it is a single line).</summary>
+        private static bool TryLastWordOnOneLine(CssBox box, out CssRect lastWord)
+        {
+            CssRect? last = null;
+            double? top = null;
+            var single = true;
+
+            void Visit(CssBox x)
+            {
+                foreach (var w in x.Words)
+                {
+                    if (top is { } t && Math.Abs(t - w.Top) > 0.01) single = false;
+                    top ??= w.Top;
+                    last = w;
+                }
+
+                foreach (var c in x.Boxes) Visit(c);
+            }
+
+            Visit(box);
+            lastWord = last!;
+            return single && last is not null;
         }
 
         /// <summary>
@@ -9351,6 +9392,8 @@ namespace PeachBrackets.Html.Dom
             box.DerivedStyle.ActualDisplay is Keywords.InlineBlock && !box.IsImage
             && !ReferenceEquals(box, line.OwnerBox)
             && (box.Overflow.Value != Overflow.Visible
+                // An orthogonal flow's lines run across this line's axis, so none of them is a baseline of it (css-writing-modes-4 section 4.1).
+                || box.WritingMode.Value.IsVertical() != line.OwnerBox.WritingMode.Value.IsVertical()
                 || (LastOwnLineBaselineOf(box) is null && !HasWordOnLine(box, line)));
 
         /// <summary>
@@ -10851,6 +10894,9 @@ namespace PeachBrackets.Html.Dom
 
             if (box.DerivedStyle.ActualDisplay != Keywords.InlineBlock) return null;
             if (box.Overflow.Value != Overflow.Visible) return rect.Bottom + box.ActualMarginBottom;
+
+            // The lines of an orthogonal flow run across this line's axis, so none of them is a baseline of it (css-writing-modes-4 section 4.1).
+            if (box.WritingMode.Value.IsVertical() != lineBox.OwnerBox.WritingMode.Value.IsVertical()) return rect.Bottom + box.ActualMarginBottom;
 
             if (LastOwnLineBaselineOf(box) is { } ownBaseline) return ownBaseline;
 

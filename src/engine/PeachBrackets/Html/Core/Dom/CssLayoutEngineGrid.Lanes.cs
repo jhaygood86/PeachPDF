@@ -960,15 +960,16 @@ namespace PeachBrackets.Html.Dom
 
             // A lane's baseline-aligned items share a first baseline (css-align-3 9.3), so the lane is as tall as the largest ascent plus the
             // largest descent among them.
-            var baselineExtents = new Dictionary<int, (double Ascent, double Descent)>();
-            foreach (var item in laneItems.Where(i => !_vertical && i.Span == 1 && IsBaselineAlign(ResolveSelfAlignment(i.Box.AlignSelf.ToString(), _gridBox.AlignItems.ToString()))))
+            var baselineExtents = new Dictionary<(int Lane, bool Last), (double Above, double Below)>();
+            foreach (var item in laneItems.Where(i => !_vertical && i.Span == 1))
             {
-                if (BaselineAlignment.GetItemBaselineOffset(item.Box) is not { } ascent) continue;
-                var (held, heldDescent) = baselineExtents.GetValueOrDefault(item.Start, (0.0, 0.0));
-                baselineExtents[item.Start] = (Math.Max(held, ascent), Math.Max(heldDescent, outerHeights[item.Box] - ascent));
+                if (BaselineKind(ResolveSelfAlignment(item.Box.AlignSelf.ToString(), _gridBox.AlignItems.ToString())) is not { } last) continue;
+                var span = ItemRowBaseline(item.Box, last);
+                var (above, below) = baselineExtents.GetValueOrDefault((item.Start, last));
+                baselineExtents[(item.Start, last)] = (Math.Max(above, span.Above), Math.Max(below, outerHeights[item.Box] - span.Above));
             }
-            foreach (var (lane, (ascent, descent)) in baselineExtents)
-                if (!IsFixed(rows[lane].Def)) rows[lane].Size = Math.Max(rows[lane].Size, ascent + descent);
+            foreach (var ((lane, _), (above, below)) in baselineExtents)
+                if (!IsFixed(rows[lane].Def)) rows[lane].Size = Math.Max(rows[lane].Size, above + below);
 
             foreach (var item in laneItems.Where(i => i.Span > 1 && !IsSubgridItem(i.Box)))
                 GrowSpannedAutoRows(rows, new Placement { Box = item.Box, RowStart = item.Start, RowSpan = item.Span }, outerHeights[item.Box], rowGap);
@@ -1023,6 +1024,7 @@ namespace PeachBrackets.Html.Dom
                 var cellHeight = RowSpanHeight(rows, start, span, rowGap)
                     - (start == 0 ? _rowStartInset : 0) - (start + span >= rows.Length ? _rowEndInset : 0);
                 var align = ResolveSelfAlignment(item.Box.AlignSelf.ToString(), _gridBox.AlignItems.ToString());
+                if (!_vertical && span == 1 && BaselineKind(align) is true) align = Keywords.End;
                 var outerWidth = outerWidths[item.Box];
 
                 var room = outerWidth;

@@ -480,7 +480,7 @@ namespace PeachBrackets.Html.Dom
                     // ascent/descent to the row's baseline group extent (CSS Box Alignment 3 §9.3) — grown here,
                     // before PositionTracks fixes every row's final Position below, so AlignRowBaselines' later
                     // within-row shift never needs a second, cascading re-position pass (issue #280).
-                    var baselineExtents = new Dictionary<int, (double MaxAscent, double MaxDescent)>();
+                    var baselineGroups = new Dictionary<(int Row, bool Last), List<CssBox>>();
                     // With a definite container height the flexible rows are resolved by §12.7 further down, from their base sizes: for a bare
                     // `fr` (minmax(auto, fr)) that is the items' automatic minimum (§6.6), for minmax(<length>, fr) the length. Until then such a row
                     // holds its base, not its content, so the content cannot hold it open past its share. Without a definite height a flexible row
@@ -503,17 +503,14 @@ namespace PeachBrackets.Html.Dom
                             : natural;
                         rows[p.RowStart].Size = Math.Max(rows[p.RowStart].Size, rowBase);
 
-                        if (!_vertical
-                            && IsBaselineAlign(ResolveSelfAlignment(p.Box.AlignSelf.ToString(), _gridBox.AlignItems.ToString()))
-                            && BaselineAlignment.GetItemBaselineOffset(p.Box) is { } ascent)
+                        if (!_vertical && BaselineKind(ResolveSelfAlignment(p.Box.AlignSelf.ToString(), _gridBox.AlignItems.ToString())) is { } groupLast)
                         {
-                            var descent = natural - ascent;
-                            var (curAscent, curDescent) = baselineExtents.GetValueOrDefault(p.RowStart, (0.0, 0.0));
-                            baselineExtents[p.RowStart] = (Math.Max(curAscent, ascent), Math.Max(curDescent, descent));
+                            if (!baselineGroups.TryGetValue((p.RowStart, groupLast), out var members)) baselineGroups[(p.RowStart, groupLast)] = members = [];
+                            members.Add(p.Box);
                         }
                     }
-                    foreach (var (rowIndex, (maxAscent, maxDescent)) in baselineExtents)
-                        rows[rowIndex].Size = Math.Max(rows[rowIndex].Size, maxAscent + maxDescent);
+                    foreach (var ((rowIndex, groupLast), members) in baselineGroups)
+                        rows[rowIndex].Size = Math.Max(rows[rowIndex].Size, BaselineGroupSize(members, groupLast));
 
                     // Row-spanning items grow the last auto row they cover if their content exceeds the spanned rows.
                     foreach (var p in normalItems.Where(p => p.RowSpan > 1))
@@ -600,6 +597,9 @@ namespace PeachBrackets.Html.Dom
                     var justify = LogicalizePhysicalKeyword(
                         ResolveSelfAlignment(p.Box.JustifySelf.ToString(), _gridBox.JustifyItems.ToString()));
                     var align = ResolveSelfAlignment(p.Box.AlignSelf.ToString(), _gridBox.AlignItems.ToString());
+
+                    // The fallback alignment of a last baseline is the end edge (css-align-3 section 9.3); AlignRowBaselines then lines the group up.
+                    if (!_vertical && p.RowSpan == 1 && BaselineKind(align) is true) align = Keywords.End;
 
                     // Inline-axis baseline (css-align-3 §9.3): in a horizontal writing mode an item's baseline is
                     // synthesized from its border box, so a first baseline is the start edge and a last baseline the
@@ -2416,43 +2416,6 @@ namespace PeachBrackets.Html.Dom
         private static bool IsBaselineAlign(string value) =>
             !string.IsNullOrEmpty(value)
             && value.IndexOf(Keywords.Baseline, StringComparison.OrdinalIgnoreCase) >= 0;
-
-        /// <summary>
-        /// Aligns the first baselines of the single-row items in each row whose used <c>align-items</c>/
-        /// <c>align-self</c> is <c>baseline</c> (they were placed start-aligned by <see cref="PlaceItemInCell"/>,
-        /// since <see cref="AlignmentOffset"/> maps baseline to start). Each baseline item is shifted down by
-        /// the difference between the row's maximum baseline offset and its own, so every baseline item in the
-        /// row rests on a common baseline. Items with no discoverable baseline stay start-aligned. The row
-        /// itself was already grown to the baseline group's max-ascent + max-descent during row sizing (see
-        /// the <c>baselineExtents</c> pass above <see cref="PositionTracks"/>'s row call), so this shift never
-        /// overflows the row (issue #280).
-        /// </summary>
-        private void AlignRowBaselines(List<Placement> placements)
-        {
-            var baselineItems = placements.Where(p =>
-                p.RowSpan == 1 && IsBaselineAlign(ResolveSelfAlignment(p.Box.AlignSelf.ToString(), _gridBox.AlignItems.ToString())));
-
-            foreach (var row in baselineItems.GroupBy(p => p.RowStart))
-            {
-                var offsets = new List<(CssBox Box, double Offset)>();
-                var maxBaseline = 0.0;
-                foreach (var p in row)
-                {
-                    var offset = BaselineAlignment.GetItemBaselineOffset(p.Box);
-                    if (offset is null) continue;   // no line-box content — stays start-aligned
-                    offsets.Add((p.Box, offset.Value));
-                    maxBaseline = Math.Max(maxBaseline, offset.Value);
-                }
-
-                if (offsets.Count < 2) continue;   // a lone baseline item already sits on its own baseline
-
-                foreach (var (box, offset) in offsets)
-                {
-                    var dy = maxBaseline - offset;
-                    if (dy > 0.01) box.OffsetTop(dy);
-                }
-            }
-        }
 
         /// <summary>
         /// Aligns the single-column items of each column whose used <c>justify-self</c>/<c>justify-items</c> is
