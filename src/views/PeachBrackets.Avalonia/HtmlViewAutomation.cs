@@ -94,6 +94,12 @@ internal sealed class HtmlViewAutomationPeer : ControlAutomationPeer, IScrollPro
                         AccessibilityMapping.ToToggleState(old?.Checked ?? PeachBrackets.Accessibility.ToggleState.None),
                         AccessibilityMapping.ToToggleState(change.Node.Checked));
                     break;
+                case { Kind: AccessibilityChangeKind.StateChanged, Property: "expanded" } when AccessibilityMapping.IsDisclosure(change.Node):
+                    peer.RaisePropertyChangedEvent(
+                        ExpandCollapsePatternIdentifiers.ExpandCollapseStateProperty,
+                        AccessibilityMapping.ToExpandCollapseState(old?.Expanded),
+                        AccessibilityMapping.ToExpandCollapseState(change.Node.Expanded));
+                    break;
                 case { Kind: AccessibilityChangeKind.NameChanged }:
                     peer.RaisePropertyChangedEvent(AutomationElementIdentifiers.NameProperty, old?.ReadingText ?? string.Empty, change.Node.ReadingText);
                     break;
@@ -143,7 +149,7 @@ internal sealed class HtmlViewAutomationPeer : ControlAutomationPeer, IScrollPro
 }
 
 /// <summary>One part of the page - a paragraph, a heading, a link, a control, a landmark - in the tree a screen reader walks.</summary>
-internal sealed class HtmlNodeAutomationPeer : AutomationPeer, IInvokeProvider, IToggleProvider, IValueProvider, IRangeValueProvider, IScrollProvider
+internal sealed class HtmlNodeAutomationPeer : AutomationPeer, IInvokeProvider, IToggleProvider, IValueProvider, IRangeValueProvider, IScrollProvider, IExpandCollapseProvider
 {
     private readonly HtmlViewAutomationPeer _root;
     private readonly HtmlView _view;
@@ -252,6 +258,9 @@ internal sealed class HtmlNodeAutomationPeer : AutomationPeer, IInvokeProvider, 
         if (providerType == typeof(IScrollProvider))
             return _view.ScrollMetricsOf(Node) is not null ? this : null;
 
+        if (providerType == typeof(IExpandCollapseProvider))
+            return AccessibilityMapping.IsDisclosure(Node) ? this : null;
+
         return null;
     }
 
@@ -262,6 +271,15 @@ internal sealed class HtmlNodeAutomationPeer : AutomationPeer, IInvokeProvider, 
     public AvaloniaToggleState ToggleState => AccessibilityMapping.ToToggleState(Current.Checked);
 
     public void Toggle() => global::Avalonia.Threading.Dispatcher.UIThread.Post(() => _view.ToggleFromAutomation(Node));
+
+    // IExpandCollapseProvider: a details element and its summary open and close as a click on the summary does.
+    public ExpandCollapseState ExpandCollapseState => AccessibilityMapping.ToExpandCollapseState(Current.Expanded);
+
+    public bool ShowsMenu => false;
+
+    public void Expand() => global::Avalonia.Threading.Dispatcher.UIThread.Post(() => _view.SetDetailsOpenFromAutomation(Node, true));
+
+    public void Collapse() => global::Avalonia.Threading.Dispatcher.UIThread.Post(() => _view.SetDetailsOpenFromAutomation(Node, false));
 
     // IValueProvider and IRangeValueProvider share names, so the range ones are explicit.
     public string? Value => _view.FieldValue(Current) ?? string.Empty;

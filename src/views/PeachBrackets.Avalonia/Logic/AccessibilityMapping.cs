@@ -84,6 +84,20 @@ internal static class AccessibilityMapping
     public static bool IsToggleControl(AccessibilityRole role) =>
         role is AccessibilityRole.CheckBox or AccessibilityRole.Radio or AccessibilityRole.Switch or AccessibilityRole.MenuItemCheckBox or AccessibilityRole.MenuItemRadio;
 
+    /// <summary>Whether a node is a <c>details</c> element or its <c>summary</c>, which a screen reader can open and close.</summary>
+    /// <param name="node">a node of the accessibility tree</param>
+    public static bool IsDisclosure(AccessibilityNode node) =>
+        node.Expanded is not null && (string.Equals(node.TagName, "details", StringComparison.OrdinalIgnoreCase) || string.Equals(node.TagName, "summary", StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>The expand/collapse state of a node's expanded flag.</summary>
+    /// <param name="expanded">whether it is open, or null when it cannot be</param>
+    public static ExpandCollapseState ToExpandCollapseState(bool? expanded) => expanded switch
+    {
+        true => ExpandCollapseState.Expanded,
+        false => ExpandCollapseState.Collapsed,
+        _ => ExpandCollapseState.LeafNode,
+    };
+
     /// <summary>Whether a role is read through the range-value pattern: a progress bar, meter, slider, scroll bar or spin button.</summary>
     /// <param name="role">the role of a node</param>
     public static bool IsRangeRole(AccessibilityRole role) =>

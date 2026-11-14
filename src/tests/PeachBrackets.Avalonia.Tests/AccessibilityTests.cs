@@ -251,4 +251,40 @@ public class AccessibilityTests
             window.Close();
         });
     }
+
+    [Fact]
+    public async Task DetailsAndSummaryOpenAndCloseThroughTheExpandCollapsePattern()
+    {
+        await HeadlessSession.Run(async () =>
+        {
+            var (window, view) = await HeadlessSession.ShowAsync(
+                "<html><body style='margin:0'><details id='d'><summary id='s'>More</summary><p id='inner'>hidden text</p></details><p id='after'>after</p></body></html>", 500, 300);
+            var peer = ControlAutomationPeer.CreatePeerForElement(view);
+            var after = view.Document!.GetElementBounds("after")!.Value.Y;
+
+            HtmlNodeAutomationPeer PeerOf(string tag) => Walk(peer).OfType<HtmlNodeAutomationPeer>().First(p => p.Node.TagName == tag);
+
+            var details = PeerOf("details").GetProvider<IExpandCollapseProvider>();
+            var summary = PeerOf("summary").GetProvider<IExpandCollapseProvider>();
+            Assert.NotNull(details);
+            Assert.NotNull(summary);
+            Assert.Equal(ExpandCollapseState.Collapsed, details.ExpandCollapseState);
+            Assert.Null(Walk(peer).OfType<HtmlNodeAutomationPeer>().First(p => p.Node.TagName == "p").GetProvider<IExpandCollapseProvider>());
+
+            // Expanding through the summary opens the details: the text after it moves down and both peers say so.
+            summary.Expand();
+            await HtmlViewInput.SettleAsync(view);
+            Assert.True(view.Document.GetElementBounds("after")!.Value.Y > after + 5);
+            Assert.Equal(ExpandCollapseState.Expanded, PeerOf("details").GetProvider<IExpandCollapseProvider>()!.ExpandCollapseState);
+            Assert.Equal(ExpandCollapseState.Expanded, PeerOf("summary").GetProvider<IExpandCollapseProvider>()!.ExpandCollapseState);
+            Assert.Contains(view.LastAccessibilityDiff!.Changes, c => c.Kind == AccessibilityChangeKind.StateChanged && c.Property == "expanded");
+
+            // And collapsing through the details itself closes it again.
+            PeerOf("details").GetProvider<IExpandCollapseProvider>()!.Collapse();
+            await HtmlViewInput.SettleAsync(view);
+            Assert.Equal(after, view.Document.GetElementBounds("after")!.Value.Y, 1);
+            Assert.Equal(ExpandCollapseState.Collapsed, PeerOf("details").GetProvider<IExpandCollapseProvider>()!.ExpandCollapseState);
+            window.Close();
+        });
+    }
 }

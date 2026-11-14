@@ -72,6 +72,31 @@ public sealed partial class HtmlView
             AfterControlChange(document, result);
     }
 
+    /// <summary>Opens or closes the <c>details</c> a node is (or the summary of), as a screen reader asks. False when the node is not one.</summary>
+    internal bool SetDetailsOpenFromAutomation(AccessibilityNode node, bool open)
+    {
+        if (_document is not { } document || document.GetElementOf(node) is not { } element)
+            return false;
+
+        var details = string.Equals(node.TagName, "details", StringComparison.OrdinalIgnoreCase) ? element : document.GetDetailsToggledBy(element);
+        if (details is null)
+            return false;
+
+        QueueFocus(async () =>
+        {
+            if (_context is not { } context || !ReferenceEquals(document, _document))
+                return;
+
+            UpdateResult result;
+            using (var measuring = new MeasuringCanvas(context))
+                result = await document.SetOpenAsync(details, open, measuring.Canvas);
+
+            if (ReferenceEquals(document, _document))
+                AfterControlChange(document, result);
+        });
+        return true;
+    }
+
     // A click on a submit button raises FormSubmitting.
     private bool SubmitFormAt(int page, double x, double y) =>
         _document is { } document && document.GetElementAt(page, x, y) is { } element && SubmitForm(element, page, x, y);
