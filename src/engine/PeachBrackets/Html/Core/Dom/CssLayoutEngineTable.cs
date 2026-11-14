@@ -5901,16 +5901,6 @@ namespace PeachBrackets.Html.Dom
             return false;
         }
 
-        private static bool RowHasSpan(CssBox row)
-        {
-            foreach (var cell in row.Boxes)
-            {
-                if (cell is CssSpacingBox || GetRowSpan(cell) > 1) return true;
-            }
-
-            return false;
-        }
-
         /// <summary>
         /// The first row of the run of rows that must travel with row <paramref name="i"/> when the break
         /// falls before it, or -1 where nothing earlier can (css-break-3 §4.4 rule 1/2; the run is pulled
@@ -5919,8 +5909,8 @@ namespace PeachBrackets.Html.Dom
         /// <remarks>
         /// Relaxed from the front rather than abandoned (§4.4's ladder): a run head that begins its band
         /// leaves nothing above it to move to, and a run no fresh band holds would only straddle again.
-        /// Rows holding a <c>rowspan</c> are never pulled: the foreign writes a spanning cell takes are
-        /// recorded for one row only, so a multi-row retraction could not put them back.
+        /// Rows holding or ending a <c>rowspan</c> are pulled like any other: the cursor records each
+        /// row's writes to a spanning cell, so <see cref="TableRowCursor.Retract"/> puts them all back.
         /// </remarks>
         private int AvoidRunHead(
             int i, int slot, HtmlContainerInt container, TableRowCursor cursor,
@@ -5930,7 +5920,7 @@ namespace PeachBrackets.Html.Dom
 
             var k = i;
             while (k - 1 >= ResumeRowIndex && rowSlots[k - 1] == slot
-                   && !RowHasSpan(_bodyRows[k - 1]) && BreakBeforeRowIsAvoided(k))
+                   && BreakBeforeRowIsAvoided(k))
             {
                 k--;
             }
@@ -5946,11 +5936,6 @@ namespace PeachBrackets.Html.Dom
 
             if (k >= i) return -1;
 
-            foreach (var endRow in cursor.RowSpannedBoxes.Keys)
-            {
-                if (endRow >= k) return -1;
-            }
-
             return k;
         }
 
@@ -5962,6 +5947,11 @@ namespace PeachBrackets.Html.Dom
             Canvas g, HtmlContainerInt container, TableRowCursor cursor, int slot, int head, int i,
             TableRowCursor.RowPlacement headPlacement)
         {
+            foreach (var spanning in cursor.ForeignCellsWrittenSince(headPlacement))
+            {
+                container.ClearContinuationShells(spanning);
+            }
+
             for (var j = i - 1; j >= head; j--)
             {
                 container.ClearFragmentDisplacements(_bodyRows[j]);

@@ -17,8 +17,8 @@ Load-bearing details:
 - After a straddle correction the row's `RowPlacement` is re-taken (`cursor.BeginRow()`), otherwise a later pull
   would restore `MaxBottom` to the old band.
 - Forced break at the same point wins (`BreakBeforeRowIsAvoided` returns false when `ForcedBreakFallsBeforeRow`).
-- Rows with `rowspan`/`CssSpacingBox`, or a pending `RowSpannedBoxes` end at/after the head, are not pulled:
-  `TableRowCursor` records foreign writes for one row only.
+- Rowspans: `TableRowCursor` keeps foreign writes to spanning cells across rows (`RowPlacement.ForeignMark`), so
+  retracting several rows undoes every row's writes; `TakeBreakBeforeRun` also clears their continuation shells.
 - Reference: Chromium does the same via early-break relayout; WebKit has no row avoid.
 
 Evidence: `TableRowBreakAvoidIntegrationTests` (fail without the change: 6 of 12), engine suite 19955 and

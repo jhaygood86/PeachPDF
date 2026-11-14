@@ -464,8 +464,11 @@ namespace PeachBrackets.Html.Fragmentation
         /// those itself, before calling this, using <see cref="ForeignCellsWritten"/>.
         /// </para>
         /// </remarks>
-        internal readonly struct RowPlacement(double maxBottom, double maxRight, Dictionary<int, int>? spannedCounts)
+        internal readonly struct RowPlacement(double maxBottom, double maxRight, Dictionary<int, int>? spannedCounts, int foreignMark)
         {
+            /// <summary>How many foreign writes the cursor held before this row, so a retraction undoes only the ones from here on.</summary>
+            internal int ForeignMark { get; } = foreignMark;
+
             internal double MaxBottom { get; } = maxBottom;
 
             internal double MaxRight { get; } = maxRight;
@@ -517,21 +520,27 @@ namespace PeachBrackets.Html.Fragmentation
         /// </remarks>
         internal bool AlreadyWroteTo(CssBox cell)
         {
-            foreach (var write in _foreignWrites)
+            for (var i = _rowForeignStart; i < _foreignWrites.Count; i++)
             {
-                if (ReferenceEquals(write.Cell, cell)) return true;
+                if (ReferenceEquals(_foreignWrites[i].Cell, cell)) return true;
             }
 
             return false;
         }
 
+        /// <summary>Where the row being placed began in <see cref="_foreignWrites"/>.</summary>
+        private int _rowForeignStart;
+
         /// <summary>The cells belonging to earlier rows that the row being placed has written to.</summary>
-        internal IEnumerable<CssBox> ForeignCellsWritten
+        internal IEnumerable<CssBox> ForeignCellsWritten => ForeignCellsWrittenSince(_rowForeignStart);
+
+        /// <summary>The spanning cells written to since <paramref name="placement"/> began, across every row placed after it.</summary>
+        internal IEnumerable<CssBox> ForeignCellsWrittenSince(RowPlacement placement) =>
+            ForeignCellsWrittenSince(placement.ForeignMark);
+
+        private IEnumerable<CssBox> ForeignCellsWrittenSince(int mark)
         {
-            get
-            {
-                foreach (var write in _foreignWrites) yield return write.Cell;
-            }
+            for (var i = mark; i < _foreignWrites.Count; i++) yield return _foreignWrites[i].Cell;
         }
 
         /// <summary>What this cursor holds before the row about to be placed touches it.</summary>
@@ -540,9 +549,10 @@ namespace PeachBrackets.Html.Fragmentation
             // Per row rather than per placement, and this is the clear that carries the invariant: a row
             // that is *not* retracted leaves its entries behind, and the next row's Retract would otherwise
             // undo a previous row's writes. The one in Retract is belt against a second retraction.
-            _foreignWrites.Clear();
+            _rowForeignStart = _foreignWrites.Count;
+            var mark = _rowForeignStart;
 
-            if (RowSpannedBoxes.Count == 0) return new RowPlacement(MaxBottom, MaxRight, null);
+            if (RowSpannedBoxes.Count == 0) return new RowPlacement(MaxBottom, MaxRight, null, mark);
 
             var spanned = new Dictionary<int, int>(RowSpannedBoxes.Count);
 
@@ -551,7 +561,7 @@ namespace PeachBrackets.Html.Fragmentation
                 spanned[endRow] = boxes.Count;
             }
 
-            return new RowPlacement(MaxBottom, MaxRight, spanned);
+            return new RowPlacement(MaxBottom, MaxRight, spanned, mark);
         }
 
         /// <summary>
@@ -581,7 +591,7 @@ namespace PeachBrackets.Html.Fragmentation
             // Every entry is the retracted row's own: a stopped row ends the pass, so no row begins with one.
             _unfinishedCells.Clear();
 
-            for (var i = _foreignWrites.Count - 1; i >= 0; i--)
+            for (var i = _foreignWrites.Count - 1; i >= placement.ForeignMark; i--)
             {
                 var (cell, previousBottom, appliedOffset) = _foreignWrites[i];
 
@@ -598,7 +608,8 @@ namespace PeachBrackets.Html.Fragmentation
                 else cell.ActualBottom = previousBottom;
             }
 
-            _foreignWrites.Clear();
+            _foreignWrites.RemoveRange(placement.ForeignMark, _foreignWrites.Count - placement.ForeignMark);
+            _rowForeignStart = placement.ForeignMark;
 
             if (RowSpannedBoxes.Count == 0) return;
 

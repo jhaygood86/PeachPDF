@@ -164,5 +164,26 @@ namespace PeachBrackets.Engine.Tests.Integration
                 Assert.Equal(Math.Floor(head.ActualBottom / PageHeight - 0.001), Math.Floor(first.Location.Y / PageHeight));
             }
         }
+
+        [Fact]
+        public async Task RowsSharingARowspan_AreRetractedTogetherAndTheSpanFollows()
+        {
+            var sb = new StringBuilder("""
+                <!DOCTYPE html><html><head><style>
+                body { margin: 0; } table { border-collapse: collapse; width: 100%; }
+                td { padding: 0; height: 20pt; font-size: 8px; line-height: 10pt; }
+                </style></head><body><table>
+                """);
+            for (var r = 0; r < 41; r++) sb.Append($"<tr><td colspan='2'>s{r}</td></tr>");
+            sb.Append("<tr id='head' style='break-after: avoid'><td id='span' rowspan='2'>SPAN</td><td>HEAD</td></tr>");
+            sb.Append("<tr id='first'><td>FIRST</td></tr><tr id='after'><td colspan='2'>AFTER</td></tr></table></body></html>");
+
+            var root = await Layout(sb.ToString());
+
+            Assert.True(Y(root, "head") >= PageHeight, $"head at {Y(root, "head")}");
+            Assert.True(Y(root, "first") > Y(root, "head"));
+            Assert.True(Y(root, "span") >= PageHeight);
+            Assert.True(Y(root, "after") > Y(root, "first"));
+        }
     }
 }
