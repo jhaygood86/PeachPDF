@@ -48,3 +48,11 @@ css-grid 726 -> 737 passing.
   its natural width a contribution broke `grid-item-minmax-img-001`, where `minmax(auto, 0)` must not size the track.
 - Machine load matters for this suite: with leftover `dotnet` processes running, a full engine run failed 6-9 different timing-sensitive tests (page-break, paint statistics,
   transforms); after `dotnet build-server shutdown` only the known intermittent `PaintStatisticsTests` remained.
+
+## Item sizing: ratio transfer from fixed rows, min-height on auto rows
+
+- An item with a percentage height over fixed-size rows and an `aspect-ratio` (or a replaced item's natural ratio) contributes the transferred width to
+  intrinsic column sizing (`TransferredFromFixedRows`), as css-sizing-4 transfers a definite block size through the ratio.
+- An auto-height grid whose `min-height` exceeds its rows stretches the auto rows (`StretchAutoRows`) before the `align-content: stretch` pass, so
+  `min-height` behaves like a definite height for stretching (css-grid 11.1).
+- Remaining sizing failures need logical size properties (`inline-size`, `block-size`), which are not implemented.

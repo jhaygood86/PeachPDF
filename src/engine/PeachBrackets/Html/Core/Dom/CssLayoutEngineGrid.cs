@@ -547,6 +547,20 @@ namespace PeachBrackets.Html.Dom
 
                     var rowContainerSize = hasDefiniteBlock ? BlockContentSize
                         : rows.Sum(t => t.Size) + (rowCount > 1 ? sizingRowGap * (rowCount - 1) : 0);
+
+                    // An auto-height grid whose min-height is taller than its rows shares that minimum among its auto rows (css-grid-1 12.1, 12.8).
+                    if (!_vertical && !hasDefiniteHeight && !rowSubgrid && CssValueParser.IsValidLength(_gridBox.MinHeight)
+                        && !CssValueParser.DependsOnPercentage(_gridBox.MinHeight) && IsStretch(_gridBox.AlignContent.ToString()))
+                    {
+                        var minContent = CssValueParser.ParseLength(_gridBox.MinHeight, 0, _gridBox) + _gridBox.ActualBoxSizeIncludedHeight
+                            - _gridBox.ActualPaddingTop - _gridBox.ActualPaddingBottom - _gridBox.ActualBorderTopWidth - _gridBox.ActualBorderBottomWidth;
+                        if (minContent > rowContainerSize + 0.01)
+                        {
+                            StretchAutoRows(rows, minContent, rowGap);
+                            rowContainerSize = Math.Max(rowContainerSize, rows.Sum(t => t.Size) + (rowCount > 1 ? sizingRowGap * (rowCount - 1) : 0));
+                        }
+                    }
+
                     if (hasDefiniteBlock && !rowSubgrid && IsStretch(_gridBox.AlignContent.ToString()))
                         StretchAutoRows(rows, rowContainerSize, rowGap);
                     PositionTracks(rows, BlockOrigin, rowContainerSize, rowGap, _gridBox.AlignContent.ToString());
@@ -1660,6 +1674,7 @@ namespace PeachBrackets.Html.Dom
                 var (mn, mx) = _vertical
                     ? await MeasureInlineContributionVertical(g, p.Box)
                     : await MeasureItemContribution(g, p.Box);
+                if (!_vertical && await TransferredFromFixedRows(g, p) is { } transferred) (mn, mx) = (transferred, transferred);
                 if (HasAutoMinimum(colDefs[p.ColStart]))
                     mn = _vertical ? AutoMinimumOfVertical(p.Box, mn, contentWidth) : AutoMinimumOf(p.Box, mn, contentWidth);
                 min[p.ColStart] = Math.Max(min[p.ColStart], mn);
@@ -1723,7 +1738,45 @@ namespace PeachBrackets.Html.Dom
                 return (min, max);
                 }
 
-                /// <summary>One item of a column subgrid's contribution to the parent's columns: the parent column it starts in, how many it spans, its outer
+                /// <summary>
+        /// The outer width an item with an <c>aspect-ratio</c>, an auto width and a percentage height takes when its rows are fixed tracks: the height is the
+        /// percentage of the area those tracks make (a definite size), and the ratio transfers it to the width (css-sizing-4 5.1). Null when any of that does not hold.
+        /// </summary>
+        private async ValueTask<double?> TransferredFromFixedRows(Canvas g, Placement p)
+        {
+            var box = p.Box;
+            if (!box.Width.Equals(Keywords.Auto, StringComparison.OrdinalIgnoreCase)) return null;
+            if (!CssValueParser.IsValidLength(box.Height) || !CssValueParser.DependsOnPercentage(box.Height)) return null;
+
+            // The ratio is the declared one, or a replaced item's own.
+            double? ratio = null;
+            if (!string.IsNullOrEmpty(box.AspectRatio) && box.AspectRatio != Keywords.Auto)
+            {
+                using var pooledTokens = CssValueParser.GetCssTokensPooled(box.AspectRatio);
+                List<Token> tokens = pooledTokens;
+                if (AspectRatioGrammar.TryParse(tokens, out var declared) && declared is > 0) ratio = declared;
+            }
+
+            ratio ??= (await GetReplacedNaturalSizeAsync(g, box))?.Ratio;
+            if (ratio is not > 0) return null;
+
+            var rows = ExpandTemplate(_gridBox.GridTemplateRows.Value);
+            if (p.RowStart + p.RowSpan > rows.Count) return null;
+
+            var area = 0.0;
+            for (var r = p.RowStart; r < p.RowStart + p.RowSpan; r++)
+            {
+                if (rows[r].Kind != GridTrackKind.Length) return null;
+                area += ResolveFixedLength(rows[r], 0);
+            }
+
+            area += ParseGap(_gridBox.FlexRowGap, 0) * (p.RowSpan - 1);
+            var height = CssValueParser.ParseLength(box.Height, area, box);
+            return Math.Max(0, height - box.ActualBoxSizeIncludedHeight) * ratio.Value + box.ActualBoxSizeIncludedWidth
+                + box.ActualMarginLeft + box.ActualMarginRight;
+        }
+
+        /// <summary>One item of a column subgrid's contribution to the parent's columns: the parent column it starts in, how many it spans, its outer
                 /// min-content and max-content widths, and the subgrid's own margin, border and padding when the item sits at its first or last column.</summary>
                 private readonly record struct SubgridContribution(CssBox Box, int Start, int Span, double Min, double Max, double Edge);
 
