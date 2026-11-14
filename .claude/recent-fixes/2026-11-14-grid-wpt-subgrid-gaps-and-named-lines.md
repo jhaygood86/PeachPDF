@@ -34,3 +34,17 @@ formatting context and its margins collapse with its children's. This engine mad
 first child's margin (8px in `grid-as-flex-item-should-not-shrink-to-fit-*`, whose reference has no overflow). `DomUtils.OverflowPropagatesToViewport` is asked by
 `EstablishesIndependentFormattingContext` and, through `CssBox.OverflowKeepsFlow`, by the five margin-folding checks in `CssBox` that read `Overflow.Value`. Across all 16 WPT
 modules: +11 passing (css-grid +8, css-flexbox +2, css-backgrounds +1), none lost. The body is still painted clipped; only the layout predicate changed.
+
+## Item sizing (replaced items, declared widths)
+css-grid 726 -> 737 passing.
+- **A declared width is kept when an item's height is measured** (`MeasureItemHeightHorizontal`): it pinned every item's width to its track, so an item narrower than its
+  track was measured at the track's width - a 100px-wide ratio-only svg in an 800px row measured 800px tall. Only an `auto` width takes the track's now.
+  This also fixed the `grid-item-block-axis-content-contribution-*` tests.
+- **A ratio-only replaced item with a declared height** (an `<svg viewBox>` with `height: 100px`) gets its width through the ratio instead of filling the area
+  (`transfersHeight` in `PlaceItemInCellHorizontal`), unless `justify-self: stretch` is explicit. The doc line saying a ratio-only svg "fills its area's width under any
+  alignment" holds only while its height is also auto.
+- **An image or svg with a declared height contributes its transferred width** to an `auto` track (`MeasureItemContribution`): its measured contribution is 0 until the
+  image loads, which measuring the word does; that transferred width is also its automatic minimum (`grid-minimum-size-grid-items-009`). Not done for an image with no declared size: making
+  its natural width a contribution broke `grid-item-minmax-img-001`, where `minmax(auto, 0)` must not size the track.
+- Machine load matters for this suite: with leftover `dotnet` processes running, a full engine run failed 6-9 different timing-sensitive tests (page-break, paint statistics,
+  transforms); after `dotnet build-server shutdown` only the known intermittent `PaintStatisticsTests` remained.

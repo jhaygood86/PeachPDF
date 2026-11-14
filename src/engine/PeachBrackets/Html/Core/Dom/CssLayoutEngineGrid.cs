@@ -1936,6 +1936,15 @@ namespace PeachBrackets.Html.Dom
                 // The measured widths already hold the box's own padding and border.
                 minContent = await CssLayoutEngine.GetMinContentWidth(g, box);
                 maxContent = await CssLayoutEngine.GetMaxContentWidth(g, box);
+
+                // An image or inline svg whose height is declared has the width that height transfers through its ratio as both contributions (css-grid-2
+                // 6.6: the transferred size is its automatic minimum); its own measure holds nothing until the image is loaded, which measuring the word does.
+                if (box is CssBoxImage or CssBoxSvg && minContent <= 0 && maxContent <= 0 && CssValueParser.IsValidLength(box.Height))
+                {
+                    await box.MeasureWordsSize(g);
+                    var replacedWidth = box.Words.Count > 0 ? box.Words[0].Width : 0;
+                    minContent = maxContent = replacedWidth + box.ActualPaddingLeft + box.ActualPaddingRight + box.ActualBorderLeftWidth + box.ActualBorderRightWidth;
+                }
             }
 
             return (minContent + outerExtra, maxContent + outerExtra);
@@ -2096,7 +2105,8 @@ namespace PeachBrackets.Html.Dom
             var measuredAtNaturalSize = natural is { } naturalSize
                 && !ReplacedStretchesWidth(naturalSize,
                     ResolveSelfAlignment(box.JustifySelf.ToString(), _gridBox.JustifyItems.ToString()));
-            if (!measuredAtNaturalSize)
+            // A declared width is the item's own whatever the track is; only an auto width takes the track's.
+            if (!measuredAtNaturalSize && savedWidth == Keywords.Auto)
                 box.Width = FormatLayoutUnits(cssWidth, box);
             else if (natural is { DefaultSize: { } pinned })
                 box.Width = FormatLayoutUnits(pinned.Width, box);
@@ -2143,8 +2153,10 @@ namespace PeachBrackets.Html.Dom
             // with only an aspect ratio (a viewBox-only svg) under any alignment, which is how browsers
             // treat it.
             var natural = autoWidth || autoHeight ? await GetReplacedNaturalSizeAsync(g, box) : null;
+            // A replaced item with a ratio and no natural width whose height is declared gets its width through the ratio (css 2.1 10.3.2), not the area's.
+            var transfersHeight = autoWidth && !autoHeight && natural is { Width: false, Ratio: > 0 } && CssValueParser.IsValidLength(box.Height);
             var stretchWidth = autoWidth
-                && (natural is { } replacedSize ? ReplacedStretchesWidth(replacedSize, justify) : IsStretch(justify));
+                && (natural is { } replacedSize ? ReplacedStretchesWidth(replacedSize, justify) && !(transfersHeight && !justify.Isi(Keywords.Stretch)) : IsStretch(justify));
             var stretchHeight = autoHeight && IsStretch(align)
                 && !(align.Isi(Keywords.Normal) && natural is { Height: true });
             var restorePercentages = ResolveAreaPercentages(box, cellContentWidth0);
@@ -2182,6 +2194,8 @@ namespace PeachBrackets.Html.Dom
                     ? cellContentWidth
                     : ratioWidth is { } fromHeight
                         ? fromHeight
+                        : transfersHeight
+                            ? CssValueParser.ParseLength(box.Height, 0, box) * natural!.Value.Ratio!.Value
                         : natural is { DefaultSize: { } defaultSize }
                             ? defaultSize.Width
                             : await CssLayoutEngine.GetFitContentWidth(g, box,
