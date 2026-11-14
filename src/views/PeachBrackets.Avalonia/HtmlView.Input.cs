@@ -358,12 +358,15 @@ public sealed partial class HtmlView
         if (cursor.Images.Count > 0 && TryShowImageCursor(cursor))
             return;
 
-        SetCursorKind(AvaloniaCursors.ToType(cursor.Shape));
+        // The keyword's pointer stands in while the image loads; the load shows the image when it finishes, so it is still waited for.
+        SetCursorKind(AvaloniaCursors.ToType(cursor.Shape), keepPendingImage: _pendingImageCursor is not null && ReferenceEquals(_pendingImageCursor, cursor));
     }
 
-    private void SetCursorKind(StandardCursorType kind)
+    private void SetCursorKind(StandardCursorType kind, bool keepPendingImage = false)
     {
-        _pendingImageCursor = null;
+        if (!keepPendingImage)
+            _pendingImageCursor = null;
+
         if (_shownCursor == kind)
             return;
 

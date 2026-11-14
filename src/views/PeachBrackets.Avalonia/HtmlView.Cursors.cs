@@ -31,7 +31,9 @@ public sealed partial class HtmlView
             {
                 _pendingImageCursor = cursor;
                 _ = LoadCursorImagesAsync(cursor);
-                return false;
+
+                // A load that finished at once (a data: address) has already shown its image.
+                return _pendingImageCursor is null && _shownImageKey == key && _shownCursor is null;
             }
 
             if (made is null)
