@@ -4465,6 +4465,13 @@ namespace PeachBrackets.Html.Dom
             // into is not a band this one does.
             _bandsARowOverflowedInto.Clear();
 
+            // Where each body row of this pass was finally placed, so an avoided break can pull the rows
+            // above it into the next band (css-break-3 §4.4). -1 marks a row this pass has not placed.
+            var rowSlots = new int[_bodyRows.Count];
+            Array.Fill(rowSlots, -1);
+            var rowTops = new double[_bodyRows.Count];
+            var rowPlacements = new TableRowCursor.RowPlacement[_bodyRows.Count];
+
             // A continuation re-enters the row that did not finish, not the one after it: only some of
             // that row's cells stopped, and the cells of a row are §2.1 parallel flows, so the row is
             // where the record points. Every other run starts at the first body row.
@@ -4522,6 +4529,18 @@ namespace PeachBrackets.Html.Dom
                     // a table-engine-positioned row reaches) re-syncs against this rather than
                     // duplicating it, exactly as it already does for CssLayoutEngineTable's whole-table
                     // relocation pre-check (#149).
+                    var pulledHead = BreakBeforeRowIsAvoided(i)
+                        ? AvoidRunHead(i, slot, container, cursor, rowSlots, rowTops, estimatedRowHeight)
+                        : -1;
+
+                    if (pulledHead >= 0)
+                    {
+                        // §4.4: the break before this row is avoided, so it falls before the run's head.
+                        slot = await TakeBreakBeforeRun(g, container, cursor, slot, pulledHead, i, rowPlacements[pulledHead]);
+                        i = pulledHead - 1;
+                        continue;
+                    }
+
                     PreRegisterPageNameTransition(container, row, slot + 1);
                     slot = await TakeBreakBeforeRow(g, container, cursor, slot);
                 }
@@ -4559,10 +4578,26 @@ namespace PeachBrackets.Html.Dom
                     // would displace the row by a gap that placement no longer opens.
                     container!.ClearFragmentDisplacements(row);
 
+                    var measuredHeight = cursor.MaxBottom - rowTop;
+
                     cursor.Retract(placement);
                     PassRewind.RollBackTo(null, row.Boxes);
 
+                    var pulledHead = BreakBeforeRowIsAvoided(i)
+                        ? AvoidRunHead(i, slot, container!, cursor, rowSlots, rowTops, measuredHeight)
+                        : -1;
+
+                    if (pulledHead >= 0)
+                    {
+                        slot = await TakeBreakBeforeRun(g, container!, cursor, slot, pulledHead, i, rowPlacements[pulledHead]);
+                        i = pulledHead - 1;
+                        continue;
+                    }
+
                     slot = await TakeBreakBeforeRow(g, container!, cursor, slot);
+
+                    // What a later pull of this row would retract back to: the new band's, not the old one's.
+                    placement = cursor.BeginRow();
 
                     // The slice below measures the row from its top, and a stale one makes a moved row look as if it spans the band it left.
                     rowTop = cursor.CurrentY;
@@ -4581,6 +4616,10 @@ namespace PeachBrackets.Html.Dom
                 // §4.3's last rung in as many words. Stated after the correction, because a row the
                 // correction moved fits the band it was moved to and has nothing to slice.
                 var slicedRowBottom = SliceARowAcrossTheBandsItOverflows(container, row, cursor, rowTop);
+
+                rowSlots[i] = slot;
+                rowTops[i] = rowTop;
+                rowPlacements[i] = placement;
 
                 cursor.CurrentY = cursor.MaxBottom + VerticalSpacingAt(HeaderRowCountInGrid + i + 1);
 
@@ -5804,6 +5843,134 @@ namespace PeachBrackets.Html.Dom
             }
 
             return _tableBox.UsedPageName;
+        }
+
+        /// <summary>
+        /// Whether css-break-3 §4.4 forbids the unforced break at the class-A break point between body rows
+        /// <paramref name="index"/> − 1 and <paramref name="index"/>: an <c>avoid</c> <c>break-after</c> on
+        /// the earlier side or <c>break-before</c> on the later one (read through the chains each side
+        /// begins or ends, as <see cref="ForcedBreakFallsBeforeRow"/> does), or a <c>break-inside: avoid</c>
+        /// on a row group holding both rows. A forced break at the same point wins over all of them.
+        /// </summary>
+        private bool BreakBeforeRowIsAvoided(int index)
+        {
+            if (index <= 0 || ForcedBreakFallsBeforeRow(index)) return false;
+
+            var previous = _bodyRows[index - 1];
+            var next = _bodyRows[index];
+
+            // Outward from the earlier row: the row, then each group it ends.
+            for (var box = previous; box != _tableBox && box != null; box = box.ParentBox)
+            {
+                if (BreakValues.AvoidsBreak(box.BreakAfter.Value, FragmentationContext.Page)) return true;
+                if (!BreakPropagation.PropagatesBreakAfterOutward(box)) break;
+            }
+
+            // Inward from it: what the row's last in-flow content ends.
+            for (var child = BreakPropagation.LastInFlowChild(previous);
+                 child is not null && BreakPropagation.PropagatesBreakAfterOutward(child);
+                 child = BreakPropagation.LastInFlowChild(child))
+            {
+                if (BreakValues.AvoidsBreak(child.BreakAfter.Value, FragmentationContext.Page)) return true;
+            }
+
+            for (var box = next; box != _tableBox && box != null; box = box.ParentBox)
+            {
+                if (BreakValues.AvoidsBreak(box.BreakBefore.Value, FragmentationContext.Page)) return true;
+                if (!BreakPropagation.PropagatesBreakBeforeOutward(box)) break;
+            }
+
+            for (var child = BreakPropagation.FirstInFlowChild(next);
+                 child is not null && BreakPropagation.PropagatesBreakBeforeOutward(child);
+                 child = BreakPropagation.FirstInFlowChild(child))
+            {
+                if (BreakValues.AvoidsBreak(child.BreakBefore.Value, FragmentationContext.Page)) return true;
+            }
+
+            // Rule 2: a row group (never the table itself) holding both rows avoids breaks inside it.
+            for (var group = previous.ParentBox; group != null && group != _tableBox; group = group.ParentBox)
+            {
+                if (!BreakValues.AvoidsBreak(group.BreakInside.Value, FragmentationContext.Page)) continue;
+
+                for (var up = next.ParentBox; up != null; up = up.ParentBox)
+                {
+                    if (up == group) return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static bool RowHasSpan(CssBox row)
+        {
+            foreach (var cell in row.Boxes)
+            {
+                if (cell is CssSpacingBox || GetRowSpan(cell) > 1) return true;
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// The first row of the run of rows that must travel with row <paramref name="i"/> when the break
+        /// falls before it, or -1 where nothing earlier can (css-break-3 §4.4 rule 1/2; the run is pulled
+        /// back to the nearest break point those rules allow).
+        /// </summary>
+        /// <remarks>
+        /// Relaxed from the front rather than abandoned (§4.4's ladder): a run head that begins its band
+        /// leaves nothing above it to move to, and a run no fresh band holds would only straddle again.
+        /// Rows holding a <c>rowspan</c> are never pulled: the foreign writes a spanning cell takes are
+        /// recorded for one row only, so a multi-row retraction could not put them back.
+        /// </remarks>
+        private int AvoidRunHead(
+            int i, int slot, HtmlContainerInt container, TableRowCursor cursor,
+            int[] rowSlots, double[] rowTops, double trailingHeight)
+        {
+            if (container.CurrentFragmentainer is { HasOwnBand: true }) return -1;
+
+            var k = i;
+            while (k - 1 >= ResumeRowIndex && rowSlots[k - 1] == slot
+                   && !RowHasSpan(_bodyRows[k - 1]) && BreakBeforeRowIsAvoided(k))
+            {
+                k--;
+            }
+
+            var room = RoomForARowIn(container, slot + 1);
+
+            while (k < i
+                   && (k <= ResumeRowIndex || rowSlots[k - 1] != slot
+                       || cursor.MaxBottom - rowTops[k] + trailingHeight > room))
+            {
+                k++;
+            }
+
+            if (k >= i) return -1;
+
+            foreach (var endRow in cursor.RowSpannedBoxes.Keys)
+            {
+                if (endRow >= k) return -1;
+            }
+
+            return k;
+        }
+
+        /// <summary>
+        /// Takes back rows <paramref name="head"/> to <paramref name="i"/> − 1 and takes the break before
+        /// <paramref name="head"/>, so the run re-places in the band the break opens.
+        /// </summary>
+        private async ValueTask<int> TakeBreakBeforeRun(
+            Canvas g, HtmlContainerInt container, TableRowCursor cursor, int slot, int head, int i,
+            TableRowCursor.RowPlacement headPlacement)
+        {
+            for (var j = i - 1; j >= head; j--)
+            {
+                container.ClearFragmentDisplacements(_bodyRows[j]);
+                PassRewind.RollBackTo(null, _bodyRows[j].Boxes);
+            }
+
+            cursor.Retract(headPlacement);
+
+            return await TakeBreakBeforeRow(g, container, cursor, slot);
         }
 
         /// <summary>
