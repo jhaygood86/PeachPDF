@@ -18,13 +18,11 @@ internal readonly record struct SkiaTextMask(byte[] Samples, int Left, int Top, 
     /// <summary>
     /// Rasterizes <paramref name="text"/>, as a canvas whose layout units are <paramref name="deviceScaleX"/> by <paramref name="deviceScaleY"/>
     /// device pixels would draw it with its top-left at <paramref name="point"/> and a translation of (<paramref name="translateX"/>,
-    /// <paramref name="translateY"/>) device pixels, with the font's own hinting. The mask covers only the part of the run inside
-    /// <paramref name="limit"/> (the device pixels that can be seen) when one is given; it is empty when none of the run is. Null when the run
-    /// is too large.
+    /// <paramref name="translateY"/>) device pixels, with the font's own hinting. Null when the run is too large.
     /// </summary>
     public static SkiaTextMask? Rasterize(SkiaRenderContext context, string text, Font font, PaintPoint point, double letterSpacing,
         double layoutUnitsPerPoint, double deviceScaleX, double deviceScaleY, double translateX, double translateY,
-        FontPalette? palette, ShapeSettings features, int subPixels, (int Left, int Top, int Right, int Bottom)? limit = null)
+        FontPalette? palette, ShapeSettings features, int subPixels)
     {
         var typeface = font.Typeface!;
         var metrics = typeface.Metrics;
@@ -49,13 +47,6 @@ internal readonly record struct SkiaTextMask(byte[] Samples, int Left, int Top, 
         var right = (int)Math.Ceiling(originX + advance * deviceScaleX + 2 + pixelsPerEmX * 0.15 + slant);
         var top = (int)Math.Floor(baseline - above);
         var bottom = (int)Math.Ceiling(baseline + below);
-        if (limit is { } visible)
-        {
-            left = Math.Max(left, visible.Left);
-            top = Math.Max(top, visible.Top);
-            right = Math.Min(right, visible.Right);
-            bottom = Math.Min(bottom, visible.Bottom);
-        }
 
         var width = right - left;
         var height = bottom - top;

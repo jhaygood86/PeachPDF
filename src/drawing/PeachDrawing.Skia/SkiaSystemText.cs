@@ -38,7 +38,7 @@ internal sealed partial class SystemTextSettingsProvider : ISystemTextSettings
         return task.Wait(TimeSpan.FromMilliseconds(500)) && task.IsCompletedSuccessfully ? task.Result : default;
     }
 
-    private static SystemTextSettings Detect()
+    internal static SystemTextSettings Detect()
     {
         try
         {
@@ -79,16 +79,13 @@ internal sealed partial class SystemTextSettingsProvider : ISystemTextSettings
 
     // ---- Linux --------------------------------------------------------------------------------------------
 
-    private static SystemTextSettings DetectLinux()
-    {
-        var smoothing = Gsettings("font-antialiasing");
-        if (smoothing is null || !ParseGsettingsSmoothing(smoothing))
-            return default;
+    internal static SystemTextSettings DetectLinux() => FromGsettings(Gsettings("font-antialiasing"), Gsettings);
 
-        return new SystemTextSettings(true, ParseGsettingsBgr(Gsettings("font-rgba-order")));
-    }
+    /// <summary>The settings the output of <c>font-antialiasing</c> asks for, reading <c>font-rgba-order</c> through <paramref name="readOrder"/> only when subpixel text is on.</summary>
+    internal static SystemTextSettings FromGsettings(string? smoothing, Func<string, string?> readOrder) =>
+        smoothing is null || !ParseGsettingsSmoothing(smoothing) ? default : new SystemTextSettings(true, ParseGsettingsBgr(readOrder("font-rgba-order")));
 
-    private static string? Gsettings(string key)
+    internal static string? Gsettings(string key)
     {
         try
         {

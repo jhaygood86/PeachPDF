@@ -561,6 +561,104 @@ public class TextRenderingTests
     }
 
     [Fact]
+    public void Linux_settings_compose_from_the_two_gsettings_answers()
+    {
+        var asked = new List<string>();
+        string? Order(string key)
+        {
+            asked.Add(key);
+            return "'bgr'";
+        }
+
+        Assert.Equal(new SystemTextSettings(true, true), SystemTextSettingsProvider.FromGsettings("'rgba'", Order));
+        Assert.Equal(new SystemTextSettings(true, false), SystemTextSettingsProvider.FromGsettings("'rgba'", _ => "'rgb'"));
+        Assert.Equal(new SystemTextSettings(true, false), SystemTextSettingsProvider.FromGsettings("'rgba'", _ => null));
+        asked.Clear();
+        Assert.Equal(default, SystemTextSettingsProvider.FromGsettings("'grayscale'", Order));
+        Assert.Equal(default, SystemTextSettingsProvider.FromGsettings(null, Order));
+        Assert.Empty(asked);
+    }
+
+    [Fact]
+    public void Detection_never_throws_whatever_the_machine_has()
+    {
+        // No gsettings here (or one that answers): either way a settings value, never an exception.
+        _ = SystemTextSettingsProvider.DetectLinux();
+        _ = SystemTextSettingsProvider.Gsettings("font-antialiasing");
+        _ = SystemTextSettingsProvider.Detect();
+    }
+
+    [Fact]
+    public async Task Synthetic_styles_and_palettes_and_huge_runs_are_drawn_whole_or_as_outlines()
+    {
+        using var context = await ContextAsync(SkiaTextRendering.Grayscale);
+        using var s = new Surface(context, 300, 120, White);
+        using (var canvas = s.Canvas())
+        {
+            // Only the regular face is loaded, so italic and bold are synthesized: the letters cannot be built from masks of the regular glyphs, the word is rasterized whole.
+            var italic = context.GetFont("Source Sans 3", 20, PaintFontStyle.Italic)!;
+            var bold = context.GetFont("Source Sans 3", 20, PaintFontStyle.Bold)!;
+            canvas.DrawString("Slanted", italic, PaintColor.Black, new PaintPoint(4, 4), canvas.MeasureString("Slanted", italic));
+            canvas.DrawString("Heavy", bold, PaintColor.Black, new PaintPoint(150, 4), canvas.MeasureString("Heavy", bold));
+            Assert.True(context.TextMasks.Count >= 2);
+
+            // A palette is a color-font feature, so the run is whole too.
+            var font = context.GetFont("Source Sans 3", 20, PaintFontStyle.Regular)!;
+            canvas.DrawString("Palette", font, PaintColor.Black, new PaintPoint(4, 40), canvas.MeasureString("Palette", font), fontPalette: new FontPalette(0, []));
+        }
+
+        Assert.True(Ink(s, (255, 255, 255)) > 200);
+
+        // Text too large for a mask is drawn as an outline instead, even when a mode was named.
+        var before = context.TextMasks.Count;
+        using var big = new Surface(context, 400, 400, White);
+        using (var canvas = big.Canvas())
+        {
+            var huge = context.GetFont("Source Sans 3", 4000, PaintFontStyle.Regular)!;
+            canvas.DrawString("W", huge, PaintColor.Black, new PaintPoint(-300, -2900), new Core.Size(100, 100));
+        }
+
+        Assert.Equal(before, context.TextMasks.Count);
+        Assert.True(Ink(big, (255, 255, 255)) > 1000);
+    }
+
+    [Fact]
+    public async Task A_position_that_rounds_up_to_the_next_pixel_lands_on_that_pixel()
+    {
+        using var context = await ContextAsync(SkiaTextRendering.Grayscale);
+        using var a = new Surface(context, 100, 30, White);
+        using var b = new Surface(context, 100, 30, White);
+
+        // 10.999 is a 64th of a pixel from 11: its mask is the one for 11, shifted a whole pixel.
+        using (var canvas = a.Canvas())
+            Draw(canvas, context, "Hamburg", PaintColor.Black, x: 10.999, y: 5.999);
+        using (var canvas = b.Canvas())
+            Draw(canvas, context, "Hamburg", PaintColor.Black, x: 11, y: 6);
+
+        for (var y = 0; y < 30; y++)
+        {
+            for (var x = 0; x < 100; x++)
+                Assert.Equal(b.Px(x, y), a.Px(x, y));
+        }
+    }
+
+    [Fact]
+    public async Task A_fully_transparent_color_draws_nothing_and_an_empty_clip_draws_nothing()
+    {
+        using var context = await ContextAsync(SkiaTextRendering.Lcd);
+        using var s = new Surface(context, 100, 30, White);
+        using (var canvas = s.Canvas())
+        {
+            Draw(canvas, context, "Invisible", PaintColor.FromArgb(0, 0, 0, 0));
+            canvas.PushClip(new Rect(50, 0, 0, 0));
+            Draw(canvas, context, "Clipped away", PaintColor.Black);
+            canvas.PopClip();
+        }
+
+        Assert.Equal(0, Ink(s, (255, 255, 255)));
+    }
+
+    [Fact]
     public void The_default_system_provider_answers_without_throwing_or_hanging()
     {
         var started = DateTime.UtcNow;
