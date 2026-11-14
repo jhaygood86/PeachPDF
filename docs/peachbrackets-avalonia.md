@@ -44,6 +44,7 @@ when the control is resized, the theme variant changes or the display scale chan
 | `IsZoomEnabled`, `Zoom`, `SetZoom` | Zoom with Ctrl and the wheel, Ctrl and plus, minus or 0, or a pinch; limited to 0.5 to 4. Images are chosen again for the new zoom once it settles. |
 | `AllowNetworkAccess`, `DocumentBaseUri` | Whether `http`/`https` resources may be loaded (off by default, so a document cannot make the application call out), and the address relative addresses resolve against (`Source` by default). |
 | `SelectionColor`, `UserStyleSheet`, `DocumentMargin`, `PageBackground` | The selection color, a reader's style sheet, the space around the document, and the color behind the page. All but `PageBackground` take effect on the next load. |
+| `TextRendering` | How the text is drawn, a `SkiaTextRendering`: `Auto` (default) follows the operating system, `Lcd` and `Grayscale` force a mode, `Outline` draws vector text. Changing it paints the page again. See [text rendering](#text-rendering). |
 | `AnimationsEnabled`, `AnimationEvents` | Whether CSS animations, transitions and animated images play (off by default), and the events of each frame. |
 | `IsLayoutSynchronous` | Load and lay out on the UI thread before the next frame, for documents that need no fetching. |
 | `Input` | The pointing devices the `hover` and `pointer` media queries report (a mouse on a desktop, a touch screen on a phone or tablet by default). |
@@ -64,6 +65,12 @@ when the control is resized, the theme variant changes or the display scale chan
 | Links | A click raises `LinkActivated`, then follows the link: `http`, `https`, `mailto` and `tel` addresses are launched through Avalonia's launcher, an anchor scrolls to its target (honoring `scroll-margin` and `scroll-padding`). |
 | Scroll containers | `overflow: auto` and `scroll` boxes and text areas take the wheel, the document-painted scroll bars and the keys before the page does. |
 | `content-visibility: auto` | Boxes that come near the view are shown and those that left are skipped. |
+
+## Text rendering
+
+`HtmlView` draws the page's text through [`PeachDrawing.Skia`'s](peachdrawing-skia.md#text-rendering-peachdrawing-engine) hinted coverage masks, so it looks like the rest of the desktop: with `TextRendering` left at `Auto`, text has ClearType-style color fringes where Windows has ClearType on (and the stripe order the user chose), follows the desktop's font smoothing on Linux where it can be read (`gsettings`), and is grayscale on macOS, where Apple has removed subpixel text. `Lcd`, `Grayscale` and `Outline` ignore the system's setting.
+
+LCD text is drawn only over an opaque backdrop: the page's background (`PageBackground`) is what each frame and each tile is cleared to, so a transparent `PageBackground` gets grayscale text, as does text inside a translucent layer (an animated opacity, for instance). Text is hinted for the device size, so the view's zoom and the screen's scale, whole or fractional, draw crisp text at their size. It works on the GPU path (tiles are textures) and the CPU path alike.
 
 ## Form controls and text editing
 
@@ -90,12 +97,13 @@ Documents see the fonts installed on the machine and any added to `HtmlViewFonts
 * There is no system caret blink time to read, so the caret blinks every 530 ms.
 * A cursor image uses its first frame; SVG cursor images are not supported.
 * Color controls open sliders and a swatch, not a full color picker.
+* `TextRendering.Auto` reads the system setting on Windows (ClearType) and, through `gsettings`, on GNOME-family Linux desktops; other desktops and macOS get grayscale text.
 * No find UI is built in (`HtmlDocument.FindText` exists).
 
 ## The demo
 
 `src/examples/PeachBrackets.Avalonia.Example` is a desktop app with an `HtmlView`: the showcases on the left (the sample page, the screen-only pages and every
 PDF showcase as HTML, filtered by category, and three live web pages), the page in the middle, a panel of the view's options on the right (animations, zoom,
-synchronous layout, no-scrolling mode, network access, dark theme, zoom buttons, document margin, a user style sheet, select all, copy, and opening a file)
+synchronous layout, no-scrolling mode, network access, dark theme, text rendering, zoom buttons, document margin, a user style sheet, select all, copy, and opening a file)
 and a status line. Run it with `dotnet run --project src/examples/PeachBrackets.Avalonia.Example`; `-- --smoke <file>` loads a page, prints what the document
 reports and exits, and `-- --showcase <slug> --screenshot <png>` writes a picture of one showcase.

@@ -17,7 +17,7 @@ internal static class Program
 
 /// <summary>
 /// The demo application. With no options it opens the demo window. <c>--smoke &lt;file&gt;</c> loads a page, prints what the view and document report and exits;
-/// <c>--showcase &lt;slug&gt;</c> shows one showcase, and with <c>--screenshot &lt;png&gt;</c> also writes what the window shows and exits.
+/// <c>--showcase &lt;slug&gt;</c> shows one showcase, and with <c>--screenshot &lt;png&gt;</c> also writes what the window shows and exits; <c>--text-rendering &lt;Auto|Outline|Grayscale|Lcd&gt;</c> sets how text is drawn.
 /// </summary>
 internal sealed class ExampleApp : Application
 {
@@ -31,7 +31,7 @@ internal sealed class ExampleApp : Application
             var smoke = Option(args, "--smoke");
             var showcase = Option(args, "--showcase");
             var screenshot = Option(args, "--screenshot");
-            desktop.MainWindow = smoke is not null ? SmokeWindow(desktop, smoke) : DemoWindow(desktop, showcase, screenshot);
+            desktop.MainWindow = smoke is not null ? SmokeWindow(desktop, smoke) : DemoWindow(desktop, showcase, screenshot, Option(args, "--text-rendering"));
         }
 
         base.OnFrameworkInitializationCompleted();
@@ -43,9 +43,12 @@ internal sealed class ExampleApp : Application
         return index >= 0 && index + 1 < args.Length ? args[index + 1] : null;
     }
 
-    private static Window DemoWindow(IClassicDesktopStyleApplicationLifetime desktop, string? slug, string? screenshot)
+    private static Window DemoWindow(IClassicDesktopStyleApplicationLifetime desktop, string? slug, string? screenshot, string? textRendering)
     {
         var window = new DemoWindow(AppContext.BaseDirectory);
+        if (Enum.TryParse<PeachDrawing.Skia.SkiaTextRendering>(textRendering, true, out var mode))
+            window.View.TextRendering = mode;
+
         if (slug is null)
             return window;
 

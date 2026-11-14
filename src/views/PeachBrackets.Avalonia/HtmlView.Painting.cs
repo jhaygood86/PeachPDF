@@ -38,7 +38,7 @@ public sealed partial class HtmlView
 
     // What a frame is painted from, read once on the UI thread when the frame is recorded: the render thread then uses these and never the properties that move
     // under it (a scroll or a zoom between the recording and the painting would otherwise mix two frames).
-    private readonly record struct PaintState(double ScrollX, double ScrollY, double Scale, SKColor Background);
+    private readonly record struct PaintState(double ScrollX, double ScrollY, double Scale, SKColor Background, SkiaTextRendering TextRendering);
 
     private bool _paintFailureReported;
 
@@ -52,7 +52,7 @@ public sealed partial class HtmlView
     internal Action<SKCanvas, double, double> CapturePaintForTests()
     {
         var background = PageBackground;
-        var state = new PaintState(_scrollX, _scrollY, Scale, new SKColor(background.R, background.G, background.B, background.A));
+        var state = new PaintState(_scrollX, _scrollY, Scale, new SKColor(background.R, background.G, background.B, background.A), TextRendering);
         return (canvas, widthPx, heightPx) => PaintFrame(canvas, state, widthPx, heightPx, null);
     }
 
@@ -78,7 +78,7 @@ public sealed partial class HtmlView
             return;
 
         var background = PageBackground;
-        var state = new PaintState(_scrollX, _scrollY, Scale, new SKColor(background.R, background.G, background.B, background.A));
+        var state = new PaintState(_scrollX, _scrollY, Scale, new SKColor(background.R, background.G, background.B, background.A), TextRendering);
         context.Custom(new HtmlDrawOperation(this, bounds, state));
         PaintScrollbarIndicator(context);
     }
@@ -165,6 +165,9 @@ public sealed partial class HtmlView
         // The context uploads each image to the hardware once, for the one the control draws with.
         context.GpuContext = gpu;
 
+        // How text is drawn was read from the control on the UI thread when the frame was recorded; the context takes it in here, under the lock, and never asks the control.
+        context.TextRendering = state.TextRendering;
+
         // What the frame shows is what the view says now, read with the lock held: the scroll, the zoom and the viewport the document was told are changed together
         // under it, so the page and the boxes the viewport holds (a fixed bar, a stuck header) are always drawn for the same position. The scroll recorded when the
         // frame was queued may be several steps behind the viewport by the time it is painted, which drew a fixed box that far from where it belongs.
@@ -178,8 +181,8 @@ public sealed partial class HtmlView
         if ((gpu is not null || TilesOnCpuForTests) && !document.HasViewportBackgrounds && TryPaintTiles(canvas, gpu, document, state, originX, originY, widthPx, heightPx))
         {
             // The boxes that only move or fade are not in the tiles: each frame draws them over, and the boxes the viewport holds in place are over those.
-            PaintWindow(canvas, document, state.Scale, originX, originY, widthPx, heightPx, DocumentPaintLayer.Animated);
-            PaintWindow(canvas, document, state.Scale, originX, originY, widthPx, heightPx, DocumentPaintLayer.ViewportAttached);
+            PaintWindow(canvas, document, state, originX, originY, widthPx, heightPx, DocumentPaintLayer.Animated);
+            PaintWindow(canvas, document, state, originX, originY, widthPx, heightPx, DocumentPaintLayer.ViewportAttached);
             return;
         }
 
@@ -188,13 +191,13 @@ public sealed partial class HtmlView
         // viewport is part of the one pass.)
         if (document.HasViewportBackgrounds)
         {
-            PaintWindow(canvas, document, state.Scale, originX, originY, widthPx, heightPx, DocumentPaintLayer.All);
+            PaintWindow(canvas, document, state, originX, originY, widthPx, heightPx, DocumentPaintLayer.All);
             return;
         }
 
-        PaintWindow(canvas, document, state.Scale, originX, originY, widthPx, heightPx, DocumentPaintLayer.Content);
-        PaintWindow(canvas, document, state.Scale, originX, originY, widthPx, heightPx, DocumentPaintLayer.Animated);
-        PaintWindow(canvas, document, state.Scale, originX, originY, widthPx, heightPx, DocumentPaintLayer.ViewportAttached);
+        PaintWindow(canvas, document, state, originX, originY, widthPx, heightPx, DocumentPaintLayer.Content);
+        PaintWindow(canvas, document, state, originX, originY, widthPx, heightPx, DocumentPaintLayer.Animated);
+        PaintWindow(canvas, document, state, originX, originY, widthPx, heightPx, DocumentPaintLayer.ViewportAttached);
     }
 
     // Draws the tiles that hold the part of the page in view, painting the ones that are not held. False when a tile cannot be made, in which case
@@ -283,7 +286,7 @@ public sealed partial class HtmlView
             return null;
 
         surface.Canvas.Clear(state.Background);
-        PaintWindow(surface.Canvas, document, state.Scale, bounds.X, bounds.Y, bounds.Width, bounds.Height, DocumentPaintLayer.Content);
+        PaintWindow(surface.Canvas, document, state, bounds.X, bounds.Y, bounds.Width, bounds.Height, DocumentPaintLayer.Content);
         return surface.Snapshot();
     }
 
@@ -300,11 +303,12 @@ public sealed partial class HtmlView
 
     // Paints one layer of the document for the window of the page that starts at (originX, originY) device pixels and is widthPx by heightPx, onto a
     // canvas whose origin is that window's top-left.
-    private void PaintWindow(SKCanvas canvas, HtmlDocument document, double pageScale, double originX, double originY, double widthPx, double heightPx, DocumentPaintLayer layer)
+    private void PaintWindow(SKCanvas canvas, HtmlDocument document, PaintState state, double originX, double originY, double widthPx, double heightPx, DocumentPaintLayer layer)
     {
         if (_context is not { } context)
             return;
 
+        var pageScale = state.Scale;
         var scale = (float)pageScale;
         var visibleTop = originY / pageScale;
         var visibleBottom = (originY + heightPx) / pageScale;
@@ -332,6 +336,9 @@ public sealed partial class HtmlView
 
             using (var target = SkiaCanvas.FromCanvas(context, canvas, new PeachDrawing.Core.Rect(0, 0, size.WidthPoints * PixelsPerPoint, size.HeightPoints * PixelsPerPoint)))
             {
+                // Every frame and every tile starts from the page's background color, so what is behind the text is opaque when that color is, and LCD text can be used.
+                target.OpaqueBackdrop = state.Background.Alpha == 255;
+
                 // Painting finishes without waiting for anything (what it draws was resolved during layout), so the task is already complete.
                 // The layer of what the viewport holds is painted whole, not by region (see PaintFrameLocked).
                 if (layer == DocumentPaintLayer.ViewportAttached)

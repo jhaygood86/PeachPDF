@@ -8,6 +8,7 @@ using Avalonia.Styling;
 using Avalonia.Threading;
 using PeachBrackets.Apple.Example;
 using PeachBrackets.Avalonia;
+using PeachDrawing.Skia;
 
 namespace PeachBrackets.Avalonia.Example;
 
@@ -166,6 +167,14 @@ internal sealed class DemoWindow : Window
         };
         _view.PageBackground = Colors.White;
 
+        // How text is drawn: Auto follows the system (ClearType on Windows), the others force a mode.
+        var textRendering = new ComboBox { HorizontalAlignment = HorizontalAlignment.Stretch, ItemsSource = Enum.GetValues<SkiaTextRendering>(), SelectedItem = _view.TextRendering };
+        textRendering.SelectionChanged += (_, _) =>
+        {
+            if (textRendering.SelectedItem is SkiaTextRendering mode)
+                _view.TextRendering = mode;
+        };
+
         var margin = new Slider { Minimum = 0, Maximum = 80, Value = 0, Width = 200 };
         margin.PropertyChanged += (_, e) =>
         {
@@ -219,6 +228,8 @@ internal sealed class DemoWindow : Window
                 animations, zoomEnabled, sync, autoHeight, _network, _dark,
                 new TextBlock { Text = "Zoom" },
                 new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, Children = { zoomOut, zoomReset, zoomIn, _zoomText } },
+                new TextBlock { Text = "Text rendering" },
+                textRendering,
                 new TextBlock { Text = "Margin around the document" },
                 margin,
                 new TextBlock { Text = "User style sheet (applies on the next load)" },

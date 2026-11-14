@@ -67,6 +67,7 @@ public sealed partial class HtmlView : Control
         AffectsRender<HtmlView>(PageBackgroundProperty);
         WireTextInput();
         PageBackgroundProperty.Changed.AddClassHandler<HtmlView>((view, _) => view.MarkTilesStale());
+        TextRenderingProperty.Changed.AddClassHandler<HtmlView>((view, _) => view.InvalidateContent());
         HtmlProperty.Changed.AddClassHandler<HtmlView>((view, _) => view.OnContentChanged());
         SourceProperty.Changed.AddClassHandler<HtmlView>((view, _) => view.OnContentChanged());
         SelectionColorProperty.Changed.AddClassHandler<HtmlView>((view, _) => view.OnOptionsChanged());
@@ -122,6 +123,9 @@ public sealed partial class HtmlView : Control
 
     /// <summary>Identifies <see cref="PageBackground"/>.</summary>
     public static readonly StyledProperty<Color> PageBackgroundProperty = AvaloniaProperty.Register<HtmlView, Color>(nameof(PageBackground), Colors.White);
+
+    /// <summary>Identifies <see cref="TextRendering"/>.</summary>
+    public static readonly StyledProperty<SkiaTextRendering> TextRenderingProperty = AvaloniaProperty.Register<HtmlView, SkiaTextRendering>(nameof(TextRendering), SkiaTextRendering.Auto);
 
     /// <summary>Identifies <see cref="ContentHeight"/>.</summary>
     public static readonly DirectProperty<HtmlView, double> ContentHeightProperty =
@@ -214,6 +218,17 @@ public sealed partial class HtmlView : Control
     {
         get => GetValue(PageBackgroundProperty);
         set => SetValue(PageBackgroundProperty, value);
+    }
+
+    /// <summary>
+    /// How the page's text is drawn: <see cref="SkiaTextRendering.Auto"/> (the default) follows the operating system's own setting (ClearType on Windows, the desktop's
+    /// font smoothing on Linux where it can be read, grayscale on macOS), <see cref="SkiaTextRendering.Lcd"/> and <see cref="SkiaTextRendering.Grayscale"/> force one,
+    /// and <see cref="SkiaTextRendering.Outline"/> draws vector text with no fitting to the pixel grid. Changing it paints the page again.
+    /// </summary>
+    public SkiaTextRendering TextRendering
+    {
+        get => GetValue(TextRenderingProperty);
+        set => SetValue(TextRenderingProperty, value);
     }
 
     /// <summary>The height of the document at the control's width, in device independent pixels.</summary>

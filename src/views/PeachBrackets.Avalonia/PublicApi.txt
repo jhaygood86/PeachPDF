@@ -36,6 +36,7 @@ PeachBrackets.Avalonia.HtmlView : sealed class
   field static StyledProperty<Color> SelectionColorProperty
   field static StyledProperty<Double> DocumentMarginProperty
   field static StyledProperty<HtmlViewScrollMode> ScrollModeProperty
+  field static StyledProperty<SkiaTextRendering> TextRenderingProperty
   field static StyledProperty<String> HtmlProperty
   field static StyledProperty<String> UserStyleSheetProperty
   field static StyledProperty<Uri> DocumentBaseUriProperty
@@ -60,6 +61,7 @@ PeachBrackets.Avalonia.HtmlView : sealed class
   property HtmlDocument Document { get; }
   property HtmlViewScrollMode ScrollMode { get; set; }
   property InputCapabilities Input { get; set; }
+  property SkiaTextRendering TextRendering { get; set; }
   property String Html { get; set; }
   property String SelectedText { get; }
   property String UserStyleSheet { get; set; }
