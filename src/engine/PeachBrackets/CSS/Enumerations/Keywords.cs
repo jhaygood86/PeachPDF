@@ -68,6 +68,8 @@
         public const string InlineFlex = "inline-flex";
         public const string Grid = "grid";
         public const string InlineGrid = "inline-grid";
+        public const string GridLanes = "grid-lanes";
+        public const string InlineGridLanes = "inline-grid-lanes";
         public const string Visible = "visible";
         public const string Hidden = "hidden";
         public const string Collapse = "collapse";

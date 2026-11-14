@@ -1104,7 +1104,9 @@ namespace PeachBrackets.Css
                 {Keywords.MozBox, DisplayMode.Flex},
                 {Keywords.MozInlineBox, DisplayMode.InlineFlex},
                 {Keywords.Grid, DisplayMode.Grid},
-                {Keywords.InlineGrid, DisplayMode.InlineGrid}
+                {Keywords.InlineGrid, DisplayMode.InlineGrid},
+                {Keywords.GridLanes, DisplayMode.GridLanes},
+                {Keywords.InlineGridLanes, DisplayMode.InlineGridLanes}
             }.Freeze();
         public static readonly KeywordMap<ClearMode> ClearModes =
             new KeywordMap<ClearMode>(StringComparer.OrdinalIgnoreCase)
@@ -1377,7 +1379,23 @@ namespace PeachBrackets.Css
                 { Keywords.Center, AlignItem.Center },
                 { Keywords.Stretch, AlignItem.Stretch },
                 { Keywords.Normal, AlignItem.Normal },
-                { Keywords.Baseline, AlignItem.Baseline }
+                { Keywords.Baseline, AlignItem.Baseline },
+                { "safe center", AlignItem.Center },
+                { "unsafe center", AlignItem.Center },
+                { "safe start", AlignItem.Start },
+                { "unsafe start", AlignItem.Start },
+                { "safe end", AlignItem.End },
+                { "unsafe end", AlignItem.End },
+                { "safe self-start", AlignItem.SelfStart },
+                { "unsafe self-start", AlignItem.SelfStart },
+                { "safe self-end", AlignItem.SelfEnd },
+                { "unsafe self-end", AlignItem.SelfEnd },
+                { "safe flex-start", AlignItem.FlexStart },
+                { "unsafe flex-start", AlignItem.FlexStart },
+                { "safe flex-end", AlignItem.FlexEnd },
+                { "unsafe flex-end", AlignItem.FlexEnd },
+                { "first baseline", AlignItem.Baseline },
+                { "last baseline", AlignItem.Baseline }
             }.Freeze();
 
         public static readonly KeywordMap<AlignItem> AlignSelfKeywords =
@@ -1393,7 +1411,23 @@ namespace PeachBrackets.Css
                 { Keywords.Center, AlignItem.Center },
                 { Keywords.Stretch, AlignItem.Stretch },
                 { Keywords.Normal, AlignItem.Normal },
-                { Keywords.Baseline, AlignItem.Baseline }
+                { Keywords.Baseline, AlignItem.Baseline },
+                { "safe center", AlignItem.Center },
+                { "unsafe center", AlignItem.Center },
+                { "safe start", AlignItem.Start },
+                { "unsafe start", AlignItem.Start },
+                { "safe end", AlignItem.End },
+                { "unsafe end", AlignItem.End },
+                { "safe self-start", AlignItem.SelfStart },
+                { "unsafe self-start", AlignItem.SelfStart },
+                { "safe self-end", AlignItem.SelfEnd },
+                { "unsafe self-end", AlignItem.SelfEnd },
+                { "safe flex-start", AlignItem.FlexStart },
+                { "unsafe flex-start", AlignItem.FlexStart },
+                { "safe flex-end", AlignItem.FlexEnd },
+                { "unsafe flex-end", AlignItem.FlexEnd },
+                { "first baseline", AlignItem.Baseline },
+                { "last baseline", AlignItem.Baseline }
             }.Freeze();
 
         public static readonly KeywordMap<JustifyContent> JustifyContentKeywords =
@@ -1449,7 +1483,28 @@ namespace PeachBrackets.Css
                 { "legacy right", JustifyItem.LegacyRight },
                 { "right legacy", JustifyItem.LegacyRight },
                 { "legacy center", JustifyItem.LegacyCenter },
-                { "center legacy", JustifyItem.LegacyCenter }
+                { "center legacy", JustifyItem.LegacyCenter },
+                { Keywords.FlexStart, JustifyItem.FlexStart },
+                { Keywords.FlexEnd, JustifyItem.FlexEnd },
+                { Keywords.SelfStart, JustifyItem.SelfStart },
+                { "safe center", JustifyItem.Center },
+                { "unsafe center", JustifyItem.Center },
+                { "safe start", JustifyItem.Start },
+                { "unsafe start", JustifyItem.Start },
+                { "safe end", JustifyItem.End },
+                { "unsafe end", JustifyItem.End },
+                { "safe self-start", JustifyItem.SelfStart },
+                { "unsafe self-start", JustifyItem.SelfStart },
+                { "safe self-end", JustifyItem.SelfEnd },
+                { "unsafe self-end", JustifyItem.SelfEnd },
+                { "safe flex-start", JustifyItem.FlexStart },
+                { "unsafe flex-start", JustifyItem.FlexStart },
+                { "safe flex-end", JustifyItem.FlexEnd },
+                { "unsafe flex-end", JustifyItem.FlexEnd },
+                { "safe left", JustifyItem.Left },
+                { "unsafe left", JustifyItem.Left },
+                { "safe right", JustifyItem.Right },
+                { "unsafe right", JustifyItem.Right }
             }.Freeze();
 
         public static readonly KeywordMap<JustifyItem> JustifySelfKeywords =
@@ -1466,7 +1521,28 @@ namespace PeachBrackets.Css
                 { Keywords.Right, JustifyItem.Right },
                 { Keywords.Baseline, JustifyItem.Baseline },
                 { "first baseline", JustifyItem.Baseline },
-                { "last baseline", JustifyItem.LastBaseline }
+                { "last baseline", JustifyItem.LastBaseline },
+                { Keywords.FlexStart, JustifyItem.FlexStart },
+                { Keywords.FlexEnd, JustifyItem.FlexEnd },
+                { Keywords.SelfStart, JustifyItem.SelfStart },
+                { "safe center", JustifyItem.Center },
+                { "unsafe center", JustifyItem.Center },
+                { "safe start", JustifyItem.Start },
+                { "unsafe start", JustifyItem.Start },
+                { "safe end", JustifyItem.End },
+                { "unsafe end", JustifyItem.End },
+                { "safe self-start", JustifyItem.SelfStart },
+                { "unsafe self-start", JustifyItem.SelfStart },
+                { "safe self-end", JustifyItem.SelfEnd },
+                { "unsafe self-end", JustifyItem.SelfEnd },
+                { "safe flex-start", JustifyItem.FlexStart },
+                { "unsafe flex-start", JustifyItem.FlexStart },
+                { "safe flex-end", JustifyItem.FlexEnd },
+                { "unsafe flex-end", JustifyItem.FlexEnd },
+                { "safe left", JustifyItem.Left },
+                { "unsafe left", JustifyItem.Left },
+                { "safe right", JustifyItem.Right },
+                { "unsafe right", JustifyItem.Right }
             }.Freeze();
 
         public static readonly KeywordMap<ContainerType> ContainerTypes =

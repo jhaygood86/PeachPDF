@@ -170,6 +170,8 @@ namespace PeachBrackets.Css
             // longhands is not worth the complexity and could change existing output.
             AddLogicalShorthand(PropertyNames.GridTemplate, () => new GridTemplateProperty(),
                 PropertyNames.GridTemplateRows, PropertyNames.GridTemplateColumns, PropertyNames.GridTemplateAreas);
+            AddLogicalShorthand(PropertyNames.GridLanes, () => new GridLanesProperty(),
+                PropertyNames.GridTemplateRows, PropertyNames.GridTemplateColumns, PropertyNames.GridTemplateAreas, PropertyNames.GridLanesDirection);
             AddLogicalShorthand(PropertyNames.Grid, () => new GridProperty(),
                 PropertyNames.GridTemplateRows, PropertyNames.GridTemplateColumns, PropertyNames.GridTemplateAreas,
                 PropertyNames.GridAutoFlow, PropertyNames.GridAutoRows, PropertyNames.GridAutoColumns);

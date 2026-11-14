@@ -21,6 +21,12 @@ namespace PeachBrackets.Css
         InlineFlex,
         Grid,
         InlineGrid,
+
+        /// <summary><c>grid-lanes</c> (css-grid-3 §4): a grid whose items pack into the shortest lane. Reads <c>grid</c> through <c>ActualDisplay</c>; <c>CssLayoutEngineGridLanes</c> tells it apart.</summary>
+        GridLanes,
+
+        /// <summary><c>inline-grid-lanes</c>: the inline-level <see cref="GridLanes"/>.</summary>
+        InlineGridLanes,
         Contents,
 
         /// <summary>

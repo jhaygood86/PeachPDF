@@ -183,6 +183,14 @@ namespace PeachBrackets.Css
         public static readonly string GridAutoColumns = "grid-auto-columns";
         public static readonly string GridAutoRows = "grid-auto-rows";
         public static readonly string GridAutoFlow = "grid-auto-flow";
+        public static readonly string FitTolerance = "fit-tolerance";
+        public static readonly string GridGap = "grid-gap";
+        public static readonly string GridRowGap = "grid-row-gap";
+        public static readonly string GridColumnGap = "grid-column-gap";
+        public static readonly string GridLanesDirection = "grid-lanes-direction";
+        public static readonly string GridLanesPack = "grid-lanes-pack";
+        public static readonly string GridLanes = "grid-lanes";
+        public static readonly string FlowTolerance = "flow-tolerance";
         public static readonly string GridColumn = "grid-column";
         public static readonly string GridColumnStart = "grid-column-start";
         public static readonly string GridColumnEnd = "grid-column-end";

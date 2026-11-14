@@ -1915,6 +1915,8 @@ namespace PeachBrackets.Html.Parse
                     CssProperty<DisplayMode>.FromValue(Keywords.Flex, DisplayMode.Flex),
                 DisplayMode.InlineGrid =>
                     CssProperty<DisplayMode>.FromValue(Keywords.Grid, DisplayMode.Grid),
+                DisplayMode.InlineGridLanes =>
+                    CssProperty<DisplayMode>.FromValue(Keywords.GridLanes, DisplayMode.GridLanes),
                 DisplayMode.InlineTable =>
                     CssProperty<DisplayMode>.FromValue(Keywords.Table, DisplayMode.Table),
                 _ => display
@@ -3980,7 +3982,8 @@ namespace PeachBrackets.Html.Parse
         /// Whether <paramref name="box"/> is a flex or grid container, i.e. its in-flow children are items.
         /// </summary>
         private static bool IsFlexOrGridContainer(CssBox box) =>
-            box.Display.Value is DisplayMode.Flex or DisplayMode.InlineFlex or DisplayMode.Grid or DisplayMode.InlineGrid;
+            box.Display.Value is DisplayMode.Flex or DisplayMode.InlineFlex or DisplayMode.Grid or DisplayMode.InlineGrid
+                or DisplayMode.GridLanes or DisplayMode.InlineGridLanes;
 
         /// <summary>
         /// Correct the DOM tree recursively by replacing  "br" html boxes with anonymous blocks that respect br spec.<br/>
@@ -4039,7 +4042,8 @@ namespace PeachBrackets.Html.Parse
                 // <span><h4/><p/></span> items as one run hoisted their block children up to become
                 // the items themselves. Each child is still corrected as its own formatting context.
                 if (box.Display.Value is DisplayMode.Flex or DisplayMode.InlineFlex
-                    or DisplayMode.Grid or DisplayMode.InlineGrid)
+                    or DisplayMode.Grid or DisplayMode.InlineGrid
+                    or DisplayMode.GridLanes or DisplayMode.InlineGridLanes)
                 {
                     foreach (var item in box.Boxes)
                     {

@@ -545,7 +545,7 @@ namespace PeachBrackets.Css
         public static readonly IValueConverter FloatReferenceConverter = Map.FloatReferences.ToConverter();
         public static readonly IValueConverter FootnoteDisplayConverter = Map.FootnoteDisplayModes.ToConverter();
         public static readonly IValueConverter FootnotePolicyConverter = Map.FootnotePolicyModes.ToConverter();
-        public static readonly IValueConverter DisplayModeConverter = Map.DisplayModes.ToConverter();
+        public static readonly IValueConverter DisplayModeConverter = new DisplayTwoValueConverter(Map.DisplayModes.ToConverter());
         public static readonly IValueConverter ContainerTypeConverter = Map.ContainerTypes.ToConverter();
         public static readonly IValueConverter ContainerShorthandConverter = new ContainerShorthandConverter();
         public static readonly IValueConverter ClearModeConverter = Map.ClearModes.ToConverter();

@@ -16,6 +16,10 @@ namespace PeachBrackets.Css
     /// </summary>
     internal static class CssomGrammars
     {
+        /// <summary><c>fit-tolerance: normal | &lt;length-percentage [0,∞]&gt; | infinite</c> (CSS Grid 3 §4.4).</summary>
+        internal static readonly IValueConverter FitTolerance =
+            Converters.NonNegativeLengthOrPercentOrNormalConverter.Or(Keywords.Infinite);
+
         /// <summary>
         /// <c>container-name: none | &lt;custom-ident&gt;+</c> (CSS Containment 3 §2) - a space-separated
         /// list of bare identifiers, NOT a quoted CSS &lt;string&gt;. <see cref="Converters.LiteralsConverter"/>

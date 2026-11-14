@@ -26,6 +26,11 @@ namespace PeachBrackets.Css
             if (idents.Length is < 1 or > 2 || idents.Any(t => t.Type != TokenType.Ident))
                 return null;
 
+            // css-grid-3: `normal` stands alone. Grids read it as `row`; a grid-lanes container uses it to
+            // choose its axis from the templates.
+            if (idents.Length == 1 && idents[0].Data.Isi(Keywords.Normal))
+                return new GridAutoFlowValue(tokens);
+
             var hasAxis = false;
             var hasDense = false;
             foreach (var t in idents)

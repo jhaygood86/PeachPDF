@@ -45,17 +45,17 @@ public class LayoutPaintCoverageTests
     }
 
     [Theory]
-    [InlineData("align-self:center;justify-self:center", 35, 35, true)]
-    [InlineData("align-self:end;justify-self:end", 85, 85, true)]
-    [InlineData("align-self:flex-end", 10, 85, true)]
-    [InlineData("align-self:start", 10, 10, true)]
-    [InlineData("safe center", 10, 10, false)]
-    public async Task AnAbsoluteGridChildIsAlignedInItsStaticPositionRectangle(string alignment, int x, int y, bool declaration)
+    [InlineData("align-self:center;justify-self:center", 35, 35)]
+    [InlineData("align-self:end;justify-self:end", 85, 85)]
+    [InlineData("align-self:flex-end", 10, 85)]
+    [InlineData("align-self:start", 10, 10)]
+    [InlineData("align-self:safe center", 10, 35)]
+    [InlineData("align-self:normal", 10, 10)]
+    public async Task AnAbsoluteGridChildIsAlignedInItsStaticPositionRectangle(string alignment, int x, int y)
     {
-        var style = declaration ? alignment : "align-self:safe center";
         using var canvas = await PageRaster.RenderAsync(
             "<div style='display:grid;width:100px;height:100px'>" +
-            $"<div style='position:absolute;width:30px;height:30px;background:rgb(0,128,0);{style}'></div></div>");
+            $"<div style='position:absolute;width:30px;height:30px;background:rgb(0,128,0);{alignment}'></div></div>");
 
         Assert.Equal(Green, PageRaster.Rgb(canvas, x, y));
     }

@@ -141,7 +141,10 @@ namespace PeachBrackets.Html.Dom
 
             _vertical = _gridBox.WritingMode.Value.IsVertical();
             await StateContainerFrame(g, resumed: false);
-            await LayoutFresh(g);
+            if (IsLanes)
+                await LayoutLanes(g);
+            else
+                await LayoutFresh(g);
             await StateSpannedFrames(g);
         }
 
@@ -209,7 +212,14 @@ namespace PeachBrackets.Html.Dom
                 ? hasDefiniteHeight ? _gridBox.ClientBottom - _gridBox.ClientTop : 0
                 : _gridBox.ClientRight - _gridBox.ClientLeft;
             var columnGap = ParseGap(_gridBox.FlexColumnGap, contentWidth);
-            var rowGap = ParseGap(_gridBox.FlexRowGap, contentWidth);
+
+            // A percentage row gap resolves against the container's height, and against an indefinite one the percentage counts as 0 while the rows are sized
+            // (css-grid-1 11.1, css-align-3 8.1: `calc(20px + 5%)` is 20px); it takes its final value from the height the rows then give the container.
+            var rowGapIsPercentage = _gridBox.FlexRowGap.Value is { IsValue: true, Value: { } rowGapLength } && (rowGapLength.IsCalc ? rowGapLength.CalcText!.Contains('%') : rowGapLength.Length!.Value.Type == Length.Unit.Percent);
+            var sizingRowGap = _vertical || !rowGapIsPercentage || hasDefiniteHeight
+                ? ParseGap(_gridBox.FlexRowGap, !_vertical && hasDefiniteHeight ? _gridBox.ClientBottom - _gridBox.ClientTop : contentWidth)
+                : ParseGap(_gridBox.FlexRowGap, 0);
+            var rowGap = sizingRowGap;
 
             // The templates were parsed once at cascade time (CssProperty<GridTemplate>); read them directly.
             var colTemplate = _gridBox.GridTemplateColumns.Value;
@@ -523,8 +533,11 @@ namespace PeachBrackets.Html.Dom
                     ExpandFlexibleRows(rows, minBlock, rowGap);
                 }
 
+                    if (!_vertical && rowGapIsPercentage && !hasDefiniteHeight)
+                        rowGap = ParseGap(_gridBox.FlexRowGap, rows.Sum(t => t.Size) + (rowCount > 1 ? sizingRowGap * (rowCount - 1) : 0));
+
                     var rowContainerSize = hasDefiniteBlock ? BlockContentSize
-                        : rows.Sum(t => t.Size) + (rowCount > 1 ? rowGap * (rowCount - 1) : 0);
+                        : rows.Sum(t => t.Size) + (rowCount > 1 ? sizingRowGap * (rowCount - 1) : 0);
                     if (hasDefiniteBlock && !rowSubgrid && IsStretch(_gridBox.AlignContent.ToString()))
                         StretchAutoRows(rows, rowContainerSize, rowGap);
                     PositionTracks(rows, BlockOrigin, rowContainerSize, rowGap, _gridBox.AlignContent.ToString());
@@ -598,7 +611,7 @@ namespace PeachBrackets.Html.Dom
                 }
 
                 // ── Container size when auto.
-                var gridHeight = rows.Sum(t => t.Size) + (rowCount > 1 ? rowGap * (rowCount - 1) : 0);
+                var gridHeight = rows.Sum(t => t.Size) + (rowCount > 1 ? sizingRowGap * (rowCount - 1) : 0);
                 if (_vertical)
                 {
                     // The rows are stacked along the width: an auto width shrinks to them from the block-end
@@ -865,7 +878,8 @@ namespace PeachBrackets.Html.Dom
             IReadOnlyList<UnfinishedGridItem>? seedUnfinished,
             IReadOnlyList<CssBox>? seedFinished,
             IReadOnlyDictionary<CssBox, GridSubgridContext> subgridContexts,
-            PaintPoint placementOrigin)
+            PaintPoint placementOrigin,
+            Action<IReadOnlyList<IReadOnlyList<CssBox>>, int>? settle = null)
         {
             var container = _gridBox.HtmlContainer;
 
@@ -917,6 +931,9 @@ namespace PeachBrackets.Html.Dom
                         placementOrigin));
                     return;
                 }
+
+                // Every item of this row has its true extent now; what was placed below a cut one on an estimate is settled against it.
+                settle?.Invoke(rowGroups, rowIndex);
             }
         }
 
@@ -955,7 +972,7 @@ namespace PeachBrackets.Html.Dom
 
             await CommitItemContent(
                 g, resume.Rows, resume.ResumeRowIndex, resume.UnfinishedItems, resume.FinishedItems,
-                resume.SubgridContexts, _gridBox.Location);
+                resume.SubgridContexts, _gridBox.Location, IsLanes ? SettleLanes : null);
         }
 
         /// <summary>
@@ -1726,16 +1743,17 @@ namespace PeachBrackets.Html.Dom
                 return false;
 
             var flow = _gridBox.GridAutoFlow ?? Keywords.Row;
-            if (flow.IndexOf(Keywords.Column, StringComparison.OrdinalIgnoreCase) >= 0)
-                return false;
+            var isColumnFlow = flow.IndexOf(Keywords.Column, StringComparison.OrdinalIgnoreCase) >= 0;
 
             var items = _gridBox.Boxes.Where(DomUtils.GeneratesFlexOrGridItem).ToList();
             if (items.Count == 0)
                 return false;
 
+            // Under `grid-auto-flow: column` the rows are the fixed axis and the columns grow with the items.
             var explicitColDefs = colTemplate?.Tracks.ToList() ?? [];
-            var placements = PlaceItems(items, false, flow.IndexOf(Keywords.Dense, StringComparison.OrdinalIgnoreCase) >= 0,
-                Math.Max(1, explicitColDefs.Count), BuildLineNames(colTemplate), BuildLineNames(rowTemplate));
+            var fixedCount = isColumnFlow ? Math.Max(1, rowTemplate?.Tracks.Count ?? 0) : Math.Max(1, explicitColDefs.Count);
+            var placements = PlaceItems(items, isColumnFlow, flow.IndexOf(Keywords.Dense, StringComparison.OrdinalIgnoreCase) >= 0,
+                fixedCount, BuildLineNames(colTemplate), BuildLineNames(rowTemplate));
             var colCount = Math.Max(1, Math.Max(explicitColDefs.Count,
                 placements.Count == 0 ? 0 : placements.Max(p => p.ColStart + p.ColSpan)));
             var colDefs = BuildTrackDefs(explicitColDefs, ExpandTrackSizes(_gridBox.GridAutoColumns), colCount)
@@ -1798,15 +1816,20 @@ namespace PeachBrackets.Html.Dom
         /// has measured every word already.</summary>
         private static (double Min, double Max) MeasureItemContributionSync(Canvas g, CssBox box)
         {
+            var outerExtra = box.ActualMarginLeft + box.ActualMarginRight;
             double minContent, maxContent;
             if (CssValueParser.IsValidLength(box.Width))
+            {
+                // A declared width is the content box's (or, for border-box, already the border box's).
                 minContent = maxContent = CssValueParser.ParseLength(box.Width, 0, box);
+                outerExtra += box.ActualPaddingLeft + box.ActualPaddingRight + box.ActualBorderLeftWidth + box.ActualBorderRightWidth;
+            }
             else
+            {
+                // The measured width already holds the box's own padding and border.
                 box.GetMinMaxWidth(g, out minContent, out maxContent);
+            }
 
-            var outerExtra = box.ActualMarginLeft + box.ActualMarginRight
-                + box.ActualPaddingLeft + box.ActualPaddingRight
-                + box.ActualBorderLeftWidth + box.ActualBorderRightWidth;
             return (minContent + outerExtra, maxContent + outerExtra);
         }
 
@@ -1814,20 +1837,20 @@ namespace PeachBrackets.Html.Dom
         /// own margin/border/padding). An explicit width supplies both.</summary>
         private static async ValueTask<(double Min, double Max)> MeasureItemContribution(Canvas g, CssBox box)
         {
+            var outerExtra = box.ActualMarginLeft + box.ActualMarginRight;
             double minContent, maxContent;
             if (CssValueParser.IsValidLength(box.Width))
             {
                 minContent = maxContent = CssValueParser.ParseLength(box.Width, 0, box);
+                outerExtra += box.ActualPaddingLeft + box.ActualPaddingRight + box.ActualBorderLeftWidth + box.ActualBorderRightWidth;
             }
             else
             {
+                // The measured widths already hold the box's own padding and border.
                 minContent = await CssLayoutEngine.GetMinContentWidth(g, box);
                 maxContent = await CssLayoutEngine.GetMaxContentWidth(g, box);
             }
 
-            var outerExtra = box.ActualMarginLeft + box.ActualMarginRight
-                + box.ActualPaddingLeft + box.ActualPaddingRight
-                + box.ActualBorderLeftWidth + box.ActualBorderRightWidth;
             return (minContent + outerExtra, maxContent + outerExtra);
         }
 
@@ -2334,13 +2357,15 @@ namespace PeachBrackets.Html.Dom
         private void StateAbsolutelyPositionedAreas(Track[] columns, Track[] rows, int explicitColumns, int explicitRows,
             IReadOnlyDictionary<string, List<int>> colLineNames, IReadOnlyDictionary<string, List<int>> rowLineNames)
         {
-            if (_vertical || _rtl) return;
+            if (_vertical) return;
 
             var paddingLeft = _gridBox.ClientLeft - _gridBox.ActualPaddingLeft;
             var paddingRight = _gridBox.ClientRight + _gridBox.ActualPaddingRight;
             var paddingTop = _gridBox.ClientTop - _gridBox.ActualPaddingTop;
             var rowsEnd = rows.Length > 0 ? rows[^1].Position + rows[^1].Size : BlockOrigin;
             var paddingBottom = Math.Max(rowsEnd, _gridBox.ClientBottom) + _gridBox.ActualPaddingBottom;
+            var contentBottom = Math.Max(rowsEnd, _gridBox.ClientBottom);
+            var mirror = _gridBox.ClientLeft + _mirrorRight;
 
             foreach (var child in _gridBox.Boxes)
             {
@@ -2349,22 +2374,37 @@ namespace PeachBrackets.Html.Dom
                 var (colStart, colSpan) = ResolveAxis(child.GridColumnStart, child.GridColumnEnd, explicitColumns, colLineNames);
                 var (rowStart, rowSpan) = ResolveAxis(child.GridRowStart, child.GridRowEnd, explicitRows, rowLineNames);
 
-                double Edge(Track[] tracks, int start, int span, bool atStart, double paddingEdge)
+                // The position of a line, or null where it does not exist (auto, or beyond the explicit grid) and the container's edge stands in for it.
+                static double? Edge(Track[] tracks, int start, int span, bool atStart)
                 {
-                    // Line index of the edge: the start line is `start`, the end line `start + span`. A line outside the explicit tracks is the padding edge.
-                    if (start < 0) return paddingEdge;
+                    if (start < 0) return null;
                     var line = atStart ? start : start + span;
-                    if (line < 0 || line > tracks.Length) return paddingEdge;
-                    if (atStart) return line >= tracks.Length ? paddingEdge : tracks[line].Position;
+                    if (line < 0 || line > tracks.Length) return null;
+                    if (atStart) return line >= tracks.Length ? null : tracks[line].Position;
                     return tracks[line - 1].Position + tracks[line - 1].Size;
                 }
 
-                var left = Edge(columns, colStart, colSpan, atStart: true, paddingLeft);
-                var right = Edge(columns, colStart, colSpan, atStart: false, paddingRight);
-                var top = Edge(rows, rowStart, rowSpan, atStart: true, paddingTop);
-                var bottom = Edge(rows, rowStart, rowSpan, atStart: false, paddingBottom);
+                // The columns are numbered from the right under `direction: rtl`, so the line that starts the area is its right edge.
+                var colStartLine = Edge(columns, colStart, colSpan, atStart: true);
+                var colEndLine = Edge(columns, colStart, colSpan, atStart: false);
+                double? leftLine = _rtl ? colEndLine is { } e ? mirror - e : null : colStartLine;
+                double? rightLine = _rtl ? colStartLine is { } s0 ? mirror - s0 : null : colEndLine;
+                var topLine = Edge(rows, rowStart, rowSpan, atStart: true);
+                var bottomLine = Edge(rows, rowStart, rowSpan, atStart: false);
 
-                child.GridContainingArea = new Rect(left, top, Math.Max(0, right - left), Math.Max(0, bottom - top));
+                Rect AreaWith(double left, double right, double top, double bottom)
+                {
+                    var l = leftLine ?? left;
+                    var r = rightLine ?? right;
+                    var t = topLine ?? top;
+                    var b = bottomLine ?? bottom;
+                    return new Rect(l, t, Math.Max(0, r - l), Math.Max(0, b - t));
+                }
+
+                // The static position is as if the child were the only item of a grid area whose lines that do not exist are the container's *content* edges
+                // (css-grid-1 section 9.2), where its containing block takes the padding edges.
+                child.GridStaticArea = AreaWith(_gridBox.ClientLeft, _gridBox.ClientRight, _gridBox.ClientTop, contentBottom);
+                child.GridContainingArea = AreaWith(paddingLeft, paddingRight, paddingTop, paddingBottom);
 
                 // The child may already have been placed against the padding box by its own pass: put it where its area says (the area's corner,
                 // moved by any inset it declares). A pass that places it later reads the area itself, and finds it already there.
