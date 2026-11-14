@@ -354,6 +354,42 @@ public class TextInputTests
     }
 
     [Fact]
+    public async Task TheClientIsOfferedOnlyWhileATextFieldHasTheFocus()
+    {
+        await HeadlessSession.Run(async () =>
+        {
+            var (window, view) = await HeadlessSession.ShowAsync(Page);
+            var requeries = 0;
+            view.AddHandler(InputMethod.TextInputMethodClientRequeryRequestedEvent, (_, _) => requeries++);
+
+            static object? Request(HtmlView view)
+            {
+                var args = new TextInputMethodClientRequestedEventArgs { RoutedEvent = InputElement.TextInputMethodClientRequestedEvent };
+                view.RaiseEvent(args);
+                return args.Client;
+            }
+
+            // The view has the focus and a document, but no field has it: no input method client, so no soft keyboard.
+            view.Focus();
+            Assert.Null(Request(view));
+
+            // A field taking the focus makes the input method ask again, and it is offered.
+            await ClickAsync(window, view, FieldPoint);
+            Assert.True(requeries > 0);
+            Assert.NotNull(Request(view));
+
+            // The field giving up the focus withdraws it, again by having the input method ask.
+            var before = requeries;
+            // Shift+Tab from the first tab stop leaves the page.
+            await HtmlViewInput.KeyAsync(window, view, Key.Tab, RawInputModifiers.Shift);
+            Assert.Null(view.Document!.GetEditState());
+            Assert.True(requeries > before);
+            Assert.Null(Request(view));
+            window.Close();
+        });
+    }
+
+    [Fact]
     public async Task TheFieldMenuOffersCutCopyPasteAndSelectAllAsTheSelectionAllows()
     {
         await HeadlessSession.Run(async () =>

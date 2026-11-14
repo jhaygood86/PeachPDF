@@ -2,6 +2,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Input.Platform;
 using Avalonia.Input.TextInput;
+using Avalonia.Interactivity;
 using Avalonia.Threading;
 using PeachBrackets.Avalonia.Logic;
 using PeachBrackets.HtmlViewCore;
@@ -21,16 +22,19 @@ public sealed partial class HtmlView
     private FieldInputClient? _inputClient;
     private DispatcherTimer? _blink;
     private bool _caretShown = true;
+    private bool _clientOffered;
     private string? _editFieldKey;
     private int? _fieldAnchor;
     private Task _placement = Task.CompletedTask;
 
     // The input method asks the control for its client when it takes the keyboard focus, and the caret blinks only while the control has it.
+    // The client is offered only while a text field of the page has the focus (so a soft keyboard is not raised by the view having the focus alone);
+    // UpdateTextInputClient asks Avalonia to ask again whenever that changes.
     private static bool WireTextInput()
     {
         TextInputMethodClientRequestedEvent.AddClassHandler<HtmlView>((view, e) =>
         {
-            if (view._document is not null)
+            if (view.IsEditingField)
                 e.Client = view._inputClient ??= new FieldInputClient(view);
         });
         GotFocusEvent.AddClassHandler<HtmlView>((view, _) => view.UpdateTextInputClient());
@@ -402,6 +406,14 @@ public sealed partial class HtmlView
     internal void UpdateTextInputClient()
     {
         var state = _document?.GetEditState();
+
+        // A field taking or giving up the focus is a change of whether there is a client: the input method (and with it the soft keyboard) asks again.
+        if ((state is not null) != _clientOffered)
+        {
+            _clientOffered = state is not null;
+            RaiseEvent(new TextInputMethodClientRequeryRequestedEventArgs { RoutedEvent = InputMethod.TextInputMethodClientRequeryRequestedEvent });
+        }
+
         if (state is not { } field)
         {
             _editFieldKey = null;
