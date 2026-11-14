@@ -63,5 +63,27 @@ namespace PeachBrackets.Engine.Tests.Integration
 
             Assert.Equal(Baseline(items[0]), items[1].ActualBottom, 0.5);
         }
+
+        [Fact]
+        public async Task AnOrthogonalItem_IsAsWideAsItsLinesStackedAcrossItsAreasHeight()
+        {
+            var grid = await LayOut("grid-auto-flow:row;grid-auto-rows:50pt;justify-content:start;height:100pt",
+                "<div style='writing-mode:vertical-lr;font:10pt/1 monospace;justify-self:start'>aaaa<br>bbbb<br>cccc</div>");
+            var item = grid.Boxes.First(b => b.HtmlTag is not null);
+
+            // Three lines of 10pt stack across, whatever the height.
+            Assert.Equal(30, item.ActualBoxSizingWidth, 1.5);
+        }
+
+        [Fact]
+        public async Task ColumnBaseline_ShiftsEachItemByTheDifferenceOfItsCentralBaselines()
+        {
+            var grid = await LayOut("grid-auto-flow:row;grid-auto-rows:50pt;justify-items:baseline;justify-content:start;height:100pt",
+                "<div style='writing-mode:vertical-lr;font:10pt/1 monospace'>a</div><div style='writing-mode:vertical-lr;font:20pt/1 monospace'>b</div>");
+            var items = grid.Boxes.Where(b => b.HtmlTag is not null).ToList();
+
+            // central baselines: half a line (5pt and 10pt) from the left edge, so the first item sits 5pt in
+            Assert.Equal(items[1].Location.X + 10, items[0].Location.X + 5, 0.75);
+        }
     }
 }

@@ -96,5 +96,87 @@ namespace PeachBrackets.Html.Dom
 
             return above + below;
         }
+
+        /// <summary>
+        /// The first (or last) baseline of an item in the column axis, as its distances to the left and right edges of a margin box <paramref name="width"/> wide.
+        /// An orthogonal item has lines across this axis: its baseline is the central baseline of its first (last) line, one half line thickness inside
+        /// the border box edge the lines start from (css-writing-modes-4 section 4.1). Any other item has no baseline here, and one is synthesized at
+        /// the border box edge the alignment falls back to - the inline-start edge for a first baseline, the inline-end edge for a last one.
+        /// </summary>
+        private BaselineSpan ItemColumnBaseline(CssBox box, bool last, double width)
+        {
+            var mode = box.WritingMode.Value;
+            if (mode.IsVertical() && !_vertical)
+            {
+                var linesStartLeft = mode is WritingMode.VerticalLr or WritingMode.SidewaysLr;
+                var line = last ? FindLastLineBox(box) : BaselineAlignment.FindFirstLineBox(box);
+                var word = line is null || line.Words.Count == 0 ? null : last ? line.Words[^1] : line.Words[0];
+                var half = (word?.OwnerBox.ActualLineHeight ?? 0) / 2;
+                var fromLeft = (box.ActualMarginLeft + box.ActualBorderLeftWidth + box.ActualPaddingLeft) + half;
+                var fromRight = (box.ActualMarginRight + box.ActualBorderRightWidth + box.ActualPaddingRight) + half;
+
+                // The first line is at the block-start side, the last at the block-end side.
+                var onLeft = linesStartLeft != last;
+                return onLeft ? new BaselineSpan(fromLeft, width - fromLeft) : new BaselineSpan(width - fromRight, fromRight);
+            }
+
+            var onLeftEdge = last == _rtl;
+            return onLeftEdge
+                ? new BaselineSpan(box.ActualMarginLeft, width - box.ActualMarginLeft)
+                : new BaselineSpan(width - box.ActualMarginRight, box.ActualMarginRight);
+        }
+
+        /// <summary>Whether the edge a baseline alignment of an item falls back to is the left one. An orthogonal item shares a baseline only with items whose
+        /// lines stack the same way, and falls back to its own block-start (first) or block-end (last) side; any other item to the grid's inline-start or end.</summary>
+        private bool ColumnBaselineEdgeIsLeft(CssBox box, bool last)
+        {
+            var mode = box.WritingMode.Value;
+            return mode.IsVertical() && !_vertical
+                ? (mode is WritingMode.VerticalLr or WritingMode.SidewaysLr) != last
+                : last == _rtl;
+        }
+
+        /// <summary>The <c>justify-self</c> keyword that puts an item at the edge <see cref="ColumnBaselineEdgeIsLeft"/> names (rtl mirrors start and end).</summary>
+        private string ColumnBaselineFallback(CssBox box, bool last) =>
+            ColumnBaselineEdgeIsLeft(box, last) != _rtl ? Keywords.Start : Keywords.End;
+
+        /// <summary>The width each baseline-sharing group of single-column items needs in its column: the furthest baseline from the left edge plus the
+        /// furthest from the right edge among them.</summary>
+        private double ColumnBaselineGroupSize(IEnumerable<(CssBox Box, double Width)> items, bool last)
+        {
+            double above = 0, below = 0;
+            foreach (var (box, width) in items)
+            {
+                var span = ItemColumnBaseline(box, last, width);
+                above = Math.Max(above, span.Above);
+                below = Math.Max(below, span.Below);
+            }
+
+            return above + below;
+        }
+
+        /// <summary>
+        /// Aligns the single-column items of each column whose used <c>justify-self</c>/<c>justify-items</c> is <c>baseline</c> or <c>last baseline</c>
+        /// (css-align-3 section 9.3): each was placed at the edge the alignment falls back to, and moves inwards by how far its baseline is short of
+        /// the furthest one in its group.
+        /// </summary>
+        private void AlignColumnBaselines(List<(Placement Placement, bool Last)> items)
+        {
+            foreach (var group in items.GroupBy(i => (i.Placement.ColStart, i.Last, Left: ColumnBaselineEdgeIsLeft(i.Placement.Box, i.Last))))
+            {
+                var members = group.Select(i => i.Placement.Box).ToList();
+                if (members.Count < 2) continue;   // a lone item already sits on its own baseline
+
+                var last = group.Key.Last;
+                var spans = members.Select(b => (Box: b, Span: ItemColumnBaseline(b, last, b.ActualBoxSizingWidth + b.ActualMarginLeft + b.ActualMarginRight))).ToList();
+                var fromLeft = group.Key.Left;
+                var furthest = spans.Max(x => fromLeft ? x.Span.Above : x.Span.Below);
+                foreach (var (box, span) in spans)
+                {
+                    var dx = furthest - (fromLeft ? span.Above : span.Below);
+                    if (dx > 0.01) box.OffsetLeft(fromLeft ? dx : -dx);
+                }
+            }
+        }
     }
 }

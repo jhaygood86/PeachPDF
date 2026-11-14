@@ -81,3 +81,15 @@ gutters in subgrids).
   were passing only because `last baseline` was treated as `first` on both sides (the flex reference still does).
 - Not done: baseline sharing across row-spanning items, the column axis for orthogonal items (central baseline of the first line), vertical writing modes,
   and a multi-line inline-block's bottom inset (the reference of `grid-self-baseline-horiz-002` still falls short by that).
+
+## Orthogonal items and the column-axis baseline
+
+- An item in a vertical writing mode inside a horizontal grid is as wide as its lines stack at the inline size its area gives it (`MeasureOrthogonalContribution`;
+  the area's height is known while the columns are sized only when its rows are all fixed, `FixedAreaHeightOf`), and is no longer pinned to a horizontal
+  text measure on placement. Gained all of `abspos/orthogonal-positioned-grid-items-*` that were failing.
+- Column-axis baseline (`ItemColumnBaseline`): an orthogonal item's baseline is the central baseline of its first (last) line, half a line thickness inside the
+  edge its lines start from; any other item synthesizes it at the inline-start (end) border edge. An orthogonal item falls back to its **own** block-start
+  side (`grid-justify-baseline-001`: a vertical-rl and a vertical-lr item in one column go to opposite sides), and shares a baseline only with items whose
+  lines stack the same way. A group makes its column wide enough for the furthest baseline from each edge (`ColumnBaselineGroupSize`).
+- Lost `column-fill-reverse-justify-items-indefinite-size-002` (grid lanes, tentative): its reference is a flex column with `align-items: baseline`, which puts
+  vertical-rl items at the grid's start, so it contradicts the plain-grid test above; the plain-grid one was followed.

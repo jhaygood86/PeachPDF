@@ -342,6 +342,22 @@ namespace PeachBrackets.Html.Dom
             // sized against, so it is gathered once and `SizeColumnsAt` can size them again for another page's measure.
             Track[] columns;
             Track[] rows;
+
+            // The height an item's area has while the columns are being sized, when its rows are all fixed: an orthogonal item's width is the block
+            // size its content takes at that inline size.
+            double? FixedAreaHeightOf(Placement p)
+            {
+                var defs = BuildTrackDefs(explicitRowDefs, autoRowDefs, rowCount);
+                var total = 0.0;
+                for (var r = p.RowStart; r < p.RowStart + p.RowSpan && r < defs.Count; r++)
+                {
+                    if (!IsFixed(defs[r])) return null;
+                    total += ResolveFixedRow(defs[r], false);
+                }
+
+                return total + ParseGap(_gridBox.FlexRowGap, 0) * (p.RowSpan - 1);
+            }
+
             IReadOnlyList<GridTrackSize> colDefs = [];
             var collapsed = new bool[colCount];
             double[] colMinContent = [], colMaxContent = [];
@@ -364,7 +380,7 @@ namespace PeachBrackets.Html.Dom
 
                 // Intrinsic (min/max-content) contributions for auto/min-content/max-content/fit-content columns.
                 (colMinContent, colMaxContent) =
-                    await MeasureColumnIntrinsics(g, placements, colDefs, colCount, contentWidth, columnGap, colLineNames);
+                    await MeasureColumnIntrinsics(g, placements, colDefs, colCount, contentWidth, columnGap, colLineNames, FixedAreaHeightOf);
 
                 // A vertical grid with an auto height has no inline space to fill: it is as long as its
                 // columns' max-content sizes (css-grid-2 section 11.1 with an indefinite available space).
@@ -609,7 +625,7 @@ namespace PeachBrackets.Html.Dom
                     {
                         var last = justify.IndexOf("last", StringComparison.OrdinalIgnoreCase) >= 0;
                         inlineBaselineItems.Add((p, last));
-                        justify = last ? Keywords.End : Keywords.Start;
+                        justify = ColumnBaselineFallback(p.Box, last);
                     }
 
                     var context = BuildChildSubgridContext(p, columns, rows, adoptRows: true, colLineNames, rowLineNames, columnGap, rowGap);
@@ -630,7 +646,7 @@ namespace PeachBrackets.Html.Dom
                 if (!_vertical)
                 {
                     AlignRowBaselines(placements);
-                    AlignColumnBaselines(inlineBaselineItems, _rtl);
+                    AlignColumnBaselines(inlineBaselineItems);
                 }
 
                 // ── Container size when auto.
@@ -1655,11 +1671,12 @@ namespace PeachBrackets.Html.Dom
         /// intrinsic column no longer collapses to zero.</summary>
         private async ValueTask<(double[] MinContent, double[] MaxContent)> MeasureColumnIntrinsics(
             Canvas g, List<Placement> placements, IReadOnlyList<GridTrackSize> colDefs, int colCount,
-            double contentWidth, double gap, Dictionary<string, List<int>> colLineNames)
+            double contentWidth, double gap, Dictionary<string, List<int>> colLineNames, Func<Placement, double?>? areaHeight = null)
             {
             var min = new double[colCount];
             var max = new double[colCount];
             if (!colDefs.Any(d => IsIntrinsic(d) || d.Kind == GridTrackKind.Flex)) return (min, max);
+            var columnBaselineGroups = new Dictionary<(int Column, bool Last, bool Left), List<(CssBox Box, double Width)>>();
 
             // Single-column items contribute directly to their column.
             // A subgrid item is skipped: measuring it here (with no SubgridContext) would lay it out as an
@@ -1673,12 +1690,29 @@ namespace PeachBrackets.Html.Dom
             {
                 var (mn, mx) = _vertical
                     ? await MeasureInlineContributionVertical(g, p.Box)
-                    : await MeasureItemContribution(g, p.Box);
-                if (!_vertical && await TransferredFromFixedRows(g, p) is { } transferred) (mn, mx) = (transferred, transferred);
+                    : IsOrthogonalAutoWidth(p.Box)
+                        ? await MeasureOrthogonalContribution(g, p.Box, areaHeight?.Invoke(p))
+                        : await MeasureItemContribution(g, p.Box);
+                if (!_vertical && !IsOrthogonalAutoWidth(p.Box) && await TransferredFromFixedRows(g, p) is { } transferred) (mn, mx) = (transferred, transferred);
                 if (HasAutoMinimum(colDefs[p.ColStart]))
                     mn = _vertical ? AutoMinimumOfVertical(p.Box, mn, contentWidth) : AutoMinimumOf(p.Box, mn, contentWidth);
                 min[p.ColStart] = Math.Max(min[p.ColStart], mn);
                 max[p.ColStart] = Math.Max(max[p.ColStart], mx);
+
+                // A baseline-aligned item shares its column with the rest of its group, which the column has to be wide enough to hold
+                // (css-grid-1 section 6.6): the furthest baseline from one edge plus the furthest from the other.
+                if (!_vertical && BaselineKind(LogicalizePhysicalKeyword(ResolveSelfAlignment(p.Box.JustifySelf.ToString(), _gridBox.JustifyItems.ToString()))) is { } columnLast)
+                {
+                    var key = (p.ColStart, columnLast, ColumnBaselineEdgeIsLeft(p.Box, columnLast));
+                    (columnBaselineGroups.TryGetValue(key, out var group) ? group : columnBaselineGroups[key] = []).Add((p.Box, mx));
+                }
+            }
+
+            foreach (var ((column, groupLast, _), members) in columnBaselineGroups)
+            {
+                var needed = ColumnBaselineGroupSize(members, groupLast);
+                min[column] = Math.Max(min[column], needed);
+                max[column] = Math.Max(max[column], needed);
             }
 
             // Spanning items: distribute the contribution the spanned tracks don't already cover across the
@@ -1975,6 +2009,28 @@ namespace PeachBrackets.Html.Dom
 
         /// <summary>An item's outer min-content and max-content width contributions (content width, plus its
         /// own margin/border/padding). An explicit width supplies both.</summary>
+        /// <summary>Whether an item of a horizontal grid is in a vertical writing mode (an orthogonal flow) with an auto width: its width in the
+        /// column axis is the block size its content takes, not a horizontal text measure (css-writing-modes-4 section 7.3).</summary>
+        private bool IsOrthogonalAutoWidth(CssBox box) =>
+            !_vertical && box.WritingMode.Value.IsVertical() && box.Width == Keywords.Auto;
+
+        /// <summary>The margin-box width of an orthogonal item laid out at the inline size (physical height) its area gives it: its lines stack across,
+        /// so this is its content's block size.</summary>
+        private async ValueTask<(double Min, double Max)> MeasureOrthogonalContribution(Canvas g, CssBox box, double? areaHeight)
+        {
+            var savedHeight = box.Height;
+            if (areaHeight is { } h && box.Height == Keywords.Auto)
+                box.Height = FormatLayoutUnits(Math.Max(0, h - box.ActualMarginTop - box.ActualMarginBottom - box.ActualBoxSizeIncludedHeight), box);
+
+            box.Location = new PaintPoint(_gridBox.ClientLeft, _gridBox.ClientTop);
+            box.ActualBottom = box.Location.Y;
+            box.RectanglesReset();
+            await PerformLayoutBlockified(g, box);
+            var width = box.ActualBoxSizingWidth + box.ActualMarginLeft + box.ActualMarginRight;
+            box.Height = savedHeight;
+            return (width, width);
+        }
+
         private static async ValueTask<(double Min, double Max)> MeasureItemContribution(Canvas g, CssBox box)
         {
             var outerExtra = box.ActualMarginLeft + box.ActualMarginRight;
@@ -2222,7 +2278,7 @@ namespace PeachBrackets.Html.Dom
             box.AlgorithmicDefiniteHeight = null;
 
             var cellContentWidth = Math.Max(0, cellWidth - HorizontalMarginBorderPadding(box));
-            if (autoWidth)
+            if (autoWidth && !(IsOrthogonalAutoWidth(box) && !stretchWidth))
             {
                 // An auto-width block would fill its containing block, so a grid item's width must be pinned:
                 // stretch → the cell's content width; otherwise its fit-content size clamped to the cell.
@@ -2416,36 +2472,6 @@ namespace PeachBrackets.Html.Dom
         private static bool IsBaselineAlign(string value) =>
             !string.IsNullOrEmpty(value)
             && value.IndexOf(Keywords.Baseline, StringComparison.OrdinalIgnoreCase) >= 0;
-
-        /// <summary>
-        /// Aligns the single-column items of each column whose used <c>justify-self</c>/<c>justify-items</c> is
-        /// <c>baseline</c> (css-align-3 §9.3, inline axis in a horizontal writing mode): the group shares a first
-        /// baseline at the largest start margin edge among them, so their border boxes' start edges line up,
-        /// and a <c>last baseline</c> group likewise shares the end edge. <see cref="PlaceItemInCell"/> already
-        /// put each item at its own start (or end) edge, so this only moves an item inwards by the difference.
-        /// </summary>
-        private static void AlignColumnBaselines(List<(Placement Placement, bool Last)> items, bool rtl)
-        {
-            foreach (var group in items.GroupBy(i => (i.Placement.ColStart, i.Last)))
-            {
-                var boxes = group.Select(i => i.Placement.Box).ToList();
-                if (boxes.Count < 2) continue;   // a lone item already sits on its own baseline
-
-                // A last-baseline group lines up on the inline end edge, which is the left one under rtl.
-                if (group.Key.Last != rtl)
-                {
-                    var margin = boxes.Max(b => b.ActualMarginRight);
-                    foreach (var b in boxes)
-                        if (margin - b.ActualMarginRight is > 0.01 and var dx) b.OffsetLeft(-dx);
-                }
-                else
-                {
-                    var margin = boxes.Max(b => b.ActualMarginLeft);
-                    foreach (var b in boxes)
-                        if (margin - b.ActualMarginLeft is > 0.01 and var dx) b.OffsetLeft(dx);
-                }
-            }
-        }
 
         /// <summary>The start offset of an item within its cell for a start/end/center alignment (a stretched
         /// or start-aligned item is at 0). Baseline is placed at start here, then <see cref="AlignRowBaselines"/>

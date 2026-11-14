@@ -743,7 +743,7 @@ namespace PeachBrackets.Html.Dom
 
                 var last = justify.IndexOf("last", StringComparison.OrdinalIgnoreCase) >= 0;
                 inlineBaselines[item.Box] = (new Placement { Box = item.Box, ColStart = item.Start }, last);
-                return last ? Keywords.End : Keywords.Start;
+                return ColumnBaselineFallback(item.Box, last);
             }
 
             // The first and last lanes of a subgrid start inside its own margin, border and padding (css-grid-2 9.2).
@@ -845,7 +845,7 @@ namespace PeachBrackets.Html.Dom
                 Shift(item.Box, 0, (fillReverse ? stackEnd - top - outer - top : 0) + rangeOffset);
             }
 
-            if (!_vertical) AlignColumnBaselines([.. inlineBaselines.Values], _rtl);
+            if (!_vertical) AlignColumnBaselines([.. inlineBaselines.Values]);
 
             var area = new Track { Def = GridTrackSize.Auto, Size = stackEnd, Position = origin };
             StateAbsolutelyPositionedAreas(columns, [area], explicitColDefs.Count, 1, colLineNames, rowLineNames);
