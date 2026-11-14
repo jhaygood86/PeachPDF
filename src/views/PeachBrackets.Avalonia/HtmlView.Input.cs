@@ -156,7 +156,8 @@ public sealed partial class HtmlView
 
         if (_pressedType == PointerType.Touch)
         {
-            if (_dragged)
+            // While two fingers pinch, the pinch carries the page.
+            if (_dragged && !_pinching)
                 e.Handled |= TouchDragBy(_lastPoint.X - position.X, _lastPoint.Y - position.Y);
         }
         else if (_selecting && TryLocate(position, out var page, out var x, out var y))

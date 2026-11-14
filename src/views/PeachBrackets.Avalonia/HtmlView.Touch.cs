@@ -27,6 +27,7 @@ public sealed partial class HtmlView
 
     private double _pinchStartZoom;
     private bool _pinching;
+    private global::Avalonia.Point _pinchLastOrigin;
 
     private double _lastTapX;
     private double _lastTapY;
@@ -274,7 +275,14 @@ public sealed partial class HtmlView
             // A second finger ends what the first one was doing.
             EndFling(settle: false);
             _selecting = false;
+            _pinchLastOrigin = origin;
         }
+
+        // The fingers moving together carry the page with them: what was under the focal point goes with it, and the zoom then keeps it there.
+        var moved = origin - _pinchLastOrigin;
+        _pinchLastOrigin = origin;
+        if (!IsAutoHeight && (moved.X != 0 || moved.Y != 0))
+            ScrollTo(_scrollX - (moved.X * _dpi), _scrollY - (moved.Y * _dpi));
 
         SetZoom(TouchMath.PinchZoom(_pinchStartZoom, scale), origin);
     }

@@ -159,6 +159,40 @@ public class TouchTests
     }
 
     [Fact]
+    public async Task MovingTheFocalPointOfAPinchPansThePageWithIt()
+    {
+        await HeadlessSession.Run(async () =>
+        {
+            var (window, view) = await HeadlessSession.ShowAsync(Tall);
+            Assert.True(view.TouchDragBy(0, 600));
+            static void Pinch(HtmlView view, double scale, Point origin) =>
+                view.RaiseEvent(new global::Avalonia.Input.PinchEventArgs(scale, origin) { RoutedEvent = global::Avalonia.Input.InputElement.PinchEvent });
+
+            // The page position under a point of the view.
+            (double X, double Y) Under(Point p) => ((view.ScrollPixels.X + p.X) / view.Zoom, (view.ScrollPixels.Y + p.Y) / view.Zoom);
+
+            var start = new Point(200, 150);
+            var under = Under(start);
+            Pinch(view, 1.5, start);
+            Assert.Equal(1.5, view.Zoom, 3);
+            Assert.Equal(under.Y, Under(start).Y, 1);
+
+            // The fingers move up and to the left while the spread stays: the same page position goes with them.
+            var moved = new Point(150, 100);
+            Pinch(view, 1.5, moved);
+            var after = Under(moved);
+            Assert.Equal(under.X, after.X, 1);
+            Assert.Equal(under.Y, after.Y, 1);
+
+            // And it zooms about the new focal point too.
+            Pinch(view, 2, new Point(120, 90));
+            Assert.Equal(2, view.Zoom, 3);
+            Assert.Equal(under.Y, Under(new Point(120, 90)).Y, 1);
+            window.Close();
+        });
+    }
+
+    [Fact]
     public async Task ADoubleTapZoomsInUnlessTheDocumentForbidsIt()
     {
         await HeadlessSession.Run(async () =>
