@@ -20,6 +20,9 @@ public sealed partial class HtmlView
     // The document cursor whose image is still being loaded, so the pointer can be shown when it arrives (cleared when a keyword pointer is shown).
     private DocumentCursor? _pendingImageCursor;
 
+    // Counts the times the pointers were let go of, so a load that finishes after that (or after the view left the tree) can tell and throw away what it made.
+    private int _cursorGeneration;
+
     // Shows the first image of a document's cursor that has loaded. True when one is shown; false when none is usable yet (the keyword's pointer
     // stands in, and a load that is under way shows the image when it finishes) or none can be.
     private bool TryShowImageCursor(DocumentCursor cursor)
@@ -30,7 +33,7 @@ public sealed partial class HtmlView
             if (!_imageCursors.TryGetValue(key, out var made))
             {
                 _pendingImageCursor = cursor;
-                _ = LoadCursorImagesAsync(cursor);
+                Forget(LoadCursorImagesAsync(cursor));
 
                 // A load that finished at once (a data: address) has already shown its image.
                 return _pendingImageCursor is null && _shownImageKey == key && _shownCursor is null;
@@ -59,11 +62,22 @@ public sealed partial class HtmlView
     private async Task LoadCursorImagesAsync(DocumentCursor cursor)
     {
         var allowNetwork = AllowNetworkAccess;
+        var generation = _cursorGeneration;
         foreach (var image in cursor.Images)
         {
             var key = CursorKey(image);
-            if (!_imageCursors.ContainsKey(key))
-                _imageCursors[key] = await TryCreateCursorAsync(image, allowNetwork);
+            if (_imageCursors.ContainsKey(key))
+                continue;
+
+            var made = await TryCreateCursorAsync(image, allowNetwork);
+            if (generation != _cursorGeneration || !_attached)
+            {
+                // The pointers were let go of (or the view left the tree) while this one loaded: nothing holds it, so it is let go of here.
+                made?.Dispose();
+                return;
+            }
+
+            _imageCursors[key] = made;
         }
 
         if (ReferenceEquals(_pendingImageCursor, cursor))
@@ -75,6 +89,7 @@ public sealed partial class HtmlView
 
     internal void ReleaseCursors()
     {
+        _cursorGeneration++;
         _pendingImageCursor = null;
         if (_shownImageKey is not null)
             Cursor = null;
@@ -110,8 +125,9 @@ public sealed partial class HtmlView
             // The hotspot is in the image's own pixels; a .cur file carries one of its own for when the style gives none.
             var own = CursorImages.CurHotspot(bytes);
             var (hotX, hotY) = CursorImages.Hotspot(image.HotspotX ?? own?.X, image.HotspotY ?? own?.Y, source.Width, source.Height, width, height);
+            // The platform copies the pixels when it makes the pointer, so the bitmap is let go of here either way.
             if (width == source.Width && height == source.Height)
-                return new Cursor(new Bitmap(new MemoryStream(bytes, writable: false)), new PixelPoint(hotX, hotY));
+                return new Cursor(decoded, new PixelPoint(hotX, hotY));
 
             using var scaled = decoded.CreateScaledBitmap(new PixelSize(width, height));
             return new Cursor(scaled, new PixelPoint(hotX, hotY));
@@ -128,23 +144,7 @@ public sealed partial class HtmlView
         if (CursorImages.TryDecodeDataUri(uri, out var data))
             return data.Length <= MaxCursorBytes ? data : null;
 
-        var address = new Uri(uri);
-        if (address.IsFile)
-        {
-            var info = new FileInfo(address.LocalPath);
-            return info.Exists && info.Length <= MaxCursorBytes ? await File.ReadAllBytesAsync(address.LocalPath) : null;
-        }
-
-        if (!allowNetwork)
-            return null;
-
-        using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
-        client.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", HostResourceLoader.UserAgent);
-        using var response = await client.GetAsync(address, HttpCompletionOption.ResponseHeadersRead);
-        if (!response.IsSuccessStatusCode || response.Content.Headers.ContentLength > MaxCursorBytes)
-            return null;
-
-        var bytes = await response.Content.ReadAsByteArrayAsync();
-        return bytes.Length <= MaxCursorBytes ? bytes : null;
+        // Through the host's loader, as everything else the view fetches: its network policy, shared client and timeouts apply. More than the limit is refused.
+        return await HostBytes.ReadAsync(new Uri(uri), allowNetwork, MaxCursorBytes);
     }
 }

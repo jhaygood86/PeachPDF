@@ -1,4 +1,3 @@
-using System.Threading;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input.Platform;
@@ -35,6 +34,9 @@ public sealed partial class HtmlView : Control
     private const double MinZoom = 0.5;
     private const double MaxZoom = 4;
 
+    // The width an auto-height view lays its document out at when its parent gives it no width to fill.
+    internal const double UnconstrainedWidth = 400;
+
     // The document is stepped, restyled and edited on the UI thread and painted on the render thread: one at a time.
     private readonly Lock _documentLock = new();
 
@@ -54,11 +56,17 @@ public sealed partial class HtmlView : Control
     private bool _attached;
     private DispatcherTimer? _reflowTimer;
 
+    // Bumped whenever the document is replaced or let go of, so work that was waiting on the old one can tell, and ends without touching the new one.
+    private int _documentEpoch;
+    private CancellationTokenSource? _loadCancellation;
+
     static HtmlView()
     {
         FocusableProperty.OverrideDefaultValue<HtmlView>(true);
         ClipToBoundsProperty.OverrideDefaultValue<HtmlView>(true);
         AffectsRender<HtmlView>(PageBackgroundProperty);
+        WireTextInput();
+        PageBackgroundProperty.Changed.AddClassHandler<HtmlView>((view, _) => view.MarkTilesStale());
         HtmlProperty.Changed.AddClassHandler<HtmlView>((view, _) => view.OnContentChanged());
         SourceProperty.Changed.AddClassHandler<HtmlView>((view, _) => view.OnContentChanged());
         SelectionColorProperty.Changed.AddClassHandler<HtmlView>((view, _) => view.OnOptionsChanged());
@@ -238,10 +246,9 @@ public sealed partial class HtmlView : Control
             if (ReferenceEquals(_fontSet, value))
                 return;
 
+            // The document that is showing keeps painting with the context it was laid out with; the next load makes a context for the new fonts and
+            // takes it in together with the document it lays out (see Adopt), so the render thread never finds the context missing or disposed.
             _fontSet = value;
-            var old = _context;
-            _context = null;
-            RetireContext(old);
             OnOptionsChanged();
         }
     }
@@ -296,7 +303,7 @@ public sealed partial class HtmlView : Control
             return;
 
         if (TopLevel.GetTopLevel(this)?.Clipboard is { } clipboard)
-            _ = clipboard.SetTextAsync(text);
+            Forget(clipboard.SetTextAsync(text));
     }
 
     /// <summary>Selects all the text.</summary>
@@ -348,6 +355,7 @@ public sealed partial class HtmlView : Control
     private void OnContentChanged()
     {
         _loadVersion++;
+        CancelLoad();
         if (_attached)
             StartReload();
     }
@@ -383,19 +391,25 @@ public sealed partial class HtmlView : Control
         _attached = false;
         ActualThemeVariantChanged -= OnThemeChanged;
         _loadVersion++;
+        CancelLoad();
         _reflowTimer?.Stop();
         UntrackScaling();
         StopAnimationLoop();
         ReleaseCursors();
+        ResetInteractionState();
+        var context = _context;
         lock (_documentLock)
         {
             ResetTiles();
-            _document?.Dispose();
-            _document = null;
+            ReleaseDocument();
+            _context = null;
         }
 
-        RetireContext(_context);
-        _context = null;
+        _accessibilityTree = null;
+        _inputClient = null;
+        _clientOffered = false;
+        ReleaseMeasuringCache();
+        RetireContext(context);
         base.OnDetachedFromVisualTree(e);
     }
 
@@ -419,9 +433,22 @@ public sealed partial class HtmlView : Control
         _topLevel = null;
     }
 
-    private void OnScalingChanged(object? sender, EventArgs e)
+    private void OnScalingChanged(object? sender, EventArgs e) => ApplyScaling(_topLevel?.RenderScaling ?? _dpi);
+
+    // The display scale changed (the window moved to another monitor): the scroll offset is in device pixels, so it is kept at the same place in the page.
+    internal void ApplyScaling(double newDpi)
     {
-        _dpi = _topLevel?.RenderScaling ?? _dpi;
+        if (newDpi <= 0)
+            return;
+
+        if (newDpi != _dpi && _dpi > 0)
+        {
+            var ratio = newDpi / _dpi;
+            _scrollX *= ratio;
+            _scrollY *= ratio;
+        }
+
+        _dpi = newDpi;
         if (_attached)
             QueueReflow();
     }
@@ -433,7 +460,9 @@ public sealed partial class HtmlView : Control
             return base.MeasureOverride(availableSize);
 
         // As tall as the document at the width offered; a document that has not been laid out for this width yet is, and the control measures again.
-        var width = double.IsInfinity(availableSize.Width) ? Math.Max(Bounds.Width, 1) : availableSize.Width;
+        // With no width to fill (a parent that does not limit it) the document is as wide as the control already is, or a page-like width when it has none yet,
+        // never one pixel.
+        var width = double.IsInfinity(availableSize.Width) ? (Bounds.Width > 1 ? Bounds.Width : UnconstrainedWidth) : availableSize.Width;
         if (_document is not null && Math.Abs(_loadedWidth - width) > 0.5 && _attached)
             QueueReflow();
 
@@ -481,19 +510,45 @@ public sealed partial class HtmlView : Control
     private HtmlViewRenderContext EnsureContext() =>
         _context ??= new HtmlViewRenderContext(_fontSet ?? HtmlViewFonts.Shared) { PixelsPerPoint = PixelsPerPoint };
 
+    // The context a load uses: the one the document is laid out with, or - when the fonts changed - a new one that is taken in with the document it loads.
+    private HtmlViewRenderContext ContextForLoad()
+    {
+        var fonts = _fontSet ?? HtmlViewFonts.Shared;
+        return _context is { } current && ReferenceEquals(current.Fonts, fonts) ? current : new HtmlViewRenderContext(fonts) { PixelsPerPoint = PixelsPerPoint };
+    }
+
+    private void CancelLoad()
+    {
+        _loadCancellation?.Cancel();
+        _loadCancellation = null;
+    }
+
     private async Task ReloadAsync()
     {
-        var version = ++_loadVersion;
+        if (Html is null && Source is null)
+        {
+            _loadVersion++;
+            CancelLoad();
+            ClearDocument();
+            return;
+        }
+
+        // Not laid out yet: nothing to load at, and a load that is under way for an earlier width is left alone.
         var widthDip = Bounds.Width;
-        if (widthDip < 1 || (Html is null && Source is null))
+        if (widthDip < 1)
             return;
 
-        var context = EnsureContext();
+        var version = ++_loadVersion;
+        CancelLoad();
+        var cancellation = _loadCancellation = new CancellationTokenSource();
+        var context = ContextForLoad();
         context.Configure(AllowNetworkAccess, DocumentBaseUri ?? Source);
         BeginLoad(context);
+        HtmlDocument? loaded = null;
+        Exception? failure = null;
         try
         {
-            var html = Html ?? await ReadSourceAsync(Source!, AllowNetworkAccess);
+            var html = Html ?? await ReadSourceAsync(Source!, AllowNetworkAccess, cancellation.Token);
             if (version != _loadVersion)
                 return;
 
@@ -515,30 +570,58 @@ public sealed partial class HtmlView : Control
                 return;
             }
 
-            Adopt(document, widthDip);
-            DocumentLoaded?.Invoke(this, EventArgs.Empty);
+            Adopt(document, context, widthDip);
+            loaded = document;
         }
         catch (Exception exception) when (version == _loadVersion && exception is not OutOfMemoryException)
         {
-            DocumentFailed?.Invoke(this, new HtmlLoadFailedEventArgs(exception));
+            failure = exception;
         }
         finally
         {
             EndLoad(context);
+
+            // A context made for a load that was not taken in (it failed or was overtaken) is let go of.
+            if (!ReferenceEquals(context, _context))
+                RetireContext(context);
+
+            if (ReferenceEquals(_loadCancellation, cancellation))
+                _loadCancellation = null;
+
+            cancellation.Dispose();
+        }
+
+        // The handlers run after the load is over, so a handler that throws is not taken for a load that failed.
+        if (loaded is not null)
+            RaiseGuarded(() => DocumentLoaded?.Invoke(this, EventArgs.Empty));
+        else if (failure is not null)
+            RaiseGuarded(() => DocumentFailed?.Invoke(this, new HtmlLoadFailedEventArgs(failure)));
+    }
+
+    // An application's handler that throws must not bring down the load that raised it (nothing observes the task of a load), nor be mistaken for a failure of it.
+    private static void RaiseGuarded(Action raise)
+    {
+        try
+        {
+            raise();
+        }
+        catch (Exception exception) when (exception is not OutOfMemoryException)
+        {
+            System.Diagnostics.Trace.TraceError("A handler of an HtmlView event threw: " + exception);
         }
     }
 
-    private static async Task<string> ReadSourceAsync(Uri source, bool allowNetwork)
-    {
-        if (source.IsFile)
-            return await File.ReadAllTextAsync(source.LocalPath);
+    private const long MaxSourceBytes = 64L * 1024 * 1024;
 
-        if (!allowNetwork)
+    private static async Task<string> ReadSourceAsync(Uri source, bool allowNetwork, CancellationToken cancellation)
+    {
+        if (!source.IsFile && !allowNetwork && source.Scheme is "http" or "https")
             throw new InvalidOperationException("The source is not a file and AllowNetworkAccess is off.");
 
-        using var client = new HttpClient();
-        client.DefaultRequestHeaders.UserAgent.ParseAdd(HostResourceLoader.UserAgent);
-        return await client.GetStringAsync(source);
+        var bytes = await HostBytes.ReadAsync(source, allowNetwork, MaxSourceBytes, cancellation)
+            ?? throw (source.IsFile ? new FileNotFoundException("The source file was not found.", source.LocalPath) : new IOException("The source could not be loaded: " + source));
+        using var reader = new StreamReader(new MemoryStream(bytes, writable: false), System.Text.Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
+        return await reader.ReadToEndAsync(cancellation);
     }
 
     // The part of a load that does not touch the control: it runs on a pool thread, so it uses only what it is handed.
@@ -575,18 +658,33 @@ public sealed partial class HtmlView : Control
         }
     }
 
-    // Takes a laid-out document in and shows it.
-    private void Adopt(HtmlDocument document, double widthDip)
+    // Takes a laid-out document in and shows it. The context it was laid out with goes in together with it, so the render thread always finds a document and
+    // the context that made it, and the old context is let go of only once nothing paints with it.
+    private void Adopt(HtmlDocument document, HtmlViewRenderContext context, double widthDip)
     {
         StopAnimationLoop();
+        ResetInteractionState();
+        HtmlViewRenderContext? old;
         lock (_documentLock)
         {
-            _document?.Dispose();
+            ReleaseDocument();
+            old = ReferenceEquals(_context, context) ? null : _context;
+            _context = context;
             _document = document;
             ResetTiles();
         }
 
+        if (old is not null)
+        {
+            ReleaseMeasuringCache();
+            RetireContext(old);
+        }
+
         _loadedWidth = widthDip;
+        _paintFailureReported = false;
+
+        // Images were chosen for the zoom of the old document; this one starts at 1 and is brought to the zoom the view is at.
+        _imagesChosenForZoom = 1;
         document.Selection.SelectionChanged += OnSelectionChanged;
         document.AnimationsWoke += OnAnimationsWoke;
         UpdateMetrics();
@@ -595,6 +693,47 @@ public sealed partial class HtmlView : Control
         ScrollTo(_scrollX, _scrollY);
         InvalidateContent();
         EnsureAnimationLoop();
+        QueueImageUpgrade();
+        if (_clientOffered)
+            UpdateTextInputClient();
+    }
+
+    // Lets go of the document the view shows, with the document lock held: nothing refers to it afterwards.
+    private void ReleaseDocument()
+    {
+        _documentEpoch++;
+        if (_document is not { } old)
+            return;
+
+        old.Selection.SelectionChanged -= OnSelectionChanged;
+        old.AnimationsWoke -= OnAnimationsWoke;
+        _document = null;
+        old.Dispose();
+    }
+
+    // Nothing is to be shown: the document is let go of and the view is empty again, as it is before anything has loaded.
+    private void ClearDocument()
+    {
+        StopAnimationLoop();
+        ResetInteractionState();
+        lock (_documentLock)
+        {
+            ResetTiles();
+            ReleaseDocument();
+            _pageTops = [];
+            _pageHeights = [];
+            _contentWidth = _contentHeight = 0;
+        }
+
+        _accessibilityTree = null;
+        LastAccessibilityDiff = null;
+        _loadedWidth = -1;
+        _scrollX = _scrollY = 0;
+        PublishContentHeight(0);
+        if (_clientOffered)
+            UpdateTextInputClient();
+
+        RequestPaint();
     }
 
     private void OnSelectionChanged(object? sender, PeachBrackets.Selection.SelectionChangedEventArgs e)
@@ -726,7 +865,7 @@ public sealed partial class HtmlView : Control
 
         // What came near is shown and what went away skipped, for an element with `content-visibility: auto`.
         if (document.ContentVisibilityNeedsUpdate)
-            _ = UpdateContentVisibilityAsync(document);
+            Forget(UpdateContentVisibilityAsync(document));
 
         // A scroll moves what an animation on a scroll or view timeline plays at.
         EnsureAnimationLoop();
@@ -754,7 +893,10 @@ public sealed partial class HtmlView : Control
     // Scrolls so a position in the document (DIPs from its top, at zoom 1) is at the top of the view.
     private void ScrollToDocumentY(double documentY) => ScrollTo(_scrollX, documentY * Scale);
 
-    /// <summary>Sets how far the page is zoomed, keeping the point <paramref name="focus"/> (in the control's coordinates) where it is.</summary>
+    /// <summary>
+    /// Sets how far the page is zoomed, keeping the point <paramref name="focus"/> (in the control's coordinates) where it is. It does nothing when
+    /// <see cref="IsZoomEnabled"/> is off or the control is as tall as its document (<see cref="HtmlViewScrollMode.Disabled"/>), which has no view to zoom.
+    /// </summary>
     /// <param name="zoom">the new zoom; it is held between 0.5 and 4</param>
     /// <param name="focus">the point to keep still, or <see langword="null"/> for the middle of the control</param>
     public void SetZoom(double zoom, Point? focus = null)
@@ -777,6 +919,7 @@ public sealed partial class HtmlView : Control
         UpdateViewport();
         RequestPaint();
         QueueImageUpgrade();
+        OnScrolledForAccessibility();
         ZoomChanged?.Invoke(this, EventArgs.Empty);
         ScrollChanged?.Invoke(this, EventArgs.Empty);
     }
@@ -824,6 +967,74 @@ public sealed partial class HtmlView : Control
 
     private void RaiseDocumentFailed(Exception exception) => DocumentFailed?.Invoke(this, new HtmlLoadFailedEventArgs(exception));
 
+    // Runs a task nobody awaits: what goes wrong in it is reported as a failure of the document, on the UI thread, instead of being lost in an unobserved task.
+    private void Forget(Task task)
+    {
+        if (task.IsCompletedSuccessfully)
+            return;
+
+        task.ContinueWith(
+            static (finished, state) =>
+            {
+                var view = (HtmlView)state!;
+                if (finished.Exception?.GetBaseException() is { } exception && exception is not OperationCanceledException)
+                    PostToUi(() => view.RaiseDocumentFailed(exception));
+            },
+            this,
+            CancellationToken.None,
+            TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
+            TaskScheduler.Default);
+    }
+
+    // One canvas to measure text on is kept for the work that asks for one again and again (a pointer move restyles, a caret is looked for). Work that overlaps
+    // gets a canvas of its own. UI thread only.
+    private MeasuringCanvas? _measuringCache;
+
+    internal MeasuringLease RentMeasuring(HtmlViewRenderContext context)
+    {
+        var cached = _measuringCache;
+        _measuringCache = null;
+        if (cached is not null && !ReferenceEquals(cached.Context, context))
+        {
+            cached.Dispose();
+            cached = null;
+        }
+
+        return new MeasuringLease(this, cached ?? new MeasuringCanvas(context));
+    }
+
+    private void ReturnMeasuring(MeasuringCanvas canvas)
+    {
+        // Kept only while it belongs to the context the view paints with.
+        if (_measuringCache is null && _attached && ReferenceEquals(canvas.Context, _context))
+            _measuringCache = canvas;
+        else
+            canvas.Dispose();
+    }
+
+    private void ReleaseMeasuringCache()
+    {
+        _measuringCache?.Dispose();
+        _measuringCache = null;
+    }
+
+    /// <summary>A canvas to measure on, handed back (not disposed) when the work that rented it is done.</summary>
+    internal readonly struct MeasuringLease : IDisposable
+    {
+        private readonly HtmlView _view;
+        private readonly MeasuringCanvas _canvas;
+
+        public MeasuringLease(HtmlView view, MeasuringCanvas canvas)
+        {
+            _view = view;
+            _canvas = canvas;
+        }
+
+        public PeachDrawing.Core.Canvas Canvas => _canvas.Canvas;
+
+        public void Dispose() => _view.ReturnMeasuring(_canvas);
+    }
+
     // The canvas a layout or a restyle measures text on: nothing is drawn on it.
     internal sealed class MeasuringCanvas : IDisposable
     {
@@ -832,9 +1043,12 @@ public sealed partial class HtmlView : Control
 
         public MeasuringCanvas(SkiaRenderContext context)
         {
+            Context = context;
             _surface = SKSurface.Create(new SKImageInfo(1, 1));
             _composer = new SkiaComposer(context, _surface, 1, 1);
         }
+
+        public SkiaRenderContext Context { get; }
 
         public PeachDrawing.Core.Canvas Canvas => _composer.Canvas;
 

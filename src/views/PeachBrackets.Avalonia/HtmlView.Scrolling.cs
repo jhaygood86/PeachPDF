@@ -141,7 +141,7 @@ public sealed partial class HtmlView
         if (_document is not { } document || _context is not { } context || document.GetElementAt(page, x, y) is not { } element)
             return false;
 
-        using var measuring = new MeasuringCanvas(context);
+        using var measuring = RentMeasuring(context);
         var result = document.ScrollTextArea(element, points, measuring.Canvas);
         if (result.Applied && result.DirtyRegions.Count > 0)
             InvalidateRegions(result.DirtyRegions);

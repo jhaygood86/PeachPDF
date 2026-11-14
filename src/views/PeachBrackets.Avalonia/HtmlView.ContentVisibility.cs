@@ -28,7 +28,7 @@ public sealed partial class HtmlView
                     return;
 
                 UpdateResult result;
-                using (var measuring = new MeasuringCanvas(context))
+                using (var measuring = RentMeasuring(context))
                     result = await document.UpdateContentVisibilityAsync(measuring.Canvas);
 
                 if (!ReferenceEquals(document, _document) || !result.Applied)
@@ -42,6 +42,12 @@ public sealed partial class HtmlView
                 InvalidateContent();
             }
             while (_contentVisibilityAgain && ReferenceEquals(document, _document));
+        }
+        catch (Exception exception) when (exception is not OutOfMemoryException)
+        {
+            // What a document that was replaced meanwhile throws is nothing the one that replaced it has to answer for.
+            if (ReferenceEquals(document, _document))
+                RaiseDocumentFailed(exception);
         }
         finally
         {

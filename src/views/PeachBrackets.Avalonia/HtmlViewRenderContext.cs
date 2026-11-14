@@ -19,6 +19,9 @@ internal sealed class HtmlViewRenderContext(FontSet fontSet) : SkiaRenderContext
         _baseUri = baseUri;
     }
 
+    /// <summary>The fonts this context was made for, so a load can tell whether a changed <c>FontSet</c> needs a new one.</summary>
+    public FontSet Fonts => FontSet;
+
     public override Uri? BaseUri => _baseUri;
 
     public override ValueTask<RNetworkResponse?> GetResourceStream(Uri uri) => HostResourceLoader.LoadAsync(uri, _allowNetwork);

@@ -181,8 +181,15 @@ public sealed partial class HtmlView
     protected override void OnPointerReleased(PointerReleasedEventArgs e)
     {
         base.OnPointerReleased(e);
+
+        // The press may have been ended by a reload while the pointer was still held: the capture is let go of all the same.
         if (!_pressed)
+        {
+            if (ReferenceEquals(e.Pointer.Captured, this))
+                e.Pointer.Capture(null);
+
             return;
+        }
 
         _pressed = false;
         e.Pointer.Capture(null);
@@ -259,9 +266,10 @@ public sealed partial class HtmlView
         if (IsAutoHeight)
             return;
 
+        // Only a wheel that moved the page is used up: at the top or the bottom it goes on to a scroll viewer around the view.
         var before = (_scrollX, _scrollY);
         ScrollTo(_scrollX + (dx * _dpi), _scrollY + (dy * _dpi));
-        e.Handled = before != (_scrollX, _scrollY) || true;
+        e.Handled = before != (_scrollX, _scrollY);
     }
 
     /// <inheritdoc />
@@ -323,7 +331,6 @@ public sealed partial class HtmlView
                 ScrollTo(_scrollX, double.MaxValue);
                 break;
             default:
-                _ = document;
                 return;
         }
 
@@ -406,7 +413,7 @@ public sealed partial class HtmlView
         if (link.Uri is { } uri)
         {
             if (PageLayout.IsLaunchable(uri) && Uri.TryCreate(uri, UriKind.Absolute, out var target) && TopLevel.GetTopLevel(this)?.Launcher is { } launcher)
-                _ = launcher.LaunchUriAsync(target);
+                Forget(launcher.LaunchUriAsync(target));
         }
         else if (link.Anchor is { } anchor && _document?.GetScrollOffset(anchor) is { } offset && _pageTops.Length > 0)
         {
@@ -428,14 +435,14 @@ public sealed partial class HtmlView
     {
         _pendingPointer = new PointerSample(page, x, y, pressed);
         _clearPending = false;
-        _ = PumpStateAsync();
+        Forget(PumpStateAsync());
     }
 
     private void RequestClear()
     {
         _pendingPointer = null;
         _clearPending = true;
-        _ = PumpStateAsync();
+        Forget(PumpStateAsync());
     }
 
     // One state change at a time: a restyle lays the document out again, and only the pointer's latest position matters.
@@ -445,12 +452,14 @@ public sealed partial class HtmlView
             return;
 
         _pumping = true;
+        HtmlDocument? working = null;
         try
         {
             while (_document is { } document && _context is { } context && (_pendingPointer is not null || _clearPending))
             {
+                working = document;
                 PeachBrackets.Updates.UpdateResult result;
-                using var measuring = new MeasuringCanvas(context);
+                using var measuring = RentMeasuring(context);
                 if (_pendingPointer is { } pointer)
                 {
                     _pendingPointer = null;
@@ -471,7 +480,9 @@ public sealed partial class HtmlView
         }
         catch (Exception exception) when (exception is not OutOfMemoryException)
         {
-            RaiseDocumentFailed(exception);
+            // What a document that was replaced meanwhile throws is nothing the one that replaced it has to answer for.
+            if (working is null || IsCurrent(working))
+                RaiseDocumentFailed(exception);
         }
         finally
         {
@@ -495,6 +506,8 @@ public sealed partial class HtmlView
         var maxScroll = (_contentHeight * Scale) - ViewportHeightPx;
         var thumbTop = maxScroll <= 0 ? 0 : travel * (_scrollY / maxScroll);
         var thumb = new global::Avalonia.Rect(Bounds.Width - 7, thumbTop, 5, thumbLength);
-        context.DrawRectangle(new SolidColorBrush(Color.FromArgb(110, 90, 90, 90)), null, new RoundedRect(thumb, 2.5));
+        context.DrawRectangle(IndicatorBrush, null, new RoundedRect(thumb, 2.5));
     }
+
+    private static readonly IBrush IndicatorBrush = new global::Avalonia.Media.Immutable.ImmutableSolidColorBrush(Color.FromArgb(110, 90, 90, 90));
 }

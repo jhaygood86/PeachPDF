@@ -138,6 +138,27 @@ public class PaintingTests
     }
 
     [Fact]
+    public async Task TheTilePathPaintsOnARenderThreadWithoutTouchingTheControl()
+    {
+        await HeadlessSession.Run(async () =>
+        {
+            var html = "<html><body style='margin:0'><div style='height:2600px;background:#00aa00'></div></body></html>";
+            var (window, view) = await HeadlessSession.ShowAsync(html, 300, 300, v => v.PageBackground = global::Avalonia.Media.Color.FromRgb(0, 0, 255));
+            view.TilesOnCpuForTests = true;
+
+            // Captured here, on the UI thread, as a render does; painted on a thread that is not allowed to read the control's properties.
+            var paint = view.CapturePaintForTests();
+            using var bitmap = new SKBitmap(300, 300);
+            using var canvas = new SKCanvas(bitmap);
+            await Task.Run(() => paint(canvas, 300, 300));
+
+            var pixel = bitmap.GetPixel(100, 100);
+            Assert.True(pixel.Green > 120 && pixel.Blue < 60, $"the tile of the page should be drawn, got {pixel}");
+            window.Close();
+        });
+    }
+
+    [Fact]
     public async Task ATileForARegionThatChangedIsDroppedAndTheOthersStay()
     {
         await HeadlessSession.Run(async () =>

@@ -17,8 +17,6 @@ public sealed partial class HtmlView
     // The blink time of the caret; Avalonia has no system setting for it, so it is the usual one.
     private const int CaretBlinkMilliseconds = 530;
 
-    private static readonly bool TextInputWired = WireTextInput();
-
     private FieldInputClient? _inputClient;
     private DispatcherTimer? _blink;
     private bool _caretShown = true;
@@ -30,7 +28,7 @@ public sealed partial class HtmlView
     // The input method asks the control for its client when it takes the keyboard focus, and the caret blinks only while the control has it.
     // The client is offered only while a text field of the page has the focus (so a soft keyboard is not raised by the view having the focus alone);
     // UpdateTextInputClient asks Avalonia to ask again whenever that changes.
-    private static bool WireTextInput()
+    private static void WireTextInput()
     {
         TextInputMethodClientRequestedEvent.AddClassHandler<HtmlView>((view, e) =>
         {
@@ -39,7 +37,6 @@ public sealed partial class HtmlView
         });
         GotFocusEvent.AddClassHandler<HtmlView>((view, _) => view.UpdateTextInputClient());
         LostFocusEvent.AddClassHandler<HtmlView>((view, _) => view.StopBlink());
-        return true;
     }
 
     /// <summary>Whether the page's focus is on a text field, which is when typed text goes to the page and not to its scrolling.</summary>
@@ -83,7 +80,7 @@ public sealed partial class HtmlView
         if (_context is not { } context)
             return;
 
-        using var measuring = new MeasuringCanvas(context);
+        using var measuring = RentMeasuring(context);
         var wasFocused = element.Equals(FocusedFieldElement());
         if (!wasFocused)
         {
@@ -119,7 +116,7 @@ public sealed partial class HtmlView
         if (_document is not { } document || _context is not { } context || _fieldAnchor is not { } anchor || document.GetEditState() is null)
             return;
 
-        using var measuring = new MeasuringCanvas(context);
+        using var measuring = RentMeasuring(context);
         if (document.GetEditIndexAt(measuring.Canvas, page, x, y) is { } index)
             AfterEdit(document.SetEditSelection(anchor, index), CurrentFieldText());
     }
@@ -332,7 +329,7 @@ public sealed partial class HtmlView
         if (name is null || _context is not { } context)
             return false;
 
-        using var measuring = new MeasuringCanvas(context);
+        using var measuring = RentMeasuring(context);
         var canvas = measuring.Canvas;
         var target = CaretMoves.LineMove(name, state.SelectionEnd,
             lines => document.GetEditIndexByLine(canvas, state.SelectionEnd, lines), index => document.GetEditLineRange(canvas, index));
@@ -445,7 +442,7 @@ public sealed partial class HtmlView
         if (_document is not { } document || _context is not { } context)
             return null;
 
-        using var measuring = new MeasuringCanvas(context);
+        using var measuring = RentMeasuring(context);
         if (document.GetEditPlace(measuring.Canvas) is not { } place || (uint)place.PageIndex >= (uint)_pageTops.Length)
             return null;
 

@@ -75,7 +75,7 @@ public sealed partial class HtmlView
                 return Show(BuildColorFlyout(document, element, state.Value));
 
             case "file":
-                _ = PickFilesAsync(document, element);
+                Forget(PickFilesAsync(document, element));
                 return true;
 
             default:
@@ -163,7 +163,11 @@ public sealed partial class HtmlView
                 IsEnabled = !option.Disabled,
                 Tag = option.Value,
             };
-            item.Click += (_, _) => AfterControlChange(document, document.SetValue(element, option.Value));
+            item.Click += (_, _) =>
+            {
+                if (IsCurrent(document))
+                    AfterControlChange(document, document.SetValue(element, option.Value));
+            };
             flyout.Items.Add(item);
         }
 
@@ -182,6 +186,9 @@ public sealed partial class HtmlView
                 return;
 
             flyout.Hide();
+            if (!IsCurrent(document))
+                return;
+
             if (withTime)
                 Show(BuildTimeFlyout(document, element, value, picked));
             else
@@ -210,6 +217,9 @@ public sealed partial class HtmlView
         ok.Click += (_, _) =>
         {
             flyout.Hide();
+            if (!IsCurrent(document))
+                return;
+
             var chosen = new TimeSpan((int)(hours.Value ?? 0), (int)(minutes.Value ?? 0), 0);
             var text = date is { } day ? PickerValues.FormatDateTime(value, day, chosen) : PickerValues.FormatTime(chosen);
             AfterControlChange(document, document.SetValue(element, text));
@@ -223,7 +233,8 @@ public sealed partial class HtmlView
         var (r, g, b) = PickerValues.ParseColor(value);
         var sliders = new[] { NewChannel(r), NewChannel(g), NewChannel(b) };
         var swatch = new Border { Height = 32, CornerRadius = new global::Avalonia.CornerRadius(3) };
-        void Update() => swatch.Background = new SolidColorBrush(Color.FromRgb((byte)sliders[0].Value, (byte)sliders[1].Value, (byte)sliders[2].Value));
+        byte Channel(int i) => (byte)Math.Clamp(Math.Round(sliders[i].Value), 0, 255);
+        void Update() => swatch.Background = new SolidColorBrush(Color.FromRgb(Channel(0), Channel(1), Channel(2)));
         foreach (var slider in sliders)
             slider.ValueChanged += (_, _) => Update();
 
@@ -239,7 +250,8 @@ public sealed partial class HtmlView
         ok.Click += (_, _) =>
         {
             flyout.Hide();
-            AfterControlChange(document, document.SetValue(element, PickerValues.FormatColor((byte)sliders[0].Value, (byte)sliders[1].Value, (byte)sliders[2].Value)));
+            if (IsCurrent(document))
+                AfterControlChange(document, document.SetValue(element, PickerValues.FormatColor(Channel(0), Channel(1), Channel(2))));
         };
         return flyout;
 
@@ -271,7 +283,8 @@ public sealed partial class HtmlView
         }
         catch (Exception exception) when (exception is not OutOfMemoryException)
         {
-            RaiseDocumentFailed(exception);
+            if (IsCurrent(document))
+                RaiseDocumentFailed(exception);
         }
     }
 

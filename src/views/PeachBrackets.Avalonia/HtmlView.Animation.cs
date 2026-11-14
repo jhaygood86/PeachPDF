@@ -9,7 +9,6 @@ public sealed partial class HtmlView
     private bool _stepping;
     private bool _framePending;
     private readonly AnimationLogic.FrameClock _frameClock = new();
-    private MeasuringCanvas? _animationMeasuring;
 
     internal int FrameCount { get; private set; }
 
@@ -53,16 +52,6 @@ public sealed partial class HtmlView
             return;
 
         _animating = false;
-
-        // A step that is still finishing measures on this: it releases it when it is done.
-        if (!_stepping)
-            ReleaseMeasuring();
-    }
-
-    private void ReleaseMeasuring()
-    {
-        _animationMeasuring?.Dispose();
-        _animationMeasuring = null;
     }
 
     private void OnFrame(TimeSpan frameTime)
@@ -86,60 +75,67 @@ public sealed partial class HtmlView
 
         var time = _frameClock.Step(frameTime);
 
-        // What a frame that changes layout measures text on; one per run of the loop rather than one per frame.
-        _animationMeasuring ??= new MeasuringCanvas(context);
-
+        // What a frame that changes layout measures text on; the canvas is kept between frames, and handed back when the step has finished.
+        var measuring = RentMeasuring(context);
         // A property that moves or resizes boxes lays the document out again, which an asynchronous document may have to wait for: that frame finishes when the
         // layout does, with the painter leaving the surface alone until the new layout is in.
         // The tiles the frame repainted are dropped in the same hold of the lock as the step, so the render thread never paints a plan that has moved a box
         // between layers over tiles that still have it (or still lack it).
         ValueTask<AnimationFrame> step;
-        lock (_documentLock)
+        try
         {
-            step = document.AdvanceAnimationsAsync(time, _animationMeasuring.Canvas);
-            if (step.IsCompletedSuccessfully)
-                ApplyFrameToTiles(step.Result);
+            lock (_documentLock)
+            {
+                step = document.AdvanceAnimationsAsync(time, measuring.Canvas);
+                if (step.IsCompletedSuccessfully)
+                    ApplyFrameToTiles(step.Result);
+            }
+        }
+        catch
+        {
+            measuring.Dispose();
+            throw;
         }
 
         if (step.IsCompletedSuccessfully)
         {
+            measuring.Dispose();
             CompleteAnimationFrame(step.Result);
             return;
         }
 
-        _ = FinishAnimationFrameAsync(document, step);
+        Forget(FinishAnimationFrameAsync(document, step, measuring));
     }
 
-    private async Task FinishAnimationFrameAsync(HtmlDocument document, ValueTask<AnimationFrame> step)
+    private async Task FinishAnimationFrameAsync(HtmlDocument document, ValueTask<AnimationFrame> step, MeasuringLease measuring)
     {
         _stepping = true;
         try
         {
             var frame = await step;
-            if (ReferenceEquals(document, _document))
-            {
-                lock (_documentLock)
-                    ApplyFrameToTiles(frame);
 
-                CompleteAnimationFrame(frame);
-            }
-            else
-            {
-                StopAnimationLoop();
-            }
+            // A reload that came meanwhile took the document away (and started a loop of its own for the new one): this step ends without touching any of that.
+            if (!ReferenceEquals(document, _document))
+                return;
+
+            lock (_documentLock)
+                ApplyFrameToTiles(frame);
+
+            CompleteAnimationFrame(frame);
         }
         catch (Exception exception) when (exception is not OutOfMemoryException)
         {
+            // What a document that was let go of throws is not a failure of the one that replaced it.
+            if (!ReferenceEquals(document, _document))
+                return;
+
             StopAnimationLoop();
             RaiseDocumentFailed(exception);
         }
         finally
         {
             _stepping = false;
-
-            // The loop was stopped while the step finished.
-            if (!_animating)
-                ReleaseMeasuring();
+            measuring.Dispose();
         }
     }
 

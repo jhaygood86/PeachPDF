@@ -25,7 +25,7 @@ public sealed partial class HtmlView
     internal Task FocusIdle => _focusWork;
 
     // Runs focus changes one after another, so two quick key presses do not interleave their restyles.
-    private void QueueFocus(Func<Task> change) => _focusWork = RunAfterAsync(_focusWork, change);
+    internal void QueueFocus(Func<Task> change) => _focusWork = RunAfterAsync(_focusWork, change);
 
     private async Task RunAfterAsync(Task before, Func<Task> work)
     {
@@ -38,13 +38,19 @@ public sealed partial class HtmlView
             // The earlier change failed and has been reported; this one does not depend on it.
         }
 
+        // A change that was waiting on a document a reload has since replaced fails quietly: the document it was for is gone.
+        var epoch = _documentEpoch;
         try
         {
             await work();
         }
-        catch (Exception exception) when (exception is not OutOfMemoryException)
+        catch (Exception exception) when (exception is not OutOfMemoryException && epoch == _documentEpoch)
         {
             RaiseDocumentFailed(exception);
+        }
+        catch (Exception exception) when (exception is not OutOfMemoryException)
+        {
+            // Stale.
         }
     }
 
@@ -119,7 +125,7 @@ public sealed partial class HtmlView
         if (isAnchor)
             ScrollToElement(uri[1..]);
         else if (PageLayout.IsLaunchable(uri) && Uri.TryCreate(uri, UriKind.Absolute, out var target) && TopLevel.GetTopLevel(this)?.Launcher is { } launcher)
-            _ = launcher.LaunchUriAsync(target);
+            Forget(launcher.LaunchUriAsync(target));
     }
 
     private async Task FocusNodeAsync(AccessibilityNode node, bool focusVisible)
@@ -128,7 +134,7 @@ public sealed partial class HtmlView
             return;
 
         UpdateResult result;
-        using (var measuring = new MeasuringCanvas(context))
+        using (var measuring = RentMeasuring(context))
             result = await document.FocusAsync(node, focusVisible, measuring.Canvas);
 
         if (ReferenceEquals(document, _document))
@@ -142,7 +148,7 @@ public sealed partial class HtmlView
             return;
 
         UpdateResult result;
-        using (var measuring = new MeasuringCanvas(context))
+        using (var measuring = RentMeasuring(context))
             result = await document.SetFocusAsync(null, false, measuring.Canvas);
 
         if (ReferenceEquals(document, _document))

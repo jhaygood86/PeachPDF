@@ -138,7 +138,7 @@ public sealed partial class HtmlView
         if (_context is not { } context || !ReferenceEquals(document, _document))
             return;
 
-        using var measuring = new MeasuringCanvas(context);
+        using var measuring = RentMeasuring(context);
         var result = await document.RestyleFormAsync(measuring.Canvas);
         if (ReferenceEquals(document, _document))
             ApplyUpdate(result);

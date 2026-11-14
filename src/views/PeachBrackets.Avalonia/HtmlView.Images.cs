@@ -27,7 +27,7 @@ public sealed partial class HtmlView
     private void OnUpgradeTick(object? sender, EventArgs e)
     {
         _upgradeTimer?.Stop();
-        _ = UpgradeImagesAsync();
+        Forget(UpgradeImagesAsync());
     }
 
     private async Task UpgradeImagesAsync()
@@ -48,9 +48,11 @@ public sealed partial class HtmlView
                 InvalidateContent();
             }
         }
-        catch (Exception exception) when (ReferenceEquals(document, _document))
+        catch (Exception exception) when (exception is not OutOfMemoryException)
         {
-            RaiseDocumentFailed(exception);
+            // What a document that was replaced meanwhile throws is nothing the one that replaced it has to answer for.
+            if (ReferenceEquals(document, _document))
+                RaiseDocumentFailed(exception);
         }
     }
 }

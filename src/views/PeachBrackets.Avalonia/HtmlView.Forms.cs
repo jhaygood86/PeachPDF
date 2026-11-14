@@ -65,7 +65,7 @@ public sealed partial class HtmlView
             return;
 
         UpdateResult result;
-        using (var measuring = new MeasuringCanvas(context))
+        using (var measuring = RentMeasuring(context))
             result = await document.ToggleDetailsAsync(element, measuring.Canvas);
 
         if (ReferenceEquals(document, _document))
@@ -88,7 +88,7 @@ public sealed partial class HtmlView
                 return;
 
             UpdateResult result;
-            using (var measuring = new MeasuringCanvas(context))
+            using (var measuring = RentMeasuring(context))
                 result = await document.SetOpenAsync(details, open, measuring.Canvas);
 
             if (ReferenceEquals(document, _document))
@@ -120,7 +120,7 @@ public sealed partial class HtmlView
             return;
 
         UpdateResult result;
-        using (var measuring = new MeasuringCanvas(context))
+        using (var measuring = RentMeasuring(context))
             result = await document.ResetFormAsync(element, measuring.Canvas);
 
         if (ReferenceEquals(document, _document))
@@ -134,7 +134,7 @@ public sealed partial class HtmlView
             return;
 
         UpdateResult result;
-        using (var measuring = new MeasuringCanvas(context))
+        using (var measuring = RentMeasuring(context))
             result = await document.SetFocusAsync(element, true, measuring.Canvas);
 
         if (ReferenceEquals(document, _document))
@@ -187,7 +187,7 @@ public sealed partial class HtmlView
             return;
 
         UpdateResult result;
-        using (var measuring = new MeasuringCanvas(context))
+        using (var measuring = RentMeasuring(context))
             result = await document.RestyleFormAsync(measuring.Canvas);
 
         if (ReferenceEquals(document, _document))
