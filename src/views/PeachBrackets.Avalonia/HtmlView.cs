@@ -441,14 +441,18 @@ public sealed partial class HtmlView : Control
         if (newDpi <= 0)
             return;
 
-        if (newDpi != _dpi && _dpi > 0)
+        lock (_documentLock)
         {
-            var ratio = newDpi / _dpi;
-            _scrollX *= ratio;
-            _scrollY *= ratio;
+            if (newDpi != _dpi && _dpi > 0)
+            {
+                var ratio = newDpi / _dpi;
+                _scrollX *= ratio;
+                _scrollY *= ratio;
+            }
+
+            _dpi = newDpi;
         }
 
-        _dpi = newDpi;
         if (_attached)
             QueueReflow();
     }
@@ -857,11 +861,28 @@ public sealed partial class HtmlView : Control
     // Tells the document which part of it is showing, so a fixed box stays where it was put in the view and a sticky one follows the top of it.
     private void UpdateViewport()
     {
+        lock (_documentLock)
+            PushViewport();
+
+        AfterViewportChange();
+    }
+
+    // Hands the document the viewport that the scroll and zoom now say. It is always called with the document lock held, in the same hold that changed the scroll
+    // or the zoom: a frame paints the page at the scroll it finds under that lock, and the boxes the viewport holds are placed from the viewport the document
+    // has, so the two must never be told apart (a fixed bar would be drawn a scroll step away from the page it is fixed to).
+    private void PushViewport()
+    {
         if (_document is not { } document || Bounds.Width <= 0 || Bounds.Height <= 0)
             return;
 
         var perPoint = Scale * PixelsPerPoint;
         document.SetViewport(new PeachDrawing.Core.Rect(_scrollX / perPoint, _scrollY / perPoint, Bounds.Width * _dpi / perPoint, Bounds.Height * _dpi / perPoint));
+    }
+
+    private void AfterViewportChange()
+    {
+        if (_document is not { } document)
+            return;
 
         // What came near is shown and what went away skipped, for an element with `content-visibility: auto`.
         if (document.ContentVisibilityNeedsUpdate)
@@ -882,9 +903,14 @@ public sealed partial class HtmlView : Control
         if (newX == _scrollX && newY == _scrollY)
             return;
 
-        _scrollX = newX;
-        _scrollY = newY;
-        UpdateViewport();
+        lock (_documentLock)
+        {
+            _scrollX = newX;
+            _scrollY = newY;
+            PushViewport();
+        }
+
+        AfterViewportChange();
         RequestPaint();
         ScrollChanged?.Invoke(this, EventArgs.Empty);
         OnScrolledForAccessibility();
@@ -911,12 +937,15 @@ public sealed partial class HtmlView : Control
         var at = focus ?? new Point(Bounds.Width / 2, Bounds.Height / 2);
         var newX = ViewportMath.ScrollAfterZoom(_scrollX, _zoom, newZoom, at.X * _dpi);
         var newY = ViewportMath.ScrollAfterZoom(_scrollY, _zoom, newZoom, at.Y * _dpi);
-        _zoom = newZoom;
-        _scrollX = newX;
-        _scrollY = newY;
-        _scrollX = ViewportMath.ClampScroll(_scrollX, _contentWidth * Scale, ViewportWidthPx);
-        _scrollY = ViewportMath.ClampScroll(_scrollY, _contentHeight * Scale, ViewportHeightPx);
-        UpdateViewport();
+        lock (_documentLock)
+        {
+            _zoom = newZoom;
+            _scrollX = ViewportMath.ClampScroll(newX, _contentWidth * Scale, ViewportWidthPx);
+            _scrollY = ViewportMath.ClampScroll(newY, _contentHeight * Scale, ViewportHeightPx);
+            PushViewport();
+        }
+
+        AfterViewportChange();
         RequestPaint();
         QueueImageUpgrade();
         OnScrolledForAccessibility();

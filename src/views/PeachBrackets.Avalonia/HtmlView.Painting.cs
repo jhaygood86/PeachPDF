@@ -165,6 +165,11 @@ public sealed partial class HtmlView
         // The context uploads each image to the hardware once, for the one the control draws with.
         context.GpuContext = gpu;
 
+        // What the frame shows is what the view says now, read with the lock held: the scroll, the zoom and the viewport the document was told are changed together
+        // under it, so the page and the boxes the viewport holds (a fixed bar, a stuck header) are always drawn for the same position. The scroll recorded when the
+        // frame was queued may be several steps behind the viewport by the time it is painted, which drew a fixed box that far from where it belongs.
+        state = state with { ScrollX = _scrollX, ScrollY = _scrollY, Scale = Scale };
+
         // Whole pixels, so a tile (or the page painted straight) lands on the pixel grid and text is not smeared.
         var originX = Math.Round(state.ScrollX);
         var originY = Math.Round(state.ScrollY);
