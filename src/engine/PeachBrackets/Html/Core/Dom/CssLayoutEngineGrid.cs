@@ -514,6 +514,7 @@ namespace PeachBrackets.Html.Dom
                     {
                         var natural = await MeasureItemHeight(g, p.Box, SpanWidthOf(p))
                             + (p.RowStart > 0 ? _rowGapHalf : 0) + (p.RowStart + p.RowSpan < rowCount ? _rowGapHalf : 0);
+                        natural = ClampToSpecifiedPercentage(p.Box, natural, rows[p.RowStart].Def);
                         var rowBase = expandsFlexRows && IsFlexTrack(rows[p.RowStart].Def)
                             ? FlexRowBaseContribution(rows[p.RowStart].Def, p.Box, natural)
                             : natural;
@@ -1694,6 +1695,14 @@ namespace PeachBrackets.Html.Dom
                         ? await MeasureOrthogonalContribution(g, p.Box, areaHeight?.Invoke(p))
                         : await MeasureItemContribution(g, p.Box);
                 if (!_vertical && !IsOrthogonalAutoWidth(p.Box) && await TransferredFromFixedRows(g, p) is { } transferred) (mn, mx) = (transferred, transferred);
+                // The items of a row subgrid sit in this grid's rows, so what a percentage height of theirs transfers through a ratio is a
+                // contribution to the column too (css-grid-2 section 9.5).
+                if (!_vertical && IsSubgridItem(p.Box) && ChildRowSubgrid(p.Box) && !ChildColSubgrid(p.Box))
+                {
+                    var viaSubgrid = await TransferredThroughRowSubgrid(g, p.Box, p.ColStart, p.RowStart);
+                    mn = Math.Max(mn, viaSubgrid);
+                    mx = Math.Max(mx, viaSubgrid);
+                }
                 if (HasAutoMinimum(colDefs[p.ColStart]))
                     mn = _vertical ? AutoMinimumOfVertical(p.Box, mn, contentWidth) : AutoMinimumOf(p.Box, mn, contentWidth);
                 min[p.ColStart] = Math.Max(min[p.ColStart], mn);
@@ -1864,7 +1873,9 @@ namespace PeachBrackets.Html.Dom
                             }
                         }
 
-                        var (mn, mx) = await MeasureItemContribution(g, q.Box);
+                        var (mn, mx) = IsOrthogonalAutoWidth(q.Box)
+                            ? await MeasureOrthogonalContribution(g, q.Box, DefiniteRowAreaHeight(q))
+                            : await MeasureItemContribution(g, q.Box);
                         var edge = (q.ColStart == 0 ? startInset : half) + (q.ColStart + qSpan >= span ? endInset : half);
                         into.Add(new SubgridContribution(q.Box, offset + q.ColStart, qSpan, mn, mx, edge));
                     }
@@ -1888,6 +1899,77 @@ namespace PeachBrackets.Html.Dom
 
                     return true;
                 }
+
+        /// <summary>The synchronous twin of <see cref="CollectSubgridColumnContributions"/> for the intrinsic walk.</summary>
+                private bool CollectSubgridColumnContributionsSync(
+                    Canvas g, int span, IReadOnlyList<IReadOnlyList<string>> inheritedNames, int offset, List<SubgridContribution> into, double parentGap = 0)
+                {
+                    if (!string.IsNullOrEmpty(_gridBox.GridTemplateAreas) && !_gridBox.GridTemplateAreas.Isi(Keywords.None)) return false;
+
+                    var flow = _gridBox.GridAutoFlow ?? Keywords.Row;
+                    if (flow.IndexOf(Keywords.Column, StringComparison.OrdinalIgnoreCase) >= 0) return false;
+
+                    var items = _gridBox.Boxes.Where(DomUtils.GeneratesFlexOrGridItem).ToList();
+                    var colNames = BuildLineNames(_gridBox.GridTemplateColumns.Value);
+                    AddInheritedNames(colNames, inheritedNames);
+                    var placements = PlaceItems(items, false, flow.IndexOf(Keywords.Dense, StringComparison.OrdinalIgnoreCase) >= 0, span,
+                        colNames, BuildLineNames(_gridBox.GridTemplateRows.Value));
+
+                    var half = SubgridGapHalf(_gridBox.FlexColumnGap, parentGap, 0);
+                    var startInset = _gridBox.ActualMarginLeft + _gridBox.ActualBorderLeftWidth + _gridBox.ActualPaddingLeft;
+                    var endInset = _gridBox.ActualMarginRight + _gridBox.ActualBorderRightWidth + _gridBox.ActualPaddingRight;
+
+                    var firstOfThis = into.Count;
+                    foreach (var q in placements)
+                    {
+                        if (q.ColStart >= span) continue;
+                        var qSpan = Math.Min(q.ColSpan, span - q.ColStart);
+
+                        if (IsSubgridItem(q.Box) && ChildColSubgrid(q.Box))
+                        {
+                            var nested = new CssLayoutEngineGrid(q.Box);
+                            var beforeNested = into.Count;
+                            if (nested.CollectSubgridColumnContributionsSync(
+                                    g, qSpan, SpannedLineNames(colNames, q.ColStart, qSpan), offset + q.ColStart, into, parentGap))
+                            {
+                                // The edges of this subgrid sit beyond the nested one's: they count for what the nested one puts on its own first and last lanes.
+                                for (var k = beforeNested; k < into.Count; k++)
+                                {
+                                    var held = into[k];
+                                    var extra = (q.ColStart == 0 && held.Start == offset ? startInset : 0)
+                                        + (q.ColStart + qSpan >= span && held.Start + held.Span == offset + span ? endInset : 0);
+                                    if (extra != 0) into[k] = held with { Edge = held.Edge + extra };
+                                }
+
+                                continue;
+                            }
+                        }
+
+                        var (mn, mx) = MeasureItemContributionSync(g, q.Box);
+                        var edge = (q.ColStart == 0 ? startInset : half) + (q.ColStart + qSpan >= span ? endInset : half);
+                        into.Add(new SubgridContribution(q.Box, offset + q.ColStart, qSpan, mn, mx, edge));
+                    }
+
+                    // A subgrid with nothing on an edge still has its own margin, border and padding there (css-grid-2 9.5, subgrid edge placeholders).
+                    var coversStart = false;
+                    var coversEnd = false;
+                    for (var k = firstOfThis; k < into.Count; k++)
+                    {
+                        coversStart |= into[k].Start == offset;
+                        coversEnd |= into[k].Start + into[k].Span == offset + span;
+                    }
+
+                    if (!coversStart && !coversEnd && span == 1)
+                        into.Add(new SubgridContribution(_gridBox, offset, 1, 0, 0, startInset + endInset));
+                    else
+                    {
+                        if (!coversStart) into.Add(new SubgridContribution(_gridBox, offset, 1, 0, 0, startInset));
+                        if (!coversEnd) into.Add(new SubgridContribution(_gridBox, offset + span - 1, 1, 0, 0, endInset));
+                    }
+
+                    return true;
+                }
+
 
         /// <summary>
         /// A grid container's min-content and max-content widths: the sum of its column track sizes plus
@@ -1942,6 +2024,23 @@ namespace PeachBrackets.Html.Dom
                 if (HasAutoMinimum(colDefs[p.ColStart])) mn = AutoMinimumOf(p.Box, mn, 0);
                 min[p.ColStart] = Math.Max(min[p.ColStart], mn);
                 max[p.ColStart] = Math.Max(max[p.ColStart], mx);
+            }
+
+            // A column subgrid's own items size the columns it spans (css-grid-2 section 9.5).
+            foreach (var p in placements.Where(p => IsSubgridItem(p.Box) && ChildColSubgrid(p.Box)))
+            {
+                var contributions = new List<SubgridContribution>();
+                if (!new CssLayoutEngineGrid(p.Box).CollectSubgridColumnContributionsSync(
+                        g, p.ColSpan, SpannedLineNames(BuildLineNames(colTemplate), p.ColStart, p.ColSpan), p.ColStart, contributions, gap))
+                    continue;
+
+                foreach (var c in contributions)
+                {
+                    if (c.Start >= colCount || c.Span != 1 || IsFixed(colDefs[c.Start])) continue;
+
+                    min[c.Start] = Math.Max(min[c.Start], c.Min + c.Edge);
+                    max[c.Start] = Math.Max(max[c.Start], c.Max + c.Edge);
+                }
             }
 
             foreach (var p in placements.Where(p => p.ColSpan > 1 && !IsSubgridItem(p.Box)))
@@ -2007,8 +2106,57 @@ namespace PeachBrackets.Html.Dom
             return (minContent + outerExtra, maxContent + outerExtra);
         }
 
-        /// <summary>An item's outer min-content and max-content width contributions (content width, plus its
-        /// own margin/border/padding). An explicit width supplies both.</summary>
+        /// <summary>The largest width a percentage height transfers (through an aspect ratio) for the items of a row subgrid and of the row subgrids nested
+        /// in it, whose rows are this grid's rows from <paramref name="rowOffset"/> on.</summary>
+        private async ValueTask<double> TransferredThroughRowSubgrid(Canvas g, CssBox subgrid, int column, int rowOffset)
+        {
+            var inner = new CssLayoutEngineGrid(subgrid);
+            var innerItems = subgrid.Boxes.Where(DomUtils.GeneratesFlexOrGridItem).ToList();
+            var innerColumns = Math.Max(1, subgrid.GridTemplateColumns.Value?.Tracks.Count ?? 1);
+            var widest = 0.0;
+            foreach (var q in inner.PlaceItems(innerItems, false, false, innerColumns, new Dictionary<string, List<int>>(), new Dictionary<string, List<int>>()))
+            {
+                if (IsSubgridItem(q.Box) && ChildRowSubgrid(q.Box) && !ChildColSubgrid(q.Box))
+                {
+                    widest = Math.Max(widest, await TransferredThroughRowSubgrid(g, q.Box, column, rowOffset + q.RowStart));
+                    continue;
+                }
+
+                var lifted = new Placement { Box = q.Box, ColStart = column, ColSpan = 1, RowStart = rowOffset + q.RowStart, RowSpan = q.RowSpan };
+                if (await TransferredFromFixedRows(g, lifted) is { } transferred) widest = Math.Max(widest, transferred);
+            }
+
+            return widest;
+        }
+
+        /// <summary>The height of an item's area in this grid when the grid's own height is definite and its rows are fixed lengths and <c>fr</c> tracks
+        /// (the flexible ones share what the fixed ones and the gaps leave), or null when the rows need the items to be sized.</summary>
+        private double? DefiniteRowAreaHeight(Placement q)
+        {
+            if (_vertical || !CssValueParser.IsValidLength(_gridBox.Height) || CssValueParser.DependsOnPercentage(_gridBox.Height)) return null;
+
+            var defs = ExpandTemplate(_gridBox.GridTemplateRows.Value);
+            if (defs.Count == 0 || q.RowStart + q.RowSpan > defs.Count) return null;
+
+            var gap = ParseGap(_gridBox.FlexRowGap, 0);
+            double fixedTotal = 0, flexTotal = 0;
+            foreach (var def in defs)
+            {
+                if (IsFixed(def)) fixedTotal += ResolveFixedLength(def, 0);
+                else if (def.Kind == GridTrackKind.Flex) flexTotal += def.Flex;
+                else return null;
+            }
+
+            var height = CssValueParser.ParseLength(_gridBox.Height, 0, _gridBox) + _gridBox.ActualBoxSizeIncludedHeight
+                - _gridBox.ActualPaddingTop - _gridBox.ActualPaddingBottom - _gridBox.ActualBorderTopWidth - _gridBox.ActualBorderBottomWidth;
+            var perFlex = flexTotal > 0 ? Math.Max(0, height - fixedTotal - gap * (defs.Count - 1)) / Math.Max(flexTotal, 1) : 0;
+
+            var total = gap * (q.RowSpan - 1);
+            for (var r = q.RowStart; r < q.RowStart + q.RowSpan; r++)
+                total += IsFixed(defs[r]) ? ResolveFixedLength(defs[r], 0) : defs[r].Flex * perFlex;
+            return total;
+        }
+
         /// <summary>Whether an item of a horizontal grid is in a vertical writing mode (an orthogonal flow) with an auto width: its width in the
         /// column axis is the block size its content takes, not a horizontal text measure (css-writing-modes-4 section 7.3).</summary>
         private bool IsOrthogonalAutoWidth(CssBox box) =>
@@ -2031,6 +2179,8 @@ namespace PeachBrackets.Html.Dom
             return (width, width);
         }
 
+        /// <summary>An item's outer min-content and max-content width contributions (content width, plus its
+        /// own margin/border/padding). An explicit width supplies both.</summary>
         private static async ValueTask<(double Min, double Max)> MeasureItemContribution(Canvas g, CssBox box)
         {
             var outerExtra = box.ActualMarginLeft + box.ActualMarginRight;
@@ -2107,6 +2257,22 @@ namespace PeachBrackets.Html.Dom
         /// <c>&lt;flex&gt;</c> is <c>minmax(auto, &lt;flex&gt;)</c>), so the items' minimum contribution is their automatic minimum size (§6.6,
         /// §12.5) with its exemptions, not their min-content. A <c>min-content</c>/<c>max-content</c> minimum takes the content contribution itself.
         /// </summary>
+        /// <summary>
+        /// An item's automatic minimum size in a row is the smaller of its content size and its specified size (css-grid-1 section 6.6). A percentage height
+        /// is definite for that when the row has a fixed growth limit, which it resolves against: <c>minmax(auto, 100px)</c> holds a <c>height: 100%</c>
+        /// item to 100px however tall its content is.
+        /// </summary>
+        private double ClampToSpecifiedPercentage(CssBox box, double natural, GridTrackSize rowDef)
+        {
+            if (rowDef.Kind != GridTrackKind.Minmax || rowDef.Min.Kind != GridTrackKind.Auto || !IsFixed(rowDef.Max)
+                || !box.Height.TrimEnd().EndsWith('%'))
+                return natural;
+
+            var limit = ResolveFixedLength(rowDef.Max, BlockContentSize);
+            var specified = CssValueParser.ParseLength(box.Height, limit, box) + box.ActualBoxSizeIncludedHeight + box.ActualMarginTop + box.ActualMarginBottom;
+            return Math.Min(natural, specified);
+        }
+
         private static bool HasAutoMinimum(GridTrackSize def) =>
             def.Kind is GridTrackKind.Flex or GridTrackKind.Auto
             || (def.Kind == GridTrackKind.Minmax && def.Min.Kind == GridTrackKind.Auto);
@@ -2269,6 +2435,7 @@ namespace PeachBrackets.Html.Dom
             var stretchHeight = autoHeight && IsStretch(align)
                 && !(align.Isi(Keywords.Normal) && natural is { Height: true });
             var restorePercentages = ResolveAreaPercentages(box, cellContentWidth0);
+            var restoreHeights = ResolveAreaHeights(box, cellHeight);
             var savedWidth = box.Width;
             var savedHeight = box.Height;
 
@@ -2339,6 +2506,7 @@ namespace PeachBrackets.Html.Dom
             if (autoWidth) box.Width = savedWidth;
             if (stretchHeight || pinHeight) box.Height = savedHeight;
             restorePercentages();
+            restoreHeights();
 
             // Position the item's margin box within the cell along each axis per the alignment keyword.
             var outerWidth = box.ActualBoxSizingWidth + box.ActualMarginLeft + box.ActualMarginRight;
@@ -2461,6 +2629,31 @@ namespace PeachBrackets.Html.Dom
                 box.Width = width;
                 box.MinWidth = minWidth;
                 box.MaxWidth = maxWidth;
+            };
+        }
+
+        /// <summary>The block-axis twin of <see cref="ResolveAreaPercentages"/>: a percentage <c>height</c>, <c>min-height</c> or <c>max-height</c> of an
+        /// item resolves against its grid area's height once the rows are sized (css-grid-1 section 6.2).</summary>
+        private static Action ResolveAreaHeights(CssBox box, double areaHeight)
+        {
+            var height = box.Height;
+            var minHeight = box.MinHeight;
+            var maxHeight = box.MaxHeight;
+
+            string Resolve(string value) =>
+                value.Contains('%') && CssValueParser.IsValidLength(value)
+                    ? FormatLayoutUnits(CssValueParser.ParseLength(value, areaHeight, box), box)
+                    : value;
+
+            box.Height = Resolve(height);
+            box.MinHeight = Resolve(minHeight);
+            box.MaxHeight = Resolve(maxHeight);
+
+            return () =>
+            {
+                box.Height = height;
+                box.MinHeight = minHeight;
+                box.MaxHeight = maxHeight;
             };
         }
 
@@ -2743,7 +2936,7 @@ namespace PeachBrackets.Html.Dom
                 if (p.RowSpan == 1)
                 {
                     if (!IsFixed(rows[p.RowStart].Def))
-                        rows[p.RowStart].Size = Math.Max(rows[p.RowStart].Size, natural);
+                        rows[p.RowStart].Size = Math.Max(rows[p.RowStart].Size, ClampToSpecifiedPercentage(box, natural, rows[p.RowStart].Def));
                 }
                 else
                 {

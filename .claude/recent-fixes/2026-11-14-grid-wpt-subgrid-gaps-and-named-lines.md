@@ -93,3 +93,17 @@ gutters in subgrids).
   lines stack the same way. A group makes its column wide enough for the furthest baseline from each edge (`ColumnBaselineGroupSize`).
 - Lost `column-fill-reverse-justify-items-indefinite-size-002` (grid lanes, tentative): its reference is a flex column with `align-items: baseline`, which puts
   vertical-rl items at the grid's start, so it contradicts the plain-grid test above; the plain-grid one was followed.
+
+## Subgrid tail: sizing against the area, intrinsic width through subgrids
+
+- A percentage `height`/`min-`/`max-height` of an item resolves against its grid area's height once the rows are sized (`ResolveAreaHeights`; width already
+  did). While the rows are sized, such an item in a `minmax(auto, <length>)` row is held to that growth limit (`ClampToSpecifiedPercentage`: the specified size
+  suggestion of its automatic minimum, css-grid-1 6.6), for plain and column-subgrid items alike.
+- `width: min-content`/`max-content` on a grid holding a column subgrid was 0: the synchronous intrinsic walk skipped subgrid items. It now takes the subgrid's own
+  items' contributions through `CollectSubgridColumnContributionsSync`, a twin of the async collector (no sync-over-async here: the walk runs inside a layout).
+- A row subgrid's items (nested ones too) transfer a percentage height of the parent's fixed rows through their aspect ratio into the column
+  (`TransferredThroughRowSubgrid`).
+- Not done: an orthogonal item inside a subgrid in the synchronous intrinsic walk is still measured as horizontal text (`standalone-axis-size-010..013`; the
+  walk cannot lay out), and the row-subgrid case where the row is `auto` and sized by a sibling (`row-subgrid-intrinsic-size-transfer-003`).
+- Lost three grid-lanes tests (`row-item-percentage-sizes-001`, `row-subgrid-extra-margin-001`, `row-track-sizing-002`) whose references are plain grids that now
+  resolve percentage heights; lanes does not match them in the first lane.
