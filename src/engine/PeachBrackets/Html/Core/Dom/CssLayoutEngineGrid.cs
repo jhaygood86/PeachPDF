@@ -1654,7 +1654,7 @@ namespace PeachBrackets.Html.Dom
             // A bare <c>fr</c> track is <c>minmax(auto, fr)</c>, so its base is its items' automatic minimum (§6.6, §12.5),
             // measured here beside the intrinsic tracks'. A spanning item is not (see below), as the simplified span
             // distribution has no flexible-track step.
-            foreach (var p in placements.Where(p => p.ColSpan == 1 && !IsSubgridItem(p.Box)
+            foreach (var p in placements.Where(p => p.ColSpan == 1 && !(IsSubgridItem(p.Box) && ChildColSubgrid(p.Box))
                          && (IsIntrinsic(colDefs[p.ColStart]) || colDefs[p.ColStart].Kind == GridTrackKind.Flex)))
             {
                 var (mn, mx) = _vertical
@@ -1669,7 +1669,7 @@ namespace PeachBrackets.Html.Dom
             // Spanning items: distribute the contribution the spanned tracks don't already cover across the
             // intrinsic columns they span. Single-column contributions are settled first (loop above) so the
             // "already covered" term reflects them.
-            foreach (var p in placements.Where(p => p.ColSpan > 1 && !IsSubgridItem(p.Box)))
+            foreach (var p in placements.Where(p => p.ColSpan > 1 && !(IsSubgridItem(p.Box) && ChildColSubgrid(p.Box))))
             {
                 var lastCol = Math.Min(p.ColStart + p.ColSpan, colCount);
                 var intrinsicCols = new List<int>();
@@ -1751,6 +1751,7 @@ namespace PeachBrackets.Html.Dom
                     var startInset = _gridBox.ActualMarginLeft + _gridBox.ActualBorderLeftWidth + _gridBox.ActualPaddingLeft;
                     var endInset = _gridBox.ActualMarginRight + _gridBox.ActualBorderRightWidth + _gridBox.ActualPaddingRight;
 
+                    var firstOfThis = into.Count;
                     foreach (var q in placements)
                     {
                         if (q.ColStart >= span) continue;
@@ -1759,14 +1760,43 @@ namespace PeachBrackets.Html.Dom
                         if (IsSubgridItem(q.Box) && ChildColSubgrid(q.Box))
                         {
                             var nested = new CssLayoutEngineGrid(q.Box);
+                            var beforeNested = into.Count;
                             if (await nested.CollectSubgridColumnContributions(
                                     g, qSpan, SpannedLineNames(colNames, q.ColStart, qSpan), offset + q.ColStart, into, parentGap))
+                            {
+                                // The edges of this subgrid sit beyond the nested one's: they count for what the nested one puts on its own first and last lanes.
+                                for (var k = beforeNested; k < into.Count; k++)
+                                {
+                                    var held = into[k];
+                                    var extra = (q.ColStart == 0 && held.Start == offset ? startInset : 0)
+                                        + (q.ColStart + qSpan >= span && held.Start + held.Span == offset + span ? endInset : 0);
+                                    if (extra != 0) into[k] = held with { Edge = held.Edge + extra };
+                                }
+
                                 continue;
+                            }
                         }
 
                         var (mn, mx) = await MeasureItemContribution(g, q.Box);
                         var edge = (q.ColStart == 0 ? startInset : half) + (q.ColStart + qSpan >= span ? endInset : half);
                         into.Add(new SubgridContribution(q.Box, offset + q.ColStart, qSpan, mn, mx, edge));
+                    }
+
+                    // A subgrid with nothing on an edge still has its own margin, border and padding there (css-grid-2 9.5, subgrid edge placeholders).
+                    var coversStart = false;
+                    var coversEnd = false;
+                    for (var k = firstOfThis; k < into.Count; k++)
+                    {
+                        coversStart |= into[k].Start == offset;
+                        coversEnd |= into[k].Start + into[k].Span == offset + span;
+                    }
+
+                    if (!coversStart && !coversEnd && span == 1)
+                        into.Add(new SubgridContribution(_gridBox, offset, 1, 0, 0, startInset + endInset));
+                    else
+                    {
+                        if (!coversStart) into.Add(new SubgridContribution(_gridBox, offset, 1, 0, 0, startInset));
+                        if (!coversEnd) into.Add(new SubgridContribution(_gridBox, offset + span - 1, 1, 0, 0, endInset));
                     }
 
                     return true;
@@ -1789,8 +1819,8 @@ namespace PeachBrackets.Html.Dom
             minWidth = maxWidth = 0;
             var colTemplate = _gridBox.GridTemplateColumns.Value;
             var rowTemplate = _gridBox.GridTemplateRows.Value;
-            if (colTemplate is { IsSubgrid: true } || rowTemplate is { IsSubgrid: true }
-                || colTemplate is { AutoRepeat: not GridAutoRepeatKind.None })
+            // A column subgrid takes its width from its parent's tracks; a row subgrid does not touch the columns this measures.
+            if (colTemplate is { IsSubgrid: true } || colTemplate is { AutoRepeat: not GridAutoRepeatKind.None })
                 return false;
             if (!string.IsNullOrEmpty(_gridBox.GridTemplateAreas) && !_gridBox.GridTemplateAreas.Isi(Keywords.None))
                 return false;
@@ -1804,7 +1834,11 @@ namespace PeachBrackets.Html.Dom
 
             // Under `grid-auto-flow: column` the rows are the fixed axis and the columns grow with the items.
             var explicitColDefs = colTemplate?.Tracks.ToList() ?? [];
-            var fixedCount = isColumnFlow ? Math.Max(1, rowTemplate?.Tracks.Count ?? 0) : Math.Max(1, explicitColDefs.Count);
+            // A row subgrid has as many rows as the parent rows it spans.
+            var rowCount = rowTemplate is { IsSubgrid: true }
+                ? Math.Max(1, ResolveAxis(_gridBox.GridRowStart, _gridBox.GridRowEnd, 1, new Dictionary<string, List<int>>()).Span)
+                : Math.Max(1, rowTemplate?.Tracks.Count ?? 0);
+            var fixedCount = isColumnFlow ? rowCount : Math.Max(1, explicitColDefs.Count);
             var placements = PlaceItems(items, isColumnFlow, flow.IndexOf(Keywords.Dense, StringComparison.OrdinalIgnoreCase) >= 0,
                 fixedCount, BuildLineNames(colTemplate), BuildLineNames(rowTemplate));
             var colCount = Math.Max(1, Math.Max(explicitColDefs.Count,

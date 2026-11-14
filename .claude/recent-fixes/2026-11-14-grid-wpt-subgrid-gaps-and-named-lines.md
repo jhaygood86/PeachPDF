@@ -17,3 +17,13 @@ css-grid module (pinned WPT, local fonts): 698 -> 710 passing.
 - Tests that asserted the old limits (`repeat(2, [x] 1fr)` invalid, `span foo` invalid) now assert the opposite.
 
 Not done: see the plan's remaining subgrid groups (orthogonal writing modes, standalone-axis size, repeat auto-fill in subgrids, intrinsic size transfer, baseline).
+
+## Subgrid sizing (same round, later)
+css-grid 710 -> 718 passing.
+- A *row*-only subgrid is an ordinary item for column sizing: `MeasureColumnIntrinsics` skipped every subgrid item, so a row subgrid with `grid-column: 2 / span 2` never made
+  its spanned `auto` column wide enough. Only column subgrids are measured through their items now (`auto-track-sizing-001`).
+- `MeasureIntrinsicWidth` (shrink-to-fit) no longer returns false for a row subgrid, and a column-flow grid that is a row subgrid has as many rows as the parent rows it spans
+  (`standalone-axis-size-002`, `-007`).
+- Subgrid edge placeholders: a subgrid with nothing on an edge still contributes its own margin, border and padding there, and a nested subgrid's contributions get this
+  level's edges added (`CollectSubgridColumnContributions`). `subgrid-no-items-on-edges-001` still fails: its container is an `inline-grid`, whose shrink-to-fit width
+  (`MeasureIntrinsicWidth`) skips subgrid items entirely.
