@@ -156,6 +156,35 @@ public class TextInputTests
     }
 
     [Fact]
+    public async Task TheClipboardShortcutsCopyCutAndPasteInTheFocusedField()
+    {
+        await HeadlessSession.Run(async () =>
+        {
+            var (window, view) = await FocusFieldAsync(FieldPoint, "hello world");
+            var clipboard = TopLevel.GetTopLevel(view)!.Clipboard!;
+            static KeyEventArgs Press(Key key) => new() { RoutedEvent = InputElement.KeyDownEvent, Key = key, KeyModifiers = KeyModifiers.Control };
+
+            // Ctrl+C and Ctrl+Insert copy the selection; both are used by the field.
+            view.Document!.SetEditSelection(0, 5);
+            await SetClipboard(clipboard, "unset");
+            Assert.True(view.HandleEditKey(Press(Key.C)));
+            Assert.True(await HeadlessSession.PumpUntilAsync(() => ClipboardText(clipboard).GetAwaiter().GetResult() == "hello"));
+
+            await SetClipboard(clipboard, "unset");
+            view.Document!.SetEditSelection(6, 11);
+            Assert.True(view.HandleEditKey(Press(Key.Insert)));
+            Assert.True(await HeadlessSession.PumpUntilAsync(() => ClipboardText(clipboard).GetAwaiter().GetResult() == "world"));
+
+            // Ctrl+X takes it out of the field, Ctrl+V puts the clipboard in at the caret.
+            Assert.True(view.HandleEditKey(Press(Key.X)));
+            Assert.True(await HeadlessSession.PumpUntilAsync(() => State(view).Text == "hello "));
+            Assert.True(view.HandleEditKey(Press(Key.V)));
+            Assert.True(await HeadlessSession.PumpUntilAsync(() => State(view).Text == "hello world"));
+            window.Close();
+        });
+    }
+
+    [Fact]
     public async Task APasswordIsNeverCopied()
     {
         await HeadlessSession.Run(async () =>
