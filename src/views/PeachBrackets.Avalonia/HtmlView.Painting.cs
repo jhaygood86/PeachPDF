@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using Avalonia;
 using Avalonia.Media;
 using Avalonia.Platform;
@@ -28,6 +29,19 @@ public sealed partial class HtmlView
     private int _framesPainted;
 
     internal int FramesPainted => Volatile.Read(ref _framesPainted);
+
+    /// <summary>Holds tiles the way a paint on the graphics hardware does, so a test can see which ones a change drops without a graphics context.</summary>
+    internal TileCache<SKImage> SeedTilesForTests()
+    {
+        lock (_documentLock)
+        {
+            ResetTiles();
+            _tiles = new TileCache<SKImage>(MaxCachedTiles, static image => image.Dispose());
+            _tilesDocument = _document;
+            _tilesScale = Scale;
+            return _tiles;
+        }
+    }
 
     /// <inheritdoc />
     public override void Render(DrawingContext context)
@@ -122,9 +136,21 @@ public sealed partial class HtmlView
             return;
         }
 
-        PaintWindow(canvas, document, originX, originY, widthPx, heightPx, DocumentPaintLayer.All);
+        // Painted straight, the layers are still drawn apart: what the viewport holds is drawn whole, because a stuck box is painted where the viewport is but its
+        // layout position is where it would be if it scrolled, so painting everything by the region in view would cull it. (A background attached to the
+        // viewport is part of the one pass.)
+        if (document.HasViewportBackgrounds)
+        {
+            PaintWindow(canvas, document, originX, originY, widthPx, heightPx, DocumentPaintLayer.All);
+            return;
+        }
+
+        PaintWindow(canvas, document, originX, originY, widthPx, heightPx, DocumentPaintLayer.Content);
+        PaintWindow(canvas, document, originX, originY, widthPx, heightPx, DocumentPaintLayer.Animated);
+        PaintWindow(canvas, document, originX, originY, widthPx, heightPx, DocumentPaintLayer.ViewportAttached);
     }
 
+    [ExcludeFromCodeCoverage(Justification = "Needs a GPU: it paints tiles into textures of a graphics context, which a headless test has none of.")]
     // Draws the tiles that hold the part of the page in view, painting the ones that are not held. False when a tile cannot be made, in which case
     // nothing of the page has been drawn and the caller paints it straight.
     private bool TryPaintTiles(SKCanvas canvas, GRContext gpu, HtmlDocument document, double originX, double originY, double widthPx, double heightPx)
@@ -175,6 +201,7 @@ public sealed partial class HtmlView
         return true;
     }
 
+    [ExcludeFromCodeCoverage(Justification = "Needs a GPU: it paints tiles into textures of a graphics context, which a headless test has none of.")]
     // Paints the first tile missing from the row beyond the visible ones in the direction of the scroll. False when there is none to paint.
     private bool PrefetchTile(GRContext gpu, HtmlDocument document, IReadOnlyList<TileKey> visible, int heading, double contentWidth, double contentHeight)
     {
@@ -201,6 +228,7 @@ public sealed partial class HtmlView
         return false;
     }
 
+    [ExcludeFromCodeCoverage(Justification = "Needs a GPU: it paints tiles into textures of a graphics context, which a headless test has none of.")]
     // One tile: the content layer of the part of the page it covers, on the page's background, in a texture of the hardware.
     private SKImage? RenderTile(GRContext gpu, HtmlDocument document, TileBounds bounds)
     {
@@ -258,7 +286,11 @@ public sealed partial class HtmlView
             using (var target = SkiaCanvas.FromCanvas(context, canvas, new PeachDrawing.Core.Rect(0, 0, size.WidthPoints * PixelsPerPoint, size.HeightPoints * PixelsPerPoint)))
             {
                 // Painting finishes without waiting for anything (what it draws was resolved during layout), so the task is already complete.
-                document.PaintPageRegionAsync(page, target, region, layer).GetAwaiter().GetResult();
+                // The layer of what the viewport holds is painted whole, not by region (see PaintFrameLocked).
+                if (layer == DocumentPaintLayer.ViewportAttached)
+                    document.PaintPageAsync(page, target, layer).GetAwaiter().GetResult();
+                else
+                    document.PaintPageRegionAsync(page, target, region, layer).GetAwaiter().GetResult();
             }
 
             canvas.Restore();
