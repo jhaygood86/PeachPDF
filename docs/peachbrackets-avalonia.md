@@ -67,9 +67,9 @@ when the control is resized, the theme variant changes or the display scale chan
 
 ## Form controls and text editing
 
-Check boxes, radio buttons, buttons, ranges, `details` and reset and submit controls work on a click or the keyboard. Select, date, time, color and
+Check boxes, radio buttons, buttons, ranges (also with the arrow, Home, End and Page keys), `details` (also through the expand/collapse automation pattern) and reset and submit controls work on a click or the keyboard. Shift and click extends the selection, on the page and in a text field, and a pinch pans the page as its focal point moves. Select, date, time, color and
 file controls open an Avalonia flyout or the platform's file picker. Text fields and text areas are edited in place: caret, selection, typing, word and
-line moves, cut, copy and paste, an input method (through `TextInputMethodClient`) and a context menu. Tab and Shift+Tab move through the document's
+line moves, cut, copy and paste, an input method (through `TextInputMethodClient`, offered only while a text field has the focus) and a context menu, which takes the keyboard focus (arrows, Enter and Escape work in it) without the page losing its own. Tab and Shift+Tab move through the document's
 focusable parts and then on to the next Avalonia control, so there is no keyboard trap.
 
 ## Accessibility
@@ -87,8 +87,7 @@ Documents see the fonts installed on the machine and any added to `HtmlViewFonts
 * Avalonia 12 and its Skia renderer only.
 * The document is one continuous surface, not paginated.
 * Avalonia has no accessibility text pattern, grid or table pattern, focus-changed event or live-region notification: live regions are announced as a change of the region's name, and tables expose table, header and cell peers only.
-* There is no system caret blink time to read, so the caret blinks every 530 ms; the input method is offered while a document is loaded, so a soft keyboard can appear without a focused field on a touch device.
-* Shift and click does not extend a selection, a pinch does not pan, and a range is changed by click and drag, not the arrow keys.
+* There is no system caret blink time to read, so the caret blinks every 530 ms.
 * A cursor image uses its first frame; SVG cursor images are not supported.
 * Color controls open sliders and a swatch, not a full color picker.
 * No find UI is built in (`HtmlDocument.FindText` exists).
