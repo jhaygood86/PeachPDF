@@ -1,11 +1,9 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
-using Avalonia.Layout;
-using Avalonia.Platform.Storage;
+using Avalonia.Media.Imaging;
 using Avalonia.Themes.Fluent;
 using Avalonia.Threading;
-using PeachBrackets.Avalonia;
 
 namespace PeachBrackets.Avalonia.Example;
 
@@ -17,25 +15,12 @@ internal static class Program
     public static AppBuilder BuildApp() => AppBuilder.Configure<ExampleApp>().UsePlatformDetect();
 }
 
+/// <summary>
+/// The demo application. With no options it opens the demo window. <c>--smoke &lt;file&gt;</c> loads a page, prints what the view and document report and exits;
+/// <c>--showcase &lt;slug&gt;</c> shows one showcase, and with <c>--screenshot &lt;png&gt;</c> also writes what the window shows and exits.
+/// </summary>
 internal sealed class ExampleApp : Application
 {
-    private const string Sample = """
-        <!doctype html>
-        <html><head><style>
-          body { font-family: sans-serif; margin: 24px; max-width: 46em; }
-          h1 { color: #b4503c; } a { color: #1a5fb4; }
-          .card { border: 1px solid #ccc; border-radius: 8px; padding: 12px; margin: 12px 0; }
-          button:hover { background: #fde8d8; }
-        </style></head><body>
-          <h1>PeachBrackets on Avalonia</h1>
-          <p>This page is laid out by PeachBrackets and painted through Avalonia's Skia lease. Select text, follow <a href="#end">a link to the end</a>, or edit the field below.</p>
-          <div class="card"><label>Name <input type="text" value="Peach"></label>
-            <label><input type="checkbox" checked> Subscribe</label> <button>Submit</button></div>
-          <div class="card" style="height:8em;overflow:auto">Scrolling inside a box.<br><br><br><br><br><br><br><br>The end of the box.</div>
-          <p style="height:900px">Scroll down.</p><p id="end">The end.</p>
-        </body></html>
-        """;
-
     public override void Initialize() => Styles.Add(new FluentTheme());
 
     public override void OnFrameworkInitializationCompleted()
@@ -43,44 +28,57 @@ internal sealed class ExampleApp : Application
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
             var args = desktop.Args ?? [];
-            var smoke = Array.IndexOf(args, "--smoke");
-            desktop.MainWindow = smoke >= 0 && smoke + 1 < args.Length ? SmokeWindow(desktop, args[smoke + 1]) : MainWindow();
+            var smoke = Option(args, "--smoke");
+            var showcase = Option(args, "--showcase");
+            var screenshot = Option(args, "--screenshot");
+            desktop.MainWindow = smoke is not null ? SmokeWindow(desktop, smoke) : DemoWindow(desktop, showcase, screenshot);
         }
 
         base.OnFrameworkInitializationCompleted();
     }
 
-    private static Window MainWindow()
+    private static string? Option(string[] args, string name)
     {
-        var view = new HtmlView { Html = Sample, AnimationsEnabled = true };
-        var open = new Button { Content = "Open HTML file..." };
-        var status = new TextBlock { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0) };
-        var window = new Window { Title = "PeachBrackets.Avalonia", Width = 900, Height = 700 };
-        view.DocumentLoaded += (_, _) => status.Text = $"Loaded: {view.ContentHeight:F0} px tall";
-        view.DocumentFailed += (_, e) => status.Text = "Failed: " + e.Exception.Message;
-        view.LinkActivated += (_, e) => status.Text = "Link: " + (e.Uri ?? e.Destination);
-        open.Click += async (_, _) =>
-        {
-            var files = await window.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
-            {
-                Title = "Open an HTML file",
-                FileTypeFilter = [new FilePickerFileType("HTML") { Patterns = ["*.html", "*.htm"] }],
-            });
+        var index = Array.IndexOf(args, name);
+        return index >= 0 && index + 1 < args.Length ? args[index + 1] : null;
+    }
 
-            if (files.Count > 0 && files[0].TryGetLocalPath() is { } path)
-            {
-                view.AllowNetworkAccess = false;
-                view.Source = new Uri(path);
-                view.Html = null;
-            }
+    private static Window DemoWindow(IClassicDesktopStyleApplicationLifetime desktop, string? slug, string? screenshot)
+    {
+        var window = new DemoWindow(AppContext.BaseDirectory);
+        if (slug is null)
+            return window;
+
+        window.Opened += async (_, _) =>
+        {
+            var loaded = new TaskCompletionSource();
+            window.View.DocumentLoaded += (_, _) => loaded.TrySetResult();
+            await window.ShowAsync(slug);
+            await loaded.Task.WaitAsync(TimeSpan.FromSeconds(60));
+            if (screenshot is null)
+                return;
+
+            // Let the first frames and any animation settle, then picture the window.
+            await Task.Delay(1500);
+            Dispatcher.UIThread.RunJobs();
+            var size = new PixelSize((int)window.Bounds.Width, (int)window.Bounds.Height);
+            using var bitmap = new RenderTargetBitmap(size);
+            bitmap.Render(window);
+            #pragma warning disable CS0618 // The overload that takes encoder options is a static helper in Avalonia 12; the plain one writes a PNG.
+            bitmap.Save(screenshot);
+#pragma warning restore CS0618
+            Console.WriteLine("OK screenshot=" + screenshot);
+            desktop.Shutdown(0);
         };
 
-        var bar = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(8), Children = { open, status } };
-        var root = new DockPanel();
-        DockPanel.SetDock(bar, Dock.Top);
-        root.Children.Add(bar);
-        root.Children.Add(view);
-        window.Content = root;
+        DispatcherTimer.RunOnce(() =>
+        {
+            if (screenshot is not null)
+            {
+                Console.WriteLine("FAILED timeout");
+                desktop.Shutdown(2);
+            }
+        }, TimeSpan.FromSeconds(120));
         return window;
     }
 
@@ -92,7 +90,7 @@ internal sealed class ExampleApp : Application
         view.DocumentLoaded += async (_, _) =>
         {
             await Task.Delay(300);
-            Console.WriteLine($"OK loaded={file} height={view.ContentHeight:F0} frames={view.Document is not null}");
+            Console.WriteLine($"OK loaded={file} height={view.ContentHeight:F0} document={view.Document is not null}");
             desktop.Shutdown(0);
         };
         view.DocumentFailed += (_, e) =>

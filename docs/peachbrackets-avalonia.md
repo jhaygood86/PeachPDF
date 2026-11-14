@@ -94,5 +94,8 @@ Documents see the fonts installed on the machine and any added to `HtmlViewFonts
 
 ## The demo
 
-`src/examples/PeachBrackets.Avalonia.Example` is a small desktop app with an `HtmlView`, an Open button and a status line. Run it with
-`dotnet run --project src/examples/PeachBrackets.Avalonia.Example`, or with `-- --smoke <file>` to load a page, print what the document reports and exit.
+`src/examples/PeachBrackets.Avalonia.Example` is a desktop app with an `HtmlView`: the showcases on the left (the sample page, the screen-only pages and every
+PDF showcase as HTML, filtered by category, and three live web pages), the page in the middle, a panel of the view's options on the right (animations, zoom,
+synchronous layout, no-scrolling mode, network access, dark theme, zoom buttons, document margin, a user style sheet, select all, copy, and opening a file)
+and a status line. Run it with `dotnet run --project src/examples/PeachBrackets.Avalonia.Example`; `-- --smoke <file>` loads a page, prints what the document
+reports and exits, and `-- --showcase <slug> --screenshot <png>` writes a picture of one showcase.
