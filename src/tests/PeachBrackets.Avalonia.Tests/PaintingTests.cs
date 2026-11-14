@@ -3,6 +3,7 @@ using Avalonia.Headless;
 using PeachBrackets.Avalonia.Tests.TestSupport;
 using PeachBrackets.HtmlViewCore;
 using SkiaSharp;
+using Amount = global::Avalonia.Automation.Provider.ScrollAmount;
 
 namespace PeachBrackets.Avalonia.Tests;
 
@@ -178,6 +179,74 @@ public class PaintingTests
 
             Assert.False(tiles.TryGet(new TileKey(0, 2), out _), "the tile that holds the changed box is painted again");
             Assert.True(tiles.TryGet(new TileKey(0, 0), out _), "a tile the change did not touch is kept");
+            window.Close();
+        });
+    }
+
+    private static async Task PaintOnceAsync(HtmlView view)
+    {
+        var paint = view.CapturePaintForTests();
+        using var bitmap = new SKBitmap(300, 300);
+        using var canvas = new SKCanvas(bitmap);
+        await Task.Run(() => paint(canvas, 300, 300));
+    }
+
+    [Fact]
+    public async Task AFrameThatFoundEveryTileItNeededPaintsOneMoreInTheDirectionOfTheScroll()
+    {
+        await HeadlessSession.Run(async () =>
+        {
+            var html = "<html><body style='margin:0'><div style='height:4000px;background:#00aa00'></div></body></html>";
+            var (window, view) = await HeadlessSession.ShowAsync(html, 300, 300);
+            view.TilesOnCpuForTests = true;
+
+            await PaintOnceAsync(view);
+            Assert.Equal(1, view.TileCountForTests);
+
+            // Not yet scrolling anywhere: nothing is painted ahead.
+            await PaintOnceAsync(view);
+            Assert.Equal(1, view.TileCountForTests);
+
+            // Scrolled down a little, the visible tile is held, so the frame has time to paint the one below it; once that is held there is nothing more to do.
+            view.ScrollDocumentFromAutomation(Amount.NoAmount, Amount.SmallIncrement);
+            await PaintOnceAsync(view);
+            Assert.Equal(2, view.TileCountForTests);
+            await PaintOnceAsync(view);
+            Assert.Equal(2, view.TileCountForTests);
+
+            // At the end the frame has to paint its own tile; the next one finds nothing beyond the last row to paint ahead.
+            view.ScrollDocumentToPercentFromAutomation(-1, 100);
+            await PaintOnceAsync(view);
+            Assert.Equal(3, view.TileCountForTests);
+            await PaintOnceAsync(view);
+            Assert.Equal(3, view.TileCountForTests);
+
+            // Scrolling back up paints ahead on the other side.
+            view.ScrollDocumentFromAutomation(Amount.NoAmount, Amount.SmallDecrement);
+            await PaintOnceAsync(view);
+            Assert.Equal(4, view.TileCountForTests);
+            window.Close();
+        });
+    }
+
+    [Fact]
+    public async Task APaintThatFailsIsReportedOnceAsAFailureOfTheDocument()
+    {
+        await HeadlessSession.Run(async () =>
+        {
+            var (window, view) = await HeadlessSession.ShowAsync("<html><body><p>text</p></body></html>", 300, 300);
+            var failures = new List<Exception>();
+            view.DocumentFailed += (_, e) => failures.Add(e.Exception);
+
+            // Every frame fails, and the application is told once, not once a frame.
+            view.PaintHookForTests = () => throw new InvalidOperationException("the paint failed");
+            await PaintOnceAsync(view);
+            await PaintOnceAsync(view);
+            Assert.True(await HeadlessSession.PumpUntilAsync(() => failures.Count > 0));
+            await HeadlessSession.PumpUntilAsync(() => false, 100);
+            Assert.Single(failures);
+            Assert.Equal("the paint failed", failures[0].Message);
+            view.PaintHookForTests = null;
             window.Close();
         });
     }

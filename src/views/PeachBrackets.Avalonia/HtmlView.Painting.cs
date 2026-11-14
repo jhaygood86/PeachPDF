@@ -45,6 +45,19 @@ public sealed partial class HtmlView
     /// <summary>Paints through the tiles even with no graphics context, into raster surfaces, so a test can run the tile path a headless session has no GPU for.</summary>
     internal bool TilesOnCpuForTests { get; set; }
 
+    /// <summary>Runs inside a frame's paint, with the document lock held, so a test can make a paint fail.</summary>
+    internal Action? PaintHookForTests { get; set; }
+
+    /// <summary>How many tiles are held now. For tests.</summary>
+    internal int TileCountForTests
+    {
+        get
+        {
+            lock (_documentLock)
+                return _tiles?.Count ?? 0;
+        }
+    }
+
     /// <summary>
     /// Captures what a render would, on the calling (UI) thread, and returns the paint a render thread would run with it, so a test can run it from a thread of
     /// its own onto a canvas of its own.
@@ -143,7 +156,10 @@ public sealed partial class HtmlView
         try
         {
             lock (_documentLock)
+            {
+                PaintHookForTests?.Invoke();
                 PaintFrameLocked(canvas, gpu, state, widthPx, heightPx);
+            }
         }
         catch (Exception exception) when (exception is not OutOfMemoryException)
         {
