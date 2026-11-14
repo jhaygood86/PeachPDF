@@ -95,7 +95,7 @@ public sealed partial class HtmlView
             return;
         }
 
-        if (PressInTextField(page, x, y, e.ClickCount))
+        if (PressInTextField(page, x, y, e.ClickCount, e.KeyModifiers))
         {
             _pressedInField = true;
             return;
@@ -103,8 +103,11 @@ public sealed partial class HtmlView
 
         if (_pressedType != PointerType.Touch && document.GetInteractionAt(page, x, y).CanSelectText)
         {
+            // Shift+click moves the end of the selection there, and dragging on goes on moving it.
+            var extend = e.ClickCount == 1 && (e.KeyModifiers & KeyModifiers.Shift) != 0 && document.Selection.HasSelection;
             _selecting = e.ClickCount switch
             {
+                _ when extend => document.Selection.ExtendTo(page, x, y),
                 2 => document.Selection.SelectWordAt(page, x, y),
                 >= 3 => document.Selection.SelectBlockAt(page, x, y),
                 _ => document.Selection.SelectAt(page, x, y),
@@ -112,7 +115,7 @@ public sealed partial class HtmlView
 
             // A double or triple click is a selection of its own, not the start of a click on a link.
             // (A second press on a check box or button is a second click on it, as in a browser.)
-            if (e.ClickCount > 1 && !(document.GetElementAt(page, x, y) is { } pressed && IsControl(pressed)))
+            if (extend || (e.ClickCount > 1 && !(document.GetElementAt(page, x, y) is { } pressed && IsControl(pressed))))
                 _dragged = true;
         }
     }

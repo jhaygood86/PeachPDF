@@ -47,13 +47,14 @@ public sealed partial class HtmlView
     // ---- the pointer ----------------------------------------------------------------------------------------------------------------
 
     // A press on a text field: true when it was one, in which case the press is a drag inside the field and not a click on the page.
-    internal bool PressInTextField(int page, double x, double y, int clickCount)
+    // With Shift, a press in the field that already has the focus keeps the selection's anchor and moves its other end to the press.
+    internal bool PressInTextField(int page, double x, double y, int clickCount, KeyModifiers modifiers = KeyModifiers.None)
     {
         if (!TryGetTextFieldAt(page, x, y, out var document, out var element))
             return false;
 
         _fieldAnchor = null;
-        _placement = PlaceCaretAsync(document, element, page, x, y, clickCount);
+        _placement = PlaceCaretAsync(document, element, page, x, y, clickCount, (modifiers & KeyModifiers.Shift) != 0);
         return true;
     }
 
@@ -73,13 +74,14 @@ public sealed partial class HtmlView
     }
 
     // Gives the field the focus (when it does not have it), puts the caret where the press was and, for a double or triple click, selects the word or line.
-    private async Task PlaceCaretAsync(HtmlDocument document, DocumentElement element, int page, double x, double y, int clickCount)
+    private async Task PlaceCaretAsync(HtmlDocument document, DocumentElement element, int page, double x, double y, int clickCount, bool extend = false)
     {
         if (_context is not { } context)
             return;
 
         using var measuring = new MeasuringCanvas(context);
-        if (!element.Equals(FocusedFieldElement()))
+        var wasFocused = element.Equals(FocusedFieldElement());
+        if (!wasFocused)
         {
             var result = await document.SetFocusAsync(element, false, measuring.Canvas);
             if (!ReferenceEquals(document, _document))
@@ -98,6 +100,7 @@ public sealed partial class HtmlView
         {
             2 => CaretMoves.WordAt(state.Text, index),
             >= 3 => state.Type == "textarea" ? document.GetEditLineRange(measuring.Canvas, index) ?? (0, state.Text.Length) : (0, state.Text.Length),
+            _ when extend && wasFocused => (state.SelectionStart, index),
             _ => (index, index),
         };
 
