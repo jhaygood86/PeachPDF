@@ -152,11 +152,11 @@ namespace PeachBrackets.Html.Dom
         /// <paramref name="adopt"/> false asks the item to report its own row sizes instead.
         /// </summary>
         private static GridSubgridContext? LaneSubgridContext(LaneItem item, Track[]? columns, Track[]? rows, bool adopt,
-            Dictionary<string, List<int>> colLineNames, Dictionary<string, List<int>> rowLineNames)
+            Dictionary<string, List<int>> colLineNames, Dictionary<string, List<int>> rowLineNames, double columnGap = 0, double rowGap = 0)
         {
             if (!IsSubgridItem(item.Box)) return null;
 
-            var context = new GridSubgridContext();
+            var context = new GridSubgridContext { ParentColumnGap = columnGap, ParentRowGap = rowGap };
             if (columns is not null && ChildColSubgrid(item.Box))
             {
                 context.ColumnSizes = SpannedSizes(columns, item.Start, item.Span);
@@ -430,8 +430,11 @@ namespace PeachBrackets.Html.Dom
                 colTemplate is { } c && (c.Tracks.Count > 0 || c.AutoRepeat != GridAutoRepeatKind.None || c.IsSubgrid),
                 rowTemplate is { } r && (r.Tracks.Count > 0 || r.AutoRepeat != GridAutoRepeatKind.None || r.IsSubgrid));
 
-            var colLineNames = BuildLineNames(colTemplate);
-            var rowLineNames = BuildLineNames(rowTemplate);
+            // An auto-repeat's resolved length places the lines named after it.
+            var colLineNames = BuildLineNames(colTemplate, colTemplate is { AutoRepeat: not GridAutoRepeatKind.None }
+                ? ResolveColumnTemplate(colTemplate, contentWidth, columnGap).Defs.Count : -1);
+            var rowLineNames = BuildLineNames(rowTemplate, rowTemplate is { AutoRepeat: not GridAutoRepeatKind.None }
+                ? ResolveColumnTemplate(rowTemplate, hasDefiniteBlock ? BlockContentSize : 0, rowGap).Defs.Count : -1);
 
             // A lanes container that is a subgrid also has the parent's names for the lines it spans (css-grid-2 9.2).
             var subgrid = _gridBox.SubgridContext;
@@ -630,7 +633,7 @@ namespace PeachBrackets.Html.Dom
                     {
                         var contributions = new List<SubgridContribution>();
                         if (!await new CssLayoutEngineGrid(item.Box).CollectSubgridColumnContributions(
-                                g, span, SpannedLineNames(colLineNames, s, span), s, contributions))
+                                g, span, SpannedLineNames(colLineNames, s, span), s, contributions, gap))
                             break;
 
                         contributed = true;
@@ -752,7 +755,7 @@ namespace PeachBrackets.Html.Dom
 
             async ValueTask PlaceInLanes(LaneItem item, double top, double room, string justify, string align)
             {
-                item.Box.SubgridContext = LaneSubgridContext(item, columns, null, true, colLineNames, rowLineNames);
+                item.Box.SubgridContext = LaneSubgridContext(item, columns, null, true, colLineNames, rowLineNames, columnGap, rowGap);
                 try
                 {
                     await PlaceItemInCell(g, item.Box, CellX(item), BlockOrigin + top, CellWidthOf(item), room, justify, align);
@@ -855,7 +858,7 @@ namespace PeachBrackets.Html.Dom
             {
                 var contexts = new Dictionary<CssBox, GridSubgridContext>();
                 foreach (var item in laneItems)
-                    if (LaneSubgridContext(item, columns, null, true, colLineNames, rowLineNames) is { } context) contexts[item.Box] = context;
+                    if (LaneSubgridContext(item, columns, null, true, colLineNames, rowLineNames, columnGap, rowGap) is { } context) contexts[item.Box] = context;
                 await CommitLanes(g, laneItems, contexts);
             }
         }
@@ -915,7 +918,7 @@ namespace PeachBrackets.Html.Dom
                 async (item, stackStart) =>
                 {
                     // A subgrid item reports the sizes of its own rows (report mode) for the lanes to grow to; its stacking axis is its own.
-                    item.Box.SubgridContext = LaneSubgridContext(item, null, rows, false, colLineNames, rowLineNames);
+                    item.Box.SubgridContext = LaneSubgridContext(item, null, rows, false, colLineNames, rowLineNames, columnGap, rowGap);
                     try
                     {
                         await PlaceItemInCell(g, item.Box, InlineOrigin + stackStart, BlockOrigin, contentWidth, 0, Keywords.Start, Keywords.Start);
@@ -1043,7 +1046,7 @@ namespace PeachBrackets.Html.Dom
                 }
 
                 var x = (fillReverse ? InlineOrigin + stackEnd - top - outerWidth : InlineOrigin + top) + rangeOffset;
-                item.Box.SubgridContext = LaneSubgridContext(item, null, rows, true, colLineNames, rowLineNames);
+                item.Box.SubgridContext = LaneSubgridContext(item, null, rows, true, colLineNames, rowLineNames, columnGap, rowGap);
                 try
                 {
                     await PlaceItemInCell(g, item.Box, x, cellY, room, cellHeight, justify, align);
@@ -1073,7 +1076,7 @@ namespace PeachBrackets.Html.Dom
 
                 var contexts = new Dictionary<CssBox, GridSubgridContext>();
                 foreach (var item in laneItems)
-                    if (LaneSubgridContext(item, null, rows, true, colLineNames, rowLineNames) is { } context) contexts[item.Box] = context;
+                    if (LaneSubgridContext(item, null, rows, true, colLineNames, rowLineNames, columnGap, rowGap) is { } context) contexts[item.Box] = context;
                 await CommitItemContent(g, BuildRowGroups(placements), 0, null, null, contexts, _gridBox.Location);
             }
         }

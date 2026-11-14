@@ -51,6 +51,12 @@ namespace PeachBrackets.Html.Dom
 
         /// <summary>The row-axis twin of <see cref="ColumnLineNames"/>.</summary>
         public IReadOnlyList<IReadOnlyList<string>>? RowLineNames { get; set; }
+
+        /// <summary>The parent's column and row gaps. A subgrid whose own gap differs from them puts half the difference on each side of a line as margin on the
+        /// items there (css-grid-2 9.4).</summary>
+        public double ParentColumnGap { get; set; }
+
+        public double ParentRowGap { get; set; }
     }
 
     /// <summary>
@@ -235,6 +241,8 @@ namespace PeachBrackets.Html.Dom
 
             if (!_vertical && !_rtl)
             {
+                if (colSubgrid && subgrid is not null) _colGapHalf = SubgridGapHalf(_gridBox.FlexColumnGap, subgrid.ParentColumnGap, contentWidth);
+                if (rowSubgrid && subgrid is not null) _rowGapHalf = SubgridGapHalf(_gridBox.FlexRowGap, subgrid.ParentRowGap, contentWidth);
                 if (colSubgrid)
                 {
                     _colStartInset = _gridBox.ActualMarginLeft + _gridBox.ActualBorderLeftWidth + _gridBox.ActualPaddingLeft;
@@ -288,8 +296,8 @@ namespace PeachBrackets.Html.Dom
 
             // Per-axis named-line tables: [name] from the templates, plus name-start/name-end lines each
             // grid-template-areas area contributes.
-            var colLineNames = BuildLineNames(colTemplate);
-            var rowLineNames = BuildLineNames(rowTemplate);
+            var colLineNames = BuildLineNames(colTemplate, explicitColDefs.Count);
+            var rowLineNames = BuildLineNames(rowTemplate, explicitRowDefs.Count);
 
             // A subgrid also has the parent's names for the lines it spans (§9.2), alongside the ones its own template declares.
             if (colSubgrid && subgrid?.ColumnLineNames is { } inheritedColumnNames) AddInheritedNames(colLineNames, inheritedColumnNames);
@@ -404,8 +412,8 @@ namespace PeachBrackets.Html.Dom
             {
                 var (cols, gap) = ColumnsOf(placement);
                 return ColumnSpanWidth(cols, placement.ColStart, placement.ColSpan, gap)
-                    - (placement.ColStart == 0 ? _colStartInset : 0)
-                    - (placement.ColStart + placement.ColSpan >= cols.Length ? _colEndInset : 0);
+                    - (placement.ColStart == 0 ? _colStartInset : _colGapHalf)
+                    - (placement.ColStart + placement.ColSpan >= cols.Length ? _colEndInset : _colGapHalf);
             }
 
             for (var attempt = 0; ; attempt++)
@@ -488,7 +496,8 @@ namespace PeachBrackets.Html.Dom
 
                     foreach (var p in normalItems.Where(p => p.RowSpan == 1 && !IsFixed(rows[p.RowStart].Def)))
                     {
-                        var natural = await MeasureItemHeight(g, p.Box, SpanWidthOf(p));
+                        var natural = await MeasureItemHeight(g, p.Box, SpanWidthOf(p))
+                            + (p.RowStart > 0 ? _rowGapHalf : 0) + (p.RowStart + p.RowSpan < rowCount ? _rowGapHalf : 0);
                         var rowBase = expandsFlexRows && IsFlexTrack(rows[p.RowStart].Def)
                             ? FlexRowBaseContribution(rows[p.RowStart].Def, p.Box, natural)
                             : natural;
@@ -569,11 +578,11 @@ namespace PeachBrackets.Html.Dom
                 var inlineBaselineItems = new List<(Placement Placement, bool Last)>();
                 foreach (var p in placements)
                 {
-                    var cellX = ColumnsOf(p).Columns[p.ColStart].Position + (p.ColStart == 0 ? _colStartInset : 0);
+                    var cellX = ColumnsOf(p).Columns[p.ColStart].Position + (p.ColStart == 0 ? _colStartInset : _colGapHalf);
                     var cellWidth = SpanWidthOf(p);
-                    var cellY = rows[p.RowStart].Position + (p.RowStart == 0 ? _rowStartInset : 0);
+                    var cellY = rows[p.RowStart].Position + (p.RowStart == 0 ? _rowStartInset : _rowGapHalf);
                     var cellHeight = RowSpanHeight(rows, p.RowStart, p.RowSpan, rowGap)
-                        - (p.RowStart == 0 ? _rowStartInset : 0) - (p.RowStart + p.RowSpan >= rows.Length ? _rowEndInset : 0);
+                        - (p.RowStart == 0 ? _rowStartInset : _rowGapHalf) - (p.RowStart + p.RowSpan >= rows.Length ? _rowEndInset : _rowGapHalf);
                     var justify = LogicalizePhysicalKeyword(
                         ResolveSelfAlignment(p.Box.JustifySelf.ToString(), _gridBox.JustifyItems.ToString()));
                     var align = ResolveSelfAlignment(p.Box.AlignSelf.ToString(), _gridBox.AlignItems.ToString());
@@ -589,7 +598,7 @@ namespace PeachBrackets.Html.Dom
                         justify = last ? Keywords.End : Keywords.Start;
                     }
 
-                    var context = BuildChildSubgridContext(p, columns, rows, adoptRows: true, colLineNames, rowLineNames);
+                    var context = BuildChildSubgridContext(p, columns, rows, adoptRows: true, colLineNames, rowLineNames, columnGap, rowGap);
                     p.Box.SubgridContext = context;
                     try
                     {
@@ -648,7 +657,7 @@ namespace PeachBrackets.Html.Dom
             // remarks. Grid rows are already in block-axis order (RowStart ascending), so - unlike
             // flex's line ordering - no wrap-reverse-style reordering is needed here.
             var rowGroups = BuildRowGroups(placements);
-            var subgridContexts = BuildSubgridContextMap(placements, columns, rows, colLineNames, rowLineNames);
+            var subgridContexts = BuildSubgridContextMap(placements, columns, rows, colLineNames, rowLineNames, columnGap, rowGap);
             if (!_vertical)
             await CommitItemContent(g, rowGroups, startRowIndex: 0, seedUnfinished: null, seedFinished: null,
                 subgridContexts, placementOrigin: _gridBox.Location);
@@ -662,6 +671,14 @@ namespace PeachBrackets.Html.Dom
         }
 
         private const int MaxPerPageAttempts = 3;
+
+        /// <summary>Half of how much more (or less) gap this subgrid asks for than its parent has on that axis: the margin each item beside a line inside the
+        /// subgrid takes on its side of it. A gap of <c>normal</c> is the parent's (css-grid-2 9.4).</summary>
+        private double SubgridGapHalf(CssProperty<CssKeywordOrValue<NormalKeyword, LengthOrCalc>> own, double parentGap, double basis) =>
+            own.Value is { IsValue: true } ? (ParseGap(own, basis) - parentGap) / 2 : 0;
+
+        /// <summary>The extra margin the items of a subgridded column / row axis take beside the lines inside it; see <see cref="SubgridGapHalf"/>.</summary>
+        private double _colGapHalf, _rowGapHalf;
 
         /// <summary>
         /// The measure - the content width a container starting at <paramref name="top"/> would have - of the fragmentainer that top falls in.
@@ -836,12 +853,12 @@ namespace PeachBrackets.Html.Dom
         /// </summary>
         private static IReadOnlyDictionary<CssBox, GridSubgridContext> BuildSubgridContextMap(
             List<Placement> placements, Track[] columns, Track[] rows,
-            Dictionary<string, List<int>> colLineNames, Dictionary<string, List<int>> rowLineNames)
+            Dictionary<string, List<int>> colLineNames, Dictionary<string, List<int>> rowLineNames, double columnGap = 0, double rowGap = 0)
             {
             var map = new Dictionary<CssBox, GridSubgridContext>();
             foreach (var p in placements)
             {
-                if (BuildChildSubgridContext(p, columns, rows, adoptRows: true, colLineNames, rowLineNames) is { } context)
+                if (BuildChildSubgridContext(p, columns, rows, adoptRows: true, colLineNames, rowLineNames, columnGap, rowGap) is { } context)
                     map[p.Box] = context;
             }
             return map;
@@ -1172,12 +1189,26 @@ namespace PeachBrackets.Html.Dom
 
             // A named-line reference resolves to a concrete line number against this axis's name table
             // (honoring the §8.3.1 -start/-end suffix rule for area names) before numeric handling.
-            int? startLine = ResolveNamedEdge(start, lineNames, isStart: true) ?? LineNumber(start, explicitCount);
-            int? endLine = ResolveNamedEdge(end, lineNames, isStart: false) ?? LineNumber(end, explicitCount);
+            int? startLine = start.IsSpan ? null : ResolveNamedEdge(start, lineNames, isStart: true, explicitCount) ?? LineNumber(start, explicitCount);
+            int? endLine = end.IsSpan ? null : ResolveNamedEdge(end, lineNames, isStart: false, explicitCount) ?? LineNumber(end, explicitCount);
 
             var span = 1;
             if (start.IsSpan) span = Math.Max(1, start.Value);
             else if (end.IsSpan) span = Math.Max(1, end.Value);
+
+            // `span <name>` runs to the Nth line with that name, counted from the definite edge on the other side (css-grid-2 8.3.1); implicit lines
+            // beyond the explicit grid all count as having the name.
+            if (start.IsSpan && start.Name is not null && endLine is { } fixedEnd && !end.IsSpan)
+            {
+                var from = NamedLineFrom(lineNames, start.Name, fixedEnd, start.Value, forward: false, explicitCount);
+                return (Math.Max(0, from - 1), Math.Max(1, fixedEnd - from));
+            }
+
+            if (end.IsSpan && end.Name is not null && startLine is { } fixedStart && !start.IsSpan)
+            {
+                var to = NamedLineFrom(lineNames, end.Name, fixedStart, end.Value, forward: true, explicitCount);
+                return (fixedStart - 1, Math.Max(1, to - fixedStart));
+            }
 
             if (startLine.HasValue && endLine.HasValue)
             {
@@ -1215,18 +1246,39 @@ namespace PeachBrackets.Html.Dom
         /// edge side (<paramref name="isStart"/>). Returns null when the line isn't named or the name is
         /// unknown (falls through to auto).
         /// </summary>
-        private static int? ResolveNamedEdge(GridLine line, IReadOnlyDictionary<string, List<int>> lineNames, bool isStart)
+        private static int? ResolveNamedEdge(GridLine line, IReadOnlyDictionary<string, List<int>> lineNames, bool isStart, int explicitCount = int.MaxValue)
         {
             if (line.Name is null) return null;
 
             if (lineNames.TryGetValue(line.Name, out var direct) && direct.Count > 0)
+            {
+                // A positive index past the last line with the name lands on an implicit line, which all count as having it.
+                if (line.Value > direct.Count && explicitCount != int.MaxValue)
+                    return Math.Max(direct[^1], explicitCount + 1) + (line.Value - direct.Count);
+
                 return NthClamp(direct, line.Value);
+            }
 
             var suffixed = line.Name + (isStart ? "-start" : "-end");
             if (lineNames.TryGetValue(suffixed, out var edge) && edge.Count > 0)
                 return NthClamp(edge, line.Value);
 
             return null;
+        }
+
+        /// <summary>The line number <paramref name="n"/> lines with <paramref name="name"/> away from <paramref name="from"/>, in the given direction; the implicit
+        /// lines past either end of the explicit grid count as having every name.</summary>
+        private static int NamedLineFrom(IReadOnlyDictionary<string, List<int>> lineNames, string name, int from, int n, bool forward, int explicitCount)
+        {
+            lineNames.TryGetValue(name, out var lines);
+            lines ??= [];
+            var candidates = forward ? lines.Where(l => l > from).OrderBy(l => l).ToList() : lines.Where(l => l < from).OrderByDescending(l => l).ToList();
+            if (candidates.Count >= n) return candidates[n - 1];
+
+            var missing = n - candidates.Count;
+            return forward
+                ? Math.Max(candidates.Count > 0 ? candidates[^1] : from, explicitCount == int.MaxValue ? from : explicitCount + 1) + missing
+                : Math.Max(1, (candidates.Count > 0 ? candidates[^1] : Math.Min(from, 1)) - missing);
         }
 
         /// <summary>The Nth line number among a sorted list of same-named lines: 1-based from the start for a
@@ -1641,7 +1693,7 @@ namespace PeachBrackets.Html.Dom
                         var contributions = new List<SubgridContribution>();
                         var child = new CssLayoutEngineGrid(p.Box);
                         if (!await child.CollectSubgridColumnContributions(
-                                g, p.ColSpan, SpannedLineNames(colLineNames, p.ColStart, p.ColSpan), p.ColStart, contributions))
+                                g, p.ColSpan, SpannedLineNames(colLineNames, p.ColStart, p.ColSpan), p.ColStart, contributions, gap))
                             continue;
 
                         foreach (var c in contributions)
@@ -1682,7 +1734,7 @@ namespace PeachBrackets.Html.Dom
                 /// contributes nothing, as before.
                 /// </summary>
                 private async ValueTask<bool> CollectSubgridColumnContributions(
-                    Canvas g, int span, IReadOnlyList<IReadOnlyList<string>> inheritedNames, int offset, List<SubgridContribution> into)
+                    Canvas g, int span, IReadOnlyList<IReadOnlyList<string>> inheritedNames, int offset, List<SubgridContribution> into, double parentGap = 0)
                 {
                     if (!string.IsNullOrEmpty(_gridBox.GridTemplateAreas) && !_gridBox.GridTemplateAreas.Isi(Keywords.None)) return false;
 
@@ -1695,6 +1747,7 @@ namespace PeachBrackets.Html.Dom
                     var placements = PlaceItems(items, false, flow.IndexOf(Keywords.Dense, StringComparison.OrdinalIgnoreCase) >= 0, span,
                         colNames, BuildLineNames(_gridBox.GridTemplateRows.Value));
 
+                    var half = SubgridGapHalf(_gridBox.FlexColumnGap, parentGap, 0);
                     var startInset = _gridBox.ActualMarginLeft + _gridBox.ActualBorderLeftWidth + _gridBox.ActualPaddingLeft;
                     var endInset = _gridBox.ActualMarginRight + _gridBox.ActualBorderRightWidth + _gridBox.ActualPaddingRight;
 
@@ -1707,12 +1760,12 @@ namespace PeachBrackets.Html.Dom
                         {
                             var nested = new CssLayoutEngineGrid(q.Box);
                             if (await nested.CollectSubgridColumnContributions(
-                                    g, qSpan, SpannedLineNames(colNames, q.ColStart, qSpan), offset + q.ColStart, into))
+                                    g, qSpan, SpannedLineNames(colNames, q.ColStart, qSpan), offset + q.ColStart, into, parentGap))
                                 continue;
                         }
 
                         var (mn, mx) = await MeasureItemContribution(g, q.Box);
-                        var edge = (q.ColStart == 0 ? startInset : 0) + (q.ColStart + qSpan >= span ? endInset : 0);
+                        var edge = (q.ColStart == 0 ? startInset : half) + (q.ColStart + qSpan >= span ? endInset : half);
                         into.Add(new SubgridContribution(q.Box, offset + q.ColStart, qSpan, mn, mx, edge));
                     }
 
@@ -2509,11 +2562,11 @@ namespace PeachBrackets.Html.Dom
         /// self-sizes its rows and reports them back).</summary>
         private static GridSubgridContext? BuildChildSubgridContext(
         Placement p, Track[] columns, Track[] rows, bool adoptRows,
-        Dictionary<string, List<int>> colLineNames, Dictionary<string, List<int>> rowLineNames)
+        Dictionary<string, List<int>> colLineNames, Dictionary<string, List<int>> rowLineNames, double columnGap = 0, double rowGap = 0)
         {
             if (!IsSubgridItem(p.Box)) return null;
 
-            var context = new GridSubgridContext();
+            var context = new GridSubgridContext { ParentColumnGap = columnGap, ParentRowGap = rowGap };
             if (ChildColSubgrid(p.Box))
             {
                 context.ColumnSizes = SpannedSizes(columns, p.ColStart, p.ColSpan);
@@ -2614,12 +2667,30 @@ namespace PeachBrackets.Html.Dom
         /// <summary>Extracts the <c>[name]</c> named lines declared in a track template into a mutable
         /// name → sorted 1-based line-number table (into which <c>grid-template-areas</c> merges its implicit
         /// area lines).</summary>
-        private static Dictionary<string, List<int>> BuildLineNames(GridTemplate? template)
+        private static Dictionary<string, List<int>> BuildLineNames(GridTemplate? template, int resolvedTrackCount = -1)
         {
             var table = new Dictionary<string, List<int>>();
             if (template?.LineNames is { Count: > 0 } names)
                 foreach (var (name, lines) in names)
                     table[name] = [.. lines];
+
+            if (template is { AutoRepeat: not GridAutoRepeatKind.None, AutoRepeatTracks: { Count: > 0 } body })
+            {
+                // The section's resolved length is what the template's own tracks leave of the explicit ones (one repetition when that is not known).
+                var repetitions = resolvedTrackCount >= 0 ? Math.Max(0, (resolvedTrackCount - template.Tracks.Count) / body.Count) : 1;
+                var start = template.AutoRepeatInsertIndex;
+
+                if (template.AutoRepeatLineNames is { } repeated)
+                    for (var r = 0; r < repetitions; r++)
+                        for (var boundary = 0; boundary < repeated.Count; boundary++)
+                            foreach (var name in repeated[boundary])
+                                AddLine(table, name, start + 1 + r * body.Count + boundary);
+
+                foreach (var (name, lines) in template.LineNamesAfterAutoRepeat)
+                    foreach (var line in lines)
+                        AddLine(table, name, start + repetitions * body.Count + line);
+            }
+
             return table;
         }
 

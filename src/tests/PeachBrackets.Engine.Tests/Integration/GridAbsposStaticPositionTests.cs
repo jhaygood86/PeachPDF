@@ -88,6 +88,22 @@ namespace PeachBrackets.Engine.Tests.Integration
         }
 
         [Fact]
+        public async Task NamedLinesInsideRepeat_AreLinesOfEveryRepetition_AndSpanNameCountsBackFromTheOtherEdge()
+        {
+            var html = "<div style='display:grid;width:100pt;grid-template-columns:repeat(3,[a] 10pt [b]) [end]'>" +
+                "<div id='x' style='grid-column:span b / a 3'></div><div id='y' style='grid-column:b 2 / span 2 a'></div></div>";
+            var x = await LayOut(html, "x");
+            var y = await LayOut(html, "y");
+
+            // Lines: a at 1,2,3 (before each track); b at 2,3,4. `a 3` is line 3; `span b` back from it is line 2 (b 1): the second track.
+            Assert.Equal(10, x.Location.X, 0.5);
+            Assert.Equal(10, x.ActualBoxSizingWidth, 0.5);
+
+            // `b 2` is line 3; two `a` lines on from it is line 5, which is implicit (there are three), so it spans two tracks.
+            Assert.Equal(20, y.Location.X, 0.5);
+        }
+
+        [Fact]
         public async Task Rtl_StartIsTheRightEdge_AndLeftRightStayPhysical()
         {
             var start = await LayOut("<div class='g' style='direction:rtl'><div class='a' id='a'></div></div>", "a");

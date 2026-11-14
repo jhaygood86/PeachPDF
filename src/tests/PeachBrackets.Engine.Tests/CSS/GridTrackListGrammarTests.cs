@@ -45,7 +45,6 @@ namespace PeachBrackets.Engine.Tests.CSS
         [InlineData("repeat(0, 100px)")]           // repeat count must be >= 1
         [InlineData("repeat(auto-fill)")]          // repeat needs a track body
         [InlineData("-1fr")]                        // negative flex
-        [InlineData("repeat(2, [x] 1fr)")]          // named lines inside repeat() are out of v1 scope
         [InlineData("[unclosed 100px")]             // an unclosed [ is invalid
         public void InvalidTrackLists_ReturnNull(string value)
         {
