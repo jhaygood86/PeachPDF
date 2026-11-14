@@ -1,4 +1,5 @@
 using Avalonia.Threading;
+using PeachBrackets.Updates;
 
 namespace PeachBrackets.Avalonia;
 
@@ -30,7 +31,10 @@ public sealed partial class HtmlView
         Forget(UpgradeImagesAsync());
     }
 
-    private async Task UpgradeImagesAsync()
+    /// <summary>Stands in for <see cref="HtmlDocument.UpgradeImagesAsync"/> when set, so a test can make an upgrade that fails.</summary>
+    internal Func<HtmlDocument, ValueTask<UpdateResult>>? ImageUpgrader { get; set; }
+
+    internal async Task UpgradeImagesAsync()
     {
         if (_document is not { } document)
             return;
@@ -41,7 +45,7 @@ public sealed partial class HtmlView
 
         try
         {
-            var result = await document.UpgradeImagesAsync();
+            var result = await (ImageUpgrader is { } upgrader ? upgrader(document) : document.UpgradeImagesAsync());
             if (ReferenceEquals(document, _document) && result.DirtyRegions.Count > 0)
             {
                 UpdateMetrics();

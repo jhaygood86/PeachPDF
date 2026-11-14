@@ -48,6 +48,51 @@ public class ImageTests
             window.Close();
         });
     }
+
+    [Fact]
+    public async Task AnUpgradeThatFailsIsReportedOnlyForTheDocumentOnShow()
+    {
+        await HeadlessSession.Run(async () =>
+        {
+            var (window, view) = await HeadlessSession.ShowAsync("<html><body><p>text</p></body></html>");
+            Exception? failure = null;
+            view.DocumentFailed += (_, e) => failure = e.Exception;
+            view.ImageUpgrader = _ => throw new InvalidOperationException("the upgrade failed");
+            await view.UpgradeImagesAsync();
+            Assert.Equal("the upgrade failed", failure?.Message);
+
+            // One that fails because the document was replaced meanwhile is nothing to report.
+            failure = null;
+            var replaced = new TaskCompletionSource();
+            view.DocumentLoaded += (_, _) => replaced.TrySetResult();
+            view.ImageUpgrader = async _ =>
+            {
+                view.Html = "<html><body><p>Another.</p></body></html>";
+                await replaced.Task;
+                throw new ObjectDisposedException("the old document");
+            };
+            await view.UpgradeImagesAsync();
+            Assert.Null(failure);
+            window.Close();
+        });
+    }
+
+    [Fact]
+    public async Task AnUpgradeOfAViewWithNoDocumentDoesNothing()
+    {
+        await HeadlessSession.Run(async () =>
+        {
+            var view = new HtmlView();
+            var called = false;
+            view.ImageUpgrader = _ =>
+            {
+                called = true;
+                return ValueTask.FromResult(new global::PeachBrackets.Updates.UpdateResult(false, null, []));
+            };
+            await view.UpgradeImagesAsync();
+            Assert.False(called);
+        });
+    }
 }
 
 public class CursorTests

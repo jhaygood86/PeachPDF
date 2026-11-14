@@ -10,7 +10,10 @@ public sealed partial class HtmlView
     // The contents of an element with `content-visibility: auto` that is away from the view are skipped and those that came near are shown
     // (css-contain-2 section 4). The view is moved to where the document says it is looking, so what changed above it does not move what is on screen.
     // One update at a time: a scroll that comes while one runs is looked at again when it is done.
-    private async Task UpdateContentVisibilityAsync(HtmlDocument document)
+    /// <summary>Stands in for <see cref="HtmlDocument.UpdateContentVisibilityAsync"/> when set, so a test can make an update that takes a while or fails.</summary>
+    internal Func<HtmlDocument, PeachDrawing.Core.Canvas, ValueTask<UpdateResult>>? ContentVisibilityUpdater { get; set; }
+
+    internal async Task UpdateContentVisibilityAsync(HtmlDocument document)
     {
         if (_updatingContentVisibility)
         {
@@ -29,7 +32,7 @@ public sealed partial class HtmlView
 
                 UpdateResult result;
                 using (var measuring = RentMeasuring(context))
-                    result = await document.UpdateContentVisibilityAsync(measuring.Canvas);
+                    result = await (ContentVisibilityUpdater is { } updater ? updater(document, measuring.Canvas) : document.UpdateContentVisibilityAsync(measuring.Canvas));
 
                 if (!ReferenceEquals(document, _document) || !result.Applied)
                     continue;
