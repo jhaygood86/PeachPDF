@@ -66,4 +66,55 @@ public class AnimationTests
             window.Close();
         });
     }
+
+    private const string Grow =
+        "<html><head><style>@keyframes grow{from{width:20px}to{width:200px}}" +
+        "#bar{height:40px;background:#c33;animation:grow 0.4s linear infinite alternate}" +
+        "</style></head><body style='margin:0'><div id='bar'></div></body></html>";
+
+    [Fact]
+    public async Task AnAnimationThatChangesLayoutIsSteppedAndRepainted()
+    {
+        await HeadlessSession.Run(async () =>
+        {
+            var (window, view) = await HeadlessSession.ShowAsync(Grow, 300, 200, v => v.AnimationsEnabled = true);
+            Assert.True(await PumpAsync(() => view.FrameCount > 6));
+
+            // The bar's width changes from frame to frame, so the layout was done again and what it painted differs: the box reaches different widths.
+            var widths = new HashSet<int>();
+            var sampled = await PumpAsync(() =>
+            {
+                var bounds = view.Document!.GetElementBounds("bar");
+                if (bounds is { } b)
+                    widths.Add((int)(b.Width / 20));
+
+                return widths.Count > 3;
+            });
+            Assert.True(sampled, "the animated width should take several values");
+            Assert.True(view.FramesPainted > 1);
+            window.Close();
+        });
+    }
+
+    [Fact]
+    public async Task APausedAnimationStopsTheLoopAndPlayingItStartsTheLoopAgain()
+    {
+        await HeadlessSession.Run(async () =>
+        {
+            var (window, view) = await HeadlessSession.ShowAsync(Grow, 300, 200, v => v.AnimationsEnabled = true);
+            Assert.True(await PumpAsync(() => view.FrameCount > 3));
+            var animation = Assert.Single(view.Document!.GetAnimations());
+
+            animation.Pause();
+            Assert.True(await PumpAsync(() => !view.IsAnimationLoopRunning), "nothing runs, so no frame is asked for");
+            var paused = view.FrameCount;
+            await PumpAsync(() => false, 150);
+            Assert.Equal(paused, view.FrameCount);
+
+            // The control API starts the clock from any thread, and the loop that steps it starts again.
+            await Task.Run(animation.Play);
+            Assert.True(await PumpAsync(() => view.IsAnimationLoopRunning && view.FrameCount > paused + 2), "the loop should run again");
+            window.Close();
+        });
+    }
 }
