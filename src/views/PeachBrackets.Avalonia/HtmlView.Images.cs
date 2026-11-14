@@ -9,6 +9,9 @@ public sealed partial class HtmlView
     private double _imagesChosenForZoom = 1;
     private DispatcherTimer? _upgradeTimer;
 
+    /// <summary>The zoom the document's images were last chosen for. For tests.</summary>
+    internal double ImagesChosenForZoom => _imagesChosenForZoom;
+
     private void QueueImageUpgrade()
     {
         if (_document is null || !ImageScale.NeedsUpgrade(_imagesChosenForZoom, _zoom))
