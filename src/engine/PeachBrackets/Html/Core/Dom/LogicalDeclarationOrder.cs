@@ -30,6 +30,7 @@ namespace PeachBrackets.Html.Dom
             var names = new List<string>
             {
                 "contain-intrinsic-width", "contain-intrinsic-height",
+                "width", "height", "min-width", "min-height", "max-width", "max-height",
                 "overflow-clip-margin-top", "overflow-clip-margin-right", "overflow-clip-margin-bottom", "overflow-clip-margin-left"
             };
             foreach (var side in new[] { "top", "right", "bottom", "left" })

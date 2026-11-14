@@ -312,6 +312,7 @@ The [CSS logical box-model properties](https://developer.mozilla.org/en-US/docs/
 | Logical property | Resolves to | Notes |
 |------------------|-------------|-------|
 | `margin-block` / `margin-inline` | the two physical block-edge / inline-edge margins | 1–2 values (1 applies to both edges) |
+| `inline-size` / `block-size`, `min-inline-size` / `min-block-size`, `max-inline-size` / `max-block-size` | the physical `width` / `height` (or `min-` / `max-`) of the box's own writing mode | the later of the logical and the physical declaration wins; the SVG text `inline-size` is not supported |
 | `margin-block-start` / `-end`, `margin-inline-start` / `-end` | one physical margin edge | single edge; WebKit's older `-webkit-margin-start` / `-webkit-margin-end` are accepted as `margin-inline-start` / `-end` |
 | `padding-block` / `padding-inline` (+ `-start`/`-end` longhands) | the physical `padding-*` edges | same 1–2-value / single-edge model as margin; `-webkit-padding-start` / `-webkit-padding-end` are accepted as `padding-inline-start` / `-end` |
 | `inset` | `top`+`right`+`bottom`+`left` | 1–4 values (the standard box-edge shorthand — always physical, not writing-mode-dependent, per spec) |

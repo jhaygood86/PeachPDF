@@ -56,3 +56,12 @@ css-grid 726 -> 737 passing.
 - An auto-height grid whose `min-height` exceeds its rows stretches the auto rows (`StretchAutoRows`) before the `align-content: stretch` pass, so
   `min-height` behaves like a definite height for stretching (css-grid 11.1).
 - Remaining sizing failures need logical size properties (`inline-size`, `block-size`), which are not implemented.
+
+## Logical size properties
+
+`inline-size`, `block-size` and their `min-`/`max-` forms are scratch longhands like the logical margins (`css-properties.json` category `logical`,
+`BoxRareState`, `CssBox.ResolveLogicalProperties`/`ApplySize`): they resolve to width/height by the box's own writing mode, ordered against the physical
+declaration with `LogicalDeclarationOrder`. The old `SvgOnlyProperty` registration of `inline-size` (SVG text wrapping, never read) was removed since the
+generated entry replaces it. Gained: `grid-track-ignores-max-size-001/002`. Lost (passed only because test and reference both dropped the declaration, now
+exposing real gaps): `replaced-element-016` (canvas percentage block-size) and `subgrid/scrollbar-gutter-001/002` (inline-grid in vertical-rl, scrollbar
+gutters in subgrids).

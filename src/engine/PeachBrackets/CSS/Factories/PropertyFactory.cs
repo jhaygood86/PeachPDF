@@ -335,7 +335,6 @@ namespace PeachBrackets.Css
             AddLonghand(PropertyNames.AlignBaseline, () => new SvgOnlyProperty(PropertyNames.AlignBaseline, Converters.Any), true);
             AddLonghand(PropertyNames.DominantBaseline, () => new SvgOnlyProperty(PropertyNames.DominantBaseline, Converters.Any), true);
             AddLonghand(PropertyNames.BaselineShift, () => new SvgOnlyProperty(PropertyNames.BaselineShift, Converters.Any), true);
-            AddLonghand(PropertyNames.InlineSize, () => new SvgOnlyProperty(PropertyNames.InlineSize, Converters.Any), true);
             AddLonghand(PropertyNames.ShapeInside, () => new SvgOnlyProperty(PropertyNames.ShapeInside, Converters.Any), true);
             AddLonghand(PropertyNames.ShapeSubtract, () => new SvgOnlyProperty(PropertyNames.ShapeSubtract, Converters.Any), true);
             AddLonghand(PropertyNames.R, () => new SvgOnlyProperty(PropertyNames.R, SvgOnlyProperty.GeometryLength), true);

@@ -2592,6 +2592,102 @@
       }
     },
     {
+      "name": "inline-size",
+      "comment": "CSS Logical Properties (css-logical-1) resolution scratch space - see the margin-block-start entry. Read once by CssBox.ResolveLogicalProperties, which writes the physical width/height (or min-/max-) of the box's own writing mode.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.AutoSizeConverter", "animatable": true, "registryAnimatable": true},
+      "initialValue": null,
+      "category": "logical",
+      "cssDataType": ["nonnegative-length", "keyword"],
+      "supportedValues": ["auto", "stretch", "-webkit-fill-available", "-moz-available"],
+      "keywordComparison": "ordinal-ignore-case",
+      "html": {
+        "propertyPath": "InlineSize",
+        "csharpDataType": "string?",
+        "area": null
+      }
+    },
+    {
+      "name": "block-size",
+      "comment": "CSS Logical Properties (css-logical-1) resolution scratch space - see the margin-block-start entry. Read once by CssBox.ResolveLogicalProperties, which writes the physical width/height (or min-/max-) of the box's own writing mode.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.AutoSizeConverter", "animatable": true, "registryAnimatable": true},
+      "initialValue": null,
+      "category": "logical",
+      "cssDataType": ["nonnegative-length", "keyword"],
+      "supportedValues": ["auto", "stretch", "-webkit-fill-available", "-moz-available"],
+      "keywordComparison": "ordinal-ignore-case",
+      "html": {
+        "propertyPath": "BlockSize",
+        "csharpDataType": "string?",
+        "area": null
+      }
+    },
+    {
+      "name": "min-inline-size",
+      "comment": "CSS Logical Properties (css-logical-1) resolution scratch space - see the margin-block-start entry. Read once by CssBox.ResolveLogicalProperties, which writes the physical width/height (or min-/max-) of the box's own writing mode.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.SizeConverter", "animatable": true, "registryAnimatable": true},
+      "initialValue": null,
+      "category": "logical",
+      "cssDataType": ["nonnegative-length", "keyword"],
+      "supportedValues": ["auto", "stretch", "-webkit-fill-available", "-moz-available"],
+      "keywordComparison": "ordinal-ignore-case",
+      "html": {
+        "propertyPath": "MinInlineSize",
+        "csharpDataType": "string?",
+        "area": null
+      }
+    },
+    {
+      "name": "min-block-size",
+      "comment": "CSS Logical Properties (css-logical-1) resolution scratch space - see the margin-block-start entry. Read once by CssBox.ResolveLogicalProperties, which writes the physical width/height (or min-/max-) of the box's own writing mode.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.SizeConverter", "animatable": true, "registryAnimatable": true},
+      "initialValue": null,
+      "category": "logical",
+      "cssDataType": ["nonnegative-length", "keyword"],
+      "supportedValues": ["auto", "stretch", "-webkit-fill-available", "-moz-available"],
+      "keywordComparison": "ordinal-ignore-case",
+      "html": {
+        "propertyPath": "MinBlockSize",
+        "csharpDataType": "string?",
+        "area": null
+      }
+    },
+    {
+      "name": "max-inline-size",
+      "comment": "CSS Logical Properties (css-logical-1) resolution scratch space - see the margin-block-start entry. Read once by CssBox.ResolveLogicalProperties, which writes the physical width/height (or min-/max-) of the box's own writing mode.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.OptionalSizeConverter", "animatable": true, "registryAnimatable": true},
+      "initialValue": null,
+      "category": "logical",
+      "cssDataType": ["nonnegative-length", "keyword"],
+      "supportedValues": ["auto", "stretch", "-webkit-fill-available", "-moz-available"],
+      "keywordComparison": "ordinal-ignore-case",
+      "html": {
+        "propertyPath": "MaxInlineSize",
+        "csharpDataType": "string?",
+        "area": null
+      }
+    },
+    {
+      "name": "max-block-size",
+      "comment": "CSS Logical Properties (css-logical-1) resolution scratch space - see the margin-block-start entry. Read once by CssBox.ResolveLogicalProperties, which writes the physical width/height (or min-/max-) of the box's own writing mode.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.OptionalSizeConverter", "animatable": true, "registryAnimatable": true},
+      "initialValue": null,
+      "category": "logical",
+      "cssDataType": ["nonnegative-length", "keyword"],
+      "supportedValues": ["auto", "stretch", "-webkit-fill-available", "-moz-available"],
+      "keywordComparison": "ordinal-ignore-case",
+      "html": {
+        "propertyPath": "MaxBlockSize",
+        "csharpDataType": "string?",
+        "area": null
+      }
+    },
+    {
       "name": "break-before",
       "comment": "cssDataType's own supportedValues includes region/avoid-region because real dispatch stores any css-break-4-valid keyword (CssUtilsTests.Cascade_BreakBefore_StoresOnlySpecValues) even though BreakValues.cs's fragmentation logic doesn't act on them - no FragmentationContext.Region exists, consistent with this repo's lack of multi-column-region support. supportsDataType is the stricter, @supports-only list excluding region/avoid-region for exactly that reason.",
       "inherited": false,

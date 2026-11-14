@@ -154,6 +154,12 @@ namespace PeachBrackets.Html.Dom
         internal List<CssBox>? DisplayContentsLiftedChildren;
         internal List<CssBox>? DisplayContentsAncestors;
         internal CssBox? OriginatingBox;
+        internal string? InlineSize;
+        internal string? BlockSize;
+        internal string? MinInlineSize;
+        internal string? MinBlockSize;
+        internal string? MaxInlineSize;
+        internal string? MaxBlockSize;
         internal string? MarginBlockStart;
         internal string? MarginBlockEnd;
         internal string? MarginInlineStart;
