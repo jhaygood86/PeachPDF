@@ -128,4 +128,61 @@ public class FocusTests
         Assert.Null(view.FocusedNode);
         window.Close();
     });
+
+    [Fact]
+    public Task EnterOnAFocusedAnchorLinkScrollsToItsTargetAndOnAnExternalOneStartsTheLauncher() => HeadlessSession.Run(async () =>
+    {
+        var (window, view) = await HeadlessSession.ShowAsync(Page, 500, 300);
+        var destinations = new List<string?>();
+        view.LinkActivated += (_, e) => destinations.Add(e.Destination ?? e.Uri);
+        view.Focus();
+
+        // Not cancelled: the page scrolls to the element the anchor names.
+        await HtmlViewInput.KeyAsync(window, view, Key.Tab);
+        await HtmlViewInput.KeyAsync(window, view, Key.Enter);
+        Assert.Equal(["end"], destinations);
+        Assert.True(view.ScrollPixels.Y > 1000, $"the page should have scrolled to the end, at {view.ScrollPixels.Y}");
+
+        // An external link is handed to the launcher (the headless one starts nothing) after the host was told of it.
+        for (var i = 0; i < 3; i++)
+            await HtmlViewInput.KeyAsync(window, view, Key.Tab);
+        Assert.Equal("four", view.FocusedNode?.ElementId);
+        await HtmlViewInput.KeyAsync(window, view, Key.Enter);
+        Assert.Equal(["end", "https://example.com/"], destinations);
+        window.Close();
+    });
+
+    [Fact]
+    public Task AFocusChangeThatFailsDoesNotStopTheOnesQueuedAfterIt() => HeadlessSession.Run(async () =>
+    {
+        var (window, view) = await HeadlessSession.ShowAsync(Page, 500, 300);
+        var ran = false;
+        view.QueueFocus(() => throw new InvalidOperationException("the first change failed"));
+        view.QueueFocus(() =>
+        {
+            ran = true;
+            return Task.CompletedTask;
+        });
+
+        await view.FocusIdle;
+        Assert.True(ran);
+        window.Close();
+    });
+
+    [Fact]
+    public Task StepFocusHasNothingToStepWithNoDocumentAndGivesUpTheFocusAtTheEnds() => HeadlessSession.Run(async () =>
+    {
+        Assert.False(new HtmlView().StepFocus(true));
+
+        var (window, view) = await HeadlessSession.ShowAsync(Page, 500, 300);
+        view.Focus();
+        for (var i = 0; i < 4; i++)
+            await HtmlViewInput.KeyAsync(window, view, Key.Tab);
+
+        // Past the last stop the page lets the key move Avalonia's focus on, and drops its own.
+        Assert.False(view.StepFocus(true));
+        await view.FocusIdle;
+        Assert.Null(view.FocusedNode);
+        window.Close();
+    });
 }
