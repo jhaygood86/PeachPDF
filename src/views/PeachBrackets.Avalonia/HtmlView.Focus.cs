@@ -206,6 +206,11 @@ public sealed partial class HtmlView
     protected override void OnLostFocus(FocusChangedEventArgs e)
     {
         base.OnLostFocus(e);
+
+        // The focus went into a flyout of the view's own (its field menu or a picker): the page keeps its focus, as the flyout works on it.
+        if (HasOpenFlyout)
+            return;
+
         if (_focusTargetId is not null || _document?.FocusedNode is not null)
             QueueFocus(ClearDocumentFocusAsync);
     }

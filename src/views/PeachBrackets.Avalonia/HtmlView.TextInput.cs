@@ -140,10 +140,8 @@ public sealed partial class HtmlView
 
         if (ReferenceEquals(document, _document) && IsEditingField)
         {
-            // A transient flyout does not take the keyboard focus: the view losing it would end the field's editing (and the menu acts on the field).
-            var menu = BuildFieldMenu();
-            menu.ShowMode = FlyoutShowMode.Transient;
-            menu.ShowAt(this, true);
+            // The menu takes the keyboard focus (so the arrow keys, Enter and Escape work in it); the view losing it does not end the field's editing.
+            Show(BuildFieldMenu(), true);
         }
     }
 

@@ -1,7 +1,9 @@
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
+using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.VisualTree;
 using Avalonia.Platform.Storage;
 using PeachBrackets.Updates;
 
@@ -14,6 +16,7 @@ public sealed partial class HtmlView
     private DocumentElement? _rangeElement;
     private int _rangePage;
     private FlyoutBase? _openFlyout;
+    private readonly HashSet<FlyoutBase> _ownFlyouts = [];
 
     // A press that begins on a range control sets it at once, and moving on drags the thumb.
     private bool BeginRangeDrag(int page, double x, double y)
@@ -80,15 +83,25 @@ public sealed partial class HtmlView
         }
     }
 
-    private bool Show(FlyoutBase flyout)
+    // Shows one of the view's own flyouts. While it is open the keyboard focus is inside it, and the view losing it must not end the page's focus (the menu acts
+    // on the field that has it, and a picker writes into the control that opened it); when it closes the focus comes back to the view.
+    private bool Show(PopupFlyoutBase flyout, bool atPointer = false)
     {
+        CloseFlyout();
         _openFlyout = flyout;
-        flyout.Closed += (_, _) =>
+        _ownFlyouts.Add(flyout);
+        flyout.Closed += OnOwnFlyoutClosed;
+        flyout.ShowAt(this, atPointer);
+        if (!flyout.IsOpen)
         {
+            flyout.Closed -= OnOwnFlyoutClosed;
+            _ownFlyouts.Remove(flyout);
             if (ReferenceEquals(_openFlyout, flyout))
                 _openFlyout = null;
-        };
-        flyout.ShowAt(this);
+
+            return false;
+        }
+
         return true;
     }
 
@@ -96,6 +109,42 @@ public sealed partial class HtmlView
     {
         _openFlyout?.Hide();
         _openFlyout = null;
+    }
+
+    /// <summary>Whether a flyout the view opened (a field's menu or a picker) is open.</summary>
+    internal bool HasOpenFlyout => _ownFlyouts.Count > 0;
+
+    /// <summary>The flyout the view opened last, while it is open.</summary>
+    internal FlyoutBase? OpenFlyout => _openFlyout;
+
+    private void OnOwnFlyoutClosed(object? sender, EventArgs e)
+    {
+        if (sender is not FlyoutBase flyout)
+            return;
+
+        flyout.Closed -= OnOwnFlyoutClosed;
+        _ownFlyouts.Remove(flyout);
+        if (ReferenceEquals(_openFlyout, flyout))
+            _openFlyout = null;
+
+        // The focus goes back to the page, unless it has gone to some other control since.
+        if (_ownFlyouts.Count == 0 && _document is not null && this.IsAttachedToVisualTree() && !IsFocused
+            && TopLevel.GetTopLevel(this)?.FocusManager?.GetFocusedElement() is var focused && (focused is null || IsInsideFlyoutChrome(focused)))
+        {
+            Focus();
+        }
+    }
+
+    // The focus is in a flyout's own popup (its menu or its content), not in a control of the application.
+    private static bool IsInsideFlyoutChrome(IInputElement element)
+    {
+        for (var visual = element as global::Avalonia.Visual; visual is not null; visual = visual.GetVisualParent())
+        {
+            if (visual is FlyoutPresenter or MenuFlyoutPresenter or PopupRoot or OverlayPopupHost)
+                return true;
+        }
+
+        return false;
     }
 
     // The list of options of a drop-down, the chosen one checked.
