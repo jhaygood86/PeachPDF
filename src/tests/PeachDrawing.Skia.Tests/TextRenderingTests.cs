@@ -597,6 +597,60 @@ public class TextRenderingTests
     }
 
     [Fact]
+    public async Task The_mask_cache_drops_its_oldest_runs_when_it_holds_more_than_its_budget_and_keeps_the_newest()
+    {
+        using var context = await ContextAsync(SkiaTextRendering.Grayscale);
+        var font = context.GetFont("Source Sans 3", 20, PaintFontStyle.Regular)!;
+
+        // Room for a few runs: each run of this size is a few hundred bytes, so a mask is stored (a mask is kept only when it is at most an eighth of the budget).
+        var cache = new SkiaTextMaskCache(20_000);
+        var words = Enumerable.Range(0, 40).Select(i => "word" + i).ToList();
+        foreach (var word in words)
+            Assert.NotNull(cache.Get(context, word, font, 0, 1, 1, 1, 0, 0, null, default, 1, null, out _));
+
+        Assert.True(cache.ByteCount <= 20_000, $"{cache.ByteCount} bytes are held");
+        Assert.InRange(cache.Count, 1, words.Count - 1);
+
+        // The newest run is still held (asking for it again is a hit), the oldest is not (it is made again).
+        var hits = cache.Hits;
+        _ = cache.Get(context, words[^1], font, 0, 1, 1, 1, 0, 0, null, default, 1, null, out _);
+        Assert.Equal(hits + 1, cache.Hits);
+        var misses = cache.Misses;
+        _ = cache.Get(context, words[0], font, 0, 1, 1, 1, 0, 0, null, default, 1, null, out _);
+        Assert.Equal(misses + 1, cache.Misses);
+
+        // A run too big to be worth keeping (over an eighth of the budget) is made and handed back, not stored.
+        var tiny = new SkiaTextMaskCache(100);
+        Assert.NotNull(tiny.Get(context, "not stored", font, 0, 1, 1, 1, 0, 0, null, default, 1, null, out _));
+        Assert.Equal(0, tiny.Count);
+    }
+
+    [Fact]
+    public async Task A_run_of_blanks_has_an_empty_mask_and_a_run_outside_the_visible_limit_has_none_to_draw()
+    {
+        using var context = await ContextAsync(SkiaTextRendering.Grayscale);
+        var font = context.GetFont("Source Sans 3", 20, PaintFontStyle.Regular)!;
+        var cache = new SkiaTextMaskCache();
+
+        // Spaces carry no ink: the mask is empty, with or without a limit.
+        var blank = cache.Get(context, "   ", font, 0, 1, 1, 1, 10, 10, null, default, 1, null, out _);
+        Assert.Equal(0, blank!.Value.Width);
+        blank = cache.Get(context, "   ", font, 0, 1, 1, 1, 10, 10, null, default, 1, (0, 0, 100, 100), out _);
+        Assert.Equal(0, blank!.Value.Width);
+
+        // Text whose place is wholly outside what can be seen is cut to nothing; inside, it keeps its ink.
+        var outside = cache.Get(context, "visible", font, 0, 1, 1, 1, 10, 10, null, default, 1, (500, 500, 600, 600), out _);
+        Assert.Equal(0, outside!.Value.Width);
+        var inside = cache.Get(context, "visible", font, 0, 1, 1, 1, 10, 10, null, default, 1, (0, 0, 200, 200), out _);
+        Assert.True(inside!.Value.Width > 20);
+        Assert.Contains(inside.Value.Samples, b => b != 0);
+
+        // Cut by a limit that takes only the left of the word, the mask is narrower than the whole.
+        var cut = cache.Get(context, "visible", font, 0, 1, 1, 1, 10, 10, null, default, 1, (0, 0, 25, 200), out _);
+        Assert.True(cut!.Value.Width < inside.Value.Width);
+    }
+
+    [Fact]
     public void A_gsettings_answer_is_its_output_only_when_the_process_ended_in_time_with_success()
     {
         var ok = new FakeGsettings("'rgba'\n");

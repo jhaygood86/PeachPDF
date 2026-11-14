@@ -18,13 +18,17 @@ namespace PeachDrawing.Skia;
 /// </remarks>
 internal sealed class SkiaTextMaskCache
 {
-    /// <summary>The most bytes of coverage the cache keeps.</summary>
-    private const long Budget = 48L * 1024 * 1024;
+    /// <summary>The most bytes of coverage a cache keeps unless it is made with another budget.</summary>
+    internal const long DefaultBudget = 48L * 1024 * 1024;
+
+    private readonly long _budget;
 
     private readonly Lock _gate = new();
     private readonly Dictionary<Key, LinkedListNode<Entry>> _entries = [];
     private readonly LinkedList<Entry> _order = new();
     private long _bytes;
+
+    internal SkiaTextMaskCache(long budget = DefaultBudget) => _budget = budget;
 
     internal long ByteCount => _bytes;
 
@@ -120,7 +124,7 @@ internal sealed class SkiaTextMaskCache
             var made = Trim(rasterized);
 
             var bytes = made.Samples.LongLength + 64;
-            if (bytes <= Budget / 8)
+            if (bytes <= _budget / 8)
             {
                 lock (_gate)
                 {
@@ -129,7 +133,7 @@ internal sealed class SkiaTextMaskCache
                         var entry = new Entry(key, made, bytes);
                         _entries[key] = _order.AddFirst(entry);
                         _bytes += bytes;
-                        while (_bytes > Budget && _order.Last is { } oldest)
+                        while (_bytes > _budget && _order.Last is { } oldest)
                         {
                             _order.RemoveLast();
                             _entries.Remove(oldest.Value.Key);
