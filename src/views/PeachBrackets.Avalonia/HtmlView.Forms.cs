@@ -1,3 +1,4 @@
+using System.Globalization;
 using Avalonia.Input;
 using PeachBrackets.Accessibility;
 using PeachBrackets.Updates;
@@ -166,6 +167,71 @@ public sealed partial class HtmlView
 
         if (ReferenceEquals(document, _document))
             AfterControlChange(document, result);
+    }
+
+    // The arrow keys, Home, End, Page Up and Page Down on a focused range control: true when the key was used.
+    private bool HandleRangeKey(KeyEventArgs e)
+    {
+        if (_document is not { } document || (e.KeyModifiers & (KeyModifiers.Control | KeyModifiers.Alt | KeyModifiers.Meta)) != 0
+            || e.Key is not (Key.Left or Key.Right or Key.Up or Key.Down or Key.Home or Key.End or Key.PageUp or Key.PageDown))
+        {
+            return false;
+        }
+
+        var node = CurrentFocus(document);
+        if (node?.ElementId is not { } id || document.GetElement(id) is not { } element
+            || document.GetFormState(element) is not { Type: "range", Disabled: false } state || document.GetAttribute(element, "readonly") is not null)
+        {
+            return false;
+        }
+
+        double Number(string name, double fallback) =>
+            double.TryParse(document.GetAttribute(element, name), NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed) ? parsed : fallback;
+
+        var min = Number("min", 0);
+        var max = Number("max", 100);
+        if (max <= min)
+            max = min + 100;
+
+        // The step is 1 unless the control says otherwise; "any" has no step of its own, so a hundredth of the range moves it.
+        var stepText = document.GetAttribute(element, "step");
+        var step = stepText?.Equals("any", StringComparison.OrdinalIgnoreCase) == true ? (max - min) / 100 : Number("step", 1);
+        if (step <= 0)
+            step = 1;
+
+        var current = double.TryParse(state.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsedValue) ? parsedValue : min + ((max - min) / 2);
+        var large = Math.Max(step, Math.Round(((max - min) / 10) / step) * step);
+        double target;
+        switch (e.Key)
+        {
+            case Key.Right or Key.Up:
+                target = current + step;
+                break;
+            case Key.Left or Key.Down:
+                target = current - step;
+                break;
+            case Key.PageUp:
+                target = current + large;
+                break;
+            case Key.PageDown:
+                target = current - large;
+                break;
+            case Key.Home:
+                target = min;
+                break;
+            default:
+                target = max;
+                break;
+        }
+
+        // The result is a step of the control (counted from its minimum) between the minimum and the maximum.
+        if (e.Key is not (Key.Home or Key.End))
+            target = min + (Math.Round((target - min) / step) * step);
+
+        target = Math.Clamp(target, min, max);
+        var result = document.SetValue(element, target.ToString(CultureInfo.InvariantCulture));
+        AfterControlChange(document, result);
+        return true;
     }
 
     // Space or Enter on a focused check box, radio button or button.

@@ -215,5 +215,5 @@ public sealed partial class HtmlView
             QueueFocus(ClearDocumentFocusAsync);
     }
 
-    private bool HandleFocusKey(KeyEventArgs e) => HandleEditKey(e) || HandleFocusNavigationKey(e);
+    private bool HandleFocusKey(KeyEventArgs e) => HandleEditKey(e) || HandleRangeKey(e) || HandleFocusNavigationKey(e);
 }

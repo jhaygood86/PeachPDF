@@ -207,3 +207,67 @@ public class FormsTests
         Assert.Equal("application/x-foo", HtmlView.ContentTypeOf("x.bin", "application/x-foo"));
     }
 }
+
+public class RangeKeyTests
+{
+    private const string Page = """
+        <html><body style="margin:0">
+        <input id="r" type="range" min="10" max="50" step="5" value="20" style="width:200px;height:20px"><br>
+        <input id="plain" type="range" style="width:200px;height:20px"><br>
+        <input id="off" type="range" value="20" disabled style="width:200px;height:20px">
+        <div style="height:1500px"></div>
+        </body></html>
+        """;
+
+    private static double Value(HtmlView view, string id) =>
+        double.Parse(HtmlViewInput.State(view, id).Value, CultureInfo.InvariantCulture);
+
+    [Fact]
+    public Task ArrowKeysMoveAFocusedRangeByItsStepWithinMinAndMax() => HeadlessSession.Run(async () =>
+    {
+        var (window, view) = await HeadlessSession.ShowAsync(Page, 400, 300);
+        view.Focus();
+        await HtmlViewInput.KeyAsync(window, view, Key.Tab);
+        Assert.Equal("r", view.FocusedNode?.ElementId);
+        var scrolled = view.ScrollOffsetY;
+
+        await HtmlViewInput.KeyAsync(window, view, Key.Right);
+        Assert.Equal(25, Value(view, "r"));
+        await HtmlViewInput.KeyAsync(window, view, Key.Up);
+        Assert.Equal(30, Value(view, "r"));
+        await HtmlViewInput.KeyAsync(window, view, Key.Left);
+        await HtmlViewInput.KeyAsync(window, view, Key.Down);
+        Assert.Equal(20, Value(view, "r"));
+
+        // A large step is a tenth of the range, kept a multiple of the step; Home and End go to the ends; nothing goes past them.
+        await HtmlViewInput.KeyAsync(window, view, Key.PageUp);
+        Assert.Equal(25, Value(view, "r"));
+        await HtmlViewInput.KeyAsync(window, view, Key.End);
+        Assert.Equal(50, Value(view, "r"));
+        await HtmlViewInput.KeyAsync(window, view, Key.Right);
+        Assert.Equal(50, Value(view, "r"));
+        await HtmlViewInput.KeyAsync(window, view, Key.Home);
+        Assert.Equal(10, Value(view, "r"));
+        await HtmlViewInput.KeyAsync(window, view, Key.PageDown);
+        Assert.Equal(10, Value(view, "r"));
+
+        // The keys went to the control, not to the page's scrolling.
+        Assert.Equal(scrolled, view.ScrollOffsetY);
+        window.Close();
+    });
+
+    [Fact]
+    public Task ARangeWithNoStepOrBoundsMovesByOneInZeroToOneHundred() => HeadlessSession.Run(async () =>
+    {
+        var (window, view) = await HeadlessSession.ShowAsync(Page, 400, 300);
+        view.Focus();
+        await HtmlViewInput.KeyAsync(window, view, Key.Tab);
+        await HtmlViewInput.KeyAsync(window, view, Key.Tab);
+        Assert.Equal("plain", view.FocusedNode?.ElementId);
+        await HtmlViewInput.KeyAsync(window, view, Key.Right);
+        Assert.Equal(51, Value(view, "plain"));
+        await HtmlViewInput.KeyAsync(window, view, Key.End);
+        Assert.Equal(100, Value(view, "plain"));
+        window.Close();
+    });
+}
