@@ -13,6 +13,9 @@ public sealed partial class HtmlView
 
     internal int FrameCount { get; private set; }
 
+    /// <summary>Whether the loop that steps the document is running. For tests.</summary>
+    internal bool IsAnimationLoopRunning => _animating;
+
     // Whether this control plays animations: the host asked for them.
     private bool PlaysAnimations => AnimationsEnabled;
 

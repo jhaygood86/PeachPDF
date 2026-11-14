@@ -22,6 +22,9 @@ public sealed partial class HtmlView
     private TouchActions _touchAllowed = TouchActions.All;
     private StandardCursorType? _shownCursor;
 
+    /// <summary>The keyword pointer shown now, or null when an image pointer (or none) is. For tests.</summary>
+    internal StandardCursorType? ShownKeywordCursor => _shownCursor;
+
     private bool _pumping;
     private PointerSample? _pendingPointer;
     private bool _clearPending;

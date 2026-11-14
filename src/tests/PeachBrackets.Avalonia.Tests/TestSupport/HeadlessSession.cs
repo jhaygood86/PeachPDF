@@ -50,6 +50,36 @@ internal static class HeadlessSession
         return (window, view);
     }
 
+    /// <summary>Opens a window holding a configured view and waits for it to load, or to fail; returns what went wrong, or null when it loaded.</summary>
+    public static async Task<(Window Window, HtmlView View, Exception? Failure)> ShowViewAsync(HtmlView view, double width = 400, double height = 300)
+    {
+        var window = new Window { Width = width, Height = height, Content = view, SizeToContent = SizeToContent.Manual };
+        var done = new TaskCompletionSource<Exception?>();
+        view.DocumentLoaded += (_, _) => done.TrySetResult(null);
+        view.DocumentFailed += (_, e) => done.TrySetResult(e.Exception);
+        window.Show();
+        var failure = await done.Task.WaitAsync(TimeSpan.FromSeconds(60));
+        Dispatcher.UIThread.RunJobs();
+        return (window, view, failure);
+    }
+
+    /// <summary>Runs the dispatcher and the render timer until the condition holds.</summary>
+    public static async Task<bool> PumpUntilAsync(Func<bool> condition, int milliseconds = 15000)
+    {
+        var deadline = Environment.TickCount64 + milliseconds;
+        while (Environment.TickCount64 < deadline)
+        {
+            AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+            Dispatcher.UIThread.RunJobs();
+            if (condition())
+                return true;
+
+            await Task.Delay(8);
+        }
+
+        return condition();
+    }
+
     /// <summary>The window as it is drawn.</summary>
     public static WriteableBitmap Capture(Window window)
     {
