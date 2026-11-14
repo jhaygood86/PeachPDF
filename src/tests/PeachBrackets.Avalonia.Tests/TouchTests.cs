@@ -1,4 +1,5 @@
 using Avalonia;
+using Avalonia.Headless;
 using PeachBrackets.Avalonia.Logic;
 using PeachBrackets.Avalonia.Tests.TestSupport;
 
@@ -91,11 +92,16 @@ public class TouchTests
         await HeadlessSession.Run(async () =>
         {
             var (window, view) = await HeadlessSession.ShowAsync(Boxed);
-            view.BeginTouchPress(0, 40, 40);
-            Assert.True(view.TouchDragBy(0, 50));
+            // A finger that goes down on the box and moves up drags the box's own content, through the real pointer events.
+            var finger = window.TouchBegin(new Point(40 * 96.0 / 72, 40 * 96.0 / 72));
+            window.TouchMove(finger, new Point(40 * 96.0 / 72, (40 * 96.0 / 72) - 30));
             Assert.True(view.IsTouchScrollingContainer);
             Assert.Equal(0, view.ScrollPixels.Y);
             Assert.True(view.GetContainerScroll("box")!.Value.Y > 0);
+            window.TouchEnd(finger, new Point(40 * 96.0 / 72, (40 * 96.0 / 72) - 30));
+            while (view.IsFlinging)
+                view.StepFling(0.016);
+
             window.Close();
         });
     }
@@ -188,6 +194,60 @@ public class TouchTests
             Pinch(view, 2, new Point(120, 90));
             Assert.Equal(2, view.Zoom, 3);
             Assert.Equal(under.Y, Under(new Point(120, 90)).Y, 1);
+            window.Close();
+        });
+    }
+
+    [Fact]
+    public async Task AFingerDraggedUpTheScreenPansThePage()
+    {
+        await HeadlessSession.Run(async () =>
+        {
+            var (window, view) = await HeadlessSession.ShowAsync(Tall);
+            Assert.Equal(0, view.ScrollPixels.Y);
+            var finger = window.TouchBegin(new Point(200, 250));
+            window.TouchMove(finger, new Point(200, 200));
+            window.TouchMove(finger, new Point(200, 150));
+            // The page follows the finger: dragging up 100 pixels scrolls 100 down.
+            Assert.Equal(100, view.ScrollPixels.Y, 1);
+            window.TouchEnd(finger, new Point(200, 150));
+            await HtmlViewInput.SettleAsync(view);
+            Assert.True(view.ScrollPixels.Y >= 100);
+            while (view.IsFlinging)
+                view.StepFling(0.016);
+            window.Close();
+        });
+    }
+
+    [Fact]
+    public async Task TouchActionNoneOnTheElementUnderTheFingerKeepsThePageFromPanning()
+    {
+        await HeadlessSession.Run(async () =>
+        {
+            var (window, view) = await HeadlessSession.ShowAsync(
+                "<html><body style='margin:0'>" +
+                "<div style='position:absolute;left:0;top:0;width:200px;height:3000px;touch-action:none;background:#fdd'></div>" +
+                "<div style='position:absolute;left:200px;top:0;width:200px;height:3000px;background:#dfd'></div>" +
+                "</body></html>");
+
+            // A finger that went down on the touch-action: none element moves the page nowhere.
+            var blocked = window.TouchBegin(new Point(100, 250));
+            window.TouchMove(blocked, new Point(100, 200));
+            window.TouchMove(blocked, new Point(100, 100));
+            Assert.Equal(0, view.ScrollPixels.Y);
+            Assert.Equal(PeachBrackets.TouchActions.None, view.TouchAllowed & PeachBrackets.TouchActions.PanUp);
+            window.TouchEnd(blocked, new Point(100, 100));
+            await HtmlViewInput.SettleAsync(view);
+            Assert.Equal(0, view.ScrollPixels.Y);
+
+            // The same drag over the element beside it scrolls.
+            var free = window.TouchBegin(new Point(300, 250));
+            window.TouchMove(free, new Point(300, 200));
+            window.TouchMove(free, new Point(300, 100));
+            Assert.Equal(150, view.ScrollPixels.Y, 1);
+            window.TouchEnd(free, new Point(300, 100));
+            while (view.IsFlinging)
+                view.StepFling(0.016);
             window.Close();
         });
     }
