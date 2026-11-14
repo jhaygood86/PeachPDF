@@ -27,3 +27,10 @@ css-grid 710 -> 718 passing.
 - Subgrid edge placeholders: a subgrid with nothing on an edge still contributes its own margin, border and padding there, and a nested subgrid's contributions get this
   level's edges added (`CollectSubgridColumnContributions`). `subgrid-no-items-on-edges-001` still fails: its container is an `inline-grid`, whose shrink-to-fit width
   (`MeasureIntrinsicWidth`) skips subgrid items entirely.
+
+## `body { overflow: hidden }` (found through a css-grid test, fixes seven modules' worth)
+The `overflow` of `<body>` goes to the viewport when `<html>`'s is `visible` (css-overflow-3 3.3), so the body is not a scroll container: it does not establish a
+formatting context and its margins collapse with its children's. This engine made it a formatting context, so `body { overflow: hidden }` pushed everything down by the
+first child's margin (8px in `grid-as-flex-item-should-not-shrink-to-fit-*`, whose reference has no overflow). `DomUtils.OverflowPropagatesToViewport` is asked by
+`EstablishesIndependentFormattingContext` and, through `CssBox.OverflowKeepsFlow`, by the five margin-folding checks in `CssBox` that read `Overflow.Value`. Across all 16 WPT
+modules: +11 passing (css-grid +8, css-flexbox +2, css-backgrounds +1), none lost. The body is still painted clipped; only the layout predicate changed.

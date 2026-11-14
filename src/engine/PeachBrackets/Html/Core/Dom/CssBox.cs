@@ -6326,7 +6326,7 @@ namespace PeachBrackets.Html.Dom
             if (depth > 500) return false;
             if (!WritingMode.Value.IsVertical()) return false;
             if (HasDifferentWritingModeFromParent) return false;
-            if (Overflow.Value != PeachBrackets.Css.Overflow.Visible) return false;
+            if (!OverflowKeepsFlow) return false;
             if (Words.Count > 0) return false;
             if (resolvedBlockExtent >= 0.1) return false;
 
@@ -6361,7 +6361,7 @@ namespace PeachBrackets.Html.Dom
             if (ParentBox is null || ParentBox.IndexOfChild(this) != ParentBox.Boxes.Count - 1 ||
                 !(ParentBox.BlockEndMargin < 0.1) ||
                 !(BlockEndPadding < 0.1) || !(BlockEndBorderWidth < 0.1) ||
-                Overflow.Value != PeachBrackets.Css.Overflow.Visible ||
+                !OverflowKeepsFlow ||
                 HasDifferentWritingModeFromParent)
             {
                 return;
@@ -10492,6 +10492,10 @@ namespace PeachBrackets.Html.Dom
         /// relationship to its own immediate parent (gated on their writing modes matching), never
         /// walking across a chain of different boxes the way the block-start fold does.
         /// </remarks>
+        /// <summary>Whether this box's <c>overflow</c> leaves it an ordinary block for margin collapsing: <c>visible</c>, or the <c>body</c>'s that went to the viewport
+        /// (css-overflow-3 3.3), which makes it no scroll container.</summary>
+        internal bool OverflowKeepsFlow => Overflow.Value == PeachBrackets.Css.Overflow.Visible || DomUtils.OverflowPropagatesToViewport(this);
+
         private PhysicalSide BlockEnd => LogicalPropertyResolver.BlockEnd(WritingMode.Value);
 
         private double BlockEndMargin => PhysicalMargin(BlockEnd);
@@ -10761,7 +10765,7 @@ namespace PeachBrackets.Html.Dom
             // with their in-flow children"; css-flexbox-1 §4): walking on into its children would fold that margin into the group that positions the box
             // itself, so the margin was applied twice - once moving the box, once inside it - while the box's height counted it once. (The document's root box is
             // not one: it is the bookkeeping box above <html>, and the margins of the page's first elements are meant to reach it.)
-            while (chainMembers.Count < 1000 && current.Overflow.Value == PeachBrackets.Css.Overflow.Visible &&
+            while (chainMembers.Count < 1000 && current.OverflowKeepsFlow &&
                    !current.DerivedStyle.IsFlowRoot && (current.ParentBox is null || !DomUtils.EstablishesIndependentFormattingContext(current)) &&
                    current.PhysicalBorderWidth(side) < 0.1 && current.PhysicalPadding(side) < 0.1)
             {
@@ -10896,7 +10900,7 @@ namespace PeachBrackets.Html.Dom
         private bool CollapsesBlockEndMarginWithLastChild() =>
             HasAutoBlockEndHeight()
             && !DomUtils.EstablishesIndependentFormattingContext(this)
-            && Overflow.Value == PeachBrackets.Css.Overflow.Visible
+            && OverflowKeepsFlow
             && ActualPaddingBottom < 0.1
             && ActualBorderBottomWidth < 0.1
             && (MinHeight == Keywords.Auto
@@ -11068,7 +11072,7 @@ namespace PeachBrackets.Html.Dom
             var heightIsAuto = Height == Keywords.Auto ||
                 (CssValueParser.DependsOnPercentage(Height) && !CssLayoutEngine.IsHeightDefinite(ContainingBlock));
             if (!heightIsAuto) return false;
-            if (Overflow.Value != PeachBrackets.Css.Overflow.Visible) return false;
+            if (!OverflowKeepsFlow) return false;
             // A multi-column container is a formatting context root too (css-multicol-1 §2), and its height covers its
             // floats (CSS 2.1 §10.6.7), so a container holding only a float is not empty: what follows it goes below.
             if (EstablishesMultiColumnContext || DerivedStyle.IsFlowRoot) return false;

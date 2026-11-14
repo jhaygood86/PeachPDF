@@ -1341,7 +1341,7 @@ namespace PeachBrackets.Html.Utils
             if (box.ParentBox.ParentBox is null && box.HtmlTag is { } rootTag && rootTag.Name.Equals("html", StringComparison.OrdinalIgnoreCase)) return true;
             if (box.IsFloated || box.IsPageFloated) return true;
             if (box.Position.Value is PositionMode.Absolute or PositionMode.Fixed) return true;
-            if (box.Overflow.Value is not Overflow.Visible) return true;
+            if (box.Overflow.Value is not Overflow.Visible && !OverflowPropagatesToViewport(box)) return true;
             if (box.DerivedStyle.IsFlowRoot) return true;
             if (AppliesLayoutOrPaintContainment(box)) return true;
 
@@ -1364,6 +1364,17 @@ namespace PeachBrackets.Html.Utils
             return box.ParentBox.DerivedStyle.ActualDisplay is Keywords.Flex or Keywords.InlineFlex
                 or Keywords.Grid or Keywords.InlineGrid;
         }
+
+        /// <summary>
+        /// Whether <paramref name="box"/>'s <c>overflow</c> is the one that goes to the viewport (css-overflow-3 3.3): the <c>body</c> element's, when the root
+        /// element's own is <c>visible</c>. Such a body is no scroll container, so it is not a formatting context of its own and its margins collapse with its
+        /// children's as they would with <c>overflow: visible</c>.
+        /// </summary>
+        internal static bool OverflowPropagatesToViewport(CssBox box) =>
+            box.HtmlTag is { } tag && tag.Name.Equals("body", StringComparison.OrdinalIgnoreCase)
+            && box.ParentBox is { HtmlTag: { } rootTag, ParentBox.ParentBox: null } root
+            && rootTag.Name.Equals("html", StringComparison.OrdinalIgnoreCase)
+            && root.Overflow.Value is Overflow.Visible;
 
         /// <summary>
         /// The containment that applies to <paramref name="box"/>: what its <c>contain</c> and <c>content-visibility</c> ask for (<see cref="ContainGrammar.Of"/>),

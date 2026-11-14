@@ -104,6 +104,27 @@ namespace PeachBrackets.Engine.Tests.Integration
         }
 
         [Fact]
+        public async Task ABodysOverflow_GoesToTheViewport_SoItsMarginsStillCollapseWithItsChildren()
+        {
+            string Page(string bodyStyle) => $"<html><head><style>{bodyStyle}</style></head><body><p id='p' style='margin:16pt 0'>text</p></body></html>";
+            static async Task<double> Top(string html)
+            {
+                var rc = new HtmlRenderContext { PixelsPerPoint = 1.0 };
+                var c = new HtmlContainerInt(rc);
+                await c.SetHtml(html, null);
+                var size = new Size(595, 842);
+                c.PageSize = PeachBrackets.Utilities.Utils.ToPixels(size, 1.0);
+                c.MaxSize = PeachBrackets.Utilities.Utils.ToPixels(size, 1.0);
+                using var g = PdfCanvas.CreateMeasuring(rc, size);
+                await c.PerformLayout(g);
+                CssBox? Find(CssBox b) { if (b.HtmlTag?.TryGetAttribute("id", "") == "p") return b; foreach (var x in b.Boxes) { if (Find(x) is { } f) return f; } return null; }
+                return Find(c.Root!)!.Location.Y;
+            }
+
+            Assert.Equal(await Top(Page("")), await Top(Page("body{overflow:hidden}")), 0.5);
+        }
+
+        [Fact]
         public async Task Rtl_StartIsTheRightEdge_AndLeftRightStayPhysical()
         {
             var start = await LayOut("<div class='g' style='direction:rtl'><div class='a' id='a'></div></div>", "a");
