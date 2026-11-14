@@ -54,7 +54,10 @@ public sealed partial class HtmlView
         _animating = false;
     }
 
-    private void OnFrame(TimeSpan frameTime)
+    /// <summary>Stands in for <see cref="HtmlDocument.AdvanceAnimationsAsync"/> when set, so a test can make a step that takes a while or fails.</summary>
+    internal Func<HtmlDocument, TimeSpan, PeachDrawing.Core.Canvas, ValueTask<AnimationFrame>>? AnimationStepper { get; set; }
+
+    internal void OnFrame(TimeSpan frameTime)
     {
         _framePending = false;
         if (!_animating)
@@ -86,7 +89,7 @@ public sealed partial class HtmlView
         {
             lock (_documentLock)
             {
-                step = document.AdvanceAnimationsAsync(time, measuring.Canvas);
+                step = AnimationStepper is { } stepper ? stepper(document, time, measuring.Canvas) : document.AdvanceAnimationsAsync(time, measuring.Canvas);
                 if (step.IsCompletedSuccessfully)
                     ApplyFrameToTiles(step.Result);
             }
