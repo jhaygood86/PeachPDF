@@ -120,7 +120,10 @@ public class FocusTests
         Assert.True(raised > 0);
         Assert.NotNull(view.FocusedNode);
 
-        window.Focus();
+        // Window.Focus() leaves the view's keyboard focus alone (it only focuses the window itself); taking the focus away is what loses it.
+        Assert.True(view.IsFocused);
+        window.FocusManager!.Focus(null);
+        Assert.False(view.IsFocused);
         await HtmlViewInput.SettleAsync(view);
         Assert.Null(view.FocusedNode);
         window.Close();

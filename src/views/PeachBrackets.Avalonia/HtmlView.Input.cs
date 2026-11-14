@@ -111,7 +111,8 @@ public sealed partial class HtmlView
             };
 
             // A double or triple click is a selection of its own, not the start of a click on a link.
-            if (e.ClickCount > 1)
+            // (A second press on a check box or button is a second click on it, as in a browser.)
+            if (e.ClickCount > 1 && !(document.GetElementAt(page, x, y) is { } pressed && IsControl(pressed)))
                 _dragged = true;
         }
     }
