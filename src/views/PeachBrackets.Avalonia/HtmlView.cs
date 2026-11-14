@@ -479,7 +479,7 @@ public sealed partial class HtmlView : Control
     private void StartReload() => _ = ReloadAsync();
 
     private HtmlViewRenderContext EnsureContext() =>
-        _context ??= new HtmlViewRenderContext(() => AllowNetworkAccess, () => DocumentBaseUri ?? Source, _fontSet ?? HtmlViewFonts.Shared) { PixelsPerPoint = PixelsPerPoint };
+        _context ??= new HtmlViewRenderContext(_fontSet ?? HtmlViewFonts.Shared) { PixelsPerPoint = PixelsPerPoint };
 
     private async Task ReloadAsync()
     {
@@ -489,6 +489,7 @@ public sealed partial class HtmlView : Control
             return;
 
         var context = EnsureContext();
+        context.Configure(AllowNetworkAccess, DocumentBaseUri ?? Source);
         BeginLoad(context);
         try
         {
