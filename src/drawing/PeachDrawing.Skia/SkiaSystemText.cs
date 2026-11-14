@@ -38,15 +38,18 @@ internal sealed partial class SystemTextSettingsProvider : ISystemTextSettings
         return task.Wait(TimeSpan.FromMilliseconds(500)) && task.IsCompletedSuccessfully ? task.Result : default;
     }
 
-    internal static SystemTextSettings Detect()
+    internal static SystemTextSettings Detect() => Detect(OperatingSystem.IsWindows(), OperatingSystem.IsLinux(), DetectWindows, DetectLinux);
+
+    /// <summary>The detection with the platform and the platform readers passed in, so a test can take a branch the machine it runs on never would.</summary>
+    internal static SystemTextSettings Detect(bool isWindows, bool isLinux, Func<SystemTextSettings> windows, Func<SystemTextSettings> linux)
     {
         try
         {
-            if (OperatingSystem.IsWindows())
-                return DetectWindows();
+            if (isWindows)
+                return windows();
 
-            if (OperatingSystem.IsLinux())
-                return DetectLinux();
+            if (isLinux)
+                return linux();
         }
         catch (Exception)
         {
@@ -85,23 +88,61 @@ internal sealed partial class SystemTextSettingsProvider : ISystemTextSettings
     internal static SystemTextSettings FromGsettings(string? smoothing, Func<string, string?> readOrder) =>
         smoothing is null || !ParseGsettingsSmoothing(smoothing) ? default : new SystemTextSettings(true, ParseGsettingsBgr(readOrder("font-rgba-order")));
 
-    internal static string? Gsettings(string key)
+    /// <summary>What a started <c>gsettings</c> process offers, so a test can stand in for the process.</summary>
+    internal interface IGsettingsProcess : IDisposable
+    {
+        /// <summary>Reads what the process wrote to its standard output.</summary>
+        Task<string> ReadOutputAsync();
+
+        /// <summary>Waits for the process to end, and says whether it did within the time.</summary>
+        bool WaitForExit(int milliseconds);
+
+        /// <summary>Ends the process.</summary>
+        void Kill();
+
+        /// <summary>The code the process ended with.</summary>
+        int ExitCode { get; }
+    }
+
+    private sealed class RealGsettingsProcess(Process process) : IGsettingsProcess
+    {
+        public Task<string> ReadOutputAsync() => process.StandardOutput.ReadToEndAsync();
+
+        public bool WaitForExit(int milliseconds) => process.WaitForExit(milliseconds);
+
+        public void Kill() => process.Kill();
+
+        public int ExitCode => process.ExitCode;
+
+        public void Dispose() => process.Dispose();
+    }
+
+    private static IGsettingsProcess? StartGsettings(string key)
+    {
+        var process = Process.Start(new ProcessStartInfo("gsettings", ["get", "org.gnome.desktop.interface", key])
+        {
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+        });
+
+        return process is null ? null : new RealGsettingsProcess(process);
+    }
+
+    internal static string? Gsettings(string key) => Gsettings(key, StartGsettings, 1000);
+
+    /// <summary>One key of <c>org.gnome.desktop.interface</c> as <c>gsettings</c> prints it, or null when there is no answer: no such program, a failure, or a wait longer than <paramref name="timeoutMilliseconds"/>.</summary>
+    internal static string? Gsettings(string key, Func<string, IGsettingsProcess?> start, int timeoutMilliseconds)
     {
         try
         {
-            using var process = Process.Start(new ProcessStartInfo("gsettings", ["get", "org.gnome.desktop.interface", key])
-            {
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true,
-            });
-
+            using var process = start(key);
             if (process is null)
                 return null;
 
-            var output = process.StandardOutput.ReadToEndAsync();
-            if (!process.WaitForExit(1000))
+            var output = process.ReadOutputAsync();
+            if (!process.WaitForExit(timeoutMilliseconds))
             {
                 process.Kill();
                 return null;

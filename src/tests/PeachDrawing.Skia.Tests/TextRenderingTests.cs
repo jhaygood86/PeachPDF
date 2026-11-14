@@ -579,6 +579,62 @@ public class TextRenderingTests
         Assert.Empty(asked);
     }
 
+    private sealed class FakeGsettings(string output, bool exits = true, int exitCode = 0) : SystemTextSettingsProvider.IGsettingsProcess
+    {
+        public bool Killed { get; private set; }
+
+        public bool Disposed { get; private set; }
+
+        public int ExitCode => exitCode;
+
+        public Task<string> ReadOutputAsync() => Task.FromResult(output);
+
+        public bool WaitForExit(int milliseconds) => exits;
+
+        public void Kill() => Killed = true;
+
+        public void Dispose() => Disposed = true;
+    }
+
+    [Fact]
+    public void A_gsettings_answer_is_its_output_only_when_the_process_ended_in_time_with_success()
+    {
+        var ok = new FakeGsettings("'rgba'\n");
+        Assert.Equal("'rgba'\n", SystemTextSettingsProvider.Gsettings("font-antialiasing", _ => ok, 1000));
+        Assert.True(ok.Disposed);
+        Assert.False(ok.Killed);
+
+        // A process that does not end within the time is killed, and there is no answer.
+        var slow = new FakeGsettings("'rgba'", exits: false);
+        Assert.Null(SystemTextSettingsProvider.Gsettings("font-antialiasing", _ => slow, 10));
+        Assert.True(slow.Killed);
+        Assert.True(slow.Disposed);
+
+        // A failing exit code is no answer either.
+        Assert.Null(SystemTextSettingsProvider.Gsettings("font-antialiasing", _ => new FakeGsettings("'rgba'", exitCode: 1), 1000));
+
+        // No process started, and a start that throws (no gsettings installed), are no answer.
+        Assert.Null(SystemTextSettingsProvider.Gsettings("font-antialiasing", _ => null, 1000));
+        Assert.Null(SystemTextSettingsProvider.Gsettings("font-antialiasing", _ => throw new InvalidOperationException("no gsettings"), 1000));
+
+        // The key asked for reaches the starter.
+        string? asked = null;
+        _ = SystemTextSettingsProvider.Gsettings("font-rgba-order", key => { asked = key; return null; }, 1000);
+        Assert.Equal("font-rgba-order", asked);
+    }
+
+    [Fact]
+    public void Detection_reads_the_platform_it_was_told_it_is_on_and_falls_back_to_grayscale_when_that_fails()
+    {
+        var windows = new SystemTextSettings(true, true);
+        var linux = new SystemTextSettings(true, false);
+        Assert.Equal(windows, SystemTextSettingsProvider.Detect(true, false, () => windows, () => linux));
+        Assert.Equal(linux, SystemTextSettingsProvider.Detect(false, true, () => windows, () => linux));
+        Assert.Equal(default, SystemTextSettingsProvider.Detect(false, false, () => windows, () => linux));
+        Assert.Equal(default, SystemTextSettingsProvider.Detect(false, true, () => windows, () => throw new InvalidOperationException()));
+        Assert.Equal(default, SystemTextSettingsProvider.Detect(true, false, () => throw new InvalidOperationException(), () => linux));
+    }
+
     [Fact]
     public void Detection_never_throws_whatever_the_machine_has()
     {
