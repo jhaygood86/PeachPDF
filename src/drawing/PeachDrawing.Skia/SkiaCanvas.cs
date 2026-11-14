@@ -99,7 +99,7 @@ public sealed partial class SkiaCanvas : Canvas
     }
 
     /// <summary>A canvas that shares this one's <see cref="SKCanvas"/> for the content of a layer: it stands above the layer's save level.</summary>
-    private SkiaCanvas NewLayerCanvas(Rect clip) => new(_context, _canvas, clip, _ppp, true, false, _ctm, null, _smooth);
+    private SkiaCanvas NewLayerCanvas(Rect clip) => new(_context, _canvas, clip, _ppp, true, false, _ctm, null, _smooth) { _isLayerContent = true };
 
     /// <summary>The links and named places painted so far; see <see cref="SkiaLinkMap"/>. It survives <see cref="Dispose"/>.</summary>
     public SkiaLinkMap Links { get; }

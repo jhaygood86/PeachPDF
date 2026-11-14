@@ -116,6 +116,9 @@ public sealed partial class SkiaCanvas
         if (unitsPerEm == 0)
             return;
 
+        if (TryDrawMasked(str, font, color, point, letterSpacing, fontPalette, features ?? ShapeSettings.Default))
+            return;
+
         // Where the PDF renderer puts the baseline: the run's top-left plus the cell ascent (here in layout units).
         var lineSpace = typeface.Metrics.LineSpacing * font.Size / unitsPerEm * _ppp;
         var baselineY = point.Y + lineSpace * typeface.Metrics.CellAscent / typeface.Metrics.LineSpacing;
