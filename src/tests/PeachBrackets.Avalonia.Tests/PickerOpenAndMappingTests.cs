@@ -47,6 +47,70 @@ public class PickerOpenTests
         });
     }
 
+    private static HtmlView.PickedFile Picked(string name, string text) => new(name, () => Task.FromResult<Stream>(new MemoryStream(System.Text.Encoding.UTF8.GetBytes(text))));
+
+    [Fact]
+    public async Task TheFilesAPickerHandsBackAreReadAndShownInTheFileField()
+    {
+        await HeadlessSession.Run(async () =>
+        {
+            var (window, view) = await HeadlessSession.ShowAsync(Field("file"), 400, 300);
+            global::Avalonia.Platform.Storage.FilePickerOpenOptions? asked = null;
+            view.FilePicker = options =>
+            {
+                asked = options;
+                return Task.FromResult<IReadOnlyList<HtmlView.PickedFile>>([Picked("notes.txt", "hello")]);
+            };
+
+            await HtmlViewInput.ClickAsync(window, view, "f");
+            Assert.True(await HeadlessSession.PumpUntilAsync(() => HtmlViewInput.State(view, "f").Value.Contains("notes.txt", StringComparison.Ordinal)),
+                "the chosen file's name should be shown in the field");
+            Assert.NotNull(asked);
+            Assert.False(asked!.AllowMultiple);
+            window.Close();
+        });
+    }
+
+    [Fact]
+    public async Task APickerThatPicksNothingLeavesTheFieldAloneAndOneThatFailsRaisesDocumentFailed()
+    {
+        await HeadlessSession.Run(async () =>
+        {
+            var (window, view) = await HeadlessSession.ShowAsync(Field("file"), 400, 300);
+            var before = HtmlViewInput.State(view, "f").Value;
+            var picks = 0;
+            view.FilePicker = _ =>
+            {
+                picks++;
+                return Task.FromResult<IReadOnlyList<HtmlView.PickedFile>>([]);
+            };
+
+            await HtmlViewInput.ClickAsync(window, view, "f");
+            Assert.True(await HeadlessSession.PumpUntilAsync(() => picks == 1));
+            await HtmlViewInput.SettleAsync(view);
+            Assert.Equal(before, HtmlViewInput.State(view, "f").Value);
+
+            Exception? failure = null;
+            view.DocumentFailed += (_, e) => failure = e.Exception;
+            view.FilePicker = _ => throw new IOException("the disk went away");
+            await HtmlViewInput.ClickAsync(window, view, "f");
+            Assert.True(await HeadlessSession.PumpUntilAsync(() => failure is not null));
+            Assert.Equal("the disk went away", failure!.Message);
+            window.Close();
+        });
+    }
+
+    [Fact]
+    public async Task EveryPickedFileIsReadWholeAndGivenTheTypeItsNameOrTheAcceptListSays()
+    {
+        var files = await HtmlView.ReadChosenFilesAsync([Picked("a.txt", "alpha"), Picked("b.bin", "beta")], "application/pdf");
+        Assert.Equal(["a.txt", "b.bin"], files.Select(f => f.Name));
+        Assert.Equal("text/plain", files[0].ContentType);
+        Assert.Equal("alpha", System.Text.Encoding.UTF8.GetString(files[0].Content));
+        Assert.Equal("beta", System.Text.Encoding.UTF8.GetString(files[1].Content));
+        Assert.Empty(await HtmlView.ReadChosenFilesAsync([], string.Empty));
+    }
+
     [Theory]
     [InlineData("a.jpg", "image/jpeg")]
     [InlineData("a.JPEG", "image/jpeg")]

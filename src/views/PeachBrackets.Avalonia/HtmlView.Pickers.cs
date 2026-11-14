@@ -258,26 +258,29 @@ public sealed partial class HtmlView
         static Slider NewChannel(byte initial) => new() { Minimum = 0, Maximum = 255, Value = initial };
     }
 
+    /// <summary>A file the picker handed back: its name and a way to read it.</summary>
+    internal readonly record struct PickedFile(string Name, Func<Task<Stream>> OpenRead);
+
+    /// <summary>Stands in for the platform's file picker when set. For tests, which have no picker to answer.</summary>
+    internal Func<FilePickerOpenOptions, Task<IReadOnlyList<PickedFile>>>? FilePicker { get; set; }
+
     // The platform's file picker, limited to the kinds the accept attribute names.
     private async Task PickFilesAsync(HtmlDocument document, DocumentElement element)
     {
-        if (TopLevel.GetTopLevel(this)?.StorageProvider is not { CanOpen: true } storage)
-            return;
+        var picker = FilePicker;
+        if (picker is null)
+        {
+            if (TopLevel.GetTopLevel(this)?.StorageProvider is not { CanOpen: true } storage)
+                return;
+
+            picker = async options => [.. (await storage.OpenFilePickerAsync(options)).Select(file => new PickedFile(file.Name, () => file.OpenReadAsync()))];
+        }
 
         try
         {
             var info = document.GetFileInputInfo(element) ?? new FileInputInfo(false, string.Empty);
             var options = new FilePickerOpenOptions { AllowMultiple = info.Multiple, FileTypeFilter = FileTypesFor(info.Accept) };
-            var picked = await storage.OpenFilePickerAsync(options);
-            var files = new List<ChosenFile>();
-            foreach (var file in picked)
-            {
-                await using var stream = await file.OpenReadAsync();
-                using var memory = new MemoryStream();
-                await stream.CopyToAsync(memory);
-                files.Add(new ChosenFile(file.Name, ContentTypeOf(file.Name, info.Accept), memory.ToArray()));
-            }
-
+            var files = await ReadChosenFilesAsync(await picker(options), info.Accept);
             if (files.Count > 0 && ReferenceEquals(document, _document))
                 AfterControlChange(document, document.SetFiles(element, files));
         }
@@ -286,6 +289,21 @@ public sealed partial class HtmlView
             if (IsCurrent(document))
                 RaiseDocumentFailed(exception);
         }
+    }
+
+    // What the picked files hold, with the media type each is submitted as.
+    internal static async Task<List<ChosenFile>> ReadChosenFilesAsync(IEnumerable<PickedFile> picked, string accept)
+    {
+        var files = new List<ChosenFile>();
+        foreach (var file in picked)
+        {
+            await using var stream = await file.OpenRead();
+            using var memory = new MemoryStream();
+            await stream.CopyToAsync(memory);
+            files.Add(new ChosenFile(file.Name, ContentTypeOf(file.Name, accept), memory.ToArray()));
+        }
+
+        return files;
     }
 
     // The picker's filter for an accept attribute: one entry holding every media type and extension it names, or none for any file.
