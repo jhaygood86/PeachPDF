@@ -423,7 +423,7 @@ namespace PeachBrackets.Html.Dom
 
         /// <summary>A function that yields an <c>&lt;image&gt;</c> here: a gradient or <c>image-set()</c>.</summary>
         internal static bool IsImageFunctionName(ReadOnlySpan<char> name) =>
-            IsGradientFunctionName(name) || name.Is(FunctionNames.ImageSet);
+            IsGradientFunctionName(name) || name.Is(FunctionNames.ImageSet) || name.Is(FunctionNames.PeachBarcode);
 
         internal static bool IsGradientFunctionName(ReadOnlySpan<char> name)
         {

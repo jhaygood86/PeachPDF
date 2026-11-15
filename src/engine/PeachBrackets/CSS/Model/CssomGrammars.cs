@@ -75,6 +75,7 @@ namespace PeachBrackets.Css
             ContentModes.ToConverter().Or(
                 UrlConverter).Or(
                 Converters.GradientConverter).Or(
+                Converters.BarcodeImageFunctionConverter).Or(
                 Converters.ContentListItemConverter).Or(
                 new GcpmElementFunctionConverter()).Many());
 

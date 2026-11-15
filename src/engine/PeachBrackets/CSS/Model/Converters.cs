@@ -874,8 +874,11 @@ namespace PeachBrackets.Css
         public static readonly IValueConverter ElementImageConverter =
             Construct(() => new FunctionValueConverter(FunctionNames.Element, new ElementImageConverter()));
 
+        public static readonly IValueConverter BarcodeImageFunctionConverter =
+            Construct(() => new FunctionValueConverter(FunctionNames.PeachBarcode, new BarcodeImageConverter()));
+
         public static readonly IValueConverter ImageSourceConverter = UrlConverter.Or(GradientConverter)
-            .Or(ImageSetImageConverter).Or(CrossFadeImageConverter).Or(ElementImageConverter);
+            .Or(ImageSetImageConverter).Or(CrossFadeImageConverter).Or(ElementImageConverter).Or(BarcodeImageFunctionConverter);
         public static readonly IValueConverter OptionalImageSourceConverter = ImageSourceConverter.OrNone();
         public static readonly IValueConverter MultipleImageSourceConverter = OptionalImageSourceConverter.FromList();
         /// <summary>CSS Borders 4 <c>&lt;corner-shape-value&gt;</c>.</summary>

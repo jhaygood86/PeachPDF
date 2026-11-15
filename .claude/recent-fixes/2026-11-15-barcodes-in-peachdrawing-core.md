@@ -1,0 +1,20 @@
+# Barcodes: PeachDrawing.Core encoders, declarative API, `-peachpdf-barcode()`
+
+QR code, Data Matrix, Code 128/GS1-128, EAN-13, EAN-8 and UPC-A, as vector shapes on every backend.
+
+**Load-bearing idea.** The barcode is an *extension method on `Canvas`* (`BarcodeDrawing.DrawBarcode`), not a new abstract member: the dark modules become rectangles of ONE `GraphicsPath` (nonzero fill), drawn with `DrawPath(Brush, path)`, which every backend already implements. One path = one fill, so abutting bars leave no AA seam (see the paint-seam invariant). Layout merges horizontal runs and then identical runs on consecutive rows, so a QR code is far fewer rectangles than modules.
+
+**Where it flows.**
+- `PeachDrawing.Core/Barcodes/`: encoders ported from FreePDF (MIT, empira) - `QrEncoder`, `DataMatrixEncoder`, `Code128`, `EanUpcSymbology` - behind `Barcode` / `BarcodeOptions` / `BarcodeLayout`. `BarcodeSvg.ToSvg` writes one `<path>` + `<text>`.
+- PeachPDF declarative `IContainer.QrCode/DataMatrix/Code128/Gs1128/Ean13/Ean8/UpcA/Barcode`: generates the SVG and goes through the existing `SvgImage.Parse -> SetImageContent` path, so the PDF holds a *form XObject of path operators* (`/Fm0 Do`), never an image XObject. Tests therefore read the form's stream (`xobjects[...]`), not the page content.
+- CSS `-peachpdf-barcode(<symbology>, <string> [, <color> [, <color>]])`: validated by `BarcodeImageConverter` (composed into `Converters.ImageSourceConverter` **and** into the `content` grammar in `CssomGrammars.Content`, which does not use `ImageSourceConverter`), resolved in `CssValueParser.ParseImage` to a `CssImage.Url` holding an `image/svg+xml` data URI. No new `CssImage` kind, so every consumer of a `url()` image works unchanged. The symbology keywords and creation live in one place, `BarcodeImageGrammar`, used by both layers.
+
+**Found by running it.**
+- Putting the function in `ImageSourceConverter` is not enough for `content:`: that property's grammar lists `UrlConverter`/`GradientConverter` itself. Without the second registration `content: -peachpdf-barcode(...)` is dropped silently.
+- A generated-content image needs `display: inline-block` and a size (same as `content: url()`).
+- In a hand-written test, a double-quoted CSS string inside a `style="..."` attribute closes the attribute: use `style='...'`. This cost a long detour (the background looked "unsupported" because the whole declaration was cut off).
+- All seven symbologies were rasterized with PDFium and MuPDF and decoded with zxing-cpp (both the declarative and the CSS route): every one reads back to its input (UPC-A reads as EAN-13 with a leading 0, as it should). `BarcodeRasterTests` additionally sample every module center of a `RasterCanvas` and compare with `IsDark`.
+
+**Not done / limits** (see `.claude/accepted-gaps/barcodes-encoder-limits.md`): QR is single-mode with no kanji/FNC1/Micro QR, Data Matrix only ASCII/Base 256, GS1 element strings are not validated against the AI table (only the predefined-length rule decides where FNC1 goes).
+
+**Licensing.** `PeachDrawing.Core/THIRD-PARTY-LICENSES.md` (packed), root `THIRD-PARTY-LICENSES.md` and `docs/license.md` carry the FreePDF MIT notice; each ported file has a header. FreePDF's own Data Matrix encoder replaced a GPL-derived file and its provenance says that replacement is not a staffed clean room - the old `DataMatrixImage.cs` must never be copied in.

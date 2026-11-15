@@ -128,3 +128,7 @@ sponsors can get paid support, see [Sponsorship](https://peachpdf.net/sponsorshi
 ## License
 
 BSD 3-Clause (see `LICENSE`).
+
+## Barcodes
+
+`PeachDrawing.Core.Barcodes` encodes QR codes, Data Matrix, Code 128 / GS1-128, EAN-13, EAN-8 and UPC-A and draws them on any `Canvas` as vector rectangles of one path (`canvas.DrawBarcode(Barcode.CreateQrCode("..."), origin, moduleSize, color)`); `BarcodeSvg.ToSvg` writes them as SVG. The encoders are ported from the MIT-licensed FreePDF; see `THIRD-PARTY-LICENSES.md`.

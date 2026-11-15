@@ -68,6 +68,14 @@ PeachPDF.ImageCompression : enum Int32
   Auto = 0
   Lossless = 1
   Lossy = 2
+PeachPDF.Layout.BarcodeStyle : sealed class
+  ctor()
+  property BarcodeOptions Options { get; }
+  property PdfColor Color { get; set; }
+  property PdfColor? BackgroundColor { get; set; }
+  property PdfLength? ModuleSize { get; set; }
+  property String AltText { get; set; }
+  property String FontFamily { get; set; }
 PeachPDF.Layout.DocumentMerge : sealed class
   method DocumentMerge Add(Action<IDocumentBuilder> document)
   method DocumentMerge UseContinuousPageNumbers()
@@ -123,7 +131,13 @@ PeachPDF.Layout.IContainer : interface
   method abstract IContainer Shadow(PdfBoxShadow[] shadows)
   method abstract IContainer Tag(String tagName)
   method abstract IContainer Width(PdfLength value)
+  method abstract Void Barcode(Barcode barcode, Action<BarcodeStyle> configure = null)
+  method abstract Void Code128(String text, Action<BarcodeStyle> configure = null)
   method abstract Void Column(Action<IColumnDescriptor> handler)
+  method abstract Void DataMatrix(String text, Action<BarcodeStyle> configure = null)
+  method abstract Void Ean13(String digits, Action<BarcodeStyle> configure = null)
+  method abstract Void Ean8(String digits, Action<BarcodeStyle> configure = null)
+  method abstract Void Gs1128(String elements, Action<BarcodeStyle> configure = null)
   method abstract Void Html(Byte[] data, PeachPdfCssContent stylesheet = null, Action<SlotContext, IContainer> onSlot = null)
   method abstract Void Html(Stream stream, PeachPdfCssContent stylesheet = null, Action<SlotContext, IContainer> onSlot = null)
   method abstract Void Html(String html, PeachPdfCssContent stylesheet = null, Action<SlotContext, IContainer> onSlot = null)
@@ -136,6 +150,7 @@ PeachPDF.Layout.IContainer : interface
   method abstract Void LineHorizontal(PdfLength thickness, PdfColor? color = null, Boolean dashed = False)
   method abstract Void LineVertical(PdfLength thickness, PdfColor? color = null, Boolean dashed = False)
   method abstract Void OrderedList(Action<IListDescriptor> handler, PdfListMarkerType markerType = Decimal)
+  method abstract Void QrCode(String text, Action<BarcodeStyle> configure = null)
   method abstract Void Row(Action<IRowDescriptor> handler)
   method abstract Void Svg(Byte[] data)
   method abstract Void Svg(Func<PdfSize, String> generator)
@@ -145,6 +160,7 @@ PeachPDF.Layout.IContainer : interface
   method abstract Void Text(Action<ITextSpanContainer> handler)
   method abstract Void Text(String text)
   method abstract Void UnorderedList(Action<IListDescriptor> handler, PdfListMarkerType markerType = Disc)
+  method abstract Void UpcA(String digits, Action<BarcodeStyle> configure = null)
 PeachPDF.Layout.IDocumentBuilder : interface
   method abstract Void Append(Byte[] pdf, PdfCopyMode mode = Redraw, String password = null)
   method abstract Void Append(PdfOperation operation, PdfCopyMode? mode = null)
