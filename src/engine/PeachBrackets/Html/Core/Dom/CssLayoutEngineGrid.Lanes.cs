@@ -765,7 +765,7 @@ namespace PeachBrackets.Html.Dom
                     if (contributed) continue;
                 }
 
-                var (mn, mx) = _vertical ? await MeasureInlineContributionVertical(g, item.Box) : await MeasureItemContribution(g, item.Box);
+                var (mn, mx) = _vertical ? await MeasureInlineContributionVertical(g, item.Box) : await MeasureItemContribution(g, item.Box, percentageIsAuto: true);
                 // An auto-placed item that spans lanes may start at any of them. At each start it asks the intrinsic lanes it covers for what the
                 // lanes with a fixed size do not already give it, so a lane next to a fixed one is asked for more than one between two intrinsic ones.
                 if (item.Start < 0 && span > 1)

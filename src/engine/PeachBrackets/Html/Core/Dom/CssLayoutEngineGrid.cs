@@ -2168,7 +2168,9 @@ namespace PeachBrackets.Html.Dom
         {
             var outerExtra = box.ActualMarginLeft + box.ActualMarginRight;
             double minContent, maxContent;
-            if (CssValueParser.IsValidLength(box.Width))
+
+            // A percentage width is of the track the item is yet to be placed in, so it counts as `auto` for sizing that track (css-sizing-3 5.2.1).
+            if (CssValueParser.IsValidLength(box.Width) && !box.Width.Contains('%'))
             {
                 // A declared width is the content box's (or, for border-box, already the border box's).
                 minContent = maxContent = CssValueParser.ParseLength(box.Width, 0, box);
@@ -2281,11 +2283,13 @@ namespace PeachBrackets.Html.Dom
 
         /// <summary>An item's outer min-content and max-content width contributions (content width, plus its
         /// own margin/border/padding). An explicit width supplies both.</summary>
-        private static async ValueTask<(double Min, double Max)> MeasureItemContribution(Canvas g, CssBox box)
+        private static async ValueTask<(double Min, double Max)> MeasureItemContribution(Canvas g, CssBox box, bool percentageIsAuto = false)
         {
             var outerExtra = box.ActualMarginLeft + box.ActualMarginRight;
             double minContent, maxContent;
-            if (CssValueParser.IsValidLength(box.Width))
+
+            // A lane's percentage width is of the lane the item is yet to be placed in, so it counts as `auto` for sizing that lane (css-sizing-3 5.2.1).
+            if (CssValueParser.IsValidLength(box.Width) && !(percentageIsAuto && box.Width.Contains('%')))
             {
                 minContent = maxContent = CssValueParser.ParseLength(box.Width, 0, box);
                 outerExtra += box.ActualPaddingLeft + box.ActualPaddingRight + box.ActualBorderLeftWidth + box.ActualBorderRightWidth;
