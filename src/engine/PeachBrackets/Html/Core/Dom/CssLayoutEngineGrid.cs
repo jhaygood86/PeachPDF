@@ -1374,13 +1374,14 @@ namespace PeachBrackets.Html.Dom
             if (rows.Any(t => IsFlexTrack(t.Def)))
                 return;
 
-            var stretchable = rows.Where(t => t.Def.Kind == GridTrackKind.Auto
-                                              || (t.Def.Kind == GridTrackKind.Minmax && t.Def.Max.Kind == GridTrackKind.Auto))
+            // A collapsed track (an empty auto-fit one) is not stretched and has no gutter beside it.
+            var stretchable = rows.Where(t => !t.Collapsed && (t.Def.Kind == GridTrackKind.Auto
+                                              || (t.Def.Kind == GridTrackKind.Minmax && t.Def.Max.Kind == GridTrackKind.Auto)))
                 .ToArray();
             if (stretchable.Length == 0)
                 return;
 
-            var used = rows.Sum(t => t.Size) + (rows.Length > 1 ? rowGap * (rows.Length - 1) : 0);
+            var used = rows.Sum(t => t.Size) + Math.Max(0, rows.Count(t => !t.Collapsed) - 1) * rowGap;
             var free = containerHeight - used;
             if (free <= 0.01)
                 return;
@@ -1609,6 +1610,9 @@ namespace PeachBrackets.Html.Dom
                             ? ResolveFixedLength(def.Max, contentBase)
                             : IntrinsicMax(def.Max, minContent, maxContent);
                     if (!double.IsPositiveInfinity(limit) && limit < baseSize) limit = baseSize;
+
+                    // A track whose max function is `auto` takes its share of what is left over (css-grid-1 12.8).
+                    stretches = def.Max.Kind == GridTrackKind.Auto;
                     break;
                 case GridTrackKind.FitContent:
                     // fit-content(L): the measured max-content, capped at L (def.Value holds the L argument);

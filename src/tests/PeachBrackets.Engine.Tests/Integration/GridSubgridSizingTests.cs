@@ -137,5 +137,22 @@ namespace PeachBrackets.Engine.Tests.Integration
 
             Assert.Equal(100, grid.ActualRight - grid.Location.X, 0.5);
         }
+
+        [Fact]
+        public async Task AutoFitTracksWithAnAutoMaximum_StretchOnceTheEmptyOnesCollapse()
+        {
+            const string grid = "<div style='display:grid;width:200pt;height:200pt;gap:10pt;grid-template-columns:repeat(auto-fit,minmax(25pt,auto));" +
+                                "grid-template-rows:repeat(auto-fit,minmax(25pt,auto))'>" +
+                                "<div id='a' style='grid-row:2;grid-column:3'></div><div id='b' style='grid-row:3;grid-column:4'></div></div>";
+
+            var a = await LayOut(grid, "a");
+            var b = await LayOut(grid, "b");
+
+            // Only the two tracks the items sit in survive; they share the 200pt less the one gap between them.
+            Assert.Equal(95, a.ActualRight - a.Location.X, 0.5);
+            Assert.Equal(95, a.ActualBottom - a.Location.Y, 0.5);
+            Assert.Equal(105, b.Location.X - a.Location.X, 0.5);
+            Assert.Equal(105, b.Location.Y - a.Location.Y, 0.5);
+        }
     }
 }
