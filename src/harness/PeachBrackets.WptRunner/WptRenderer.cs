@@ -2,6 +2,7 @@ using System.Text.RegularExpressions;
 using PeachBrackets;
 using PeachDrawing;
 using PeachDrawing.Core;
+using PeachDrawing.Text;
 
 namespace PeachBrackets.WptRunner;
 
@@ -31,6 +32,13 @@ internal sealed partial class WptRenderer(string wptRoot) : IReftestRenderer
         var source = Prepare(wptPath, await File.ReadAllTextAsync(FullPath(wptPath)));
 
         var context = new RasterRenderContext { ResourceLoader = LoadAsync, PixelsPerPoint = 96.0 / 72.0 };
+
+        // A browser resolves each generic family (`monospace`...) to its platform's real family; without this the raster context falls back to
+        // whatever the font set finds first, and a reftest written with `font: 24px monospace` measures a different font than the browser's.
+        var fontSet = new FontSet();
+        foreach (var (keyword, generic) in FontDefaults.GenericFamilies)
+            if (fontSet.ResolveGeneric(generic, context.IsFontExists) is { } family)
+                context.AddFontFamilyMapping(keyword, family);
         var options = new HtmlDocumentOptions
         {
             MediaType = MediaType.Screen,
