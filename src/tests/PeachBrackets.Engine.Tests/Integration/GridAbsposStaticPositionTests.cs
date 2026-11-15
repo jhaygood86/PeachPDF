@@ -53,15 +53,30 @@ namespace PeachBrackets.Engine.Tests.Integration
         }
 
         [Fact]
-        public async Task ANamedArea_IsWhereAFloatedUnpositionedGridAlignsItsChild()
+        public async Task TheContentBox_IsWhereAnUnpositionedGridAlignsItsChild_WhateverAreaTheChildNames()
         {
             var html = "<div class='g2' id='g'><div id='a' style='position:absolute;grid-area:2/2/3/3;height:6px;width:8px;align-self:center'></div></div>";
             var box = await LayOut(html.Replace("<div class='g2'", "<div style='display:grid;float:left;padding:1px 2px;border:1px solid black;background:yellow;grid:2px 20px 2px / 3px 14px 3px;height:30px;width:22px;align-items:center'"), "a");
             var grid = box.ParentBox!;
 
-            // Row two starts 2pt below the content top and is 20pt tall; the 6pt box is centered in it.
-            Assert.Equal(grid.ClientTop + 1.5 + (15 - 4.5) / 2.0, box.Location.Y, 0.5);
-            Assert.Equal(grid.ClientLeft + 2.25, box.Location.X, 0.5);
+            // The grid is not the child's containing block, so its lines are not what it is aligned in (css-grid-1 9.2): it is the only item of an area
+            // at the content edges, 22.5pt tall, and the 4.5pt box is centered in that; across it starts at the content edge.
+            Assert.Equal(grid.ClientTop + (22.5 - 4.5) / 2.0, box.Location.Y, 0.5);
+            Assert.Equal(grid.ClientLeft, box.Location.X, 0.5);
+        }
+
+        [Fact]
+        public async Task AVerticalGridsContainingArea_IsAlignedInAcrossTheBlockAxisAndDownTheInlineOne()
+        {
+            var html = "<div style='display:grid;position:relative;writing-mode:vertical-rl;grid:2pt 20pt 2pt / 3pt 14pt 3pt;height:22pt;width:30pt'>" +
+                       "<div id='a' style='position:absolute;grid-area:2/2/3/3;width:6pt;height:8pt;align-self:end;justify-self:end'></div></div>";
+            var box = await LayOut(html, "a");
+            var grid = box.ParentBox!;
+
+            // Rows run from the right edge, so row two spans 8pt-28pt across the content box and its far (block-end) side is the left one; the second
+            // column spans 3pt-17pt down it, and the 8pt box ends where that does.
+            Assert.Equal(grid.ClientLeft + 8, box.Location.X, 0.5);
+            Assert.Equal(grid.ClientTop + 17 - 8, box.Location.Y, 0.5);
         }
 
         [Fact]
