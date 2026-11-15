@@ -16617,7 +16617,7 @@ const string cssBarcodesHtml = """
     .ean13 { width: 130pt; height: 80pt; background-image: -peachpdf-barcode(ean13, "590123412345") }
     .ean8 { width: 100pt; height: 80pt; background-image: -peachpdf-barcode(ean8, "9638507") }
     .upca { width: 130pt; height: 80pt; background-image: -peachpdf-barcode(upca, "03600029145") }
-    .tag::before { content: -peachpdf-barcode(code128, "TAG-0042"); display: inline-block; width: 120pt; height: 36pt; vertical-align: middle; margin-right: 8pt }
+    .tag::before { content: -peachpdf-barcode(code128, "TAG-0042"); display: inline-block; width: 124pt; height: 48pt; vertical-align: middle; margin-right: 8pt }
     </style></head><body>
     <h1>Barcodes as CSS images</h1>
     <p><code>-peachpdf-barcode()</code> is an image function, so it works as a background and as generated content - always as vector shapes.</p>

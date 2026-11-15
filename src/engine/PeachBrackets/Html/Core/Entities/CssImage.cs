@@ -99,6 +99,22 @@ namespace PeachBrackets.Html.Entities
             }
         }
 
+        /// <summary>A color of a <see cref="BarcodeImage"/>: a given color, or (null) <c>currentcolor</c>, the color of the element it is painted for.</summary>
+        internal readonly record struct BarcodeColor(PaintColor? Given)
+        {
+            public PaintColor Resolve(PaintColor elementColor) => Given ?? elementColor;
+        }
+
+        /// <summary>
+        /// <c>-peachpdf-barcode()</c>: a barcode painted straight onto the canvas as vector rectangles (<c>PeachDrawing.Core.Barcodes</c>), at paint time, so
+        /// a <c>currentcolor</c> is the painting element's own color - the same way a gradient's is.
+        /// </summary>
+        internal sealed record BarcodeImage(PeachDrawing.Core.Barcodes.Barcode Symbol, BarcodeColor Bars, BarcodeColor? Background) : CssImage
+        {
+            /// <summary>The natural size of a module in CSS pixels: a matrix code's square is 2, a linear code's narrowest bar 1.</summary>
+            public double ModuleSizeInCssPixels => Symbol.IsLinear ? 1 : 2;
+        }
+
         internal sealed record LinearGradient(ParsedLinearGradient Gradient) : CssImage;
         internal sealed record RadialGradient(ParsedRadialGradient Gradient) : CssImage;
         internal sealed record ConicGradient(ParsedConicGradient Gradient) : CssImage;

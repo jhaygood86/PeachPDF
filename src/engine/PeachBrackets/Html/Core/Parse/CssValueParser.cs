@@ -2558,10 +2558,10 @@ namespace PeachBrackets.Html.Parse
         }
 
         /// <summary>
-        /// <c>-peachpdf-barcode( &lt;symbology&gt;, &lt;string&gt; [, &lt;color&gt; [, &lt;color&gt; ]] )</c>: encodes the text and returns the barcode
-        /// as a vector SVG image (a data URI the ordinary image path loads). Returns false when <paramref name="value"/> is not a whole
-        /// call of that function; <paramref name="image"/> is null when it is one that does not resolve (an unknown symbology, text the
-        /// symbology cannot hold), which paints nothing. A module is 2 CSS px for a matrix code and 1 CSS px for a linear one.
+        /// <c>-peachpdf-barcode( &lt;symbology&gt;, &lt;string&gt; [, &lt;color&gt; [, &lt;color&gt; ]] )</c>: encodes the text and returns the barcode as an image
+        /// the painter draws straight onto the canvas. Returns false when <paramref name="value"/> is not a whole call of that function;
+        /// <paramref name="image"/> is null when it is one that does not resolve (an unknown symbology, text the symbology cannot hold), which
+        /// paints nothing. A <c>currentcolor</c> is left for the painter, which knows the element's color.
         /// </summary>
         private bool TryParseBarcode(string value, out CssImage? image)
         {
@@ -2579,10 +2579,12 @@ namespace PeachBrackets.Html.Parse
             var barcode = BarcodeImageGrammar.TryCreate(symbology, text);
             if (barcode == null) return true;
 
-            var color = args.Count > 2 ? GetActualColor(args[2]) : PaintColor.Black;
-            PaintColor? background = args.Count > 3 ? GetActualColor(args[3]) : null;
-            var svg = PeachDrawing.Core.Barcodes.BarcodeSvg.ToSvg(barcode, barcode.IsLinear ? 1 : 2, color, background);
-            image = new CssImage.Url("data:image/svg+xml;base64," + System.Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(svg)));
+            CssImage.BarcodeColor ColorOf(string arg) =>
+                arg.Equals("currentcolor", StringComparison.OrdinalIgnoreCase) ? new(null) : new(GetActualColor(arg));
+
+            image = new CssImage.BarcodeImage(barcode,
+                args.Count > 2 ? ColorOf(args[2]) : new(PaintColor.Black),
+                args.Count > 3 ? ColorOf(args[3]) : null);
             return true;
         }
 

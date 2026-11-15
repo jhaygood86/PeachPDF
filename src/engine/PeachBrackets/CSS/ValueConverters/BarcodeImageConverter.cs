@@ -73,14 +73,10 @@ namespace PeachBrackets.Css
             if (StringConverter.Convert(args[1]) == null) return null;
 
             for (var i = 2; i < args.Count; i++)
-                if (ColorConverter.Convert(args[i]) == null || IsCurrentColor(args[i])) return null;
+                if (ColorConverter.WithCurrentColor().Convert(args[i]) == null) return null;
 
             return new ImageFunctionValue(value);
         }
-
-        // The image has no element to take a color from, so currentcolor would mean nothing here.
-        private static bool IsCurrentColor(List<Token> tokens)
-            => tokens.Any(t => t.Type == TokenType.Ident && t.Data.ToString().Equals("currentcolor", System.StringComparison.OrdinalIgnoreCase));
 
         public IPropertyValue Construct(Property[] properties) => properties.Guard<ImageFunctionValue>();
     }

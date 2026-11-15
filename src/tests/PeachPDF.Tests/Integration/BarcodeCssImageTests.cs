@@ -74,13 +74,36 @@ namespace PeachPDF.Tests.Integration
             Assert.True(Regex.Matches(FormContent(document), @"\bl\b").Count > 10);
         }
 
-        [Theory]
-        [InlineData("qr, 'x', currentcolor")]
-        public async Task CurrentcolorPaintsNothing(string args)
+        [Fact]
+        public async Task CurrentcolorTakesTheElementsColorInABackground()
         {
-            var (document, _) = await RenderAsync($"<div class='b' style=\"background-image: -peachpdf-barcode({args})\"></div>");
+            var (document, _) = await RenderAsync(
+                "<div class='b' style=\"color: rgb(204, 0, 0); background-image: -peachpdf-barcode(qr, 'x', currentcolor)\"></div>" +
+                "<div class='b' style=\"color: rgb(0, 0, 204); background-image: -peachpdf-barcode(qr, 'x', currentcolor)\"></div>");
 
-            Assert.Null(document.Inspect().Pages[0].Dict("/Resources")?.Dict("/XObject"));
+            var content = FormContent(document);
+            var colors = string.Join("|", Regex.Matches(content, @"[0-9. ]+ rg").Select(m => m.Value));
+            Assert.True(content.Contains("0.8 0 0 rg") && content.Contains("0 0 0.8 rg"), $"{content.Length} chars, fills: {colors}");
+        }
+
+        [Fact]
+        public async Task ListStyleImageTakesABarcode()
+        {
+            var (document, raw) = await RenderAsync(
+                "<ul style=\"color: rgb(204, 0, 0); list-style-image: -peachpdf-barcode(qr, 'x', currentcolor)\"><li>item</li></ul>");
+
+            Assert.DoesNotContain("/Subtype /Image", raw);
+            Assert.Contains("0.8 0 0 rg", FormContent(document));
+        }
+
+        [Fact]
+        public async Task CurrentcolorTakesTheElementsColorInGeneratedContent()
+        {
+            var (document, _) = await RenderAsync(
+                "<style>.q::before { content: -peachpdf-barcode(code128, 'AB', currentcolor); display: inline-block; width: 150px; height: 50px; }</style>" +
+                "<p class='q' style='color: rgb(204, 0, 0)'>x</p>");
+
+            Assert.Contains("0.8 0 0 rg", FormContent(document));
         }
 
         [Fact]
