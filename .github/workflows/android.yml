@@ -8,7 +8,7 @@ on:
   pull_request:
     branches: [ main ]
     paths:
-      - 'src/engine/PeachBrackets.Android/**'
+      - 'src/views/PeachBrackets.Android/**'
       - 'src/examples/PeachBrackets.Android.Example/**'
       - 'src/tests/PeachBrackets.Android.Tests/**'
       - 'src/engine/PeachBrackets/**'
@@ -41,7 +41,7 @@ jobs:
 
     - name: Build the view and the example app
       run: |
-        dotnet build src/engine/PeachBrackets.Android/PeachBrackets.Android.csproj --configuration Release
+        dotnet build src/views/PeachBrackets.Android/PeachBrackets.Android.csproj --configuration Release
         dotnet build src/examples/PeachBrackets.Android.Example/PeachBrackets.Android.Example.csproj --configuration Release
 
     # Reads the built assembly's metadata; skipped locally when the project has not been built.

@@ -1,0 +1,60 @@
+using PeachBrackets.Updates;
+
+namespace PeachBrackets.Avalonia;
+
+public sealed partial class HtmlView
+{
+    private bool _updatingContentVisibility;
+    private bool _contentVisibilityAgain;
+
+    // The contents of an element with `content-visibility: auto` that is away from the view are skipped and those that came near are shown
+    // (css-contain-2 section 4). The view is moved to where the document says it is looking, so what changed above it does not move what is on screen.
+    // One update at a time: a scroll that comes while one runs is looked at again when it is done.
+    /// <summary>Stands in for <see cref="HtmlDocument.UpdateContentVisibilityAsync"/> when set, so a test can make an update that takes a while or fails.</summary>
+    internal Func<HtmlDocument, PeachDrawing.Core.Canvas, ValueTask<UpdateResult>>? ContentVisibilityUpdater { get; set; }
+
+    internal async Task UpdateContentVisibilityAsync(HtmlDocument document)
+    {
+        if (_updatingContentVisibility)
+        {
+            _contentVisibilityAgain = true;
+            return;
+        }
+
+        _updatingContentVisibility = true;
+        try
+        {
+            do
+            {
+                _contentVisibilityAgain = false;
+                if (_context is not { } context)
+                    return;
+
+                UpdateResult result;
+                using (var measuring = RentMeasuring(context))
+                    result = await (ContentVisibilityUpdater is { } updater ? updater(document, measuring.Canvas) : document.UpdateContentVisibilityAsync(measuring.Canvas));
+
+                if (!ReferenceEquals(document, _document) || !result.Applied)
+                    continue;
+
+                UpdateMetrics();
+                RefreshAccessibility(document);
+
+                // The new top of what is shown, as the document keeps it; the scroll offset is in pixels.
+                ScrollTo(_scrollX, document.Viewport.Y * Scale * PixelsPerPoint);
+                InvalidateContent();
+            }
+            while (_contentVisibilityAgain && ReferenceEquals(document, _document));
+        }
+        catch (Exception exception) when (exception is not OutOfMemoryException)
+        {
+            // What a document that was replaced meanwhile throws is nothing the one that replaced it has to answer for.
+            if (ReferenceEquals(document, _document))
+                RaiseDocumentFailed(exception);
+        }
+        finally
+        {
+            _updatingContentVisibility = false;
+        }
+    }
+}

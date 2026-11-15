@@ -54,6 +54,8 @@
           url: /peachbrackets-android.html
         - title: PeachBrackets.Apple
           url: /peachbrackets-apple.html
+        - title: PeachBrackets.Avalonia
+          url: /peachbrackets-avalonia.html
     - title: Project
       children:
         - title: Architecture

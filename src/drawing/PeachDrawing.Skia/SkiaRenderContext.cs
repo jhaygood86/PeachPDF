@@ -8,6 +8,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace PeachDrawing.Skia;
@@ -47,6 +48,7 @@ public class SkiaRenderContext : RenderContext, IDisposable
     public SkiaRenderContext(SkiaTextEngine textEngine = SkiaTextEngine.PeachDrawing, SkiaImageCodec imageCodec = SkiaImageCodec.Auto, ISkiaTextShaper? textShaper = null, FontSet? fontSet = null)
     {
         _fontSet = fontSet ?? new FontSet();
+        SystemTextSettingsProvider.Prefetch();
         _textEngine = textEngine;
         _imageCodec = imageCodec;
         TextShaper = textShaper ?? BasicSkiaShaper.Instance;
@@ -109,6 +111,51 @@ public class SkiaRenderContext : RenderContext, IDisposable
     /// </summary>
     public GRContext? GpuContext { get; set; }
 
+    /// <summary>
+    /// How text drawn with the <see cref="SkiaTextEngine.PeachDrawing"/> engine becomes pixels; see <see cref="SkiaTextRendering"/>. The default
+    /// is <see cref="SkiaTextRendering.Auto"/>, which picks for each run. Every value but <see cref="SkiaTextRendering.Outline"/> fits each run to the
+    /// pixel grid with the font's hinting (the kind named by <see cref="RenderContext.TextHinting"/>, or the standard one when that is
+    /// <see cref="TextHinting.None"/>). It has no effect on <see cref="SkiaTextEngine.Native"/> text. Set it before drawing; a canvas that is
+    /// drawing reads it for each run.
+    /// </summary>
+    public SkiaTextRendering TextRendering { get; set; } = SkiaTextRendering.Auto;
+
+    /// <summary>
+    /// Whether the stripes of an LCD pixel run blue, green, red from left to right instead of the usual red, green, blue, for
+    /// <see cref="SkiaTextRendering.Lcd"/> text on a display built that way. <see cref="SkiaTextRendering.Auto"/> follows the operating system's setting as well.
+    /// </summary>
+    public bool LcdBgrStripes { get; set; }
+
+    /// <summary>What <see cref="SkiaTextRendering.Auto"/> asks about the system's text smoothing; a test supplies its own answer.</summary>
+    internal ISystemTextSettings SystemText { get; set; } = SystemTextSettingsProvider.Instance;
+
+    /// <summary>How many steps of a pixel a text run's position is kept at before its coverage is made.</summary>
+    internal int TextPositionSteps => 64;
+
+    private readonly Lock _maskGate = new();
+    private PeachDrawing.RasterRenderContext? _maskContext;
+
+    /// <summary>The raster context text masks are drawn with, set up with this context's hinting; made on first use.</summary>
+    internal PeachDrawing.RasterRenderContext MaskContext
+    {
+        get
+        {
+            lock (_maskGate)
+            {
+                _maskContext ??= new PeachDrawing.RasterRenderContext();
+                _maskContext.TextHinting = TextHinting == TextHinting.None ? TextHinting.Standard : TextHinting;
+                _maskContext.TextStemDarkening = TextStemDarkening;
+                return _maskContext;
+            }
+        }
+    }
+
+    /// <summary>The rasterized text runs this context has drawn, kept so a run drawn again is not rasterized again.</summary>
+    internal SkiaTextMaskCache TextMasks { get; } = new();
+
+    /// <summary>The coverage of single letters, which new words are made from.</summary>
+    internal SkiaGlyphMaskCache GlyphMasks { get; } = new();
+
     /// <summary>Layout units per point; see <see cref="RenderContext.LayoutUnitsPerPoint"/>. 1 means a layout unit is a point.</summary>
     public double PixelsPerPoint { get; set; } = 1.0;
 
@@ -139,6 +186,8 @@ public class SkiaRenderContext : RenderContext, IDisposable
             return;
 
         _disposed = true;
+        TextMasks.Clear();
+        GlyphMasks.Clear();
         _native?.Dispose();
     }
 

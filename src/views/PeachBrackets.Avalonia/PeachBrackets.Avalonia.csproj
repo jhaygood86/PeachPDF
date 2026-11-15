@@ -1,0 +1,44 @@
+<Project Sdk="Microsoft.NET.Sdk">
+	<Import Project="..\..\Version.props" />
+	<PropertyGroup>
+		<Nullable>enable</Nullable>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<AssemblyName>PeachBrackets.Avalonia</AssemblyName>
+		<RootNamespace>PeachBrackets.Avalonia</RootNamespace>
+		<PackageId>PeachBrackets.Avalonia</PackageId>
+		<Description>An Avalonia control that shows an HTML document laid out by PeachBrackets, drawn through Avalonia's Skia lease: scrolling and zoom, links, text selection and copy, form controls, text editing, animations, accessibility, and the CSS cursor, hover and touch-action behavior the document asks for.</Description>
+		<PackageTags>html;css;avalonia;view;viewer;rendering;skia</PackageTags>
+		<PackageIcon>peach.png</PackageIcon>
+		<PackageReadmeFile>README.md</PackageReadmeFile>
+		<PackageProjectUrl>https://peachpdf.net/</PackageProjectUrl>
+		<RepositoryUrl>https://github.com/jhaygood86/PeachPDF.git</RepositoryUrl>
+		<PackageLicenseExpression>BSD-3-Clause</PackageLicenseExpression>
+		<IncludeSymbols>true</IncludeSymbols>
+		<GenerateDocumentationFile>true</GenerateDocumentationFile>
+		<WarningsAsErrors>$(WarningsAsErrors);CS1591</WarningsAsErrors>
+		<GeneratePackageOnBuild>True</GeneratePackageOnBuild>
+		<GenerateAssemblyConfigurationAttribute>false</GenerateAssemblyConfigurationAttribute>
+		<GenerateAssemblyCompanyAttribute>false</GenerateAssemblyCompanyAttribute>
+		<GenerateAssemblyProductAttribute>false</GenerateAssemblyProductAttribute>
+		<GenerateAssemblyInformationalVersionAttribute>false</GenerateAssemblyInformationalVersionAttribute>
+		<GenerateAssemblyFileVersionAttribute>false</GenerateAssemblyFileVersionAttribute>
+		<GenerateAssemblyTitleVersionAttribute>false</GenerateAssemblyTitleVersionAttribute>
+		<GenerateAssemblyVersionAttribute>false</GenerateAssemblyVersionAttribute>
+	</PropertyGroup>
+	<ItemGroup>
+		<ProjectReference Include="..\..\engine\PeachBrackets\PeachBrackets.csproj" />
+		<ProjectReference Include="..\..\drawing\PeachDrawing.Core\PeachDrawing.Core.csproj" />
+		<ProjectReference Include="..\..\drawing\PeachDrawing.Skia\PeachDrawing.Skia.csproj" />
+		<PackageReference Include="Avalonia" />
+		<PackageReference Include="Avalonia.Skia" />
+	</ItemGroup>
+	<ItemGroup>
+		<None Include="..\..\..\LICENSE" Pack="true" PackagePath="\" />
+		<None Include="..\..\..\docs\assets\img\peach.png" Pack="true" PackagePath="\" />
+		<None Include="README.md" Pack="true" PackagePath="\" />
+	</ItemGroup>
+	<ItemGroup>
+		<InternalsVisibleTo Include="PeachBrackets.Avalonia.Tests" />
+	</ItemGroup>
+	<Import Project="..\PeachBrackets.HtmlView.Core\PeachBrackets.HtmlView.Core.props" />
+</Project>

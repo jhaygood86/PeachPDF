@@ -60,6 +60,7 @@ PeachDrawing.Skia.SkiaCanvas : sealed class
   method virtual Void ReturnPreviousSmoothingMode(Object prevMode)
   property Boolean HasNativeLayerEffects { get; }
   property Boolean IsOffscreenTile { get; }
+  property Boolean OpaqueBackdrop { get; set; }
   property Double PixelsPerPoint { get; }
   property Matrix3x2 CurrentTransform { get; }
   property SkiaLinkMap Links { get; }
@@ -143,12 +144,14 @@ PeachDrawing.Skia.SkiaRenderContext : class
   method virtual String GetCssMediaType(IEnumerable<String> mediaTypesAvailable)
   method virtual Void Dispose()
   property Boolean FallbackToPeachImage { get; set; }
+  property Boolean LcdBgrStripes { get; set; }
   property Double LayoutUnitsPerPoint { get; }
   property Double PixelsPerPoint { get; set; }
   property GRContext GpuContext { get; set; }
   property ISkiaTextShaper TextShaper { get; }
   property SkiaImageCodec ImageCodec { get; }
   property SkiaTextEngine TextEngine { get; }
+  property SkiaTextRendering TextRendering { get; set; }
 PeachDrawing.Skia.SkiaSemanticRegion : sealed class
   ctor(Rect Bounds, SemanticInfo Info)
   method SkiaSemanticRegion <Clone>$()
@@ -175,3 +178,8 @@ PeachDrawing.Skia.SkiaShapedRun : sealed class
 PeachDrawing.Skia.SkiaTextEngine : enum Int32
   Native = 1
   PeachDrawing = 0
+PeachDrawing.Skia.SkiaTextRendering : enum Int32
+  Auto = 0
+  Grayscale = 2
+  Lcd = 3
+  Outline = 1

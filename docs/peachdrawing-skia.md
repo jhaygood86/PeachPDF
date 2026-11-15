@@ -15,7 +15,7 @@ it picks the SkiaSharp native binaries for the platforms it ships to (`SkiaSharp
 for any SkiaSharp app.
 
 > **Status: pre-1.0.** The public surface is `SkiaCanvas`, `SkiaRenderContext`, `SkiaComposer`, `SkiaComposerOptions`, `SkiaTextEngine`,
-> `SkiaImageCodec`, `SkiaImageFormat`, `ISkiaTextShaper`, `PeachTextShaper`, `SkiaShapedRun`, `SkiaLinkMap`, `SkiaLink`, `SkiaLinkOptions`, `SkiaLinkActivatingEventArgs`, `ISkiaLinkLauncher`, `SkiaCursorArea` and `SkiaSemanticRegion`;
+> `SkiaImageCodec`, `SkiaImageFormat`, `SkiaTextRendering`, `ISkiaTextShaper`, `PeachTextShaper`, `SkiaShapedRun`, `SkiaLinkMap`, `SkiaLink`, `SkiaLinkOptions`, `SkiaLinkActivatingEventArgs`, `ISkiaLinkLauncher`, `SkiaCursorArea` and `SkiaSemanticRegion`;
 > `PublicApi.txt` beside the project is the reviewed snapshot.
 
 ## You supply the surface
@@ -136,6 +136,34 @@ using var context = new SkiaRenderContext(SkiaTextEngine.Native, textShaper: new
 
 The context calls the shaper from one thread at a time, and the shaper is the host's to dispose after the context.
 
+### Text rendering (PeachDrawing engine)
+
+`SkiaRenderContext.TextRendering` chooses how the `PeachDrawing` engine's glyphs become pixels. It has no effect on native fonts, which Skia rasterizes itself. The approach is the one
+[`PeachDrawing.Win2D`](peachdrawing-win2d.md#text-rendering-peachdrawing-engine) uses, with the same fitted weight correction and filter, so the same text looks the same through both.
+
+| `SkiaTextRendering` | What is drawn |
+|---|---|
+| `Auto` (default) | Chooses for each run, so text looks like the rest of the user's desktop wherever that is possible: `Lcd` on screen (a canvas whose `OpaqueBackdrop` is set) when the operating system asks for subpixel text, `Grayscale` otherwise, and `Outline` for large text and for text that is rotated, skewed or scaled unevenly. A `SkiaComposer`'s surface is an export that may be shown on any display, so it gets `Grayscale`, never color fringes. |
+| `Outline` | Each run's exact outlines filled as vector paths by Skia: full quality under any transform, but not fitted to the pixel grid and blended as plain coverage, so small text looks lighter and softer than the platform draws it. |
+| `Grayscale` | The run is fitted to the pixel grid at its device size by the font's own hinting (`RenderContext.TextHinting` picks the dialect, `Standard` when unset), rasterized to a coverage mask, corrected for the brightness of the text color so light and dark text have the same apparent weight, and drawn as an image on whole device pixels. |
+| `Lcd` | As `Grayscale`, with a coverage per red, green and blue stripe (3x horizontal detail, a short filter across stripes, `LcdBgrStripes` for the opposite order) blended per channel. |
+
+**What `Auto` follows.** It asks the operating system once per process, on a pool thread started when the first context is made, and never waits more than half a second for the answer:
+
+- **Windows:** whether font smoothing is on and set to ClearType, and the stripe order (`SystemParametersInfo`).
+- **Linux:** the desktop's font smoothing, read with `gsettings get org.gnome.desktop.interface font-antialiasing` (`rgba` asks for subpixel text) and `font-rgba-order` (`bgr` reverses the stripes). Where `gsettings` is missing, slow or fails (a minimal container, a desktop that is not GNOME-family) the answer is grayscale.
+- **macOS, iOS and everything else:** grayscale. Apple removed subpixel text from macOS, and a platform with no setting to read has none to follow.
+
+A named mode (`Outline`, `Grayscale`, `Lcd`) ignores the system's setting.
+
+**What LCD text needs.** Blending each color channel with its own coverage assumes what is behind the text is opaque. The canvas is not told what is on the surface it borrows, so say so: set `SkiaCanvas.OpaqueBackdrop` when the surface was cleared to an opaque color and nothing translucent is left under the text (a `SkiaComposer` does it when its `Background` is opaque). Without it, and inside a layer (a layer's content starts transparent), `Lcd` is drawn as `Grayscale`. No pixels are read back: an LCD run is two opaque images composited with Skia's `Modulate` and `Plus` blend modes (`dst * (1 - a) + ink * a` for each channel with its own `a`), which works the same on a CPU surface and a GPU one.
+
+**Placement.** A mask is made for the canvas's total matrix when it is a translation and one uniform scale (a view's zoom and the screen's DPI scale, a non-integer one included): the glyphs are hinted for the device size (font size times the scale), and the mask is placed on whole device pixels. A run drawn under a rotation, a skew or an uneven scale, with a blend mode other than the ordinary one, in a color, bitmap or SVG font, or into a recorded tile (a picture that is replayed under another transform has no pixel grid yet) is drawn as `Outline`. `Auto` also draws text above 48 device pixels per em as `Outline`, where hinting and the weight correction mean nothing and a mask costs far more.
+
+**Repeated runs and scrolling.** A run's mask is kept in a cache owned by the context (up to 48 MB, least recently used out first; a lock guards it, so contexts may be drawn from the render thread) keyed by the text, font, scale and the run's position within its pixel, not by color or by what is behind it; a word seen for the first time is built from the masks of its letters. The cache is emptied when the context is disposed.
+
+**How close it is.** The correction and the filter were fitted to what Windows' own text renderer produces, so the result is close to the platform's text, not identical: advances and metrics follow the font file. A masked run costs several times an outline run, so choose `Outline` for a text-heavy page that does not need the look.
+
 ### Native font mode is not feature complete
 
 Native mode is a convenience for text that should look like the rest of the platform's, not a second full text engine. Choose
@@ -229,6 +257,7 @@ on every drawing call throws `ObjectDisposedException`. Dispose the context afte
 - **Surface only.** The package draws; it does not create, present or flush surfaces. Flushing a GPU surface is the host's.
 - **Gradients.** Gradient colors interpolate unpremultiplied, as Skia does by default; a conic gradient with stops that go past one turn
   is clamped to the first turn.
+- **Text masks** are made for the PeachDrawing engine only, and only under a translation and one uniform scale; `Lcd` needs `OpaqueBackdrop`. On Linux `Auto` reads the GNOME setting with `gsettings` and falls back to grayscale where that is unavailable; there is no fontconfig or KDE lookup. See [text rendering](#text-rendering-peachdrawing-engine).
 - **Native text** is not feature complete; see the [table above](#native-font-mode-is-not-feature-complete).
 - **Links** have no default launcher; see [links](#links).
 

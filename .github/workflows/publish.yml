@@ -77,6 +77,7 @@ jobs:
         dotnet build src/drawing/PeachDrawing.Svg/PeachDrawing.Svg.csproj --configuration Release
         dotnet build src/drawing/PeachDrawing.Skia/PeachDrawing.Skia.csproj --configuration Release
         dotnet build src/engine/PeachBrackets/PeachBrackets.csproj --configuration Release
+        dotnet build src/views/PeachBrackets.Avalonia/PeachBrackets.Avalonia.csproj --configuration Release
         dotnet build src/PeachPDF/PeachPDF.csproj --configuration Release
 
     - name: Pack
@@ -89,6 +90,7 @@ jobs:
         dotnet pack src/drawing/PeachDrawing.Svg/PeachDrawing.Svg.csproj --configuration Release --no-build --output ./packages
         dotnet pack src/drawing/PeachDrawing.Skia/PeachDrawing.Skia.csproj --configuration Release --no-build --output ./packages
         dotnet pack src/engine/PeachBrackets/PeachBrackets.csproj --configuration Release --no-build --output ./packages
+        dotnet pack src/views/PeachBrackets.Avalonia/PeachBrackets.Avalonia.csproj --configuration Release --no-build --output ./packages
         dotnet pack src/PeachPDF/PeachPDF.csproj --configuration Release --no-build --output ./packages
 
     - name: NuGet login
@@ -104,7 +106,7 @@ jobs:
       # it), then PeachDrawing.PDF (PeachPDF depends on it, alongside PeachDrawing and PeachDrawing.Core
       # directly), then PeachDrawing.Svg (like PeachDrawing.PDF it depends on PeachDrawing and PeachDrawing.Core; nothing depends on
       # it), then PeachDrawing.Skia (the same shape as PeachDrawing.Svg: PeachDrawing, PeachDrawing.Core and PeachImage; nothing depends on it), then PeachBrackets (PeachPDF depends on it too; it needs PeachDrawing, PeachDrawing.Core and
-      # PeachDrawing.Text), then PeachPDF - each has to be on the feed
+      # PeachDrawing.Text), then PeachBrackets.Avalonia (it needs PeachBrackets and PeachDrawing.Skia; nothing depends on it), then PeachPDF - each has to be on the feed
       # before anyone can restore the one that depends on it. --skip-duplicate makes this safe to re-run.
       # The exact version-pinned filenames (rather than a "PeachDrawing.Text.*"/"PeachDrawing.*" glob)
       # avoid PeachDrawing.Text.Data's own package incidentally matching the PeachDrawing.Text push, and
@@ -137,6 +139,10 @@ jobs:
           --source https://api.nuget.org/v3/index.json \
           --skip-duplicate
         dotnet nuget push "./packages/PeachBrackets.${{ steps.version.outputs.value }}.nupkg" \
+          --api-key "${{ steps.login.outputs.NUGET_API_KEY }}" \
+          --source https://api.nuget.org/v3/index.json \
+          --skip-duplicate
+        dotnet nuget push "./packages/PeachBrackets.Avalonia.${{ steps.version.outputs.value }}.nupkg" \
           --api-key "${{ steps.login.outputs.NUGET_API_KEY }}" \
           --source https://api.nuget.org/v3/index.json \
           --skip-duplicate
@@ -174,8 +180,8 @@ jobs:
 
     - name: Build and pack
       run: |
-        dotnet build src/engine/PeachBrackets.Android/PeachBrackets.Android.csproj --configuration Release
-        dotnet pack src/engine/PeachBrackets.Android/PeachBrackets.Android.csproj --configuration Release --no-build --output ./packages
+        dotnet build src/views/PeachBrackets.Android/PeachBrackets.Android.csproj --configuration Release
+        dotnet pack src/views/PeachBrackets.Android/PeachBrackets.Android.csproj --configuration Release --no-build --output ./packages
 
     - name: NuGet login
       uses: NuGet/login@v1
@@ -213,8 +219,8 @@ jobs:
 
     - name: Build and pack
       run: |
-        dotnet build src/engine/PeachBrackets.WinUI/PeachBrackets.WinUI.csproj --configuration Release
-        dotnet pack src/engine/PeachBrackets.WinUI/PeachBrackets.WinUI.csproj --configuration Release --no-build --output ./packages
+        dotnet build src/views/PeachBrackets.WinUI/PeachBrackets.WinUI.csproj --configuration Release
+        dotnet pack src/views/PeachBrackets.WinUI/PeachBrackets.WinUI.csproj --configuration Release --no-build --output ./packages
 
     - name: NuGet login
       uses: NuGet/login@v1
@@ -297,9 +303,9 @@ jobs:
 
     - name: Build and pack
       run: |
-        dotnet build src/engine/PeachBrackets.Apple/PeachBrackets.Apple.csproj --configuration Release -p:ValidateXcodeVersion=false
+        dotnet build src/views/PeachBrackets.Apple/PeachBrackets.Apple.csproj --configuration Release -p:ValidateXcodeVersion=false
         dotnet test --project src/tests/PeachBrackets.Apple.Tests/PeachBrackets.Apple.Tests.csproj --configuration Release
-        dotnet pack src/engine/PeachBrackets.Apple/PeachBrackets.Apple.csproj --configuration Release --no-build --output ./packages
+        dotnet pack src/views/PeachBrackets.Apple/PeachBrackets.Apple.csproj --configuration Release --no-build --output ./packages
 
     - name: NuGet login
       uses: NuGet/login@v1

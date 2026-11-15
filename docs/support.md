@@ -74,7 +74,7 @@ Once 0.9.x enters maintenance, the policy applies to **PeachPDF**. It also appli
 | PeachBrackets | Supported | Not covered by the 0.9.x maintenance policy |
 | PeachDrawing, PeachDrawing.Core, PeachDrawing.Text | Supported | Not covered by the 0.9.x maintenance policy |
 | PeachDrawing.Svg, PeachDrawing.Skia, PeachDrawing.Win2D, PeachDrawing.CoreGraphics | Not applicable | Not covered by the 0.9.x maintenance policy |
-| PeachBrackets.WinUI, PeachBrackets.Android, PeachBrackets.Apple (the HtmlView libraries) | Not applicable | Not covered by the 0.9.x maintenance policy |
+| PeachBrackets.WinUI, PeachBrackets.Android, PeachBrackets.Apple, PeachBrackets.Avalonia (the HtmlView libraries) | Not applicable | Not covered by the 0.9.x maintenance policy |
 | PeachImage | Supported | Covered only by the PeachImage project's own policies |
 
 - **Full support for the rest arrives in 0.10.x.** PeachBrackets, the PeachDrawing libraries (other than PeachDrawing.PDF) and the PeachBrackets HtmlView libraries (WinUI, Android and Apple) are expected to receive full support when used on their own in the 0.10.x series. That full support is contingent on staying on the current release series: once a newer series is released, the older one is in maintenance and these libraries are no longer covered when used on their own.

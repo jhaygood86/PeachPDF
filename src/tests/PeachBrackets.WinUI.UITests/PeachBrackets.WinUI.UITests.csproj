@@ -35,7 +35,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\engine\PeachBrackets.WinUI\PeachBrackets.WinUI.csproj" />
+    <ProjectReference Include="..\..\views\PeachBrackets.WinUI\PeachBrackets.WinUI.csproj" />
   </ItemGroup>
 
   <ItemGroup>

@@ -1,0 +1,273 @@
+using Avalonia;
+using Avalonia.Headless;
+using PeachBrackets.Avalonia.Logic;
+using PeachBrackets.Avalonia.Tests.TestSupport;
+
+namespace PeachBrackets.Avalonia.Tests;
+
+public class TouchMathTests
+{
+    [Fact]
+    public void AFlingSlowsToAThirdAfterOneTimeConstant()
+    {
+        Assert.Equal(Math.Exp(-1), TouchMath.FlingDecay(0.35), 6);
+        Assert.Equal(1, TouchMath.FlingDecay(0), 6);
+    }
+
+    [Fact]
+    public void VelocityBlendsTheNewSampleWithTheOldOne()
+    {
+        Assert.Equal((0.6 * 100) + (0.4 * 50), TouchMath.SmoothVelocity(50, 10, 0.1), 6);
+        Assert.Equal(50, TouchMath.SmoothVelocity(50, 10, 0));
+    }
+
+    [Fact]
+    public void TwoTapsCloseInTimeAndPlaceAreADoubleTap()
+    {
+        Assert.True(TouchMath.IsDoubleTap(10, 10, 1000, 20, 15, 1200));
+        Assert.False(TouchMath.IsDoubleTap(10, 10, 1000, 20, 15, 1500));
+        Assert.False(TouchMath.IsDoubleTap(10, 10, 1000, 200, 15, 1200));
+        Assert.False(TouchMath.IsDoubleTap(10, 10, 0, 10, 10, 100));
+    }
+
+    [Fact]
+    public void ADoubleTapZoomsInAndThenBackOut()
+    {
+        Assert.Equal(2, TouchMath.DoubleTapZoom(1));
+        Assert.Equal(1, TouchMath.DoubleTapZoom(2));
+    }
+
+    [Fact]
+    public void APinchScalesTheZoomItBeganWith() => Assert.Equal(3, TouchMath.PinchZoom(1.5, 2));
+
+    [Fact]
+    public void CursorImagesFitTheirSizeAndHotspot()
+    {
+        Assert.Equal((64, 32), CursorImages.Fit(64, 32, 128));
+        Assert.Equal((128, 64), CursorImages.Fit(256, 128, 128));
+        Assert.Equal((64, 32), CursorImages.Hotspot(null, null, 128, 64, 128, 64));
+        Assert.Equal((0, 0), CursorImages.Hotspot(0, 0, 128, 64, 64, 32));
+        Assert.True(CursorImages.IsFetchable("data:image/png;base64,AAAA"));
+        Assert.False(CursorImages.IsFetchable("ms-appx:///x.png"));
+        Assert.True(CursorImages.TryDecodeDataUri("data:text/plain;base64,aGk=", out var bytes));
+        Assert.Equal("hi"u8.ToArray(), bytes);
+    }
+}
+
+public class TouchTests
+{
+    private const string Tall = "<html><body style='margin:0'><div style='height:3000px;background:#eee'>tall</div></body></html>";
+
+    private const string Boxed =
+        "<html><body style='margin:0'><div id='box' style='width:200px;height:100px;overflow:auto'><div style='height:1000px'>x</div></div><div style='height:3000px'>t</div></body></html>";
+
+    [Fact]
+    public async Task AFingerDraggedOverThePageScrollsIt()
+    {
+        await HeadlessSession.Run(async () =>
+        {
+            var (window, view) = await HeadlessSession.ShowAsync(Tall);
+            Assert.True(view.TouchDragBy(0, 60));
+            Assert.Equal(60, view.ScrollPixels.Y, 0.5);
+            window.Close();
+        });
+    }
+
+    [Fact]
+    public async Task TouchActionLimitsThePanTheFingerMayDo()
+    {
+        await HeadlessSession.Run(async () =>
+        {
+            var (window, view) = await HeadlessSession.ShowAsync(Tall);
+            view.TouchAllowed = PeachBrackets.TouchActions.PanDown;
+            Assert.False(view.TouchDragBy(0, 60));
+            Assert.Equal(0, view.ScrollPixels.Y);
+            window.Close();
+        });
+    }
+
+    [Fact]
+    public async Task AFingerOnAnOverflowBoxDragsTheBoxAndNotThePage()
+    {
+        await HeadlessSession.Run(async () =>
+        {
+            var (window, view) = await HeadlessSession.ShowAsync(Boxed);
+            // A finger that goes down on the box and moves up drags the box's own content, through the real pointer events.
+            var finger = window.TouchBegin(new Point(40 * 96.0 / 72, 40 * 96.0 / 72));
+            window.TouchMove(finger, new Point(40 * 96.0 / 72, (40 * 96.0 / 72) - 30));
+            Assert.True(view.IsTouchScrollingContainer);
+            Assert.Equal(0, view.ScrollPixels.Y);
+            Assert.True(view.GetContainerScroll("box")!.Value.Y > 0);
+            window.TouchEnd(finger, new Point(40 * 96.0 / 72, (40 * 96.0 / 72) - 30));
+            while (view.IsFlinging)
+                view.StepFling(0.016);
+
+            window.Close();
+        });
+    }
+
+    [Fact]
+    public async Task AFlingCarriesThePageOnAndDecaysToAStop()
+    {
+        await HeadlessSession.Run(async () =>
+        {
+            var (window, view) = await HeadlessSession.ShowAsync(Tall);
+            view.BeginFling(null, 0, 2000);
+            Assert.True(view.IsFlinging);
+            var last = 0.0;
+            var steps = 0;
+            while (view.IsFlinging && steps++ < 1000)
+            {
+                view.StepFling(0.016);
+                Assert.True(view.ScrollPixels.Y >= last);
+                last = view.ScrollPixels.Y;
+            }
+
+            Assert.False(view.IsFlinging);
+            // The distance of an exponential decay is speed times its time constant, less what is left under the stop speed.
+            Assert.InRange(last, 2000 * 0.35 * 0.8, 2000 * 0.35 * 1.05);
+            window.Close();
+        });
+    }
+
+    [Fact]
+    public async Task AFlingStopsAtTheEndOfTheContent()
+    {
+        await HeadlessSession.Run(async () =>
+        {
+            var (window, view) = await HeadlessSession.ShowAsync("<html><body style='margin:0'><div style='height:100px'>short</div></body></html>");
+            view.BeginFling(null, 0, 5000);
+            view.StepFling(0.016);
+            Assert.False(view.IsFlinging);
+            window.Close();
+        });
+    }
+
+    [Fact]
+    public async Task APinchZoomsAboutItsFocusAndEndsOnRelease()
+    {
+        await HeadlessSession.Run(async () =>
+        {
+            var (window, view) = await HeadlessSession.ShowAsync(Tall);
+            Assert.True(view.TouchDragBy(0, 600));
+            var focus = new Point(100, 100);
+            var contentBefore = (view.ScrollPixels.Y + focus.Y) / view.Zoom;
+            view.ApplyPinch(1.5, focus);
+            Assert.Equal(1.5, view.Zoom, 3);
+            view.ApplyPinch(2, focus);
+            Assert.Equal(2, view.Zoom, 3);
+            Assert.Equal(contentBefore, (view.ScrollPixels.Y + focus.Y) / view.Zoom, 1);
+            view.EndPinch();
+            view.ApplyPinch(0.5, focus);
+            Assert.Equal(1, view.Zoom, 3);
+            window.Close();
+        });
+    }
+
+    [Fact]
+    public async Task MovingTheFocalPointOfAPinchPansThePageWithIt()
+    {
+        await HeadlessSession.Run(async () =>
+        {
+            var (window, view) = await HeadlessSession.ShowAsync(Tall);
+            Assert.True(view.TouchDragBy(0, 600));
+            static void Pinch(HtmlView view, double scale, Point origin) =>
+                view.RaiseEvent(new global::Avalonia.Input.PinchEventArgs(scale, origin) { RoutedEvent = global::Avalonia.Input.InputElement.PinchEvent });
+
+            // The page position under a point of the view.
+            (double X, double Y) Under(Point p) => ((view.ScrollPixels.X + p.X) / view.Zoom, (view.ScrollPixels.Y + p.Y) / view.Zoom);
+
+            var start = new Point(200, 150);
+            var under = Under(start);
+            Pinch(view, 1.5, start);
+            Assert.Equal(1.5, view.Zoom, 3);
+            Assert.Equal(under.Y, Under(start).Y, 1);
+
+            // The fingers move up and to the left while the spread stays: the same page position goes with them.
+            var moved = new Point(150, 100);
+            Pinch(view, 1.5, moved);
+            var after = Under(moved);
+            Assert.Equal(under.X, after.X, 1);
+            Assert.Equal(under.Y, after.Y, 1);
+
+            // And it zooms about the new focal point too.
+            Pinch(view, 2, new Point(120, 90));
+            Assert.Equal(2, view.Zoom, 3);
+            Assert.Equal(under.Y, Under(new Point(120, 90)).Y, 1);
+            window.Close();
+        });
+    }
+
+    [Fact]
+    public async Task AFingerDraggedUpTheScreenPansThePage()
+    {
+        await HeadlessSession.Run(async () =>
+        {
+            var (window, view) = await HeadlessSession.ShowAsync(Tall);
+            Assert.Equal(0, view.ScrollPixels.Y);
+            var finger = window.TouchBegin(new Point(200, 250));
+            window.TouchMove(finger, new Point(200, 200));
+            window.TouchMove(finger, new Point(200, 150));
+            // The page follows the finger: dragging up 100 pixels scrolls 100 down.
+            Assert.Equal(100, view.ScrollPixels.Y, 1);
+            window.TouchEnd(finger, new Point(200, 150));
+            await HtmlViewInput.SettleAsync(view);
+            Assert.True(view.ScrollPixels.Y >= 100);
+            while (view.IsFlinging)
+                view.StepFling(0.016);
+            window.Close();
+        });
+    }
+
+    [Fact]
+    public async Task TouchActionNoneOnTheElementUnderTheFingerKeepsThePageFromPanning()
+    {
+        await HeadlessSession.Run(async () =>
+        {
+            var (window, view) = await HeadlessSession.ShowAsync(
+                "<html><body style='margin:0'>" +
+                "<div style='position:absolute;left:0;top:0;width:200px;height:3000px;touch-action:none;background:#fdd'></div>" +
+                "<div style='position:absolute;left:200px;top:0;width:200px;height:3000px;background:#dfd'></div>" +
+                "</body></html>");
+
+            // A finger that went down on the touch-action: none element moves the page nowhere.
+            var blocked = window.TouchBegin(new Point(100, 250));
+            window.TouchMove(blocked, new Point(100, 200));
+            window.TouchMove(blocked, new Point(100, 100));
+            Assert.Equal(0, view.ScrollPixels.Y);
+            Assert.Equal(PeachBrackets.TouchActions.None, view.TouchAllowed & PeachBrackets.TouchActions.PanUp);
+            window.TouchEnd(blocked, new Point(100, 100));
+            await HtmlViewInput.SettleAsync(view);
+            Assert.Equal(0, view.ScrollPixels.Y);
+
+            // The same drag over the element beside it scrolls.
+            var free = window.TouchBegin(new Point(300, 250));
+            window.TouchMove(free, new Point(300, 200));
+            window.TouchMove(free, new Point(300, 100));
+            Assert.Equal(150, view.ScrollPixels.Y, 1);
+            window.TouchEnd(free, new Point(300, 100));
+            while (view.IsFlinging)
+                view.StepFling(0.016);
+            window.Close();
+        });
+    }
+
+    [Fact]
+    public async Task ADoubleTapZoomsInUnlessTheDocumentForbidsIt()
+    {
+        await HeadlessSession.Run(async () =>
+        {
+            var (window, view) = await HeadlessSession.ShowAsync(Tall);
+            view.HandleTouchTap(new Point(50, 50));
+            Assert.Equal(1, view.Zoom);
+            view.HandleTouchTap(new Point(52, 51));
+            Assert.Equal(2, view.Zoom, 3);
+
+            view.TouchAllowed = PeachBrackets.TouchActions.PanUp;
+            view.HandleTouchTap(new Point(50, 50));
+            view.HandleTouchTap(new Point(50, 50));
+            Assert.Equal(2, view.Zoom, 3);
+            window.Close();
+        });
+    }
+}

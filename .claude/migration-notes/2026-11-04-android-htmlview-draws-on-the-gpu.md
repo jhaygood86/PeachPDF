@@ -8,4 +8,4 @@ CPU view. The Android example app takes `--ez cpu true` to start in that mode.
 a scroll reaches an area it is painted as a 1024 by 1024 pixel tile, which can take longer than a CPU frame on a device with a slow GL driver.
 A device whose OpenGL cannot create a surface should construct the view with `useGpu: false`.
 
-**Verified against** `git show v0.9.26-preview1:src/engine/PeachBrackets.Android/HtmlView.cs`, which hosts an `SKCanvasView`.
+**Verified against** `git show v0.9.26-preview1:src/views/PeachBrackets.Android/HtmlView.cs`, which hosts an `SKCanvasView`.

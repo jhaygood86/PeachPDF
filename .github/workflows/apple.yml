@@ -8,7 +8,7 @@ on:
   pull_request:
     branches: [ main ]
     paths:
-      - 'src/engine/PeachBrackets.Apple/**'
+      - 'src/views/PeachBrackets.Apple/**'
       - 'src/examples/PeachBrackets.Apple.*/**'
       - 'src/tests/PeachBrackets.Apple.Tests/**'
       - 'src/tests/PeachBrackets.Apple.AppTests/**'
@@ -45,7 +45,7 @@ jobs:
       run: dotnet workload install macos ios
 
     - name: Build the package for macOS and iOS
-      run: dotnet build src/engine/PeachBrackets.Apple/PeachBrackets.Apple.csproj --configuration Release -p:ValidateXcodeVersion=false
+      run: dotnet build src/views/PeachBrackets.Apple/PeachBrackets.Apple.csproj --configuration Release -p:ValidateXcodeVersion=false
 
     # The logic tests are plain .NET; the public-surface test reads the build above for both platforms.
     - name: Test the platform-free logic and the public surface

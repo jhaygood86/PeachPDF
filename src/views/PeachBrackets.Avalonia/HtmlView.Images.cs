@@ -1,0 +1,62 @@
+using Avalonia.Threading;
+using PeachBrackets.Updates;
+
+namespace PeachBrackets.Avalonia;
+
+public sealed partial class HtmlView
+{
+    // The zoom the document's images were last chosen for. A zoom that has settled asks for denser ones; the document keeps its layout while it loads
+    // them, and the tiles are painted again with what changed.
+    private double _imagesChosenForZoom = 1;
+    private DispatcherTimer? _upgradeTimer;
+
+    /// <summary>The zoom the document's images were last chosen for. For tests.</summary>
+    internal double ImagesChosenForZoom => _imagesChosenForZoom;
+
+    private void QueueImageUpgrade()
+    {
+        if (_document is null || !ImageScale.NeedsUpgrade(_imagesChosenForZoom, _zoom))
+            return;
+
+        _upgradeTimer ??= new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(ImageScale.SettleMilliseconds) };
+        _upgradeTimer.Stop();
+        _upgradeTimer.Tick -= OnUpgradeTick;
+        _upgradeTimer.Tick += OnUpgradeTick;
+        _upgradeTimer.Start();
+    }
+
+    private void OnUpgradeTick(object? sender, EventArgs e)
+    {
+        _upgradeTimer?.Stop();
+        Forget(UpgradeImagesAsync());
+    }
+
+    /// <summary>Stands in for <see cref="HtmlDocument.UpgradeImagesAsync"/> when set, so a test can make an upgrade that fails.</summary>
+    internal Func<HtmlDocument, ValueTask<UpdateResult>>? ImageUpgrader { get; set; }
+
+    internal async Task UpgradeImagesAsync()
+    {
+        if (_document is not { } document)
+            return;
+
+        var zoom = _zoom;
+        document.SetRenderScale(zoom, ImageScale.DevicePixelRatio(_dpi));
+        _imagesChosenForZoom = Math.Max(_imagesChosenForZoom, zoom);
+
+        try
+        {
+            var result = await (ImageUpgrader is { } upgrader ? upgrader(document) : document.UpgradeImagesAsync());
+            if (ReferenceEquals(document, _document) && result.DirtyRegions.Count > 0)
+            {
+                UpdateMetrics();
+                InvalidateContent();
+            }
+        }
+        catch (Exception exception) when (exception is not OutOfMemoryException)
+        {
+            // What a document that was replaced meanwhile throws is nothing the one that replaced it has to answer for.
+            if (ReferenceEquals(document, _document))
+                RaiseDocumentFailed(exception);
+        }
+    }
+}

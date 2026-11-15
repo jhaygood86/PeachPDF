@@ -26,6 +26,7 @@ integration points, and nothing else - no `SKPaint`, `SKImage` or `SKTypeface` i
 | `SkiaComposer`, `SkiaComposerOptions` | One page drawn onto a caller's surface: its canvas, finishing and reading back | `Composer` is this repository's name for the document-level assembler; `Finish` mirrors the page-completing call of `PdfComposerPage`; `ToPixelBuffer`/`Save` name what they return and do |
 | `SkiaImageFormat` | The file format a page is saved as | Ours; each value is the format's name |
 | `SkiaTextEngine` (`PeachDrawing`, `Native`) | Which engine shapes and draws text | Ours; each value names the engine |
+| `SkiaTextRendering` (`Auto`, `Outline`, `Grayscale`, `Lcd`), `SkiaRenderContext.TextRendering`/`LcdBgrStripes`, `SkiaCanvas.OpaqueBackdrop` | How the PeachDrawing engine's glyphs become pixels, and the host's statement that what is behind the text is opaque | Ours; `Win2dTextRendering` is the sibling's same switch, each value names the look; `OpaqueBackdrop` says what it asserts |
 | `PeachTextShaper` | The ready-made `ISkiaTextShaper` over the `PeachDrawing.Text` engine | Ours; named for the engine it wraps, not the Skia type it serves |
 | `ISkiaTextShaper`, `SkiaShapedRun` | The seam a host fills to shape native-font text (e.g. over HarfBuzz, which the package does not depend on) | Ours; plain arrays, no SkiaSharp.HarfBuzz type in the signature |
 | `SkiaImageCodec` (`Auto`, `PeachImage`, `Native`) | Which decoder turns an encoded image into pixels (`Win2dImageCodec` is the same switch) | Ours; each value names the decoder |

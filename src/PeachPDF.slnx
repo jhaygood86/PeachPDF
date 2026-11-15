@@ -30,10 +30,13 @@
   <Project Path="harness/PeachPDF.TestHarness/PeachPDF.TestHarness.csproj" />
   <Project Path="tests/PeachPDF.Tests/PeachPDF.Tests.csproj" />
   <Project Path="engine/PeachBrackets/PeachBrackets.csproj" />
-  <Project Path="engine/PeachBrackets.WinUI/PeachBrackets.WinUI.csproj" />
+  <Project Path="views/PeachBrackets.WinUI/PeachBrackets.WinUI.csproj" />
   <Project Path="examples/PeachBrackets.WinUI.Example/PeachBrackets.WinUI.Example.csproj" />
   <Project Path="tests/PeachBrackets.WinUI.Tests/PeachBrackets.WinUI.Tests.csproj" />
   <Project Path="tests/PeachBrackets.WinUI.UITests/PeachBrackets.WinUI.UITests.csproj" />
+  <Project Path="views/PeachBrackets.Avalonia/PeachBrackets.Avalonia.csproj" />
+  <Project Path="examples/PeachBrackets.Avalonia.Example/PeachBrackets.Avalonia.Example.csproj" />
+  <Project Path="tests/PeachBrackets.Avalonia.Tests/PeachBrackets.Avalonia.Tests.csproj" />
   <Project Path="tests/PeachBrackets.Android.Tests/PeachBrackets.Android.Tests.csproj" />
   <Project Path="tests/PeachBrackets.Apple.Tests/PeachBrackets.Apple.Tests.csproj" />
   <Project Path="tests/PeachBrackets.Tests/PeachBrackets.Tests.csproj" />

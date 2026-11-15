@@ -72,6 +72,10 @@ public sealed class SkiaComposer : IDisposable
             // The page is laid out in layout units; the surface is in pixels. The canvas draws under this scale like under any host matrix.
             host.Scale((float)(PixelWidth / width), (float)(PixelHeight / height));
             _canvas = SkiaCanvas.FromCanvas(renderContext, host, new Rect(0, 0, width, height), options.Links);
+
+            // A page cleared to an opaque color has an opaque backdrop; the surface is an export, so Auto never gives its text color fringes.
+            _canvas.OpaqueBackdrop = options.Background is { A: 255 };
+            _canvas.MarkAsExport();
         }
         catch
         {

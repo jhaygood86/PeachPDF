@@ -5,7 +5,7 @@ using System.Text;
 namespace PeachBrackets.WinUI.Tests.PublicApi
 {
     /// <summary>
-    /// Pins the public surface of <c>PeachBrackets.WinUI</c> to <c>src/engine/PeachBrackets.WinUI/PublicApi.txt</c>, so a type
+    /// Pins the public surface of <c>PeachBrackets.WinUI</c> to <c>src/views/PeachBrackets.WinUI/PublicApi.txt</c>, so a type
     /// or member becomes public only by a reviewed edit to that file. Run the tests with
     /// <c>UPDATE_PUBLIC_API=1</c> to rewrite it after an intended change. Adapted from
     /// <c>PeachDrawing.Core.Tests</c>'s own <c>PublicApi/PublicSurfaceTests.cs</c> - identical
@@ -122,7 +122,7 @@ namespace PeachBrackets.WinUI.Tests.PublicApi
         {
             for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir is not null; dir = dir.Parent)
             {
-                var candidate = Path.Combine(dir.FullName, "engine", "PeachBrackets.WinUI", SnapshotFile);
+                var candidate = Path.Combine(dir.FullName, "views", "PeachBrackets.WinUI", SnapshotFile);
                 if (File.Exists(candidate)) return candidate;
             }
 

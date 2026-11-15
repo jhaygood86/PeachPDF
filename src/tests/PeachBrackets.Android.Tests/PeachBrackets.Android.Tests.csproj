@@ -31,11 +31,12 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Include="..\..\engine\PeachBrackets.Android\Logic\*.cs" Link="Logic\%(Filename)%(Extension)" />
+    <Compile Include="..\..\views\PeachBrackets.Android\Logic\*.cs" Link="Logic\%(Filename)%(Extension)" />
   </ItemGroup>
 
   <ItemGroup>
     <Using Include="Xunit" />
   </ItemGroup>
 
+  <Import Project="..\..\views\PeachBrackets.HtmlView.Core\PeachBrackets.HtmlView.Core.props" />
 </Project>

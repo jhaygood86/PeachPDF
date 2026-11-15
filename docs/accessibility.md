@@ -2,7 +2,7 @@
 
 PeachBrackets describes a document to an assistive technology - a screen reader, a switch, a braille display - as an **accessibility tree**: the
 parts of the page that mean something to a reader, each with the role it has, the name it is called by, and what state it is in. A host such as the
-[WinUI](peachbrackets-winui.md) or [Android](peachbrackets-android.md) view builds the tree its platform wants (UI Automation, an accessibility node
+[WinUI](peachbrackets-winui.md), [Android](peachbrackets-android.md) or [Avalonia](peachbrackets-avalonia.md) view builds the tree its platform wants (UI Automation, an accessibility node
 provider) from this one.
 
 ```csharp

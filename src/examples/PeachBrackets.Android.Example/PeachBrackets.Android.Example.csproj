@@ -19,7 +19,7 @@
 		<DemoAssetsDir>$(MSBuildProjectDirectory)\Assets\demo\</DemoAssetsDir>
 	</PropertyGroup>
 	<ItemGroup>
-		<ProjectReference Include="..\..\engine\PeachBrackets.Android\PeachBrackets.Android.csproj" />
+		<ProjectReference Include="..\..\views\PeachBrackets.Android\PeachBrackets.Android.csproj" />
 		<PackageReference Include="SkiaSharp.NativeAssets.Android" />
 	</ItemGroup>
 
