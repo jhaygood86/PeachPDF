@@ -1783,7 +1783,6 @@ namespace PeachBrackets.Html.Dom
         internal double? StaticRightEdge { get => _rare?.StaticRightEdge; set { if (_rare is null) { if (value is null) return; _rare = new BoxRareState(); } _rare.StaticRightEdge = value; } }
 
         /// <summary>The grid area an absolutely positioned child of a grid container is placed against, in the same coordinates as <see cref="Location"/>: the area its <c>grid-column</c>/<c>grid-row</c> lines name, where a line that does not exist is the padding edge (css-grid-1 section 9). Null when the child has no such area.</summary>
-        internal Rect? GridStaticArea { get => _rare?.GridStaticArea; set { if (_rare is null) { if (value is null) return; _rare = new BoxRareState(); } _rare.GridStaticArea = value; } }
 
         /// <summary>The grid area an absolutely positioned child of a grid container is placed against, in the same coordinates as <see cref="Location"/>: the area its <c>grid-column</c>/<c>grid-row</c> lines name, with the padding edge for a line that does not exist.</summary>
         internal Rect? GridContainingArea { get => _rare?.GridContainingArea; set { if (_rare is null) { if (value is null) return; _rare = new BoxRareState(); } _rare.GridContainingArea = value; } }
@@ -8183,11 +8182,15 @@ namespace PeachBrackets.Html.Dom
         /// </summary>
         private void AlignStaticPositionInGrid()
         {
-            if (ParentBox is not { } grid || grid.DerivedStyle.ActualDisplay is not (Keywords.Grid or Keywords.InlineGrid)
-                || grid.WritingMode.Value.IsVertical() || WritingMode.Value.IsVertical())
+            if (ParentBox is not { } grid || grid.DerivedStyle.ActualDisplay is not (Keywords.Grid or Keywords.InlineGrid))
             {
                 return;
             }
+
+            // In a vertical grid the block axis (align-self) runs across the page and the inline axis (justify-self) down it; the block-start edge is the
+            // right one under vertical-rl and the inline-start edge the bottom one under direction: rtl.
+            var vertical = grid.WritingMode.Value.IsVertical();
+            var frame = WritingModeFrame.For(grid);
 
             var rtl = grid.Direction.Value == DirectionMode.Rtl;
             var contentBox = new Rect(grid.ClientLeft, grid.ClientTop, grid.ClientRight - grid.ClientLeft, grid.ClientBottom - grid.ClientTop);
@@ -8196,7 +8199,7 @@ namespace PeachBrackets.Html.Dom
             // the padding edge); otherwise it is as if it were the only item of a grid area at the container's content edges (css-grid-1 section 9.2).
             var area = ReferenceEquals(DomUtils.GetNearestPositionedAncestor(this), grid)
                 ? GridContainingArea ?? contentBox
-                : GridStaticArea ?? contentBox;
+                : contentBox;
 
             // Where along the free space the box goes, as a fraction from the start edge (logical keywords) or the left/top one (physical ones).
             static (double Fraction, bool Physical) Factor(string alignment, double free)
@@ -8218,8 +8221,10 @@ namespace PeachBrackets.Html.Dom
             if (Left.Value.IsKeyword && Right.Value.IsKeyword)
             {
                 var free = area.Width - (ActualBoxSizingWidth + ActualMarginLeft + ActualMarginRight);
-                var (fraction, physical) = Factor(StaticSelfAlignment(JustifySelf.ToString(), grid.JustifyItems.ToString()), free);
-                if (rtl && !physical) fraction = 1 - fraction;
+                var (fraction, physical) = vertical
+                    ? Factor(StaticSelfAlignment(AlignSelf.ToString(), grid.AlignItems.ToString()), free)
+                    : Factor(StaticSelfAlignment(JustifySelf.ToString(), grid.JustifyItems.ToString()), free);
+                if (vertical ? frame.BlockStartIsRight : rtl && !physical) fraction = 1 - fraction;
                 var target = area.X + free * fraction + ActualMarginLeft;
                 if (Math.Abs(target - Location.X) > 0.01) OffsetLeft(target - Location.X);
             }
@@ -8227,7 +8232,10 @@ namespace PeachBrackets.Html.Dom
             if (Top.Value.IsKeyword && Bottom.Value.IsKeyword)
             {
                 var free = area.Height - (ActualBoxSizingHeight + ActualMarginTop + ActualMarginBottom);
-                var (fraction, _) = Factor(StaticSelfAlignment(AlignSelf.ToString(), grid.AlignItems.ToString()), free);
+                var (fraction, _) = vertical
+                    ? Factor(StaticSelfAlignment(JustifySelf.ToString(), grid.JustifyItems.ToString()), free)
+                    : Factor(StaticSelfAlignment(AlignSelf.ToString(), grid.AlignItems.ToString()), free);
+                if (vertical && frame.InlineStartIsBottom) fraction = 1 - fraction;
                 var target = area.Y + free * fraction + ActualMarginTop;
                 if (Math.Abs(target - Location.Y) > 0.01) OffsetTop(target - Location.Y);
             }

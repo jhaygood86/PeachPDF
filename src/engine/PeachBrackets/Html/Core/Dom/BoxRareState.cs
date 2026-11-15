@@ -97,7 +97,6 @@ namespace PeachBrackets.Html.Dom
         internal (double X, double Y)? InlineStaticPosition;
         internal double? StaticRightEdge;
         internal Rect? GridContainingArea;
-        internal Rect? GridStaticArea;
         internal bool _isForcedBreak;
         internal bool FootnotePolicyForcedBreakBefore;
         internal bool _adjoinsForcedBreakPoint;

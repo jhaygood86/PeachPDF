@@ -2805,14 +2805,11 @@ namespace PeachBrackets.Html.Dom
         private void StateAbsolutelyPositionedAreas(Track[] columns, Track[] rows, int explicitColumns, int explicitRows,
             IReadOnlyDictionary<string, List<int>> colLineNames, IReadOnlyDictionary<string, List<int>> rowLineNames)
         {
-            if (_vertical) return;
-
             var paddingLeft = _gridBox.ClientLeft - _gridBox.ActualPaddingLeft;
             var paddingRight = _gridBox.ClientRight + _gridBox.ActualPaddingRight;
             var paddingTop = _gridBox.ClientTop - _gridBox.ActualPaddingTop;
             var rowsEnd = rows.Length > 0 ? rows[^1].Position + rows[^1].Size : BlockOrigin;
             var paddingBottom = Math.Max(rowsEnd, _gridBox.ClientBottom) + _gridBox.ActualPaddingBottom;
-            var contentBottom = Math.Max(rowsEnd, _gridBox.ClientBottom);
             var mirror = _gridBox.ClientLeft + _mirrorRight;
 
             foreach (var child in _gridBox.Boxes)
@@ -2842,6 +2839,32 @@ namespace PeachBrackets.Html.Dom
 
                 Rect AreaWith(double left, double right, double top, double bottom)
                 {
+                    if (_vertical)
+                    {
+                        // The lines are logical offsets in the content box: the columns run down the page and the rows across it. A line that does not
+                        // exist is the padding edge on the physical side it would have been.
+                        var inlineStart = colStartLine ?? 0;
+                        var inlineEnd = colEndLine ?? _frame.LogicalContentWidth;
+                        var blockStart = topLine ?? 0;
+                        var blockEnd = bottomLine ?? Math.Max(_frame.LogicalContentHeight, rows.Length > 0 ? rows[^1].Position + rows[^1].Size : 0);
+                        var area = _frame.ToPhysical(new Rect(inlineStart, blockStart, Math.Max(0, inlineEnd - inlineStart), Math.Max(0, blockEnd - blockStart)));
+
+                        var inlineStartPadding = _frame.InlineStartIsBottom ? _gridBox.ActualPaddingBottom : _gridBox.ActualPaddingTop;
+                        var inlineEndPadding = _frame.InlineStartIsBottom ? _gridBox.ActualPaddingTop : _gridBox.ActualPaddingBottom;
+                        var blockStartPadding = _frame.BlockStartIsRight ? _gridBox.ActualPaddingRight : _gridBox.ActualPaddingLeft;
+                        var blockEndPadding = _frame.BlockStartIsRight ? _gridBox.ActualPaddingLeft : _gridBox.ActualPaddingRight;
+                        var physLeft = area.X;
+                        var physRight = area.X + area.Width;
+                        var physTop = area.Y;
+                        var physBottom = area.Y + area.Height;
+                        if (colStartLine is null) { if (_frame.InlineStartIsBottom) physBottom += inlineStartPadding; else physTop -= inlineStartPadding; }
+                        if (colEndLine is null) { if (_frame.InlineStartIsBottom) physTop -= inlineEndPadding; else physBottom += inlineEndPadding; }
+                        if (topLine is null) { if (_frame.BlockStartIsRight) physRight += blockStartPadding; else physLeft -= blockStartPadding; }
+                        if (bottomLine is null) { if (_frame.BlockStartIsRight) physLeft -= blockEndPadding; else physRight += blockEndPadding; }
+                        return new Rect(physLeft, physTop, Math.Max(0, physRight - physLeft), Math.Max(0, physBottom - physTop));
+                    }
+
+
                     var l = leftLine ?? left;
                     var r = rightLine ?? right;
                     var t = topLine ?? top;
@@ -2849,9 +2872,8 @@ namespace PeachBrackets.Html.Dom
                     return new Rect(l, t, Math.Max(0, r - l), Math.Max(0, b - t));
                 }
 
-                // The static position is as if the child were the only item of a grid area whose lines that do not exist are the container's *content* edges
-                // (css-grid-1 section 9.2), where its containing block takes the padding edges.
-                child.GridStaticArea = AreaWith(_gridBox.ClientLeft, _gridBox.ClientRight, _gridBox.ClientTop, contentBottom);
+                // The containing block takes the lines the child names, a line that does not exist being the padding edge. Its static position is not
+                // here: it is as if it were the only item of a grid area at the container's content edges (css-grid-1 section 9.2).
                 child.GridContainingArea = AreaWith(paddingLeft, paddingRight, paddingTop, paddingBottom);
 
                 // The child may already have been placed against the padding box by its own pass: put it where its area says (the area's corner,
