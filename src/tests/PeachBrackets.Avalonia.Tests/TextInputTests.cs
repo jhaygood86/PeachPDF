@@ -100,14 +100,14 @@ public class TextInputTests
             Assert.Equal((11, 13), (State(view).SelectionStart, State(view).SelectionEnd) switch { var (s, e) => (Math.Min(s, e), Math.Max(s, e)) });
 
             window.KeyPress(Key.Home, RawInputModifiers.None, PhysicalKey.Home, null);
-            window.KeyPress(Key.Right, RawInputModifiers.Control, PhysicalKey.ArrowRight, null);
+            window.KeyPress(Key.Right, HeadlessSession.WordMove, PhysicalKey.ArrowRight, null);
             Assert.Equal(4, State(view).SelectionEnd);
 
             window.KeyPress(Key.End, RawInputModifiers.None, PhysicalKey.End, null);
-            window.KeyPress(Key.Back, RawInputModifiers.Control, PhysicalKey.Backspace, null);
+            window.KeyPress(Key.Back, HeadlessSession.WordMove, PhysicalKey.Backspace, null);
             Assert.Equal("one two ", State(view).Text);
 
-            window.KeyPress(Key.Left, RawInputModifiers.Shift | RawInputModifiers.Control, PhysicalKey.ArrowLeft, null);
+            window.KeyPress(Key.Left, RawInputModifiers.Shift | HeadlessSession.WordMove, PhysicalKey.ArrowLeft, null);
             Assert.Equal(4, Math.Min(State(view).SelectionStart, State(view).SelectionEnd));
             window.Close();
         });
@@ -119,7 +119,7 @@ public class TextInputTests
         await HeadlessSession.Run(async () =>
         {
             var (window, view) = await FocusFieldAsync(FieldPoint, "hello");
-            window.KeyPress(Key.A, RawInputModifiers.Control, PhysicalKey.A, null);
+            window.KeyPress(Key.A, HeadlessSession.Command, PhysicalKey.A, null);
             Assert.Equal((0, 5), (State(view).SelectionStart, State(view).SelectionEnd));
             Assert.Equal(string.Empty, view.SelectedText);
             window.KeyTextInput("X");
@@ -162,7 +162,7 @@ public class TextInputTests
         {
             var (window, view) = await FocusFieldAsync(FieldPoint, "hello world");
             var clipboard = TopLevel.GetTopLevel(view)!.Clipboard!;
-            static KeyEventArgs Press(Key key) => new() { RoutedEvent = InputElement.KeyDownEvent, Key = key, KeyModifiers = KeyModifiers.Control };
+            static KeyEventArgs Press(Key key) => new() { RoutedEvent = InputElement.KeyDownEvent, Key = key, KeyModifiers = HeadlessSession.CommandKeys };
 
             // Ctrl+C and Ctrl+Insert copy the selection; both are used by the field.
             view.Document!.SetEditSelection(0, 5);
@@ -297,7 +297,7 @@ public class TextInputTests
         await HeadlessSession.Run(async () =>
         {
             var (window, view) = await HeadlessSession.ShowAsync(Page);
-            Assert.False(view.HandleEditKey(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.C, KeyModifiers = KeyModifiers.Control }));
+            Assert.False(view.HandleEditKey(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.C, KeyModifiers = HeadlessSession.CommandKeys }));
             window.Close();
         });
     }

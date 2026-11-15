@@ -24,3 +24,9 @@ Two traps found by running it, not by reading it:
   Headless tests cannot see this (one thread, no GPU): `ViewportConsistencyTests` queues a frame, scrolls on, and paints the stale frame.
 - **The GPU paint path throws if it touches an Avalonia property.** `RenderTile` read `PageBackground` on the render thread and every frame threw, leaving a
   transparent window. `Render()` records what the render thread needs; nothing reachable from `HtmlDrawOperation.Render` may read an `AvaloniaObject`.
+- **Shortcuts follow the platform, and so must the tests.** Copy, select all and zoom keys use Command on a Mac and Control elsewhere (`TextInputLogic.IsShortcut`);
+  moving or deleting by word uses Option on a Mac. A test that sends Control passes on Windows and Linux and fails on the macOS CI leg: use
+  `HeadlessSession.Command`, `CommandKeys` and `WordMove`. Ctrl+wheel zoom stays Control on every platform, as in browsers.
+- **A test that races a local server needs `LocalServer.Hold`.** An image cursor that loads before the test looks sees no keyword at all on a fast runner;
+  hold the response, assert the keyword, then release it.
+

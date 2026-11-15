@@ -152,12 +152,17 @@ public class CursorTests
         await HeadlessSession.Run(async () =>
         {
             using var server = new LocalServer().Map("/c.png", "image/png", Images.Png(new SKColor(0, 0, 0), 16, 16)).Start();
+
+            // The server holds the image back, so the keyword is what shows first however quickly the machine would have loaded it.
+            var hold = server.Hold("/c.png");
             var html = string.Format(Box, $"url({server.BaseAddress}c.png), pointer");
             var (window, view) = await HeadlessSession.ShowAsync(html, 400, 300, v => v.AllowNetworkAccess = true);
             window.MouseMove(new Point(50, 40));
+            Assert.True(await HeadlessSession.PumpUntilAsync(() => server.Requests.Contains("/c.png")), "the cursor image should be asked for");
             Assert.Equal(StandardCursorType.Hand, view.ShownKeywordCursor);
 
-            // The pointer has not moved since, and the image still arrives.
+            // The pointer has not moved since, and the image now arrives.
+            hold.SetResult();
             Assert.True(await HeadlessSession.PumpUntilAsync(() => view.ShownKeywordCursor is null), "the image should replace the keyword when it has loaded");
             Assert.Contains("/c.png", server.Requests);
             window.Close();

@@ -286,7 +286,8 @@ public sealed partial class HtmlView
             return;
         }
 
-        var control = (e.KeyModifiers & KeyModifiers.Control) != 0;
+        // The shortcut modifier of the platform: Command on a Mac, Control elsewhere (as the text fields read it).
+        var control = TextInputLogic.IsShortcut(e.KeyModifiers, OperatingSystem.IsMacOS());
         var step = 40 * _dpi;
         var page = ViewportHeightPx * 0.875;
         switch (e.Key)

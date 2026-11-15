@@ -194,9 +194,9 @@ public class WheelAndKeyboardTests
             await HtmlViewInput.KeyAsync(window, view, Key.PageUp);
             Assert.Equal(page, view.ScrollPixels.Y, 1);
 
-            await HtmlViewInput.KeyAsync(window, view, Key.End, RawInputModifiers.Control);
+            await HtmlViewInput.KeyAsync(window, view, Key.End, HeadlessSession.Command);
             Assert.True(view.ScrollPixels.Y > 3500);
-            await HtmlViewInput.KeyAsync(window, view, Key.Home, RawInputModifiers.Control);
+            await HtmlViewInput.KeyAsync(window, view, Key.Home, HeadlessSession.Command);
             Assert.Equal(0, view.ScrollPixels.Y);
             window.Close();
         });
@@ -209,18 +209,18 @@ public class WheelAndKeyboardTests
         {
             var (window, view) = await HeadlessSession.ShowAsync(Tall);
             view.Focus();
-            await HtmlViewInput.KeyAsync(window, view, Key.OemPlus, RawInputModifiers.Control);
+            await HtmlViewInput.KeyAsync(window, view, Key.OemPlus, HeadlessSession.Command);
             Assert.Equal(1.1, view.Zoom, 3);
-            await HtmlViewInput.KeyAsync(window, view, Key.Add, RawInputModifiers.Control);
+            await HtmlViewInput.KeyAsync(window, view, Key.Add, HeadlessSession.Command);
             Assert.Equal(1.21, view.Zoom, 3);
-            await HtmlViewInput.KeyAsync(window, view, Key.OemMinus, RawInputModifiers.Control);
-            await HtmlViewInput.KeyAsync(window, view, Key.Subtract, RawInputModifiers.Control);
+            await HtmlViewInput.KeyAsync(window, view, Key.OemMinus, HeadlessSession.Command);
+            await HtmlViewInput.KeyAsync(window, view, Key.Subtract, HeadlessSession.Command);
             Assert.Equal(1, view.Zoom, 3);
-            await HtmlViewInput.KeyAsync(window, view, Key.OemPlus, RawInputModifiers.Control);
-            await HtmlViewInput.KeyAsync(window, view, Key.D0, RawInputModifiers.Control);
+            await HtmlViewInput.KeyAsync(window, view, Key.OemPlus, HeadlessSession.Command);
+            await HtmlViewInput.KeyAsync(window, view, Key.D0, HeadlessSession.Command);
             Assert.Equal(1, view.Zoom);
-            await HtmlViewInput.KeyAsync(window, view, Key.OemPlus, RawInputModifiers.Control);
-            await HtmlViewInput.KeyAsync(window, view, Key.NumPad0, RawInputModifiers.Control);
+            await HtmlViewInput.KeyAsync(window, view, Key.OemPlus, HeadlessSession.Command);
+            await HtmlViewInput.KeyAsync(window, view, Key.NumPad0, HeadlessSession.Command);
             Assert.Equal(1, view.Zoom);
             window.Close();
         });
@@ -233,9 +233,9 @@ public class WheelAndKeyboardTests
         {
             var (window, view) = await HeadlessSession.ShowAsync("<html><body><p>alpha beta</p></body></html>");
             view.Focus();
-            await HtmlViewInput.KeyAsync(window, view, Key.A, RawInputModifiers.Control);
+            await HtmlViewInput.KeyAsync(window, view, Key.A, HeadlessSession.Command);
             Assert.Contains("alpha beta", view.SelectedText);
-            await HtmlViewInput.KeyAsync(window, view, Key.C, RawInputModifiers.Control);
+            await HtmlViewInput.KeyAsync(window, view, Key.C, HeadlessSession.Command);
             await HtmlViewInput.KeyAsync(window, view, Key.F5);
             window.Close();
         });

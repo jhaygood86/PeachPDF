@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.Input;
 using Avalonia.Media.Imaging;
 using Avalonia.Skia;
 using Avalonia.Threading;
@@ -23,6 +24,15 @@ public sealed class TestApp : Application
 /// <summary>Runs a body on the UI thread of one headless application shared by every test, and shows an <see cref="HtmlView"/> in a window.</summary>
 internal static class HeadlessSession
 {
+    /// <summary>The modifier of a shortcut on the platform the tests run on: Command on a Mac, Control elsewhere (as the view reads it).</summary>
+    public static RawInputModifiers Command => OperatingSystem.IsMacOS() ? RawInputModifiers.Meta : RawInputModifiers.Control;
+
+    /// <summary><see cref="Command"/> as the modifiers an event carries.</summary>
+    public static global::Avalonia.Input.KeyModifiers CommandKeys => OperatingSystem.IsMacOS() ? global::Avalonia.Input.KeyModifiers.Meta : global::Avalonia.Input.KeyModifiers.Control;
+
+    /// <summary>The modifier that moves or deletes by word: Option on a Mac, Control elsewhere.</summary>
+    public static RawInputModifiers WordMove => OperatingSystem.IsMacOS() ? RawInputModifiers.Alt : RawInputModifiers.Control;
+
     private static readonly Lazy<HeadlessUnitTestSession> Session = new(() => HeadlessUnitTestSession.StartNew(typeof(TestApp)));
 
     // The Func<Task<T>> overload of Dispatch keeps the dispatcher running until the body finishes; the Func<T> overload would hand back the body's task
