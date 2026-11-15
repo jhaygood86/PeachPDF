@@ -183,6 +183,14 @@ namespace PeachBrackets.Css
         public static readonly string GridAutoColumns = "grid-auto-columns";
         public static readonly string GridAutoRows = "grid-auto-rows";
         public static readonly string GridAutoFlow = "grid-auto-flow";
+        public static readonly string FitTolerance = "fit-tolerance";
+        public static readonly string GridGap = "grid-gap";
+        public static readonly string GridRowGap = "grid-row-gap";
+        public static readonly string GridColumnGap = "grid-column-gap";
+        public static readonly string GridLanesDirection = "grid-lanes-direction";
+        public static readonly string GridLanesPack = "grid-lanes-pack";
+        public static readonly string GridLanes = "grid-lanes";
+        public static readonly string FlowTolerance = "flow-tolerance";
         public static readonly string GridColumn = "grid-column";
         public static readonly string GridColumnStart = "grid-column-start";
         public static readonly string GridColumnEnd = "grid-column-end";
@@ -487,6 +495,11 @@ namespace PeachBrackets.Css
         // so each logical property maps 1:1 to a physical one (block-start = top,
         // block-end = bottom, inline-start = left, inline-end = right) and is registered to
         // produce/export the existing physical longhands.
+        public static readonly string BlockSize = "block-size";
+        public static readonly string MinInlineSize = "min-inline-size";
+        public static readonly string MinBlockSize = "min-block-size";
+        public static readonly string MaxInlineSize = "max-inline-size";
+        public static readonly string MaxBlockSize = "max-block-size";
         public static readonly string MarginBlock = "margin-block";
         public static readonly string MarginBlockStart = "margin-block-start";
         public static readonly string MarginBlockEnd = "margin-block-end";

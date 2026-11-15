@@ -25,6 +25,9 @@ namespace PeachBrackets.Css
 
         public static readonly GridLine Auto = new() { IsAuto = true };
         public static GridLine Span(int n) => new() { IsSpan = true, Value = n };
+
+        /// <summary><c>span &lt;custom-ident&gt;</c> / <c>span &lt;integer&gt; &lt;custom-ident&gt;</c>: spans until the <paramref name="n"/>th line with that name.</summary>
+        public static GridLine SpanNamed(string name, int n) => new() { IsSpan = true, Name = name, Value = n };
         public static GridLine Line(int n) => new() { Value = n };
         public static GridLine Named(string name) => new() { Name = name, Value = 1 };
         public static GridLine NamedNth(string name, int n) => new() { Name = name, Value = n };
@@ -54,6 +57,22 @@ namespace PeachBrackets.Css
             if (toks.Length == 2 && toks[0].Type == TokenType.Ident && toks[0].Data.Isi(Keywords.Span)
                 && toks[1] is { Type: TokenType.Number, IsInteger: true } spanCount && spanCount.IntegerValue >= 1)
                 return GridLine.Span(spanCount.IntegerValue);
+
+            // span <custom-ident> / span <integer> <custom-ident> / span <custom-ident> <integer>
+            if (toks.Length is 2 or 3 && toks[0].Type == TokenType.Ident && toks[0].Data.Isi(Keywords.Span))
+            {
+                string spanName = null;
+                var spanCountValue = 1;
+                var spanOk = true;
+                foreach (var t in toks.Skip(1))
+                {
+                    if (IsCustomIdent(t) && spanName is null) spanName = t.Data.ToString();
+                    else if (t is { Type: TokenType.Number, IsInteger: true } k && k.IntegerValue >= 1) spanCountValue = k.IntegerValue;
+                    else spanOk = false;
+                }
+
+                if (spanOk && spanName is not null) return GridLine.SpanNamed(spanName, spanCountValue);
+            }
 
             // <custom-ident> — a named line reference.
             if (toks.Length == 1 && IsCustomIdent(toks[0]))

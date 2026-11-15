@@ -179,6 +179,11 @@ namespace PeachBrackets.Html.Fragmentation
         /// line regardless would paginate a flex container quite differently from how it renders now,
         /// which is a larger behaviour change than the break values themselves ask for.
         /// </remarks>
+        internal static bool MayNotBeCutBox(CssBox box) => MayNotBeCut([box]);
+
+        /// <summary>The side a forced <c>break-before</c> on <paramref name="box"/> demands, or null where it declares none.</summary>
+        internal static PageSide? ForcedBreakBefore(CssBox box) => ForcedBreakBetween(null, [box]);
+
         private static bool MayNotBeCut(IReadOnlyList<CssBox> boxes) =>
             boxes.Any(box => BreakValues.AvoidsBreak(box.BreakInside.Value, FragmentationContext.Page)
                              || MonolithicContent.IsMonolithicForFragmentation(box));

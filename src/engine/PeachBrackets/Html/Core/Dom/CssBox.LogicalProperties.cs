@@ -23,6 +23,13 @@ namespace PeachBrackets.Html.Dom
     /// </summary>
     internal partial class CssBox
     {
+        internal string? InlineSize { get => _rare is null ? default(string?) : _rare.InlineSize; set { if (_rare is null) { if (EqualityComparer<string?>.Default.Equals(value, default(string?))) return; _rare = new BoxRareState(); } _rare.InlineSize = value; } }
+        internal string? BlockSize { get => _rare is null ? default(string?) : _rare.BlockSize; set { if (_rare is null) { if (EqualityComparer<string?>.Default.Equals(value, default(string?))) return; _rare = new BoxRareState(); } _rare.BlockSize = value; } }
+        internal string? MinInlineSize { get => _rare is null ? default(string?) : _rare.MinInlineSize; set { if (_rare is null) { if (EqualityComparer<string?>.Default.Equals(value, default(string?))) return; _rare = new BoxRareState(); } _rare.MinInlineSize = value; } }
+        internal string? MinBlockSize { get => _rare is null ? default(string?) : _rare.MinBlockSize; set { if (_rare is null) { if (EqualityComparer<string?>.Default.Equals(value, default(string?))) return; _rare = new BoxRareState(); } _rare.MinBlockSize = value; } }
+        internal string? MaxInlineSize { get => _rare is null ? default(string?) : _rare.MaxInlineSize; set { if (_rare is null) { if (EqualityComparer<string?>.Default.Equals(value, default(string?))) return; _rare = new BoxRareState(); } _rare.MaxInlineSize = value; } }
+        internal string? MaxBlockSize { get => _rare is null ? default(string?) : _rare.MaxBlockSize; set { if (_rare is null) { if (EqualityComparer<string?>.Default.Equals(value, default(string?))) return; _rare = new BoxRareState(); } _rare.MaxBlockSize = value; } }
+
         internal string? MarginBlockStart { get => _rare is null ? default(string?) : _rare.MarginBlockStart; set { if (_rare is null) { if (EqualityComparer<string?>.Default.Equals(value, default(string?))) return; _rare = new BoxRareState(); } _rare.MarginBlockStart = value; } }
         internal string? MarginBlockEnd { get => _rare is null ? default(string?) : _rare.MarginBlockEnd; set { if (_rare is null) { if (EqualityComparer<string?>.Default.Equals(value, default(string?))) return; _rare = new BoxRareState(); } _rare.MarginBlockEnd = value; } }
         internal string? MarginInlineStart { get => _rare is null ? default(string?) : _rare.MarginInlineStart; set { if (_rare is null) { if (EqualityComparer<string?>.Default.Equals(value, default(string?))) return; _rare = new BoxRareState(); } _rare.MarginInlineStart = value; } }
@@ -74,7 +81,8 @@ namespace PeachBrackets.Html.Dom
         /// </remarks>
         internal void ResolveLogicalProperties()
         {
-            if (MarginBlockStart is null && MarginBlockEnd is null && MarginInlineStart is null && MarginInlineEnd is null
+            if (InlineSize is null && BlockSize is null && MinInlineSize is null && MinBlockSize is null && MaxInlineSize is null && MaxBlockSize is null
+                && MarginBlockStart is null && MarginBlockEnd is null && MarginInlineStart is null && MarginInlineEnd is null
                 && PaddingBlockStart is null && PaddingBlockEnd is null && PaddingInlineStart is null && PaddingInlineEnd is null
                 && InsetBlockStart is null && InsetBlockEnd is null && InsetInlineStart is null && InsetInlineEnd is null
                 && BorderBlockStartWidth is null && BorderBlockStartStyle is null && BorderBlockStartColor is null
@@ -94,6 +102,15 @@ namespace PeachBrackets.Html.Dom
             var blockEnd = LogicalPropertyResolver.BlockEnd(writingMode);
             var inlineStart = LogicalPropertyResolver.InlineStart(writingMode, direction);
             var inlineEnd = LogicalPropertyResolver.InlineEnd(writingMode, direction);
+
+            // css-logical-1 §4: the size of the box's own inline / block axis. The inline axis is horizontal unless the writing mode is vertical.
+            var inlineIsHorizontal = inlineStart is PhysicalSide.Left or PhysicalSide.Right;
+            if (InlineSize is { } isz) ApplySize(inlineIsHorizontal, "width", "inline-size", isz);
+            if (BlockSize is { } bsz) ApplySize(!inlineIsHorizontal, "width", "block-size", bsz);
+            if (MinInlineSize is { } minis) ApplySize(inlineIsHorizontal, "min-width", "min-inline-size", minis);
+            if (MinBlockSize is { } minbs) ApplySize(!inlineIsHorizontal, "min-width", "min-block-size", minbs);
+            if (MaxInlineSize is { } maxis) ApplySize(inlineIsHorizontal, "max-width", "max-inline-size", maxis);
+            if (MaxBlockSize is { } maxbs) ApplySize(!inlineIsHorizontal, "max-width", "max-block-size", maxbs);
 
             if (MarginBlockStart is { } mbs) ApplyMargin(blockStart, mbs, "margin-block-start");
             if (MarginBlockEnd is { } mbe) ApplyMargin(blockEnd, mbe, "margin-block-end");
@@ -182,7 +199,8 @@ namespace PeachBrackets.Html.Dom
         }
 
         private static bool IsLogicalBoxModelName(string propName) =>
-            propName.Contains("-block-", StringComparison.Ordinal) || propName.Contains("-inline-", StringComparison.Ordinal)
+            propName is "inline-size" or "block-size"
+            || propName.Contains("-block-", StringComparison.Ordinal) || propName.Contains("-inline-", StringComparison.Ordinal)
             || propName.StartsWith("corner-start-", StringComparison.Ordinal) || propName.StartsWith("corner-end-", StringComparison.Ordinal)
             || propName.StartsWith("border-start-", StringComparison.Ordinal) || propName.StartsWith("border-end-", StringComparison.Ordinal);
 
@@ -239,6 +257,24 @@ namespace PeachBrackets.Html.Dom
                 case 1: BorderTopRightRadius = value; break;
                 case 2: BorderBottomRightRadius = value; break;
                 default: BorderBottomLeftRadius = value; break;
+            }
+        }
+
+        /// <summary>Writes a logical size into the physical width or height (<paramref name="horizontal"/>; <paramref name="widthName"/> names the width
+        /// flavor - plain, <c>min-</c> or <c>max-</c> - and its height twin follows from it), unless that physical size was declared later.</summary>
+        private void ApplySize(bool horizontal, string widthName, string logicalName, string value)
+        {
+            var physicalName = horizontal ? widthName : widthName.Replace("width", "height", StringComparison.Ordinal);
+            if (_rare?.LogicalOrder is { } order && order.Of(physicalName) > order.Of(logicalName)) return;
+
+            switch (physicalName)
+            {
+                case "width": Width = value; break;
+                case "height": Height = value; break;
+                case "min-width": MinWidth = value; break;
+                case "min-height": MinHeight = value; break;
+                case "max-width": MaxWidth = value; break;
+                default: MaxHeight = value; break;
             }
         }
 

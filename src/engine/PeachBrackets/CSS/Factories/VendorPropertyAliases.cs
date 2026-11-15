@@ -28,6 +28,12 @@ namespace PeachBrackets.Css
             {
                 [PropertyNames.WordWrap] = PropertyNames.OverflowWrap,
                 [PropertyNames.WebkitBackdropFilter] = PropertyNames.BackdropFilter,
+                [PropertyNames.FlowTolerance] = PropertyNames.FitTolerance,
+
+                // The grid-prefixed gap properties css-grid-1 defined first, kept as aliases of the css-align-3 ones (css-align-3 section 8.1).
+                [PropertyNames.GridGap] = PropertyNames.Gap,
+                [PropertyNames.GridRowGap] = PropertyNames.RowGap,
+                [PropertyNames.GridColumnGap] = PropertyNames.ColumnGap,
             };
 
             // Properties that were shipped behind both -webkit- and -moz- (or just one) before unprefixing.

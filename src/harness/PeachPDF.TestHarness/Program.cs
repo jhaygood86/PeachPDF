@@ -4997,6 +4997,68 @@ await SaveShowcaseAsync("grid_replaced_items", "Layout", "Replaced Grid Items",
     </body></html>
     """, pdfConfig);
 
+// ─── grid-lanes showcase ────────────────────────────────────────────────────
+
+await SaveShowcaseAsync("grid_lanes", "Layout", "Grid Lanes",
+    "display: grid-lanes packs items of different heights into lanes (the layout formerly called masonry): each item goes where it can start highest, within fit-tolerance of the shortest lane; spans cover several lanes; grid-lanes-direction: row turns the rows into lanes, and dense packing backfills the room a spanning item skipped.",
+    """
+    <html><body style="font-family: sans-serif; font-size: 8pt; color:#fff;">
+      <p style="color:#000">Column lanes: three 100pt lanes, 6pt gaps, fit-tolerance 0 - each item takes the shortest lane.</p>
+      <div style="display:grid-lanes; grid-template-columns:repeat(3, 100pt); gap:6pt; fit-tolerance:0; width:318pt; padding:6pt; background:#ddd;">
+        <div style="height:60pt; background:#e74c3c;">1</div><div style="height:90pt; background:#27ae60;">2</div><div style="height:40pt; background:#2980b9;">3</div><div style="height:110pt; background:#f39c12;">4</div><div style="height:50pt; background:#8e44ad;">5</div><div style="height:75pt; background:#16a085;">6</div><div style="height:95pt; background:#d35400;">7</div><div style="height:45pt; background:#2c3e50;">8</div><div style="height:80pt; background:#e74c3c;">9</div><div style="height:55pt; background:#27ae60;">10</div><div style="height:100pt; background:#2980b9;">11</div><div style="height:65pt; background:#f39c12;">12</div>
+      </div>
+      <p style="color:#000">A two-lane item (grid-column: span 2) starts below the longer of the lanes it covers; a larger fit-tolerance keeps the items in order.</p>
+      <div style="display:grid-lanes; grid-template-columns:repeat(3, 100pt); gap:6pt; fit-tolerance:30pt; width:318pt; padding:6pt; background:#ddd;">
+        <div style="height:60pt; background:#e74c3c;">1</div><div style="height:40pt; background:#27ae60;">2</div><div style="height:50pt; background:#2980b9;">3</div>
+        <div style="height:30pt; background:#f39c12; grid-column: span 2;">4 (span 2)</div><div style="height:50pt; background:#8e44ad;">5</div><div style="height:40pt; background:#16a085;">6</div>
+      </div>
+      <p style="color:#000">Row lanes (grid-lanes-direction: row): the rows are lanes and the items stack along the inline axis.</p>
+      <div style="display:grid-lanes; grid-lanes-direction:row; grid-template-rows:30pt 30pt 30pt; gap:6pt; fit-tolerance:0; width:318pt; padding:6pt; background:#ddd;">
+        <div style="width:80pt; background:#e74c3c;">1</div><div style="width:40pt; background:#27ae60;">2</div><div style="width:60pt; background:#2980b9;">3</div><div style="width:110pt; background:#f39c12;">4</div><div style="width:50pt; background:#8e44ad;">5</div><div style="width:70pt; background:#16a085;">6</div><div style="width:90pt; background:#d35400;">7</div><div style="width:45pt; background:#2c3e50;">8</div>
+      </div>
+      <p style="color:#000">Dense packing: the last item backfills the room the span left in the second lane.</p>
+      <div style="display:grid-lanes; grid-lanes-pack:dense; grid-template-columns:100pt 100pt; gap:6pt; fit-tolerance:0; width:218pt; padding:6pt; background:#ddd;">
+        <div style="height:50pt; background:#e74c3c;">1</div><div style="height:20pt; background:#27ae60;">2</div>
+        <div style="height:20pt; background:#2980b9; grid-column: span 2;">3 (span 2)</div><div style="height:20pt; background:#f39c12;">4 (backfilled)</div>
+      </div>
+    </body></html>
+    """, pdfConfig);
+
+// ─── grid-lanes across pages showcase ───────────────────────────────────────
+
+static string LaneCard(string label, int paragraphs) =>
+    $"<div class=\"card\"><h3>{label}</h3>" + string.Concat(Enumerable.Range(1, paragraphs).Select(i =>
+        $"<p>{label} paragraph {i}. Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor.</p>")) + "</div>";
+
+var gridLanesPagedHtml = $$"""
+    <!DOCTYPE html>
+    <html><head><style>
+    @page { size: a6; margin: 10mm }
+    body { font: 8pt Helvetica, Arial, sans-serif; margin: 0; color: #1f2937 }
+    h1 { font-size: 11pt; margin: 0 0 0.4em }
+    .lanes { display: grid-lanes; grid-template-columns: repeat(2, 1fr); gap: 5pt; fit-tolerance: 0 }
+    .card { border: 0.75pt solid #94a3b8; border-radius: 3pt; padding: 4pt 5pt; background: #f8fafc }
+    .card h3 { font-size: 8pt; margin: 0 0 2pt; color: #1d4ed8 }
+    .card p { margin: 0 0 3pt; line-height: 1.3 }
+    .whole { break-inside: avoid }
+    </style></head><body>
+    <h1>Grid lanes across pages</h1>
+    <div class="lanes">
+    {{LaneCard("A", 3)}}
+    {{LaneCard("B", 9)}}
+    {{LaneCard("C", 2)}}
+    <div class="whole">{{LaneCard("D (kept whole)", 4)}}</div>
+    {{LaneCard("E", 6)}}
+    {{LaneCard("F", 2)}}
+    {{LaneCard("G", 5)}}
+    </div>
+    </body></html>
+    """;
+
+await SaveShowcaseAsync("grid_lanes_paged", "Layout", "Grid Lanes Across Pages",
+    "A grid-lanes container breaks across pages lane by lane: an item that may not be cut moves to the next page with the items below it in its lane while the other lane carries on, and an item the boundary cuts continues on the next page, with what follows it in its lane starting below the continuation.",
+    gridLanesPagedHtml, new PdfGenerateConfig { PageSize = PageSize.A6 });
+
 // ─── CSS Custom Properties (var()) showcase ─────────────────────────────────
 
 static string VarSwatch(string desc, string boxCss, string valueLabel, string cssLabel) =>

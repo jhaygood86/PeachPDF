@@ -1783,6 +1783,8 @@ namespace PeachBrackets.Html.Dom
         internal double? StaticRightEdge { get => _rare?.StaticRightEdge; set { if (_rare is null) { if (value is null) return; _rare = new BoxRareState(); } _rare.StaticRightEdge = value; } }
 
         /// <summary>The grid area an absolutely positioned child of a grid container is placed against, in the same coordinates as <see cref="Location"/>: the area its <c>grid-column</c>/<c>grid-row</c> lines name, where a line that does not exist is the padding edge (css-grid-1 section 9). Null when the child has no such area.</summary>
+
+        /// <summary>The grid area an absolutely positioned child of a grid container is placed against, in the same coordinates as <see cref="Location"/>: the area its <c>grid-column</c>/<c>grid-row</c> lines name, with the padding edge for a line that does not exist.</summary>
         internal Rect? GridContainingArea { get => _rare?.GridContainingArea; set { if (_rare is null) { if (value is null) return; _rare = new BoxRareState(); } _rare.GridContainingArea = value; } }
 
         internal (double X, double Y)? InlineStaticPosition { get => _rare is null ? default((double X, double Y)?) : _rare.InlineStaticPosition; set { if (_rare is null) { if (EqualityComparer<(double X, double Y)?>.Default.Equals(value, default((double X, double Y)?))) return; _rare = new BoxRareState(); } _rare.InlineStaticPosition = value; } }
@@ -6323,7 +6325,7 @@ namespace PeachBrackets.Html.Dom
             if (depth > 500) return false;
             if (!WritingMode.Value.IsVertical()) return false;
             if (HasDifferentWritingModeFromParent) return false;
-            if (Overflow.Value != PeachBrackets.Css.Overflow.Visible) return false;
+            if (!OverflowKeepsFlow) return false;
             if (Words.Count > 0) return false;
             if (resolvedBlockExtent >= 0.1) return false;
 
@@ -6358,7 +6360,7 @@ namespace PeachBrackets.Html.Dom
             if (ParentBox is null || ParentBox.IndexOfChild(this) != ParentBox.Boxes.Count - 1 ||
                 !(ParentBox.BlockEndMargin < 0.1) ||
                 !(BlockEndPadding < 0.1) || !(BlockEndBorderWidth < 0.1) ||
-                Overflow.Value != PeachBrackets.Css.Overflow.Visible ||
+                !OverflowKeepsFlow ||
                 HasDifferentWritingModeFromParent)
             {
                 return;
@@ -7675,7 +7677,9 @@ namespace PeachBrackets.Html.Dom
             var nearestPositionedAncestor = DomUtils.GetNearestPositionedAncestor(this);
             var inlineContainingBlock = DomUtils.InlineContainingBlockOf(nearestPositionedAncestor);
 
-            var bottom = CssValueParser.ParseLength(Bottom.Value.Value!.Value, AbsoluteContainingBlockHeight(nearestPositionedAncestor, finalizedBorderBoxHeight), this);
+            // A child of a grid container whose containing block is that grid is placed against the grid area its lines name (css-grid-1 section 9).
+            var area = ReferenceEquals(nearestPositionedAncestor, ParentBox) ? GridContainingArea : null;
+            var bottom = CssValueParser.ParseLength(Bottom.Value.Value!.Value, area?.Height ?? AbsoluteContainingBlockHeight(nearestPositionedAncestor, finalizedBorderBoxHeight), this);
 
             // Unlike ActualRight/ActualWidth (resolved for every box, including this ancestor,
             // before its children are laid out - see the GetBoxWidth call earlier in this
@@ -7692,7 +7696,7 @@ namespace PeachBrackets.Html.Dom
                       ?? nearestPositionedAncestor.ActualBottom - nearestPositionedAncestor.Location.Y)
                    - nearestPositionedAncestor.ActualBorderBottomWidth;
 
-            var actualBottom = ancestorPaddingBoxBottom - bottom;
+            var actualBottom = (area?.Bottom ?? ancestorPaddingBoxBottom) - bottom;
 
             var delta = actualBottom - ActualBottom;
 
@@ -8178,37 +8182,71 @@ namespace PeachBrackets.Html.Dom
         /// </summary>
         private void AlignStaticPositionInGrid()
         {
-            if (ParentBox is not { } grid || grid.DerivedStyle.ActualDisplay is not (Keywords.Grid or Keywords.InlineGrid)
-                || grid.WritingMode.Value.IsVertical() || WritingMode.Value.IsVertical() || grid.Direction.Value == DirectionMode.Rtl)
+            if (ParentBox is not { } grid || grid.DerivedStyle.ActualDisplay is not (Keywords.Grid or Keywords.InlineGrid))
             {
                 return;
             }
 
-            var area = GridContainingArea ?? new Rect(grid.ClientLeft, grid.ClientTop, grid.ClientRight - grid.ClientLeft, grid.ClientBottom - grid.ClientTop);
+            // In a vertical grid the block axis (align-self) runs across the page and the inline axis (justify-self) down it; the block-start edge is the
+            // right one under vertical-rl and the inline-start edge the bottom one under direction: rtl.
+            var vertical = grid.WritingMode.Value.IsVertical();
+            var frame = WritingModeFrame.For(grid);
 
-            static double Factor(string alignment, double free)
+            var rtl = grid.Direction.Value == DirectionMode.Rtl;
+            var contentBox = new Rect(grid.ClientLeft, grid.ClientTop, grid.ClientRight - grid.ClientLeft, grid.ClientBottom - grid.ClientTop);
+
+            // The rectangle the box is aligned in is the grid area its lines name when the grid is its containing block (a line that does not exist is
+            // the padding edge); otherwise it is as if it were the only item of a grid area at the container's content edges (css-grid-1 section 9.2).
+            var area = ReferenceEquals(DomUtils.GetNearestPositionedAncestor(this), grid)
+                ? GridContainingArea ?? contentBox
+                : contentBox;
+
+            // Where along the free space the box goes, as a fraction from the start edge (logical keywords) or the left/top one (physical ones).
+            static (double Fraction, bool Physical) Factor(string alignment, double free)
             {
-                var safe = alignment.StartsWith("safe", StringComparison.OrdinalIgnoreCase);
-                if (safe && free < 0) return 0;
-                if (alignment.Contains("center", StringComparison.OrdinalIgnoreCase)) return 0.5;
-                if (alignment.Contains("last", StringComparison.OrdinalIgnoreCase) || alignment.EndsWith("end", StringComparison.OrdinalIgnoreCase)) return 1;
-                return 0;
+                var words = alignment.ToLowerInvariant().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                if (words.Contains("safe") && free < 0) return (0, false);
+                var keyword = words.Length == 0 ? Keywords.Normal : words[^1];
+                return keyword switch
+                {
+                    "center" => (0.5, false),
+                    "left" => (0, true),
+                    "right" => (1, true),
+                    "end" or "flex-end" or "self-end" => (1, false),
+                    "baseline" when words.Contains("last") => (1, false),
+                    _ => (words.Contains("last") ? 1 : 0, false)
+                };
             }
 
             if (Left.Value.IsKeyword && Right.Value.IsKeyword)
             {
                 var free = area.Width - (ActualBoxSizingWidth + ActualMarginLeft + ActualMarginRight);
-                var factor = Factor(CssLayoutEngineGrid.ResolveSelfAlignment(JustifySelf.ToString(), grid.JustifyItems.ToString()), free);
-                if (factor > 0) OffsetLeft(free * factor);
+                var (fraction, physical) = vertical
+                    ? Factor(StaticSelfAlignment(AlignSelf.ToString(), grid.AlignItems.ToString()), free)
+                    : Factor(StaticSelfAlignment(JustifySelf.ToString(), grid.JustifyItems.ToString()), free);
+                if (vertical ? frame.BlockStartIsRight : rtl && !physical) fraction = 1 - fraction;
+                var target = area.X + free * fraction + ActualMarginLeft;
+                if (Math.Abs(target - Location.X) > 0.01) OffsetLeft(target - Location.X);
             }
 
             if (Top.Value.IsKeyword && Bottom.Value.IsKeyword)
             {
                 var free = area.Height - (ActualBoxSizingHeight + ActualMarginTop + ActualMarginBottom);
-                var factor = Factor(CssLayoutEngineGrid.ResolveSelfAlignment(AlignSelf.ToString(), grid.AlignItems.ToString()), free);
-                if (factor > 0) OffsetTop(free * factor);
+                var (fraction, _) = vertical
+                    ? Factor(StaticSelfAlignment(JustifySelf.ToString(), grid.JustifyItems.ToString()), free)
+                    : Factor(StaticSelfAlignment(AlignSelf.ToString(), grid.AlignItems.ToString()), free);
+                if (vertical && frame.InlineStartIsBottom) fraction = 1 - fraction;
+                var target = area.Y + free * fraction + ActualMarginTop;
+                if (Math.Abs(target - Location.Y) > 0.01) OffsetTop(target - Location.Y);
             }
         }
+
+        /// <summary>
+        /// The alignment an absolutely positioned child's static position takes: only <c>auto</c> defers to the container's <c>*-items</c>; <c>normal</c> and
+        /// <c>stretch</c> are the box's own and, as the box has no stretched size here, behave as <c>start</c> (css-align-3 section 6.1).
+        /// </summary>
+        private static string StaticSelfAlignment(string self, string items) =>
+            string.IsNullOrEmpty(self) || self.Isi(Keywords.Auto) ? items : self;
 
         private CssBox? PreviousInFlowSibling(CssBox child) =>
             ReferenceEquals(child.ParentBox, this) ? DomUtils.GetPreviousSibling(child, false) : null;
@@ -10462,6 +10500,10 @@ namespace PeachBrackets.Html.Dom
         /// relationship to its own immediate parent (gated on their writing modes matching), never
         /// walking across a chain of different boxes the way the block-start fold does.
         /// </remarks>
+        /// <summary>Whether this box's <c>overflow</c> leaves it an ordinary block for margin collapsing: <c>visible</c>, or the <c>body</c>'s that went to the viewport
+        /// (css-overflow-3 3.3), which makes it no scroll container.</summary>
+        internal bool OverflowKeepsFlow => Overflow.Value == PeachBrackets.Css.Overflow.Visible || DomUtils.OverflowPropagatesToViewport(this);
+
         private PhysicalSide BlockEnd => LogicalPropertyResolver.BlockEnd(WritingMode.Value);
 
         private double BlockEndMargin => PhysicalMargin(BlockEnd);
@@ -10731,7 +10773,7 @@ namespace PeachBrackets.Html.Dom
             // with their in-flow children"; css-flexbox-1 §4): walking on into its children would fold that margin into the group that positions the box
             // itself, so the margin was applied twice - once moving the box, once inside it - while the box's height counted it once. (The document's root box is
             // not one: it is the bookkeeping box above <html>, and the margins of the page's first elements are meant to reach it.)
-            while (chainMembers.Count < 1000 && current.Overflow.Value == PeachBrackets.Css.Overflow.Visible &&
+            while (chainMembers.Count < 1000 && current.OverflowKeepsFlow &&
                    !current.DerivedStyle.IsFlowRoot && (current.ParentBox is null || !DomUtils.EstablishesIndependentFormattingContext(current)) &&
                    current.PhysicalBorderWidth(side) < 0.1 && current.PhysicalPadding(side) < 0.1)
             {
@@ -10866,7 +10908,7 @@ namespace PeachBrackets.Html.Dom
         private bool CollapsesBlockEndMarginWithLastChild() =>
             HasAutoBlockEndHeight()
             && !DomUtils.EstablishesIndependentFormattingContext(this)
-            && Overflow.Value == PeachBrackets.Css.Overflow.Visible
+            && OverflowKeepsFlow
             && ActualPaddingBottom < 0.1
             && ActualBorderBottomWidth < 0.1
             && (MinHeight == Keywords.Auto
@@ -11038,7 +11080,7 @@ namespace PeachBrackets.Html.Dom
             var heightIsAuto = Height == Keywords.Auto ||
                 (CssValueParser.DependsOnPercentage(Height) && !CssLayoutEngine.IsHeightDefinite(ContainingBlock));
             if (!heightIsAuto) return false;
-            if (Overflow.Value != PeachBrackets.Css.Overflow.Visible) return false;
+            if (!OverflowKeepsFlow) return false;
             // A multi-column container is a formatting context root too (css-multicol-1 §2), and its height covers its
             // floats (CSS 2.1 §10.6.7), so a container holding only a float is not empty: what follows it goes below.
             if (EstablishesMultiColumnContext || DerivedStyle.IsFlowRoot) return false;

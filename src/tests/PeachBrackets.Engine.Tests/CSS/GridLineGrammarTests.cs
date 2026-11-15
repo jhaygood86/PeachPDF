@@ -78,10 +78,24 @@ namespace PeachBrackets.Engine.Tests.CSS
         [InlineData("[name]")]      // bracketed line names belong in a track list, not a <grid-line>
         [InlineData("none")]        // a CSS-wide/reserved keyword is not a custom-ident line name
         [InlineData("initial")]
-        [InlineData("span foo")]    // span <custom-ident> is out of v1 scope
+        [InlineData("span 0 foo")]  // the count must be at least one
         public void Invalid_ReturnsNull(string value)
         {
             Assert.Null(Parse(value));
+        }
+
+        [Theory]
+        [InlineData("span foo", "foo", 1)]
+        [InlineData("span 2 foo", "foo", 2)]
+        [InlineData("span foo 3", "foo", 3)]
+        public void SpanNamed_IsParsed(string value, string name, int count)
+        {
+            var line = Parse(value);
+
+            Assert.NotNull(line);
+            Assert.True(line!.IsSpan);
+            Assert.Equal(name, line.Name);
+            Assert.Equal(count, line.Value);
         }
     }
 }

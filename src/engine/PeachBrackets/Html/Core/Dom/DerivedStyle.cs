@@ -2320,7 +2320,13 @@ namespace PeachBrackets.Html.Dom
                 // otherwise see it as an ordinary block-level float and correct the tree around that
                 // false premise.
                 if (area.Float.Value is Floating.None or Floating.Footnote)
-                    return area.Display.Value is DisplayMode.FlowRoot ? Keywords.Block : area.Display.ToString();
+                    return area.Display.Value switch
+                    {
+                        DisplayMode.FlowRoot => Keywords.Block,
+                        DisplayMode.GridLanes => Keywords.Grid,
+                        DisplayMode.InlineGridLanes => Keywords.InlineGrid,
+                        _ => area.Display.ToString()
+                    };
 
                 return area.Display.Value switch
                 {
@@ -2337,7 +2343,7 @@ namespace PeachBrackets.Html.Dom
                     DisplayMode.TableHeaderGroup => Keywords.Block,
                     DisplayMode.TableFooterGroup => Keywords.Block,
                     DisplayMode.InlineFlex => Keywords.Flex,
-                    DisplayMode.InlineGrid => Keywords.Grid,
+                    DisplayMode.InlineGrid or DisplayMode.InlineGridLanes or DisplayMode.GridLanes => Keywords.Grid,
                     _ => area.Display.ToString()
                 };
             }

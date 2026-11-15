@@ -2592,6 +2592,102 @@
       }
     },
     {
+      "name": "inline-size",
+      "comment": "CSS Logical Properties (css-logical-1) resolution scratch space - see the margin-block-start entry. Read once by CssBox.ResolveLogicalProperties, which writes the physical width/height (or min-/max-) of the box's own writing mode.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.AutoSizeConverter", "animatable": true, "registryAnimatable": true},
+      "initialValue": null,
+      "category": "logical",
+      "cssDataType": ["nonnegative-length", "keyword"],
+      "supportedValues": ["auto", "stretch", "-webkit-fill-available", "-moz-available"],
+      "keywordComparison": "ordinal-ignore-case",
+      "html": {
+        "propertyPath": "InlineSize",
+        "csharpDataType": "string?",
+        "area": null
+      }
+    },
+    {
+      "name": "block-size",
+      "comment": "CSS Logical Properties (css-logical-1) resolution scratch space - see the margin-block-start entry. Read once by CssBox.ResolveLogicalProperties, which writes the physical width/height (or min-/max-) of the box's own writing mode.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.AutoSizeConverter", "animatable": true, "registryAnimatable": true},
+      "initialValue": null,
+      "category": "logical",
+      "cssDataType": ["nonnegative-length", "keyword"],
+      "supportedValues": ["auto", "stretch", "-webkit-fill-available", "-moz-available"],
+      "keywordComparison": "ordinal-ignore-case",
+      "html": {
+        "propertyPath": "BlockSize",
+        "csharpDataType": "string?",
+        "area": null
+      }
+    },
+    {
+      "name": "min-inline-size",
+      "comment": "CSS Logical Properties (css-logical-1) resolution scratch space - see the margin-block-start entry. Read once by CssBox.ResolveLogicalProperties, which writes the physical width/height (or min-/max-) of the box's own writing mode.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.SizeConverter", "animatable": true, "registryAnimatable": true},
+      "initialValue": null,
+      "category": "logical",
+      "cssDataType": ["nonnegative-length", "keyword"],
+      "supportedValues": ["auto", "stretch", "-webkit-fill-available", "-moz-available"],
+      "keywordComparison": "ordinal-ignore-case",
+      "html": {
+        "propertyPath": "MinInlineSize",
+        "csharpDataType": "string?",
+        "area": null
+      }
+    },
+    {
+      "name": "min-block-size",
+      "comment": "CSS Logical Properties (css-logical-1) resolution scratch space - see the margin-block-start entry. Read once by CssBox.ResolveLogicalProperties, which writes the physical width/height (or min-/max-) of the box's own writing mode.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.SizeConverter", "animatable": true, "registryAnimatable": true},
+      "initialValue": null,
+      "category": "logical",
+      "cssDataType": ["nonnegative-length", "keyword"],
+      "supportedValues": ["auto", "stretch", "-webkit-fill-available", "-moz-available"],
+      "keywordComparison": "ordinal-ignore-case",
+      "html": {
+        "propertyPath": "MinBlockSize",
+        "csharpDataType": "string?",
+        "area": null
+      }
+    },
+    {
+      "name": "max-inline-size",
+      "comment": "CSS Logical Properties (css-logical-1) resolution scratch space - see the margin-block-start entry. Read once by CssBox.ResolveLogicalProperties, which writes the physical width/height (or min-/max-) of the box's own writing mode.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.OptionalSizeConverter", "animatable": true, "registryAnimatable": true},
+      "initialValue": null,
+      "category": "logical",
+      "cssDataType": ["nonnegative-length", "keyword"],
+      "supportedValues": ["auto", "stretch", "-webkit-fill-available", "-moz-available"],
+      "keywordComparison": "ordinal-ignore-case",
+      "html": {
+        "propertyPath": "MaxInlineSize",
+        "csharpDataType": "string?",
+        "area": null
+      }
+    },
+    {
+      "name": "max-block-size",
+      "comment": "CSS Logical Properties (css-logical-1) resolution scratch space - see the margin-block-start entry. Read once by CssBox.ResolveLogicalProperties, which writes the physical width/height (or min-/max-) of the box's own writing mode.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.OptionalSizeConverter", "animatable": true, "registryAnimatable": true},
+      "initialValue": null,
+      "category": "logical",
+      "cssDataType": ["nonnegative-length", "keyword"],
+      "supportedValues": ["auto", "stretch", "-webkit-fill-available", "-moz-available"],
+      "keywordComparison": "ordinal-ignore-case",
+      "html": {
+        "propertyPath": "MaxBlockSize",
+        "csharpDataType": "string?",
+        "area": null
+      }
+    },
+    {
       "name": "break-before",
       "comment": "cssDataType's own supportedValues includes region/avoid-region because real dispatch stores any css-break-4-valid keyword (CssUtilsTests.Cascade_BreakBefore_StoresOnlySpecValues) even though BreakValues.cs's fragmentation logic doesn't act on them - no FragmentationContext.Region exists, consistent with this repo's lack of multi-column-region support. supportsDataType is the stricter, @supports-only list excluding region/avoid-region for exactly that reason.",
       "inherited": false,
@@ -5459,13 +5555,52 @@
     },
     {
       "name": "grid-auto-flow",
-      "comment": "[ row | column ] || dense. cssDataType 'cssom-grammar' calls the real GridAutoFlowValueConverter.Instance.Convert directly instead of the full cssom round trip.",
+      "comment": "normal | [ row | column ] || dense (css-grid-3 adds normal, the initial value: a grid lays out as row, a grid-lanes container picks its axis from the templates). cssDataType 'cssom-grammar' calls the real GridAutoFlowValueConverter.Instance.Convert directly instead of the full cssom round trip.",
       "inherited": false,
       "cssom": {"converter": "GridAutoFlowValueConverter.Instance"},
-      "initialValue": "row",
+      "initialValue": "normal",
       "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.GridAutoFlowValueConverter.Instance.Convert" },
       "html": {
         "propertyPath": "GridAutoFlow",
+        "csharpDataType": "string",
+        "area": "GridArea"
+      }
+    },
+    {
+      "name": "fit-tolerance",
+      "comment": "css-grid-3 §4.4 normal | <length-percentage [0,inf]> | infinite: how much taller a grid-lanes lane may be and still take the next item. Stored as the authored text; CssLayoutEngineGridLanes resolves it. 'flow-tolerance' is the earlier name (VendorPropertyAliases).",
+      "inherited": false,
+      "cssom": {"converter": "CssomGrammars.FitTolerance"},
+      "initialValue": "normal",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.CssomGrammars.FitTolerance.Convert" },
+      "html": {
+        "propertyPath": "FitTolerance",
+        "csharpDataType": "string",
+        "area": "GridArea"
+      }
+    },
+    {
+      "name": "grid-lanes-direction",
+      "comment": "normal | [ row | column ] [ fill-reverse || track-reverse ]? (the vocabulary of the pinned WPT; css-grid-3 now leaves the orientation property open, WebKit uses grid-auto-flow). Stored as authored text; CssLayoutEngineGridLanes reads it.",
+      "inherited": false,
+      "cssom": {"converter": "GridLanesDirectionValueConverter.Instance"},
+      "initialValue": "normal",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.GridLanesDirectionValueConverter.Instance.Convert" },
+      "html": {
+        "propertyPath": "GridLanesDirection",
+        "csharpDataType": "string",
+        "area": "GridArea"
+      }
+    },
+    {
+      "name": "grid-lanes-pack",
+      "comment": "normal | dense: whether a grid-lanes container backfills the gaps earlier items left (the same as grid-auto-flow: dense there).",
+      "inherited": false,
+      "cssom": {"converter": "GridLanesPackValueConverter.Instance"},
+      "initialValue": "normal",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.GridLanesPackValueConverter.Instance.Convert" },
+      "html": {
+        "propertyPath": "GridLanesPack",
         "csharpDataType": "string",
         "area": "GridArea"
       }

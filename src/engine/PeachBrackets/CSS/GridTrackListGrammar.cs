@@ -83,6 +83,15 @@ namespace PeachBrackets.Css
         public IReadOnlyDictionary<string, IReadOnlyList<int>> LineNames { get; init; }
             = new Dictionary<string, IReadOnlyList<int>>();
 
+        /// <summary>The names inside the <c>repeat(auto-fill|auto-fit, ...)</c> section: one list per line of one repetition (the boundary before each of its
+        /// tracks, and the one after the last), repeated at layout time with the resolved count. Null without a name there.</summary>
+        public IReadOnlyList<IReadOnlyList<string>> AutoRepeatLineNames { get; init; }
+
+        /// <summary>Named lines declared <b>after</b> the auto-repeat section: name → line numbers counted from the line that ends the section (1 is that line),
+        /// shifted at layout time by the section's resolved length.</summary>
+        public IReadOnlyDictionary<string, IReadOnlyList<int>> LineNamesAfterAutoRepeat { get; init; }
+            = new Dictionary<string, IReadOnlyList<int>>();
+
         /// <summary>The <c>subgrid</c> keyword (CSS Grid Layout Module Level 2 §9): this axis adopts the parent
         /// grid's tracks instead of defining its own. A subgrid template carries no <see cref="Tracks"/> — only
         /// any explicit <c>[name]</c> line names declared after the keyword (in <see cref="LineNames"/>).</summary>
@@ -97,7 +106,9 @@ namespace PeachBrackets.Css
             IsSubgrid == other.IsSubgrid &&
             Tracks.SequenceEqual(other.Tracks) &&
             (AutoRepeatTracks ?? []).SequenceEqual(other.AutoRepeatTracks ?? []) &&
-            LineNamesEqual(LineNames, other.LineNames);
+            LineNamesEqual(LineNames, other.LineNames) &&
+            LineNamesEqual(LineNamesAfterAutoRepeat, other.LineNamesAfterAutoRepeat) &&
+            (AutoRepeatLineNames ?? []).Select(l => string.Join(" ", l)).SequenceEqual((other.AutoRepeatLineNames ?? []).Select(l => string.Join(" ", l)));
 
         public override int GetHashCode()
         {
@@ -112,6 +123,12 @@ namespace PeachBrackets.Css
                 hash.Add(name);
                 foreach (var line in lines) hash.Add(line);
             }
+            foreach (var (name, lines) in LineNamesAfterAutoRepeat.OrderBy(kv => kv.Key, StringComparer.Ordinal))
+            {
+                hash.Add(name);
+                foreach (var line in lines) hash.Add(line);
+            }
+            foreach (var names in AutoRepeatLineNames ?? []) hash.Add(string.Join(" ", names));
             return hash.ToHashCode();
         }
 
@@ -154,6 +171,9 @@ namespace PeachBrackets.Css
             List<GridTrackSize> autoRepeatTracks = null;
             var autoRepeatIndex = -1;
             var lineNames = new Dictionary<string, SortedSet<int>>();
+            var afterNames = new Dictionary<string, SortedSet<int>>();
+            List<List<string>> autoRepeatNames = null;
+            var tracksAfterRepeat = 0;
 
             var i = 0;
             while (i < toks.Length)
@@ -162,14 +182,17 @@ namespace PeachBrackets.Css
                 // the first track). Whitespace is already stripped, so the bracket group is contiguous.
                 if (toks[i].Type == TokenType.SquareBracketOpen)
                 {
-                    var lineIndex = fixedTracks.Count + 1;
+                    // After an auto-repeat section a line is counted from the section's end, whose position is only known at layout time.
+                    var afterRepeat = autoRepeat != GridAutoRepeatKind.None;
+                    var lineIndex = afterRepeat ? tracksAfterRepeat + 1 : fixedTracks.Count + 1;
+                    var target = afterRepeat ? afterNames : lineNames;
                     i++;
                     while (i < toks.Length && toks[i].Type != TokenType.SquareBracketClose)
                     {
                         if (toks[i].Type != TokenType.Ident) return null; // only idents inside [ ]
                         var name = toks[i].Data.ToString();
-                        if (!lineNames.TryGetValue(name, out var set))
-                            lineNames[name] = set = [];
+                        if (!target.TryGetValue(name, out var set))
+                            target[name] = set = [];
                         set.Add(lineIndex);
                         i++;
                     }
@@ -180,11 +203,23 @@ namespace PeachBrackets.Css
 
                 if (toks[i] is { Type: TokenType.Function } fn && fn.Data.Isi(FunctionNames.Repeat))
                 {
-                    if (!TryParseRepeat(fn, out var repeatKind, out var repeatTracks)) return null;
+                    if (!TryParseRepeat(fn, out var repeatKind, out var repeatTracks, out var repeatNames, out var repeatCount)) return null;
 
                     if (repeatKind == GridAutoRepeatKind.None)
                     {
-                        // repeat(N, …) — expand inline.
+                        // repeat(N, …) — expand inline, the names of every repetition with it.
+                        var target = autoRepeat != GridAutoRepeatKind.None ? afterNames : lineNames;
+                        var baseLine = (autoRepeat != GridAutoRepeatKind.None ? tracksAfterRepeat : fixedTracks.Count) + 1;
+                        var bodyLength = repeatTracks.Count / repeatCount;
+                        for (var r = 0; r < repeatCount; r++)
+                            for (var boundary = 0; boundary < repeatNames.Count; boundary++)
+                                foreach (var name in repeatNames[boundary])
+                                {
+                                    if (!target.TryGetValue(name, out var set)) target[name] = set = [];
+                                    set.Add(baseLine + r * bodyLength + boundary);
+                                }
+
+                        if (autoRepeat != GridAutoRepeatKind.None) tracksAfterRepeat += repeatTracks.Count;
                         fixedTracks.AddRange(repeatTracks);
                     }
                     else
@@ -194,6 +229,7 @@ namespace PeachBrackets.Css
                         autoRepeat = repeatKind;
                         autoRepeatTracks = repeatTracks;
                         autoRepeatIndex = fixedTracks.Count;
+                        if (repeatNames.Any(names => names.Count > 0)) autoRepeatNames = repeatNames;
                     }
 
                     i++;
@@ -202,6 +238,7 @@ namespace PeachBrackets.Css
 
                 if (!TryParseTrackSize(toks[i], out var track)) return null;
                 fixedTracks.Add(track);
+                if (autoRepeat != GridAutoRepeatKind.None) tracksAfterRepeat++;
                 i++;
             }
 
@@ -215,7 +252,11 @@ namespace PeachBrackets.Css
                 AutoRepeatInsertIndex = autoRepeatIndex < 0 ? 0 : autoRepeatIndex,
                 LineNames = lineNames.ToDictionary(
                     kv => kv.Key,
-                    kv => (IReadOnlyList<int>)[.. kv.Value])
+                    kv => (IReadOnlyList<int>)[.. kv.Value]),
+                LineNamesAfterAutoRepeat = afterNames.ToDictionary(
+                    kv => kv.Key,
+                    kv => (IReadOnlyList<int>)[.. kv.Value]),
+                AutoRepeatLineNames = autoRepeatNames?.Select(names => (IReadOnlyList<string>)names).ToList()
             };
         }
 
@@ -278,10 +319,12 @@ namespace PeachBrackets.Css
             return result;
         }
 
-        private static bool TryParseRepeat(Token fn, out GridAutoRepeatKind kind, out List<GridTrackSize> tracks)
+        private static bool TryParseRepeat(Token fn, out GridAutoRepeatKind kind, out List<GridTrackSize> tracks, out List<List<string>> names, out int count)
         {
             kind = GridAutoRepeatKind.None;
             tracks = null;
+            names = null;
+            count = 0;
 
             var args = fn.ArgumentTokens.Where(t => t.Type != TokenType.Whitespace).ToArray();
             var groups = SplitByComma(args);
@@ -291,21 +334,37 @@ namespace PeachBrackets.Css
             var first = groups[0];
             if (first.Count != 1) return false;
 
-            var countTokens = 0;
             if (IsIdent(first[0], Keywords.AutoFill)) kind = GridAutoRepeatKind.AutoFill;
             else if (IsIdent(first[0], Keywords.AutoFit)) kind = GridAutoRepeatKind.AutoFit;
-            else if (first[0] is { Type: TokenType.Number, IsInteger: true } n && n.IntegerValue >= 1) countTokens = n.IntegerValue;
+            else if (first[0] is { Type: TokenType.Number, IsInteger: true } n && n.IntegerValue >= 1) count = n.IntegerValue;
             else return false;
 
-            // Remaining groups are the repeated <track-size>s. (A repeat body may not itself contain a
+            // Remaining groups are the repeated <track-size>s, each boundary optionally carrying [names]. (A repeat body may not itself contain a
             // repeat(), which SplitByComma naturally enforces since a nested function is one token.)
             var body = new List<GridTrackSize>();
+            names = [[]];
             for (var gi = 1; gi < groups.Count; gi++)
             {
-                foreach (var token in groups[gi])
+                var tokens = groups[gi];
+                for (var ti = 0; ti < tokens.Count; ti++)
                 {
-                    if (!TryParseTrackSize(token, out var track)) return false;
+                    if (tokens[ti].Type == TokenType.SquareBracketOpen)
+                    {
+                        ti++;
+                        while (ti < tokens.Count && tokens[ti].Type != TokenType.SquareBracketClose)
+                        {
+                            if (tokens[ti].Type != TokenType.Ident) return false;
+                            names[^1].Add(tokens[ti].Data.ToString());
+                            ti++;
+                        }
+
+                        if (ti >= tokens.Count) return false;
+                        continue;
+                    }
+
+                    if (!TryParseTrackSize(tokens[ti], out var track)) return false;
                     body.Add(track);
+                    names.Add([]);
                 }
             }
 
@@ -318,8 +377,8 @@ namespace PeachBrackets.Css
             }
 
             // repeat(N, body) — expand N copies now.
-            tracks = [with(body.Count * countTokens)];
-            for (var r = 0; r < countTokens; r++)
+            tracks = [with(body.Count * count)];
+            for (var r = 0; r < count; r++)
                 tracks.AddRange(body);
             return true;
         }

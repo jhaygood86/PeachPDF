@@ -170,6 +170,8 @@ namespace PeachBrackets.Css
             // longhands is not worth the complexity and could change existing output.
             AddLogicalShorthand(PropertyNames.GridTemplate, () => new GridTemplateProperty(),
                 PropertyNames.GridTemplateRows, PropertyNames.GridTemplateColumns, PropertyNames.GridTemplateAreas);
+            AddLogicalShorthand(PropertyNames.GridLanes, () => new GridLanesProperty(),
+                PropertyNames.GridTemplateRows, PropertyNames.GridTemplateColumns, PropertyNames.GridTemplateAreas, PropertyNames.GridLanesDirection);
             AddLogicalShorthand(PropertyNames.Grid, () => new GridProperty(),
                 PropertyNames.GridTemplateRows, PropertyNames.GridTemplateColumns, PropertyNames.GridTemplateAreas,
                 PropertyNames.GridAutoFlow, PropertyNames.GridAutoRows, PropertyNames.GridAutoColumns);
@@ -333,7 +335,6 @@ namespace PeachBrackets.Css
             AddLonghand(PropertyNames.AlignBaseline, () => new SvgOnlyProperty(PropertyNames.AlignBaseline, Converters.Any), true);
             AddLonghand(PropertyNames.DominantBaseline, () => new SvgOnlyProperty(PropertyNames.DominantBaseline, Converters.Any), true);
             AddLonghand(PropertyNames.BaselineShift, () => new SvgOnlyProperty(PropertyNames.BaselineShift, Converters.Any), true);
-            AddLonghand(PropertyNames.InlineSize, () => new SvgOnlyProperty(PropertyNames.InlineSize, Converters.Any), true);
             AddLonghand(PropertyNames.ShapeInside, () => new SvgOnlyProperty(PropertyNames.ShapeInside, Converters.Any), true);
             AddLonghand(PropertyNames.ShapeSubtract, () => new SvgOnlyProperty(PropertyNames.ShapeSubtract, Converters.Any), true);
             AddLonghand(PropertyNames.R, () => new SvgOnlyProperty(PropertyNames.R, SvgOnlyProperty.GeometryLength), true);

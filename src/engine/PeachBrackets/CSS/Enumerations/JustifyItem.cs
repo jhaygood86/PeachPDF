@@ -8,6 +8,9 @@ namespace PeachBrackets.Css
         Start,
         End,
         SelfEnd,
+        SelfStart,
+        FlexStart,
+        FlexEnd,
         Left,
         Right,
 
