@@ -310,5 +310,76 @@ namespace PeachPDF.Tests.Integration
                 Item(1, "height:60pt") + Item(2, "height:20pt; grid-column:span 2") + Item(3, "height:10pt; grid-column:3") + Item(4, "height:10pt; grid-column:1") + "</div>");
             Assert.True(b.Count >= 3);
         }
+
+        [Theory]
+        [InlineData("", 100, 35)]
+        [InlineData("grid-column:2", 100, 35)]
+        public async Task LanesDensePacking_BackfillsASkippedStretchOfALane(string placement, double x, double y)
+        {
+            var b = await Render(
+                "<div style='display:grid-lanes; grid-lanes-pack:dense; fit-tolerance:0; width:300pt; grid-template-columns:100pt 100pt 100pt'>" +
+                Item(1, "height:60pt") + Item(2, "height:20pt") + Item(3, "height:20pt") + Item(4, "height:15pt; grid-column:span 2") +
+                Item(5, "height:30pt; grid-column:span 3") + Item(6, "height:10pt;" + placement) + "</div>");
+            At(b, 6, x, y);
+        }
+
+        [Fact]
+        public async Task LanesRows_DenseBackfill_FillsASkippedStretchOfARow()
+        {
+            var b = await Render(
+                "<div style='display:grid-lanes; grid-lanes-direction:row; grid-lanes-pack:dense; fit-tolerance:0; height:300pt; grid-template-rows:100pt 100pt 100pt'>" +
+                Item(1, "width:60pt") + Item(2, "width:20pt") + Item(3, "width:20pt") + Item(4, "width:15pt; grid-row:span 2") +
+                Item(5, "width:30pt; grid-row:span 3") + Item(6, "width:10pt") + "</div>");
+            At(b, 6, 35, 100);
+        }
+
+        [Fact]
+        public async Task LanesColumnSubgrid_SpanningIntrinsicAndFlexibleLanes_ContributesItsItems()
+        {
+            var b = await Render(
+                "<div style='display:grid-lanes; fit-tolerance:0; width:400pt; grid-template-columns:auto 1fr auto'>" +
+                "<div style='grid-column:span 2; display:grid; grid-template-columns:subgrid; column-gap:10pt'>" + Item(1, "width:80pt;height:10pt") + Item(2, "width:40pt;height:10pt") + "</div>" +
+                "<div style='display:grid; grid-template-columns:subgrid; grid-column:3'>" + Item(3, "width:50pt;height:10pt") + "</div>" +
+                "<div style='display:grid; grid-template-columns:subgrid; grid-column:span 3'>" + Item(4, "width:50pt;height:10pt;grid-column:span 2") + Item(5, "width:20pt;height:10pt") + "</div></div>");
+            Assert.True(b.Count >= 3);
+        }
+
+        [Fact]
+        public async Task InlineGrid_InAFlexRow_MeasuresItsColumnSubgridContributions()
+        {
+            var b = await Render(
+                "<div style='display:flex'><div style='display:inline-grid; grid-template-columns:auto auto'>" +
+                "<div style='grid-column:span 2; display:grid; grid-template-columns:subgrid; column-gap:10pt; padding:0 3pt'>" + Item(1, "width:60pt;height:10pt") + Item(2, "width:30pt;height:10pt") + "</div>" +
+                "<div style='grid-column:1 / span 2; display:grid; grid-template-columns:subgrid; grid-template-areas:\"a b\"'>" + Item(3, "width:20pt;height:10pt") + "</div>" +
+                "<div style='grid-column:1 / span 2; display:grid; grid-template-columns:subgrid; grid-auto-flow:column'>" + Item(4, "width:20pt;height:10pt") + "</div>" +
+                "<div style='grid-column:span 2; display:grid; grid-template-columns:subgrid'>" + Item(5, "width:20pt;height:10pt;grid-column:span 2") + "</div></div></div>");
+            Assert.True(b.Count >= 2);
+        }
+
+        [Fact]
+        public async Task GridWithADefiniteHeight_FixedAndFlexibleRows_GiveItemsAPercentageBasis()
+        {
+            var b = await Render(
+                "<div style='display:inline-grid; height:200pt; grid-template-rows:50pt 1fr 2fr; grid-row-gap:10pt; grid-template-columns:auto'>" +
+                Item(1, "aspect-ratio:1; height:100%; grid-row:2") + Item(2, "aspect-ratio:1; height:50%; grid-row:2 / span 2") + Item(3, "width:20pt; height:100%; grid-row:5") + "</div>");
+            Assert.True(b.Count >= 1);
+        }
+
+        [Fact]
+        public async Task RowsWithAMinmaxMaximum_CapAnItemsPercentageHeight()
+        {
+            var b = await Render(
+                "<div style='display:inline-grid; width:100pt; height:300pt; grid-template-rows:minmax(10pt, 80pt) auto'>" + Item(1, "height:60%") + Item(2, "height:20pt") + "</div>");
+            Assert.True(b.Count >= 1);
+        }
+
+        [Fact]
+        public async Task LanesWithItemsWhoseHeightIsKnownImage_UseTheTransferredWidth()
+        {
+            var b = await Render(
+                "<div style='display:grid-lanes; fit-tolerance:0; width:200pt; grid-template-columns:auto auto'>" +
+                "<svg viewBox='0 0 2 1' style='height:30pt;background:#000001'></svg><img style='height:20pt;background:#000002' src='data:image/gif;base64,R0lGODlhAQABAIAAAAUEBAAAACwAAAAAAQABAAACAkQBADs='></div>");
+            Assert.True(b.Count >= 1);
+        }
     }
 }
