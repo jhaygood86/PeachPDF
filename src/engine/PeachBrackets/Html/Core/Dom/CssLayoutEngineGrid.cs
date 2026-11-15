@@ -129,6 +129,10 @@ namespace PeachBrackets.Html.Dom
             public required GridTrackSize Def { get; init; }
             public double Size { get; set; }
             public double Position { get; set; }
+
+            /// <summary>An empty <c>auto-fit</c> track: it has no size and the gap beside it collapses (css-grid-1 section 7.2.3.2). Any other
+            /// track keeps its gaps, however small it ends up.</summary>
+            public bool Collapsed { get; set; }
         }
 
         private async ValueTask Layout(Canvas g, BreakToken? resume)
@@ -238,6 +242,11 @@ namespace PeachBrackets.Html.Dom
             var subgrid = _gridBox.SubgridContext;
             var colSubgrid = colTemplate?.IsSubgrid == true && subgrid?.ColumnSizes is not null;
             var rowSubgrid = rowTemplate?.IsSubgrid == true && subgrid is not null;
+
+            // The gap a subgrid's own subgrids measure their margins against is the one actually between the lines, which is the root grid's: a
+            // subgrid's own `gap` is only the spacing it asks its items to look as if they had.
+            double LineColumnGap() => colSubgrid && subgrid is not null ? subgrid.ParentColumnGap : columnGap;
+            double LineRowGap() => rowSubgrid && subgrid is not null ? subgrid.ParentRowGap : rowGap;
 
             if (!_vertical && !_rtl)
             {
@@ -485,7 +494,7 @@ namespace PeachBrackets.Html.Dom
                             for (var r = p.RowStart; r < p.RowStart + p.RowSpan && r < rowCount; r++)
                                 usedRow[r] = true;
                         for (var r = rowRangeStart; r < rowRangeStart + rowRangeLength && r < rowCount; r++)
-                            if (!usedRow[r]) rows[r].Size = 0;
+                            if (!usedRow[r]) { rows[r].Size = 0; rows[r].Collapsed = true; }
                     }
 
                     // Subgrid children are measured separately (below) since their per-row content must feed the
@@ -529,18 +538,26 @@ namespace PeachBrackets.Html.Dom
                     foreach (var ((rowIndex, groupLast), members) in baselineGroups)
                         rows[rowIndex].Size = Math.Max(rows[rowIndex].Size, BaselineGroupSize(members, groupLast));
 
+                    // Subgrid children: a col-only subgrid is measured as one item (with adopted columns); a
+                    // row-subgrid child reports its own per-subrow heights, which grow the parent's spanned auto rows
+                    // so the shared tracks size to fit every subgrid. Those that sit in one row go first, like every single-row item, so the
+                    // spanning items below only grow rows by what the others left short.
+                    var spanningSubgrid = placements.Where(p => IsSubgridItem(p.Box) && !ChildRowSubgrid(p.Box) && p.RowSpan > 1).ToHashSet();
+                    foreach (var p in placements.Where(p => IsSubgridItem(p.Box) && !spanningSubgrid.Contains(p)))
+                        await MeasureSubgridItem(g, p, columns, rows, LineColumnGap(), LineRowGap(), colLineNames, rowLineNames);
+
                     // Row-spanning items grow the last auto row they cover if their content exceeds the spanned rows.
-                    foreach (var p in normalItems.Where(p => p.RowSpan > 1))
+                    foreach (var p in placements.Where(p => p.RowSpan > 1 && (spanningSubgrid.Contains(p) || !IsSubgridItem(p.Box))))
                     {
+                        if (spanningSubgrid.Contains(p))
+                        {
+                            await MeasureSubgridItem(g, p, columns, rows, LineColumnGap(), LineRowGap(), colLineNames, rowLineNames);
+                            continue;
+                        }
+
                         var natural = await MeasureItemHeight(g, p.Box, SpanWidthOf(p));
                         GrowSpannedAutoRows(rows, p, natural, rowGap);
                     }
-
-                    // Subgrid children: a col-only subgrid is measured as one item (with adopted columns); a
-                    // row-subgrid child reports its own per-subrow heights, which grow the parent's spanned auto rows
-                    // so the shared tracks size to fit every subgrid.
-                    foreach (var p in placements.Where(p => IsSubgridItem(p.Box)))
-                        await MeasureSubgridItem(g, p, columns, rows, columnGap, rowGap, colLineNames, rowLineNames);
 
                 if (expandsFlexRows)
                     ExpandFlexibleRows(rows, BlockContentSize, rowGap);
@@ -629,7 +646,7 @@ namespace PeachBrackets.Html.Dom
                         justify = ColumnBaselineFallback(p.Box, last);
                     }
 
-                    var context = BuildChildSubgridContext(p, columns, rows, adoptRows: true, colLineNames, rowLineNames, columnGap, rowGap);
+                    var context = BuildChildSubgridContext(p, columns, rows, adoptRows: true, colLineNames, rowLineNames, LineColumnGap(), LineRowGap());
                     p.Box.SubgridContext = context;
                     try
                     {
@@ -688,7 +705,7 @@ namespace PeachBrackets.Html.Dom
             // remarks. Grid rows are already in block-axis order (RowStart ascending), so - unlike
             // flex's line ordering - no wrap-reverse-style reordering is needed here.
             var rowGroups = BuildRowGroups(placements);
-            var subgridContexts = BuildSubgridContextMap(placements, columns, rows, colLineNames, rowLineNames, columnGap, rowGap);
+            var subgridContexts = BuildSubgridContextMap(placements, columns, rows, colLineNames, rowLineNames, LineColumnGap(), LineRowGap());
             if (!_vertical)
             await CommitItemContent(g, rowGroups, startRowIndex: 0, seedUnfinished: null, seedFinished: null,
                 subgridContexts, placementOrigin: _gridBox.Location);
@@ -1465,7 +1482,7 @@ namespace PeachBrackets.Html.Dom
             bool[] collapsed, double[] minContent, double[] maxContent, bool stretchTracks)
         {
             var n = defs.Count;
-            var tracks = defs.Select(d => new Track { Def = d }).ToArray();
+            var tracks = defs.Select((d, i) => new Track { Def = d, Collapsed = collapsed[i] }).ToArray();
             var bases = new double[n];
             var limits = new double[n];    // double.PositiveInfinity for an unbounded growth limit
             var flexes = new double[n];
@@ -2340,6 +2357,10 @@ namespace PeachBrackets.Html.Dom
                 return CssValueParser.ParseLength(def.Value, 0, _gridBox);
             if (def.Kind == GridTrackKind.Percent && hasDefiniteHeight)
                 return CssValueParser.ParseLength(def.Value, BlockContentSize, _gridBox);
+
+            // A minmax() track starts at its minimum when that is a length: its base size (css-grid-1 section 12.4), which the items then only raise.
+            if (def.Kind == GridTrackKind.Minmax && (def.Min.Kind == GridTrackKind.Length || def.Min.Kind == GridTrackKind.Percent && hasDefiniteHeight))
+                return ResolveFixedRow(def.Min, hasDefiniteHeight);
             return 0;
         }
 
@@ -2432,7 +2453,7 @@ namespace PeachBrackets.Html.Dom
             var transfersHeight = autoWidth && !autoHeight && natural is { Width: false, Ratio: > 0 } && CssValueParser.IsValidLength(box.Height);
             var stretchWidth = autoWidth
                 && (natural is { } replacedSize ? ReplacedStretchesWidth(replacedSize, justify) && !(transfersHeight && !justify.Isi(Keywords.Stretch)) : IsStretch(justify));
-            var stretchHeight = autoHeight && IsStretch(align)
+            var stretchHeight = autoHeight && IsStretch(align) && !box.HasParkedBlockSize
                 && !(align.Isi(Keywords.Normal) && natural is { Height: true });
             var restorePercentages = ResolveAreaPercentages(box, cellContentWidth0);
             var restoreHeights = ResolveAreaHeights(box, cellHeight);
@@ -2757,8 +2778,8 @@ namespace PeachBrackets.Html.Dom
             var n = tracks.Length;
             if (n == 0) return;
 
-            // A zero-size track (a collapsed auto-fit column, or an empty row) drops its adjoining gap.
-            var gapCount = Math.Max(0, tracks.Count(t => t.Size > 0.01) - 1);
+            // A collapsed auto-fit track drops its adjoining gap; an empty or zero-size track of any other kind keeps both.
+            var gapCount = Math.Max(0, tracks.Count(t => !t.Collapsed) - 1);
             var used = tracks.Sum(t => t.Size) + gap * gapCount;
             var free = containerSize - used;
 
@@ -2779,7 +2800,7 @@ namespace PeachBrackets.Html.Dom
             {
                 t.Position = pos;
                 pos += t.Size;
-                if (t.Size > 0.01) pos += between;
+                if (!t.Collapsed) pos += between;
             }
         }
 
@@ -2898,7 +2919,11 @@ namespace PeachBrackets.Html.Dom
 
             if (ChildRowSubgrid(box))
             {
-                var context = new GridSubgridContext { RowCount = p.RowSpan, RowLineNames = SpannedLineNames(rowLineNames, p.RowStart, p.RowSpan) };
+                var context = new GridSubgridContext
+                {
+                    RowCount = p.RowSpan, RowLineNames = SpannedLineNames(rowLineNames, p.RowStart, p.RowSpan),
+                    ParentColumnGap = columnGap, ParentRowGap = rowGap
+                };
                 if (ChildColSubgrid(box))
                 {
                     context.ColumnSizes = SpannedSizes(columns, p.ColStart, p.ColSpan);

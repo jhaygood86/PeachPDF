@@ -295,15 +295,28 @@ namespace PeachBrackets.Engine.Tests.Integration
         {
             var (root, _) = await BuildAndLayout(Wrap(@"
                 <div id='c' style='display:grid-lanes; width:200pt; height:200pt; grid-template-columns:100pt 100pt; fit-tolerance:0; row-gap:10pt;'>
-                    <div id='a'></div>
+                    <div id='a' style='align-self:stretch'></div>
                     <div id='b' style='height:80pt'></div>
                     <div id='s' style='grid-column: span 2; height:20pt'></div>
                 </div>"));
             var c = FindById(root, "c")!;
 
-            // a is auto-height: it fills lane one from its start to where the spanner starts (80) less the gap.
+            // a is auto-height and stretches: it fills lane one from its start to where the spanner starts (80) less the gap.
             AssertAt(c, FindById(root, "s")!, 0, 90);
             Assert.Equal(80, FindById(root, "a")!.ActualBoxSizingHeight, 0.5);
+        }
+
+        [Fact]
+        public async Task ItemsWithNormalAlignment_KeepTheirContentHeightInTheStackingAxis()
+        {
+            var (root, _) = await BuildAndLayout(Wrap(@"
+                <div id='c' style='display:grid-lanes; width:200pt; height:200pt; grid-template-columns:100pt 100pt; fit-tolerance:0; row-gap:10pt;'>
+                    <div id='a'></div>
+                    <div id='b' style='height:80pt'></div>
+                    <div id='s' style='grid-column: span 2; height:20pt'></div>
+                </div>"));
+
+            Assert.Equal(0, FindById(root, "a")!.ActualBoxSizingHeight, 0.5);
         }
 
         [Fact]

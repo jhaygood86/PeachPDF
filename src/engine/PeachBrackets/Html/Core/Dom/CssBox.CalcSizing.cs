@@ -27,6 +27,13 @@ namespace PeachBrackets.Html.Dom
         private string? _calcSizeMinHeight;
         private string? _calcSizeMaxHeight;
 
+        private bool _heightWasContentKeyword;
+
+        /// <summary>Whether the box's <c>height</c> is a content keyword or <c>calc-size()</c> - whether it is still waiting to be resolved against the
+        /// content or has been, and whatever a layout pass has since left in <c>Height</c>: it reads <c>auto</c> before that, but is not. An item with
+        /// it is sized by its content and is not stretched.</summary>
+        internal bool HasParkedBlockSize => _calcSizeHeight is not null || _heightWasContentKeyword;
+
         private static string RewriteCalcSize(string value, string neutral, bool measuredInline, out string? parked)
         {
             parked = null;
@@ -71,6 +78,7 @@ namespace PeachBrackets.Html.Dom
             {
                 Height = RewriteCalcSize(Height, Keywords.Auto, true, out var parked);
                 _calcSizeHeight = parked ?? _calcSizeHeight;
+                _heightWasContentKeyword |= parked is not null;
             }
 
             if (CalcSizeValue.IsCalcSize(MinHeight))

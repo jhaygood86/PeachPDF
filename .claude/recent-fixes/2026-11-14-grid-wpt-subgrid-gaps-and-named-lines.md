@@ -107,3 +107,20 @@ gutters in subgrids).
   walk cannot lay out), and the row-subgrid case where the row is `auto` and sized by a sibling (`row-subgrid-intrinsic-size-transfer-003`).
 - Lost three grid-lanes tests (`row-item-percentage-sizes-001`, `row-subgrid-extra-margin-001`, `row-track-sizing-002`) whose references are plain grids that now
   resolve percentage heights; lanes does not match them in the first lane.
+
+## Subgrid gaps, minmax() row bases, content-keyword heights (more subgrid pass)
+
+- The measure-mode context a row subgrid is sized with (`MeasureSubgridItem`) carried no parent gaps, so the gap difference was taken against 0
+  and rows came out too tall. It now carries them. A nested subgrid measures its gap difference against the gap between the *real* lines
+  (the root grid's), not its parent subgrid's own `gap` (`LineColumnGap`/`LineRowGap`).
+- `PositionTracks` dropped the gap beside any zero-size track; only an empty `auto-fit` track collapses (`Track.Collapsed`). An empty `auto`
+  row now keeps its gaps, which a stretched row-spanning item needs to cover them.
+- A `minmax(<length>, ...)` row started at 0 instead of its minimum (`ResolveFixedRow`), so `minmax(100px, auto)` rows were content-sized.
+- Subgrid items sitting in one row are measured before row-spanning items, so a spanner does not grow a row a subgrid would have filled.
+- `height: min-content|max-content|fit-content` reads `auto` until resolved and a layout pass can leave it `auto`; `HasParkedBlockSize` is now
+  sticky so a grid item with one is not stretched. In grid lanes an item with `align-self: normal` keeps its content height in the stacking
+  axis; only an explicit `stretch` fills the room before the next item (WPT references use `height: min-content` to model exactly that).
+- css-grid WPT locally 771 -> 801 (22 of them grid-lanes subgridded to grid). Ahem-substituted copies of the subgrid tests showed which
+  failures are font metrics (`monospace`) rather than layout: grid-gap-001 is one.
+- Still open: row-axis lanes subgrids, named-line `span <name>`/`a N` beyond the explicit grid in a subgrid (Chrome clamps), orthogonal
+  writing modes, repeat(auto-fill) in subgrids, subgrid baselines.

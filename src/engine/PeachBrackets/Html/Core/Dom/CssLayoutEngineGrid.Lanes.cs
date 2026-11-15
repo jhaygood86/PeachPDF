@@ -813,7 +813,7 @@ namespace PeachBrackets.Html.Dom
                 foreach (var item in laneItems)
                 {
                     var align = ResolveSelfAlignment(item.Box.AlignSelf.ToString(), _gridBox.AlignItems.ToString());
-                    if (align.Isi(Keywords.Start) || align.Isi(Keywords.FlexStart) || align.Isi("self-start")) continue;
+                    if (align.Isi(Keywords.Start) || align.Isi(Keywords.FlexStart) || align.Isi("self-start") || align.Isi(Keywords.Normal)) continue;
 
                     var itemStart = tops[item.Box];
                     var end = extent;

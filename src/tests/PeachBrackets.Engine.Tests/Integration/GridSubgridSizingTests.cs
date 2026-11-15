@@ -42,6 +42,49 @@ namespace PeachBrackets.Engine.Tests.Integration
         }
 
         [Fact]
+        public async Task AStretchedItemSpanningTwoRows_CoversTheGapBetweenThem()
+        {
+            var item = await LayOut("<div style='display:grid;gap:20pt;grid-template-rows:repeat(3,auto);grid-template-columns:50pt 50pt'>" +
+                                    "<div style='height:64pt'></div><div id='i' style='grid-row:2/4'></div>" +
+                                    "<div style='grid-row:2/4;grid-column:2;height:128pt'></div></div>", "i");
+
+            Assert.Equal(128, item.ActualBottom - item.Location.Y, 0.5);
+        }
+
+        [Fact]
+        public async Task AMinmaxRowWithALengthMinimum_StartsAtThatMinimum()
+        {
+            var grid = await LayOut("<div id='g' style='display:grid;gap:10pt;grid-template-rows:repeat(2,minmax(100pt,auto))'>" +
+                                    "<div style='height:20pt'></div><div style='height:20pt'></div></div>", "g");
+
+            Assert.Equal(210, grid.ActualBottom - grid.Location.Y, 0.5);
+        }
+
+        [Fact]
+        public async Task ASubgridOfASubgrid_TakesItsMarginFromTheGapBetweenTheRealLines()
+        {
+            // Both subgrids ask for a 100pt gap over the grid's 20pt: the inner one's item gives up 40pt below it, not 0.
+            var item = await LayOut("<div style='display:grid;grid-template-rows:100pt auto;gap:20pt;grid-template-columns:100pt'>" +
+                                    "<div style='display:grid;grid:subgrid/subgrid;gap:100pt;grid-row:span 2'>" +
+                                    "<div style='display:grid;grid:subgrid/subgrid;gap:100pt;grid-row:span 2'><div id='i'></div><div></div></div></div></div>", "i");
+
+            Assert.Equal(60, item.ActualBottom - item.Location.Y, 0.5);
+        }
+
+        [Theory]
+        [InlineData("grid", "min-content")]
+        [InlineData("inline-grid", "min-content")]
+        [InlineData("inline-grid;grid-template-rows:auto auto", "max-content")]
+        public async Task AMinContentHeightItem_IsNotStretchedToItsArea(string display, string height)
+        {
+            var item = await LayOut($"<div style='display:{display};grid-template-columns:50pt 50pt;font:10pt/1 monospace'>" +
+                                    $"<div id='i' style='grid-row:1/3;height:{height}'>x</div>" +
+                                    "<div style='grid-row:1/3;grid-column:2;height:100pt'></div></div>", "i");
+
+            Assert.Equal(10, item.ActualBottom - item.Location.Y, 0.5);
+        }
+
+        [Fact]
         public async Task APercentageHeight_ResolvesAgainstTheGridArea()
         {
             var item = await LayOut("<div style='display:grid;grid-template-rows:80pt;grid-template-columns:100pt'><div id='i' style='height:50%'></div></div>", "i");
