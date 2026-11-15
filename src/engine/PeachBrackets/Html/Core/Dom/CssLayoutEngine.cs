@@ -9071,6 +9071,8 @@ namespace PeachBrackets.Html.Dom
         /// <param name="coordinates">the current line coordinates</param>
         /// <param name="bottomInset">b's own border-bottom+padding-bottom, precomputed by the caller (0
         /// when b is not an atomic inline-level box)</param>
+        /// <param name="blockBox">the block container whose line b was flowed in</param>
+        /// <param name="pixelsPerPoint">the layout scale, for the inset's conversion</param>
         private static void ApplyAtomicInlineVerticalInsets(CssBox b, CssLineBoxCoordinates coordinates, double bottomInset, CssBox blockBox, double pixelsPerPoint)
         {
             if (bottomInset <= 0 || b.Position.Value is PositionMode.Absolute or PositionMode.Fixed)
