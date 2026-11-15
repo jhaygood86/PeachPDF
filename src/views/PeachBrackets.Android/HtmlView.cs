@@ -409,7 +409,7 @@ public sealed partial class HtmlView : FrameLayout
         PaintFormControls = true,
         ColorScheme = IsNightMode() ? ColorSchemePreference.Dark : ColorSchemePreference.Light,
         Input = Input ?? DetectInput(),
-        DevicePixelRatio = Logic.ImageScale.DevicePixelRatio(_density),
+        DevicePixelRatio = ImageScale.DevicePixelRatio(_density),
         AnimationsEnabled = PlaysAnimations,
         Preferences = PlaysAnimations ? new UserPreferences { ReducedMotion = false } : null,
     };
