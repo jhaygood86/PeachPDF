@@ -475,6 +475,57 @@ namespace PeachBrackets.Engine.Tests.Integration
             Assert.True(b.Location.Y + b.ActualBoxSizingHeight <= a.Location.Y + 0.5, "no overlap");
         }
 
+        [Fact]
+        public async Task AnAutoRepeatOfIntrinsicLanes_IsCountedFromTheSizesTheItemsGiveThem()
+        {
+            var (root, _) = await BuildAndLayout(Wrap(@"
+                <div id='c' style='display:grid-lanes; width:300pt; grid-template-columns:repeat(auto-fill, auto); fit-tolerance:0;'>
+                    <div id='a' style='width:100pt; height:50pt'></div>
+                    <div id='b' style='width:100pt; height:50pt'></div>
+                    <div id='d' style='width:100pt; height:50pt'></div>
+                    <div id='e' style='width:100pt; height:50pt'></div>
+                </div>"));
+            var c = FindById(root, "c")!;
+
+            // Three lanes of 100pt fit; with the old count of one the items would all stack in a single lane.
+            AssertAt(c, FindById(root, "a")!, 0, 0);
+            AssertAt(c, FindById(root, "b")!, 100, 0);
+            AssertAt(c, FindById(root, "d")!, 200, 0);
+            AssertAt(c, FindById(root, "e")!, 0, 50);
+        }
+
+        [Fact]
+        public async Task AutoFitLanes_NoItemEndedUpIn_CollapseAndTheOthersWiden()
+        {
+            var (root, _) = await BuildAndLayout(Wrap(@"
+                <div id='c' style='display:grid-lanes; width:300pt; grid-template-columns:repeat(auto-fit, auto); fit-tolerance:0;'>
+                    <div id='a' style='width:100pt; height:50pt'></div>
+                    <div id='b' style='width:100pt; height:50pt; grid-column:3'></div>
+                    <div id='d' style='width:100pt; height:50pt; grid-column:1'></div>
+                </div>"));
+            var c = FindById(root, "c")!;
+
+            // The middle lane holds nothing, so it goes and the two that remain share the 300pt.
+            AssertAt(c, FindById(root, "a")!, 0, 0);
+            AssertAt(c, FindById(root, "d")!, 0, 50);
+            AssertAt(c, FindById(root, "b")!, 150, 0);
+        }
+
+        [Fact]
+        public async Task RowLanesOfAnIntrinsicSize_AreAsTallAsTheTallestAutoPlacedItem()
+        {
+            var (root, _) = await BuildAndLayout(Wrap(@"
+                <div id='c' style='display:grid-lanes; width:300pt; height:300pt; align-content:start; grid-template-rows:repeat(3, auto); fit-tolerance:0;'>
+                    <div id='a' style='width:100pt; height:20pt'></div>
+                    <div id='b' style='width:100pt; height:40pt'></div>
+                </div>"));
+            var c = FindById(root, "c")!;
+
+            // Either item could have gone in any lane, so every lane is 40pt tall - the second starts at 40, not at the first item's 20.
+            AssertAt(c, FindById(root, "a")!, 0, 0);
+            AssertAt(c, FindById(root, "b")!, 0, 40);
+        }
+
         private static void AssertAt(CssBox container, CssBox item, double x, double y)
         {
             Assert.Equal(x, item.Location.X - container.Location.X, 0.5);

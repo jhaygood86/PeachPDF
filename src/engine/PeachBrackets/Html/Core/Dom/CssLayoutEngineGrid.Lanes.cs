@@ -430,11 +430,20 @@ namespace PeachBrackets.Html.Dom
                 colTemplate is { } c && (c.Tracks.Count > 0 || c.AutoRepeat != GridAutoRepeatKind.None || c.IsSubgrid),
                 rowTemplate is { } r && (r.Tracks.Count > 0 || r.AutoRepeat != GridAutoRepeatKind.None || r.IsSubgrid));
 
+            // A repeat() whose tracks have no definite size is counted from a hypothetical sizing of the lanes (css-grid-3 3.1.1).
+            _laneRepeatCount = null;
+            if (!_vertical && !inlineIndefinite)
+            {
+                _laneRepeatCount = rowsAreLanes
+                    ? await IntrinsicRepeatCount(g, items, rowTemplate, true, hasDefiniteBlock ? BlockContentSize : 0, rowGap, contentWidth)
+                    : await IntrinsicRepeatCount(g, items, colTemplate, false, contentWidth, columnGap, contentWidth);
+            }
+
             // An auto-repeat's resolved length places the lines named after it.
             var colLineNames = BuildLineNames(colTemplate, colTemplate is { AutoRepeat: not GridAutoRepeatKind.None }
-                ? ResolveColumnTemplate(colTemplate, contentWidth, columnGap).Defs.Count : -1);
+                ? ResolveColumnTemplate(colTemplate, contentWidth, columnGap, rowsAreLanes ? null : _laneRepeatCount).Defs.Count : -1);
             var rowLineNames = BuildLineNames(rowTemplate, rowTemplate is { AutoRepeat: not GridAutoRepeatKind.None }
-                ? ResolveColumnTemplate(rowTemplate, hasDefiniteBlock ? BlockContentSize : 0, rowGap).Defs.Count : -1);
+                ? ResolveColumnTemplate(rowTemplate, hasDefiniteBlock ? BlockContentSize : 0, rowGap, rowsAreLanes ? _laneRepeatCount : null).Defs.Count : -1);
 
             // A lanes container that is a subgrid also has the parent's names for the lines it spans (css-grid-2 9.2).
             var subgrid = _gridBox.SubgridContext;
@@ -445,6 +454,86 @@ namespace PeachBrackets.Html.Dom
                 await LayoutRowLanes(g, items, hasDefiniteBlock, inlineIndefinite, contentWidth, columnGap, rowGap, rowTemplate, colLineNames, rowLineNames);
             else
                 await LayoutColumnLanes(g, items, hasDefiniteBlock, inlineIndefinite, contentWidth, columnGap, rowGap, colTemplate, colLineNames, rowLineNames);
+        }
+
+        /// <summary>The repetition count of the lanes template's <c>repeat(auto-fill|auto-fit, ...)</c> when set from a hypothetical sizing, else null.</summary>
+        private int? _laneRepeatCount;
+
+        /// <summary>
+        /// The number of repetitions of an auto repeat whose tracks have no definite size (css-grid-3 3.1.1). The track list is expanded enough
+        /// times to hold every placement of the widest item, every item is treated as auto-placed and no track collapses, the lanes are sized, and
+        /// the largest track of each entry of the repeat (by index) is that entry's size, which then says how many repetitions fill the container.
+        /// Returns null when every entry has a definite size, which the ordinary count handles.
+        /// </summary>
+        private async ValueTask<int?> IntrinsicRepeatCount(Canvas g, List<CssBox> items, GridTemplate? template, bool rowsAreLanes,
+            double axisSize, double gap, double contentWidth)
+        {
+            if (template is not { AutoRepeat: not GridAutoRepeatKind.None, AutoRepeatTracks: { Count: > 0 } repeated })
+                return null;
+            if (repeated.All(d => FloorSize(d) > 0))
+                return null;
+            if (axisSize <= 0)
+                return 1;
+
+            var entries = repeated.Count;
+            var before = template.AutoRepeatInsertIndex;
+            var empty = new Dictionary<string, List<int>>();
+            var laneItems = new List<LaneItem>();
+            var widest = 1;
+            foreach (var box in items)
+            {
+                var (_, span) = rowsAreLanes
+                    ? ResolveAxis(box.GridRowStart, box.GridRowEnd, 0, empty)
+                    : ResolveAxis(box.GridColumnStart, box.GridColumnEnd, 0, empty);
+                span = Math.Max(1, span);
+                widest = Math.Max(widest, span);
+                laneItems.Add(new LaneItem { Box = box, Start = -1, Span = span });
+            }
+
+            var copies = Math.Max(1, (int)Math.Floor(2 + (widest - 2.0) / entries));
+            var defs = new List<GridTrackSize>(template.Tracks.Take(before));
+            for (var c = 0; c < copies; c++) defs.AddRange(repeated);
+            defs.AddRange(template.Tracks.Skip(before));
+            var count = defs.Count;
+            foreach (var item in laneItems) item.Span = Math.Min(item.Span, count);
+
+            double[] min, max;
+            if (rowsAreLanes)
+            {
+                // A row's contribution is the height an item has at its own width, which fits its content up to the container's.
+                min = new double[count];
+                foreach (var item in laneItems)
+                {
+                    await PlaceItemInCell(g, item.Box, InlineOrigin, BlockOrigin, contentWidth, 0, Keywords.Start, Keywords.Start);
+                    var height = OuterBlockOf(item.Box);
+                    var share = item.Span > 1 ? Math.Max(0, height - gap * (item.Span - 1)) / item.Span : height;
+                    for (var r = 0; r < count; r++) min[r] = Math.Max(min[r], share);
+                }
+
+                max = min;
+            }
+            else
+            {
+                (min, max) = await MeasureLaneIntrinsics(g, laneItems, defs, count, contentWidth, gap, empty);
+            }
+
+            var sizes = SizeColumnTracks(defs, axisSize, gap, new bool[count], min, max, false);
+            double fixedTotal = 0;
+            for (var i = 0; i < before; i++) fixedTotal += sizes[i].Size;
+            for (var i = before + copies * entries; i < count; i++) fixedTotal += sizes[i].Size;
+
+            double repeatedTotal = 0;
+            for (var e = 0; e < entries; e++)
+            {
+                var entry = FloorSize(repeated[e]);
+                if (entry <= 0)
+                    for (var c = 0; c < copies; c++) entry = Math.Max(entry, sizes[before + c * entries + e].Size);
+                repeatedTotal += entry;
+            }
+
+            repeatedTotal += gap * (entries - 1);
+            if (repeatedTotal <= 0) return 1;
+            return Math.Max(1, (int)Math.Floor((axisSize - fixedTotal + gap) / (repeatedTotal + gap)));
         }
 
         /// <summary>Orders the items by <c>order</c> (stable) and resolves each one's start lane and span in the grid axis.</summary>
@@ -483,6 +572,24 @@ namespace PeachBrackets.Html.Dom
                 if (spare > 0) { spare--; continue; }
                 collapsed[t] = true;
             }
+        }
+
+        /// <summary>Collapses the lanes of an auto-fit repetition that no placed item covers; false when none were left to collapse.</summary>
+        private static bool CollapseUnused(bool[] collapsed, (int Start, int Length) range, List<LaneItem> laneItems)
+        {
+            var occupied = new bool[collapsed.Length];
+            foreach (var item in laneItems)
+                for (var t = Math.Max(0, item.Start); t < item.Start + item.Span && t < occupied.Length; t++) occupied[t] = true;
+
+            var changed = false;
+            for (var t = range.Start; t < range.Start + range.Length && t < collapsed.Length; t++)
+            {
+                if (occupied[t] || collapsed[t]) continue;
+                collapsed[t] = true;
+                changed = true;
+            }
+
+            return changed;
         }
 
         /// <summary>The free stretches of one lane that an earlier item's start left above the running position: <c>[Start, End)</c>.</summary>
@@ -659,6 +766,29 @@ namespace PeachBrackets.Html.Dom
                 }
 
                 var (mn, mx) = _vertical ? await MeasureInlineContributionVertical(g, item.Box) : await MeasureItemContribution(g, item.Box);
+                // An auto-placed item that spans lanes may start at any of them. At each start it asks the intrinsic lanes it covers for what the
+                // lanes with a fixed size do not already give it, so a lane next to a fixed one is asked for more than one between two intrinsic ones.
+                if (item.Start < 0 && span > 1)
+                {
+                    for (var s = 0; s + span <= colCount; s++)
+                    {
+                        var range = Enumerable.Range(s, span).ToList();
+                        var intrinsic = range.Where(i => IsIntrinsic(colDefs[i]) || colDefs[i].Kind == GridTrackKind.Flex).ToList();
+                        if (intrinsic.Count == 0) continue;
+
+                        var fixedSize = range.Except(intrinsic).Sum(i => ResolveFixedLength(colDefs[i], contentWidth));
+                        var roomMin = Math.Max(0, mn - gap * (span - 1) - fixedSize) / intrinsic.Count;
+                        var roomMax = Math.Max(0, mx - gap * (span - 1) - fixedSize) / intrinsic.Count;
+                        foreach (var lane in intrinsic)
+                        {
+                            min[lane] = Math.Max(min[lane], roomMin);
+                            max[lane] = Math.Max(max[lane], roomMax);
+                        }
+                    }
+
+                    continue;
+                }
+
                 var shareOf = span > 1 ? Math.Max(0, 1.0 / span) : 1.0;
                 foreach (var c in covered)
                 {
@@ -687,7 +817,7 @@ namespace PeachBrackets.Html.Dom
 
             (List<GridTrackSize> explicitColDefs, (int Start, int Length)? autoFitRange) = colSubgrid && subgrid?.ColumnSizes is { } adoptedColumnSizes
                 ? ([.. Enumerable.Repeat(GridTrackSize.Auto, adoptedColumnSizes.Count)], null)
-                : ResolveColumnTemplate(colTemplate, contentWidth, columnGap);
+                : ResolveColumnTemplate(colTemplate, contentWidth, columnGap, _laneRepeatCount);
             var autoColDefs = ExpandTrackSizes(_gridBox.GridAutoColumns);
             var fixedCount = Math.Max(1, explicitColDefs.Count);
 
@@ -710,29 +840,35 @@ namespace PeachBrackets.Html.Dom
             if (inlineIndefinite)
                 contentWidth = MaxContentInlineSize(colDefs, colMax, collapsed, columnGap);
 
-            Track[] columns;
-            if (colSubgrid && subgrid is { ColumnSizes: { } adoptedSizes, ColumnOffsets: { } adoptedOffsets })
-            {
-                columns = BuildAdoptedTracks(adoptedSizes, adoptedOffsets, InlineOrigin - _colStartInset, colCount);
-            }
-            else
-            {
-                columns = SizeColumnTracks(colDefs, contentWidth, columnGap, collapsed, colMin, colMax, stretchColumns);
-                PositionTracks(columns, InlineOrigin, contentWidth, columnGap, LogicalizePhysicalKeyword(_gridBox.JustifyContent.ToString()));
-            }
-
-            if (inlineIndefinite)
-            {
-                _gridBox.ActualBottom = _gridBox.ClientTop + columns.Sum(c => c.Size) + (colCount > 1 ? columnGap * (colCount - 1) : 0)
-                    + _gridBox.ActualPaddingBottom + _gridBox.ActualBorderBottomWidth;
-                _frame = WritingModeFrame.For(_gridBox);
-            }
-
-            // track-reverse runs the lanes from the end of the grid axis: the first lane is the last one on the page.
             var trackReverse = LanesTrackReverse;
-            if (trackReverse)
-                foreach (var column in columns)
-                    column.Position = 2 * InlineOrigin + contentWidth - column.Position - column.Size;
+            Track[] columns = [];
+
+            void BuildColumns()
+            {
+                if (colSubgrid && subgrid is { ColumnSizes: { } adoptedSizes, ColumnOffsets: { } adoptedOffsets })
+                {
+                    columns = BuildAdoptedTracks(adoptedSizes, adoptedOffsets, InlineOrigin - _colStartInset, colCount);
+                }
+                else
+                {
+                    columns = SizeColumnTracks(colDefs, contentWidth, columnGap, collapsed, colMin, colMax, stretchColumns);
+                    PositionTracks(columns, InlineOrigin, contentWidth, columnGap, LogicalizePhysicalKeyword(_gridBox.JustifyContent.ToString()));
+                }
+
+                if (inlineIndefinite)
+                {
+                    _gridBox.ActualBottom = _gridBox.ClientTop + columns.Sum(c => c.Size) + (colCount > 1 ? columnGap * (colCount - 1) : 0)
+                        + _gridBox.ActualPaddingBottom + _gridBox.ActualBorderBottomWidth;
+                    _frame = WritingModeFrame.For(_gridBox);
+                }
+
+                // track-reverse runs the lanes from the end of the grid axis: the first lane is the last one on the page.
+                if (trackReverse)
+                    foreach (var column in columns)
+                        column.Position = 2 * InlineOrigin + contentWidth - column.Position - column.Size;
+            }
+
+            BuildColumns();
 
             // justify-self: baseline puts an item at its start (or end) edge and lines the lane's group up afterwards (css-align-3 9.3).
             var inlineBaselines = new Dictionary<CssBox, (Placement Placement, bool Last)>();
@@ -772,7 +908,9 @@ namespace PeachBrackets.Html.Dom
             var tops = new Dictionary<CssBox, double>();
             var outers = new Dictionary<CssBox, double>();
 
-            await StackLanes(laneItems, colCount, tolerance, rowGap, LanesDense,
+            var requestedStarts = laneItems.Select(i => i.Start).ToList();
+
+            async ValueTask Stack() => await StackLanes(laneItems, colCount, tolerance, rowGap, LanesDense,
                 (start, span) => ColumnSpanWidth(columns, start, span, columnGap),
                 async (item, stackStart) =>
                 {
@@ -785,6 +923,19 @@ namespace PeachBrackets.Html.Dom
                     outers[item.Box] = outer;
                     return outer;
                 });
+
+            await Stack();
+
+            // An auto-fit lane that no item ended up in collapses (css-grid-2 7.2.3.2), which widens the lanes left: they are sized and stacked again.
+            if (!colSubgrid && autoFitRange is { } fit && CollapseUnused(collapsed, fit, laneItems))
+            {
+                for (var i = 0; i < laneItems.Count; i++) laneItems[i].Start = requestedStarts[i];
+                tops.Clear();
+                outers.Clear();
+                inlineBaselines.Clear();
+                BuildColumns();
+                await Stack();
+            }
 
             // An item dense packing moved up was first laid at its normal place, so the extent is read from where each one ended up.
             foreach (var item in laneItems)
@@ -877,11 +1028,14 @@ namespace PeachBrackets.Html.Dom
                 _rowEndInset = _gridBox.ActualMarginBottom + _gridBox.ActualBorderBottomWidth + _gridBox.ActualPaddingBottom;
             }
 
-            var explicitRowDefs = rowSubgrid && subgrid is not null
-                ? [.. Enumerable.Repeat(GridTrackSize.Auto, subgrid.RowCount)]
-                : rowTemplate is { AutoRepeat: not GridAutoRepeatKind.None }
-                    ? ResolveColumnTemplate(rowTemplate, hasDefiniteHeight ? BlockContentSize : 0, rowGap).Defs
-                    : ExpandTemplate(rowTemplate);
+            (int Start, int Length)? rowAutoFitRange = null;
+            List<GridTrackSize> explicitRowDefs;
+            if (rowSubgrid && subgrid is not null)
+                explicitRowDefs = [.. Enumerable.Repeat(GridTrackSize.Auto, subgrid.RowCount)];
+            else if (rowTemplate is { AutoRepeat: not GridAutoRepeatKind.None })
+                (explicitRowDefs, rowAutoFitRange) = ResolveColumnTemplate(rowTemplate, hasDefiniteHeight ? BlockContentSize : 0, rowGap, _laneRepeatCount);
+            else
+                explicitRowDefs = ExpandTemplate(rowTemplate);
             var autoRowDefs = ExpandTrackSizes(_gridBox.GridAutoRows);
             var fixedCount = Math.Max(1, explicitRowDefs.Count);
 
@@ -928,6 +1082,8 @@ namespace PeachBrackets.Html.Dom
                 }
             }
 
+            var requestedLanes = laneItems.ToDictionary(i => i.Box, i => i.Start);
+
             // Pass one: every item at its own width (its fit-content size), which fixes where it stacks and, with its height, how tall an
             // auto lane has to be. The lanes are not positioned yet, so the items are measured at the container's origin.
             await StackLanes(laneItems, rowCount, tolerance, columnGap, LanesDense,
@@ -965,6 +1121,19 @@ namespace PeachBrackets.Html.Dom
             foreach (var item in laneItems)
                 stackEnd = Math.Max(stackEnd, stacks[item.Box].Top + outerWidths[item.Box]);
 
+            // An auto-fit lane that no item ended up in collapses, and with it the gap beside it (css-grid-2 7.2.3.2).
+            if (!rowSubgrid && rowAutoFitRange is { } rowFit)
+            {
+                var collapsedRows = new bool[rowCount];
+                if (CollapseUnused(collapsedRows, rowFit, laneItems))
+                    for (var r = 0; r < rowCount; r++)
+                        if (collapsedRows[r])
+                        {
+                            rows[r].Collapsed = true;
+                            rows[r].Size = 0;
+                        }
+            }
+
             // With no definite inline size the container is as long as the stack, which the frame of pass two (where `rtl` starts from the bottom)
             // has to know.
             if (inlineIndefinite)
@@ -973,8 +1142,14 @@ namespace PeachBrackets.Html.Dom
                 _frame = WritingModeFrame.For(_gridBox);
             }
 
-            foreach (var item in laneItems.Where(i => i.Span == 1 && !IsFixed(rows[i.Start].Def) && !IsSubgridItem(i.Box)))
-                rows[item.Start].Size = Math.Max(rows[item.Start].Size, outerHeights[item.Box]);
+            // Every auto-placed item gives its height to every lane it might have been placed in, whether or not it ended up there (css-grid-3 3.4):
+            // lanes of an intrinsic size come out alike, and one that holds nothing is as tall as the others.
+            foreach (var item in laneItems.Where(i => i.Span == 1 && !IsSubgridItem(i.Box)))
+            {
+                var anywhere = requestedLanes[item.Box] < 0;
+                for (var r = anywhere ? 0 : item.Start; r < (anywhere ? rowCount : item.Start + 1); r++)
+                    if (!IsFixed(rows[r].Def) && !rows[r].Collapsed) rows[r].Size = Math.Max(rows[r].Size, outerHeights[item.Box]);
+            }
 
             // A subgrid item's own rows grow the lanes it spans, lane for lane.
             foreach (var item in laneItems.Where(i => reported.GetValueOrDefault(i.Box) is not null))
@@ -998,17 +1173,36 @@ namespace PeachBrackets.Html.Dom
                 if (!IsFixed(rows[lane].Def)) rows[lane].Size = Math.Max(rows[lane].Size, above + below);
 
             foreach (var item in laneItems.Where(i => i.Span > 1 && !IsSubgridItem(i.Box)))
-                GrowSpannedAutoRows(rows, new Placement { Box = item.Box, RowStart = item.Start, RowSpan = item.Span }, outerHeights[item.Box], rowGap);
+            {
+                if (requestedLanes[item.Box] >= 0)
+                {
+                    GrowSpannedAutoRows(rows, new Placement { Box = item.Box, RowStart = item.Start, RowSpan = item.Span }, outerHeights[item.Box], rowGap);
+                    continue;
+                }
+
+                // An auto-placed spanning item is assumed to start at every lane: at each it asks the intrinsic lanes it covers for what the
+                // fixed ones do not already give it.
+                for (var start = 0; start + item.Span <= rowCount; start++)
+                {
+                    var covered = Enumerable.Range(start, item.Span).ToList();
+                    var intrinsic = covered.Where(r => !IsFixed(rows[r].Def) && !rows[r].Collapsed).ToList();
+                    if (intrinsic.Count == 0) continue;
+
+                    var taken = covered.Except(intrinsic).Sum(r => rows[r].Size);
+                    var share = Math.Max(0, outerHeights[item.Box] - rowGap * (item.Span - 1) - taken) / intrinsic.Count;
+                    foreach (var r in intrinsic) rows[r].Size = Math.Max(rows[r].Size, share);
+                }
+            }
 
             if (hasDefiniteHeight && rows.Any(t => IsFlexTrack(t.Def)))
                 ExpandFlexibleRows(rows, BlockContentSize, rowGap);
 
             var sizingRowGap = rowGap;
             if (_lanesRowGapResolvesLate)
-                rowGap = ParseGap(_gridBox.FlexRowGap, rows.Sum(t => t.Size) + (rowCount > 1 ? sizingRowGap * (rowCount - 1) : 0));
+                rowGap = ParseGap(_gridBox.FlexRowGap, rows.Sum(t => t.Size) + Math.Max(0, rows.Count(t => !t.Collapsed) - 1) * sizingRowGap);
 
             var rowContainerSize = hasDefiniteHeight ? BlockContentSize
-                : rows.Sum(t => t.Size) + (rowCount > 1 ? sizingRowGap * (rowCount - 1) : 0);
+                : rows.Sum(t => t.Size) + Math.Max(0, rows.Count(t => !t.Collapsed) - 1) * sizingRowGap;
             if (hasDefiniteHeight && IsStretch(_gridBox.AlignContent.ToString()))
                 StretchAutoRows(rows, rowContainerSize, rowGap);
             PositionTracks(rows, BlockOrigin, rowContainerSize, rowGap, _gridBox.AlignContent.ToString());

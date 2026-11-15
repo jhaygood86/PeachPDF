@@ -3135,7 +3135,7 @@ namespace PeachBrackets.Html.Dom
         /// range of the repeated tracks so empty ones can be collapsed after placement.
         /// </summary>
         private (List<GridTrackSize> Defs, (int Start, int Length)? AutoFitRange) ResolveColumnTemplate(
-            GridTemplate? template, double contentWidth, double gap)
+            GridTemplate? template, double contentWidth, double gap, int? repeatCount = null)
         {
             if (template is null)
                 return ([], null);
@@ -3149,7 +3149,11 @@ namespace PeachBrackets.Html.Dom
 
             var repFloor = FloorSum(repeated) + (repeated.Count > 1 ? gap * (repeated.Count - 1) : 0);
             int count;
-            if (repFloor <= 0)
+            if (repeatCount is { } resolvedCount)
+            {
+                count = Math.Max(1, resolvedCount);
+            }
+            else if (repFloor <= 0)
             {
                 count = 1; // no definite repeated size → a single repetition (spec's fallback)
             }
