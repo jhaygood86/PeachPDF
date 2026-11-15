@@ -626,7 +626,7 @@ namespace PeachBrackets.Html.Dom
                 var outer = await placeItem(item, stackStart);
                 var occupied = Math.Max(0, outer) + stackingGap;
 
-                if (dense && !definite && TryBackfill(gaps, item, laneCount, stackStart, occupied, tolerance, spanSize, out var lane, out var top))
+                if (dense && TryBackfill(gaps, item, definite, laneCount, stackStart, occupied, tolerance, spanSize, out var lane, out var top))
                 {
                     item.Start = lane;
                     await placeItem(item, top);
@@ -647,7 +647,7 @@ namespace PeachBrackets.Html.Dom
         /// occupying <paramref name="occupied"/> (its outer size and the gap after it) and higher than <paramref name="stackStart"/>. Of the starts within
         /// <paramref name="tolerance"/> of the highest, the first wins. The gaps it uses are cut out of the lanes.
         /// </summary>
-        private static bool TryBackfill(List<LaneGap>[] gaps, LaneItem item, int laneCount, double stackStart, double occupied, double tolerance,
+        private static bool TryBackfill(List<LaneGap>[] gaps, LaneItem item, bool definite, int laneCount, double stackStart, double occupied, double tolerance,
             Func<int, int, double> spanSize, out int lane, out double top)
         {
             lane = item.Start;
@@ -657,6 +657,8 @@ namespace PeachBrackets.Html.Dom
             var candidates = new List<(int Lane, double Top)>();
             for (var start = 0; start + item.Span <= laneCount; start++)
             {
+                // An item with a definite start only moves up within its own lanes.
+                if (definite && start != item.Start) continue;
                 if (Math.Abs(spanSize(start, item.Span) - wanted) > 0.01) continue;
 
                 var common = gaps[start];
