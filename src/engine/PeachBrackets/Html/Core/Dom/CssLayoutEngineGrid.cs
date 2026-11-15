@@ -338,7 +338,8 @@ namespace PeachBrackets.Html.Dom
             // The fixed-axis (explicit) track count: columns for row flow, rows for column flow.
             var fixedCount = Math.Max(1, isColumnFlow ? explicitRowDefs.Count : explicitColDefs.Count);
 
-            var placements = PlaceItems(items, isColumnFlow, isDense, fixedCount, colLineNames, rowLineNames);
+            var placements = PlaceItems(items, isColumnFlow, isDense, fixedCount, colLineNames, rowLineNames,
+                isColumnFlow ? explicitColDefs.Count : explicitRowDefs.Count);
             var colCount = Math.Max(1, Math.Max(explicitColDefs.Count,
                 placements.Count == 0 ? 0 : placements.Max(p => p.ColStart + p.ColSpan)));
             var rowCount = Math.Max(1, Math.Max(explicitRowDefs.Count,
@@ -1089,7 +1090,7 @@ namespace PeachBrackets.Html.Dom
         /// sparse advances a forward cursor.
         /// </summary>
         private List<Placement> PlaceItems(List<CssBox> items, bool isColumnFlow, bool dense, int fixedCount,
-            IReadOnlyDictionary<string, List<int>> colLineNames, IReadOnlyDictionary<string, List<int>> rowLineNames)
+            IReadOnlyDictionary<string, List<int>> colLineNames, IReadOnlyDictionary<string, List<int>> rowLineNames, int majorExplicitCount = -1)
         {
             var placements = new List<Placement>(items.Count);
 
@@ -1100,8 +1101,9 @@ namespace PeachBrackets.Html.Dom
             // in the source but given `order: 2` is placed after the content that has `order: 1`. The result is put back in source order at the end.
             var resolved = items.OrderBy(box => int.TryParse(box.Order, out var order) ? order : 0).Select(box =>
             {
-                var (colStart, colSpan) = ResolveAxis(box.GridColumnStart, box.GridColumnEnd, fixedCount, colLineNames);
-                var (rowStart, rowSpan) = ResolveAxis(box.GridRowStart, box.GridRowEnd, fixedCount, rowLineNames);
+                // Negative lines count from the end of that axis's own explicit grid.
+                var (colStart, colSpan) = ResolveAxis(box.GridColumnStart, box.GridColumnEnd, isColumnFlow && majorExplicitCount >= 0 ? majorExplicitCount : fixedCount, colLineNames);
+                var (rowStart, rowSpan) = ResolveAxis(box.GridRowStart, box.GridRowEnd, !isColumnFlow && majorExplicitCount >= 0 ? majorExplicitCount : fixedCount, rowLineNames);
                 return isColumnFlow
                     ? new { box, MinorStart = rowStart, MinorSpan = Math.Max(1, rowSpan), MajorStart = colStart, MajorSpan = colSpan }
                     : new { box, MinorStart = colStart, MinorSpan = Math.Max(1, colSpan), MajorStart = rowStart, MajorSpan = rowSpan };
@@ -1145,6 +1147,20 @@ namespace PeachBrackets.Html.Dom
                 }
             }
 
+            void GrowMinor(int count)
+            {
+                minorCount = count;
+                for (var i = 0; i < occupancy.Count; i++)
+                {
+                    var row = occupancy[i];
+                    if (row.Length < count)
+                    {
+                        Array.Resize(ref row, count);
+                        occupancy[i] = row;
+                    }
+                }
+            }
+
             void Commit(CssBox box, int major, int minor, int majorSpan, int minorSpan)
             {
                 Mark(major, minor, majorSpan, minorSpan);
@@ -1159,6 +1175,7 @@ namespace PeachBrackets.Html.Dom
                 Commit(r.box, r.MajorStart, ClampMinor(r.MinorStart, r.MinorSpan, minorCount), r.MajorSpan, r.MinorSpan);
 
             // Pass 2: the rest, in DOM order.
+            var lockedEnd = new Dictionary<int, int>();
             var cursorMajor = 0;
             var cursorMinor = 0;
             foreach (var r in resolved.Where(x => x.MinorStart < 0 || x.MajorStart < 0))
@@ -1176,10 +1193,16 @@ namespace PeachBrackets.Html.Dom
                     // Definite major, auto minor: first free minor position on that major line. If the line
                     // is already full (no in-range position fits), place at the start (overflow) rather than
                     // looping forever — the minor axis cannot grow to hold an auto-placed item here.
-                    var minor = 0;
-                    while (minor + r.MinorSpan <= minorCount && !Fits(r.MajorStart, minor, r.MajorSpan, r.MinorSpan))
+                    // An item locked to a line takes the first position past the items already placed on that line by this step that does not overlap
+                    // (css-grid-1 8.5), growing the implicit grid when the explicit one has no room left.
+                    var minor = lockedEnd.GetValueOrDefault(r.MajorStart);
+                    while (true)
+                    {
+                        if (minor + r.MinorSpan > minorCount) { GrowMinor(minor + r.MinorSpan); continue; }
+                        if (Fits(r.MajorStart, minor, r.MajorSpan, r.MinorSpan)) break;
                         minor++;
-                    if (minor + r.MinorSpan > minorCount) minor = 0;
+                    }
+                    lockedEnd[r.MajorStart] = minor + r.MinorSpan;
                     Commit(r.box, r.MajorStart, minor, r.MajorSpan, r.MinorSpan);
                 }
                 else
@@ -1809,28 +1832,56 @@ namespace PeachBrackets.Html.Dom
             if (!CssValueParser.IsValidLength(box.Height) || !CssValueParser.DependsOnPercentage(box.Height)) return null;
 
             // The ratio is the declared one, or a replaced item's own.
-            double? ratio = null;
-            if (!string.IsNullOrEmpty(box.AspectRatio) && box.AspectRatio != Keywords.Auto)
+            var ratio = DeclaredRatioOf(box) ?? (await GetReplacedNaturalSizeAsync(g, box))?.Ratio;
+            return ratio is > 0 ? TransferThroughRatio(p, ratio.Value) : null;
+        }
+
+        /// <summary>The same as <see cref="TransferredFromFixedRows"/> for an item whose ratio is the declared <c>aspect-ratio</c>, which needs no canvas.</summary>
+        private double? TransferredFromFixedRowsSync(Placement p)
+        {
+            var box = p.Box;
+            if (!box.Width.Equals(Keywords.Auto, StringComparison.OrdinalIgnoreCase)) return null;
+            if (!CssValueParser.IsValidLength(box.Height) || !CssValueParser.DependsOnPercentage(box.Height)) return null;
+            return DeclaredRatioOf(box) is > 0 and var ratio ? TransferThroughRatio(p, ratio) : null;
+        }
+
+        private static double? DeclaredRatioOf(CssBox box)
+        {
+            if (string.IsNullOrEmpty(box.AspectRatio) || box.AspectRatio == Keywords.Auto) return null;
+
+            using var pooledTokens = CssValueParser.GetCssTokensPooled(box.AspectRatio);
+            List<Token> tokens = pooledTokens;
+            return AspectRatioGrammar.TryParse(tokens, out var declared) && declared is > 0 ? declared : null;
+        }
+
+        private double? TransferThroughRatio(Placement p, double ratioValue)
+        {
+            var box = p.Box;
+            double? ratio = ratioValue;
+            double area;
+            if (_gridBox.GridTemplateRows.Value?.IsSubgrid == true)
             {
-                using var pooledTokens = CssValueParser.GetCssTokensPooled(box.AspectRatio);
-                List<Token> tokens = pooledTokens;
-                if (AspectRatioGrammar.TryParse(tokens, out var declared) && declared is > 0) ratio = declared;
+                // A row subgrid's rows are its parent's, whose sizes it was told (only when they are fixed) and whose gap sits between them.
+                if (_gridBox.SubgridContext is not { RowSizes: { } sizes } context || p.RowStart + p.RowSpan > sizes.Count) return null;
+                area = 0;
+                for (var r = p.RowStart; r < p.RowStart + p.RowSpan; r++) area += sizes[r];
+                area += context.ParentRowGap * (p.RowSpan - 1);
+            }
+            else
+            {
+                var rows = ExpandTemplate(_gridBox.GridTemplateRows.Value);
+                if (p.RowStart + p.RowSpan > rows.Count) return null;
+
+                area = 0.0;
+                for (var r = p.RowStart; r < p.RowStart + p.RowSpan; r++)
+                {
+                    if (rows[r].Kind != GridTrackKind.Length) return null;
+                    area += ResolveFixedLength(rows[r], 0);
+                }
+
+                area += ParseGap(_gridBox.FlexRowGap, 0) * (p.RowSpan - 1);
             }
 
-            ratio ??= (await GetReplacedNaturalSizeAsync(g, box))?.Ratio;
-            if (ratio is not > 0) return null;
-
-            var rows = ExpandTemplate(_gridBox.GridTemplateRows.Value);
-            if (p.RowStart + p.RowSpan > rows.Count) return null;
-
-            var area = 0.0;
-            for (var r = p.RowStart; r < p.RowStart + p.RowSpan; r++)
-            {
-                if (rows[r].Kind != GridTrackKind.Length) return null;
-                area += ResolveFixedLength(rows[r], 0);
-            }
-
-            area += ParseGap(_gridBox.FlexRowGap, 0) * (p.RowSpan - 1);
             var height = CssValueParser.ParseLength(box.Height, area, box);
             return Math.Max(0, height - box.ActualBoxSizeIncludedHeight) * ratio.Value + box.ActualBoxSizeIncludedWidth
                 + box.ActualMarginLeft + box.ActualMarginRight;
@@ -2035,9 +2086,18 @@ namespace PeachBrackets.Html.Dom
 
             var min = new double[colCount];
             var max = new double[colCount];
+            // The items of a row subgrid sit in this grid's rows, so what a percentage height of theirs transfers through a ratio is a contribution too.
+            foreach (var p in placements.Where(p => p.ColSpan == 1 && !IsFixed(colDefs[p.ColStart]) && IsSubgridItem(p.Box) && ChildRowSubgrid(p.Box) && !ChildColSubgrid(p.Box)))
+            {
+                var via = TransferredThroughRowSubgridSync(p.Box, p.ColStart, p.RowStart);
+                min[p.ColStart] = Math.Max(min[p.ColStart], via);
+                max[p.ColStart] = Math.Max(max[p.ColStart], via);
+            }
+
             foreach (var p in placements.Where(p => p.ColSpan == 1 && !IsFixed(colDefs[p.ColStart]) && !IsSubgridItem(p.Box)))
             {
                 var (mn, mx) = MeasureItemContributionSync(g, p.Box);
+                if (TransferredFromFixedRowsSync(p) is { } transferred) (mn, mx) = (transferred, transferred);
                 if (HasAutoMinimum(colDefs[p.ColStart])) mn = AutoMinimumOf(p.Box, mn, 0);
                 min[p.ColStart] = Math.Max(min[p.ColStart], mn);
                 max[p.ColStart] = Math.Max(max[p.ColStart], mx);
@@ -2121,6 +2181,29 @@ namespace PeachBrackets.Html.Dom
             }
 
             return (minContent + outerExtra, maxContent + outerExtra);
+        }
+
+        /// <summary>The same as <see cref="TransferredThroughRowSubgrid"/> without a canvas (declared aspect ratios only), counting the margin, border and
+        /// padding of each subgrid on the way to the item.</summary>
+        private double TransferredThroughRowSubgridSync(CssBox subgrid, int column, int rowOffset)
+        {
+            var inner = new CssLayoutEngineGrid(subgrid);
+            var innerItems = subgrid.Boxes.Where(DomUtils.GeneratesFlexOrGridItem).ToList();
+            var innerColumns = Math.Max(1, subgrid.GridTemplateColumns.Value?.Tracks.Count ?? 1);
+            var widest = 0.0;
+            foreach (var q in inner.PlaceItems(innerItems, false, false, innerColumns, new Dictionary<string, List<int>>(), new Dictionary<string, List<int>>()))
+            {
+                if (IsSubgridItem(q.Box) && ChildRowSubgrid(q.Box) && !ChildColSubgrid(q.Box))
+                {
+                    widest = Math.Max(widest, TransferredThroughRowSubgridSync(q.Box, column, rowOffset + q.RowStart));
+                    continue;
+                }
+
+                var lifted = new Placement { Box = q.Box, ColStart = column, ColSpan = 1, RowStart = rowOffset + q.RowStart, RowSpan = q.RowSpan };
+                if (TransferredFromFixedRowsSync(lifted) is { } transferred) widest = Math.Max(widest, transferred);
+            }
+
+            return widest > 0 ? widest + HorizontalMarginBorderPadding(subgrid) : 0;
         }
 
         /// <summary>The largest width a percentage height transfers (through an aspect ratio) for the items of a row subgrid and of the row subgrids nested
@@ -2849,13 +2932,15 @@ namespace PeachBrackets.Html.Dom
         private static Track[] BuildAdoptedTracks(IReadOnlyList<double> sizes, IReadOnlyList<double> offsets, double start, int totalCount)
         {
             var tracks = new Track[totalCount];
-            var overflowPos = start + (sizes.Count > 0 ? offsets[^1] + sizes[^1] : 0);
+            // A track past the adopted ones shares the last one's place and size: an item in it sits where the last track's items do.
+            var overflowPos = start + (sizes.Count > 0 ? offsets[^1] : 0);
+            var overflowSize = sizes.Count > 0 ? sizes[^1] : 0;
             for (var i = 0; i < totalCount; i++)
             {
                 if (i < sizes.Count)
                     tracks[i] = new Track { Def = GridTrackSize.Auto, Size = sizes[i], Position = start + offsets[i] };
                 else
-                    tracks[i] = new Track { Def = GridTrackSize.Auto, Size = 0, Position = overflowPos };
+                    tracks[i] = new Track { Def = GridTrackSize.Auto, Size = overflowSize, Position = overflowPos };
             }
             return tracks;
         }

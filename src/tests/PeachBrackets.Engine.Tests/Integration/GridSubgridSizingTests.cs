@@ -85,6 +85,34 @@ namespace PeachBrackets.Engine.Tests.Integration
         }
 
         [Fact]
+        public async Task ItemsLockedToARow_PlacePastTheOnesAlreadyThereAndGrowTheImplicitGrid()
+        {
+            var b = await LayOut("<div style='display:grid;width:300pt;grid-template-rows:repeat(3,20pt)'>" +
+                                 "<div style='grid-row:2;width:50pt'></div><div id='i' style='grid-row:2/4;width:50pt'></div></div>", "i");
+
+            Assert.True(b.Location.X >= 50, $"x={b.Location.X}");
+        }
+
+        [Fact]
+        public async Task ALastLineLockedItem_SharesTheOnlyColumn()
+        {
+            var b = await LayOut("<div style='display:grid;width:200pt;grid-template-rows:repeat(8,50pt)'>" +
+                                 "<div style='grid-row:1/span 3;width:100pt'></div><div id='i' style='grid-row:-1;width:100pt'></div></div>", "i");
+
+            Assert.True(b.Location.X < 50, $"x={b.Location.X}");
+        }
+
+        [Fact]
+        public async Task ARowSubgridInARowLane_IsAsWideAsItsRatioChildNeedsInTheFixedLane()
+        {
+            var item = await LayOut("<div style='display:grid-lanes;grid-template-rows:50pt 100pt;fit-tolerance:0'>" +
+                                    "<div style='grid-row:1;width:100pt;height:50pt'></div>" +
+                                    "<div id='i' style='display:grid;grid:subgrid/auto;grid-row:auto/span 1'><div style='aspect-ratio:1;height:100%'></div></div></div>", "i");
+
+            Assert.Equal(100, item.ActualRight - item.Location.X, 0.5);
+        }
+
+        [Fact]
         public async Task APercentageHeight_ResolvesAgainstTheGridArea()
         {
             var item = await LayOut("<div style='display:grid;grid-template-rows:80pt;grid-template-columns:100pt'><div id='i' style='height:50%'></div></div>", "i");

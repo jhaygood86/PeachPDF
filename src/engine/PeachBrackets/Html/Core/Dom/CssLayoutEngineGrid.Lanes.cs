@@ -911,6 +911,23 @@ namespace PeachBrackets.Html.Dom
             var reported = new Dictionary<CssBox, double[]?>();
             var stackEnd = 0.0;
 
+            // What each lane will measure when it is known before the items are: its fixed size, or, in a container of definite height whose
+            // other lanes are all fixed, what they leave (which an auto lane stretches to at least).
+            var knownLane = new double?[rowCount];
+            var provisionalRows = new Track[rowCount];
+            {
+                var autoLanes = Enumerable.Range(0, rowCount).Where(r => !IsFixed(rows[r].Def)).ToList();
+                var fixedTotal = rows.Where(t => IsFixed(t.Def)).Sum(t => t.Size) + rowGap * (rowCount - 1);
+                var share = hasDefiniteHeight && autoLanes.Count > 0 && IsStretch(_gridBox.AlignContent.ToString()) && autoLanes.All(r => rows[r].Def.Kind == GridTrackKind.Auto)
+                    ? Math.Max(0, BlockContentSize - fixedTotal) / autoLanes.Count
+                    : (double?)null;
+                for (var r = 0; r < rowCount; r++)
+                {
+                    knownLane[r] = IsFixed(rows[r].Def) ? rows[r].Size : share;
+                    provisionalRows[r] = new Track { Def = rows[r].Def, Size = knownLane[r] ?? 0, Position = r == 0 ? 0 : provisionalRows[r - 1].Position + provisionalRows[r - 1].Size + rowGap };
+                }
+            }
+
             // Pass one: every item at its own width (its fit-content size), which fixes where it stacks and, with its height, how tall an
             // auto lane has to be. The lanes are not positioned yet, so the items are measured at the container's origin.
             await StackLanes(laneItems, rowCount, tolerance, columnGap, LanesDense,
@@ -918,10 +935,19 @@ namespace PeachBrackets.Html.Dom
                 async (item, stackStart) =>
                 {
                     // A subgrid item reports the sizes of its own rows (report mode) for the lanes to grow to; its stacking axis is its own.
+                    // Lanes whose size is known are the item's area height already, which a percentage height or an aspect ratio in it needs.
+                    var laneEnd = Math.Min(item.Start + item.Span, rows.Length);
+                    var fixedLanes = Enumerable.Range(item.Start, Math.Max(0, laneEnd - item.Start)).All(r => knownLane[r] is not null);
+                    var areaHeight = fixedLanes ? provisionalRows.Skip(item.Start).Take(item.Span).Sum(t => t.Size) + rowGap * (item.Span - 1) : 0;
                     item.Box.SubgridContext = LaneSubgridContext(item, null, rows, false, colLineNames, rowLineNames, columnGap, rowGap);
+                    if (fixedLanes && item.Box.SubgridContext is { RowCount: > 0 } measuring)
+                    {
+                        measuring.RowSizes = SpannedSizes(provisionalRows, item.Start, item.Span);
+                        measuring.RowOffsets = SpannedOffsets(provisionalRows, item.Start, item.Span);
+                    }
                     try
                     {
-                        await PlaceItemInCell(g, item.Box, InlineOrigin + stackStart, BlockOrigin, contentWidth, 0, Keywords.Start, Keywords.Start);
+                        await PlaceItemInCell(g, item.Box, InlineOrigin + stackStart, BlockOrigin, contentWidth, areaHeight, Keywords.Start, Keywords.Start);
                     }
                     finally
                     {
@@ -1040,10 +1066,12 @@ namespace PeachBrackets.Html.Dom
                         end = Math.Min(end, otherTop - columnGap);
                     }
 
-                    if (end - top > outerWidth + 0.01)
+                    // As in a column lane's height, `normal` is `start` in the stacking axis: only an explicit alignment uses the room.
+                    var itemJustify = LogicalizePhysicalKeyword(ResolveSelfAlignment(item.Box.JustifySelf.ToString(), _gridBox.JustifyItems.ToString()));
+                    if (end - top > outerWidth + 0.01 && !itemJustify.Isi(Keywords.Normal))
                     {
                         room = end - top;
-                        justify = LogicalizePhysicalKeyword(ResolveSelfAlignment(item.Box.JustifySelf.ToString(), _gridBox.JustifyItems.ToString()));
+                        justify = itemJustify;
                     }
                 }
 

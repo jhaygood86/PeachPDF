@@ -124,3 +124,18 @@ gutters in subgrids).
   failures are font metrics (`monospace`) rather than layout: grid-gap-001 is one.
 - Still open: row-axis lanes subgrids, named-line `span <name>`/`a N` beyond the explicit grid in a subgrid (Chrome clamps), orthogonal
   writing modes, repeat(auto-fill) in subgrids, subgrid baselines.
+
+## Row-axis lanes subgrids and auto-placement fixes
+
+- `BuildAdoptedTracks`: a track past the adopted ones shares the last adopted track's position and size (Chrome puts items beyond a subgrid's
+  explicit rows where the last row's items are), instead of a zero-size track at its end.
+- Items locked to a row (`grid-row: 2`, auto column) take the first position past those already placed on that row by that step and grow the
+  implicit grid when the explicit columns have no room, instead of overlapping at column 1. Negative lines on the major axis (`grid-row: -1`)
+  resolve against that axis's own explicit track count; they used the column count.
+- In row lanes `justify-self: normal` is `start` in the stacking (inline) axis, as `align-self: normal` now is in column lanes; only an explicit
+  alignment uses the room before the next item.
+- A row subgrid's width needs its area height for a percentage height through an aspect ratio. Row lanes pass lane sizes to the measuring
+  context when they are known (fixed, or the share of a definite-height container's stretch); `TransferredFromFixedRows` reads a row subgrid's
+  adopted `RowSizes`, and the synchronous intrinsic width path has the same transfer (declared ratios only) including through nested row subgrids.
+- css-grid WPT locally 801 -> 819. The grid-lanes subgrid tests that still fail in the row axis are mostly named-line and extra-margin cases;
+  row-line-names-006/007 and a few row-auto-placed-subgrid-* cases that passed by coincidence (both sides stretched) now differ by a few pixels.
