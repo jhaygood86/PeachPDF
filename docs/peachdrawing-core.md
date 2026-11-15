@@ -456,8 +456,34 @@ shaped, so an implementation gets it by implementing `DrawGlyphs` and the path/c
   `CanvasColorGlyphTarget` maps that onto any `Canvas`'s own paths, clips, brushes and blend modes; a backend
   with a different way of drawing implements `IColorGlyphTarget` itself.
 
+## Barcodes on any `Canvas`
+
+`PeachDrawing.Core.Barcodes` encodes and draws six symbologies - QR code, Data Matrix (ECC 200), Code 128 (including GS1-128), EAN-13, EAN-8 and UPC-A - as **vector shapes**: the dark modules become rectangles of one path with the nonzero fill rule, so every `Canvas` (PDF, SVG, Win2D, Skia, CoreGraphics, raster) writes them as vector content and no seams show between neighboring bars. No new abstract `Canvas` member is involved; the drawing is an extension method.
+
+```csharp
+using PeachDrawing.Core.Barcodes;
+
+var qr = Barcode.CreateQrCode("https://peachpdf.net/", new BarcodeOptions { ErrorCorrection = QrErrorCorrectionLevel.Q });
+var ean = Barcode.CreateEan13("590123412345");          // 12 digits, or 13 with the check digit
+var gs1 = Barcode.CreateGs1128("(01)09501101530003(10)AB-123");
+
+// One module = 2 canvas units. Pass a background to paint the light margin, a font factory to print the digits.
+canvas.DrawBarcode(qr, new PaintPoint(10, 10), 2, PaintColor.Black, PaintColor.White);
+canvas.DrawBarcode(ean, new PaintPoint(10, 120), 1.5, PaintColor.Black, PaintColor.White,
+    size => context.GetFont("Courier New", size, PaintFontStyle.Regular)!);
+```
+
+- `Barcode.Create…` validates and encodes: a wrong EAN/UPC check digit, non-ASCII Code 128 text, an empty QR code or text that does not fit throws `ArgumentException`. `IsDark(row, column)` reads the module grid (a linear code has one row).
+- `BarcodeOptions` carries the symbology's choices - QR error correction (`L`/`M`/`Q`/`H`) and version, UTF-8 ECI, Data Matrix size and encodation (`Ascii` or `Base256`), the light margin in modules (`QuietZone`, defaulting to the standard's own), the bar height of a linear code and whether it prints its text (`ShowText`).
+- `Barcode.CreateLayout()` measures the barcode in modules (`BarcodeLayout`: the merged `Bars`, the `Texts` with their font size and box, the total size) for a caller that draws it itself. `GraphicsPath.AddBarcode(barcode, origin, moduleSize)` adds just the bars to a path.
+- `BarcodeSvg.ToSvg(barcode, moduleSize, color, background)` writes a standalone SVG: one `<path>` of rectangles plus `<text>` for the digits.
+- `canvas.DrawBarcode` also records an `img` semantic region named after the barcode's text (`AddSemanticRegion`).
+- GS1-128: `Gs1Elements.ToCode128Text` turns parenthesized element strings into the FNC1-separated text Code 128 carries; a Code 128 or Data Matrix text can also use `Code128.Fnc1` directly.
+
+QR codes are single-mode (numeric, alphanumeric or byte, UTF-8 for other text); Data Matrix encodes ASCII and Base 256 only, so text that C40, Text, X12 or EDIFACT would pack tighter gives a larger symbol. Leave the light margin light: a barcode on a dark or busy background needs the `background` color.
+
 ## Licenses
 
-`PeachDrawing.Core` is BSD 3-Clause. It carries no third-party code of its own; its one dependency,
+`PeachDrawing.Core` is BSD 3-Clause. Its barcode encoders are ported from the MIT-licensed [FreePDF](https://github.com/io7/FreePDF) (Copyright (c) 2001-2026 empira Software GmbH); the notice is in the package's `THIRD-PARTY-LICENSES.md`. Its one dependency,
 `PeachDrawing.Text`, carries its own notices in its `THIRD-PARTY-LICENSES.md`. See [License](license.md)
 for the whole list.

@@ -451,6 +451,59 @@ namespace PeachPDF.Layout
             imageBox.SetSvgContent(size => generator(new PdfSize(size.Width, size.Height)));
         }
 
+        public void Barcode(PeachDrawing.Core.Barcodes.Barcode barcode, Action<BarcodeStyle>? configure = null)
+        {
+            ArgumentNullException.ThrowIfNull(barcode);
+            PlaceBarcode(barcode, NewStyle(configure));
+        }
+
+        public void QrCode(string text, Action<BarcodeStyle>? configure = null) =>
+            PlaceBarcode(style => PeachDrawing.Core.Barcodes.Barcode.CreateQrCode(text, style.Options), configure);
+
+        public void DataMatrix(string text, Action<BarcodeStyle>? configure = null) =>
+            PlaceBarcode(style => PeachDrawing.Core.Barcodes.Barcode.CreateDataMatrix(text, style.Options), configure);
+
+        public void Code128(string text, Action<BarcodeStyle>? configure = null) =>
+            PlaceBarcode(style => PeachDrawing.Core.Barcodes.Barcode.CreateCode128(text, style.Options), configure);
+
+        public void Gs1128(string elements, Action<BarcodeStyle>? configure = null) =>
+            PlaceBarcode(style => PeachDrawing.Core.Barcodes.Barcode.CreateGs1128(elements, style.Options), configure);
+
+        public void Ean13(string digits, Action<BarcodeStyle>? configure = null) =>
+            PlaceBarcode(style => PeachDrawing.Core.Barcodes.Barcode.CreateEan13(digits, style.Options), configure);
+
+        public void Ean8(string digits, Action<BarcodeStyle>? configure = null) =>
+            PlaceBarcode(style => PeachDrawing.Core.Barcodes.Barcode.CreateEan8(digits, style.Options), configure);
+
+        public void UpcA(string digits, Action<BarcodeStyle>? configure = null) =>
+            PlaceBarcode(style => PeachDrawing.Core.Barcodes.Barcode.CreateUpcA(digits, style.Options), configure);
+
+        private static BarcodeStyle NewStyle(Action<BarcodeStyle>? configure)
+        {
+            var style = new BarcodeStyle();
+            configure?.Invoke(style);
+            return style;
+        }
+
+        private void PlaceBarcode(Func<BarcodeStyle, PeachDrawing.Core.Barcodes.Barcode> create, Action<BarcodeStyle>? configure)
+        {
+            var style = NewStyle(configure);
+            PlaceBarcode(create(style), style);
+        }
+
+        /// <summary>
+        /// A barcode is placed as the SVG <c>BarcodeSvg</c> writes - one path of rectangles - so it reaches the PDF as
+        /// vector content through the same image box and painter as any other SVG.
+        /// </summary>
+        private void PlaceBarcode(PeachDrawing.Core.Barcodes.Barcode barcode, BarcodeStyle style)
+        {
+            var svg = DecodeSvgMarkup(style.ToSvg(barcode));
+            MarkTerminal();
+            var imageBox = CreateImageBox();
+            imageBox.SetAttribute("alt", style.AltText ?? barcode.DisplayText);
+            imageBox.SetImageContent(svg);
+        }
+
         /// <summary>
         /// Places a lazily-loaded <c>&lt;img src="..."&gt;</c> - the network/file/data-URI path
         /// <see cref="Image(Uri)"/>/<see cref="Image(string)"/> still use (an eager in-memory decode,

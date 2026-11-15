@@ -83,3 +83,7 @@ The font and text engine lives in its own package, [`PeachDrawing.Text`](src/dra
 ## PeachDrawing
 
 The software rasterizer lives in its own package, [`PeachDrawing`](src/drawing/PeachDrawing/). Its `feTurbulence` noise generator ([`Filters/Turbulence.cs`](src/drawing/PeachDrawing/Filters/Turbulence.cs)) is a C# transliteration of the reference implementation in the W3C Filter Effects Module Level 1, copyright © 2018 W3C® (MIT, ERCIM, Keio, Beihang), used under the W3C permissive document license; the notice is in [`src/drawing/PeachDrawing/THIRD-PARTY-LICENSES.md`](src/drawing/PeachDrawing/THIRD-PARTY-LICENSES.md).
+
+## PeachDrawing.Core
+
+The barcode encoders (QR code, Data Matrix, Code 128 and GS1-128, EAN-13, EAN-8, UPC-A) in [`PeachDrawing.Core`](src/drawing/PeachDrawing.Core/Barcodes/) are ported from [FreePDF](https://github.com/io7/FreePDF), MIT licensed, Copyright (c) 2001-2026 empira Software GmbH. The full notice is in [`src/drawing/PeachDrawing.Core/THIRD-PARTY-LICENSES.md`](src/drawing/PeachDrawing.Core/THIRD-PARTY-LICENSES.md).

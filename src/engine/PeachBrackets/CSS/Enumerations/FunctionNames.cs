@@ -99,6 +99,7 @@ namespace PeachBrackets.Css
         public const string Var = "var";
         public const string ImageSet = "image-set";
         public const string CrossFade = "cross-fade";
+        public const string PeachBarcode = "-peachpdf-barcode";
         public const string Element = "element";
         public const string Style = "style";
         public const string Running = "running";
