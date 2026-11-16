@@ -366,6 +366,16 @@ namespace PeachBrackets.Engine.Tests.Integration
         }
 
         [Fact]
+        public async Task APercentageHeightInsideATableCellIsNotGivenTheQuirk()
+        {
+            // css-tables: what is inside a cell does not get the percentage height quirk, so the 100% below is auto and the cell stays green.
+            var html = "<html><body style='margin:0'><div id='cell' style='display:table-cell;height:100px;background:green'><div style='width:100px'><div id='d' style='height:100%;background:red'></div></div></div></body></html>";
+            var (root, _) = await LayoutAsync(html, margin: 0);
+
+            Assert.Equal(0.0, FindById(root, "d")!.ActualBoxSizingHeight, 0.01);
+        }
+
+        [Fact]
         public async Task ANowrapCellWithAWidthAttributeWrapsAsUsualInQuirksMode()
         {
             var cell = "<table><tr><td id='c' nowrap width='40'>aaa bbb ccc ddd eee</td></tr></table>";

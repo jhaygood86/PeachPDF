@@ -3578,11 +3578,17 @@ namespace PeachBrackets.Html.Dom
                     or Keywords.TableFooterGroup or Keywords.TableCell or Keywords.TableCaption)
                 return containingBlock;
 
+            var start = containingBlock;
+
             while (true)
             {
-                // The initial containing block, a table cell (whose percentage heights the standard leaves to the UA), or a box with a height.
-                if (ReferenceEquals(containingBlock, containingBlock.ContainingBlock) || containingBlock.IsTableCell
-                    || CssValueParser.IsValidLength(containingBlock.Height))
+                // A table cell's percentage heights are the UA's (the standard leaves them undefined): a browser does not apply the quirk to what is
+                // inside a cell, so the walk that reaches one from further down stops where the standard does and the percentage is the ordinary one.
+                if (containingBlock.IsTableCell)
+                    return ReferenceEquals(containingBlock, start) ? containingBlock : start;
+
+                // The initial containing block, or a box with a height of its own.
+                if (ReferenceEquals(containingBlock, containingBlock.ContainingBlock) || CssValueParser.IsValidLength(containingBlock.Height))
                     return containingBlock;
 
                 if (containingBlock.Position.Value is PositionMode.Absolute
@@ -6634,9 +6640,10 @@ namespace PeachBrackets.Html.Dom
             // CorrectReplacedElementBoxes leaves it unwrapped), so it holds only its own atomic word and
             // no text a strut could serve: the same bookkeeping-only line as the wrapper's.
             //
-            // In quirks and limited-quirks mode there is no strut at all (Quirks Mode Standard 3.4): a line is as tall as what is on it, so a line holding
-            // only an image is the image's height, with no descent hanging below it.
-            var extent = blockBox.IsReplacedBlockWrapper || blockBox is CssBoxImage or CssBoxSvg or CssBoxFrame || SizesLinesTheQuirkyWay(blockBox)
+            // In quirks and limited-quirks mode a line with no text has no strut (Quirks Mode Standard 3.4): a line holding only an image is the image's
+            // height, with no descent hanging below it. A line with text keeps the block's own strut, as in a browser; the standard's "ignored" is for
+            // the minimum height a line of nothing but replaced content would get.
+            var extent = blockBox.IsReplacedBlockWrapper || blockBox is CssBoxImage or CssBoxSvg or CssBoxFrame || (word.IsImage && SizesLinesTheQuirkyWay(blockBox))
                 ? default
                 : ExtentOf(strutStyle, text: false);
 

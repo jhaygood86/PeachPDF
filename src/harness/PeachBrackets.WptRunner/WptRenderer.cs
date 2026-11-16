@@ -22,6 +22,9 @@ internal sealed partial class WptRenderer(string wptRoot) : IReftestRenderer
     [GeneratedRegex(@"<html\b[^>]*>", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex HtmlTag();
 
+    [GeneratedRegex(@"^\s*(<!--.*?-->\s*)*<!DOCTYPE[^>]*>", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Singleline)]
+    private static partial Regex Doctype();
+
     [GeneratedRegex(@"<\?xml[^>]*\?>", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex XmlDeclaration();
 
@@ -48,6 +51,9 @@ internal sealed partial class WptRenderer(string wptRoot) : IReftestRenderer
             // Browsers snap boxes and borders to whole CSS pixels, and the reference pages are written against that.
             SnapBoxDecorationsToCssPixels = true,
             SnapBorderWidthsToCssPixels = true,
+
+            // An XML document (.xht) is never in quirks mode; the HTML parser would otherwise put one with no DOCTYPE there.
+            DocumentMode = IsXmlDocument(wptPath) ? DocumentMode.NoQuirks : null,
         };
         options.SetMargins(0);
 
@@ -88,8 +94,19 @@ internal sealed partial class WptRenderer(string wptRoot) : IReftestRenderer
             return source.Insert(head.Index + head.Length, baseTag);
         if (HtmlTag().Match(source) is { Success: true } html)
             return source.Insert(html.Index + html.Length, "<head>" + baseTag + "</head>");
-        return "<head>" + baseTag + "</head>" + source;
+
+        // A document with neither tag gets its head in front, but after the DOCTYPE: a document is in quirks mode unless its first token is
+        // one, and a tag in front of it would put every such test in the wrong mode.
+        var doctype = Doctype().Match(source);
+        var at = doctype.Success ? doctype.Index + doctype.Length : 0;
+        return source.Insert(at, "<head>" + baseTag + "</head>");
     }
+
+    /// <summary>
+    /// Whether the test is an XML document (<c>.xht</c>, <c>.xhtml</c>), which a browser never puts in quirks mode, whatever it says about a DOCTYPE.
+    /// </summary>
+    internal static bool IsXmlDocument(string wptPath) =>
+        wptPath.EndsWith(".xht", StringComparison.OrdinalIgnoreCase) || wptPath.EndsWith(".xhtml", StringComparison.OrdinalIgnoreCase);
 
     private async ValueTask<RNetworkResponse?> LoadAsync(Uri uri)
     {
