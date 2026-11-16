@@ -62,7 +62,7 @@ have its own size when `@page` rules say so.
 
 **Options.** `HtmlDocumentOptions` is read at load time: the sheet (`PageWidthPoints`, `PageHeightPoints`, margins; an `@page` rule
 overrides them), `MediaType` (`Print` paginates; `Screen` lays out one continuous surface), `ColorScheme`, `DevicePixelRatio`,
-`UserStyleSheet`, `DefaultLanguage`, `DocumentMode` (a document with no DOCTYPE is laid out in quirks mode, as in a browser; `HtmlDocument.DocumentMode` reports it), `Preferences` (reduced motion, contrast, forced colors), `FontScale` and `TextSpacing`.
+`UserStyleSheet`, `DefaultLanguage`, `Syntax` (`DocumentSyntax.Xml` parses the source as XHTML with an XML parser), `DocumentMode` (a document with no DOCTYPE is laid out in quirks mode, as in a browser; `HtmlDocument.DocumentMode` reports it), `Preferences` (reduced motion, contrast, forced colors), `FontScale` and `TextSpacing`.
 
 ```csharp
 var options = new HtmlDocumentOptions

@@ -42,3 +42,7 @@ SOFTWARE.
 
 The font and text engine this package depends on ports parts of FreeType; its notices, including the FreeType Project License, are in
 the `PeachDrawing.Text` package and in `FTL.TXT` here.
+
+## XHTML character entity names
+
+`Html/Core/Parse/Xhtml/xhtml-entities.dtd` lists the named character entities of XHTML 1.0 (the HTML 4 set that the W3C's `xhtml-lat1.ent`, `xhtml-symbol.ent` and `xhtml-special.ent` declare) as `<!ENTITY>` declarations with numeric references. The names and code points are the W3C's, published under the [W3C Software and Document License](https://www.w3.org/copyright/software-license/); the declarations are generated, not copied.

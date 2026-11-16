@@ -270,9 +270,13 @@ namespace PeachPDF
             _renderContext.PixelsPerPoint = config.PixelsPerInch / 72d;
             ApplyRasterizationSettings(config);
 
+            // A document the loader supplies says what it is; a string the caller hands over has no type, so it is HTML unless the config says so.
+            var fromLoader = html is null;
             html ??= await _renderContext.NetworkLoader.GetPrimaryContents();
 
             var options = ToDocumentOptions(config, orgPageSize);
+            if (config.DocumentSyntax == PdfDocumentSyntax.Auto && fromLoader && IsXhtmlContentType(_renderContext.NetworkLoader.PrimaryContentType))
+                options.Syntax = DocumentSyntax.Xml;
             options.StyleSheet = cssData?.StyleSheet;
 
             var htmlDocument = await HtmlDocument.LoadAsync(html, _renderContext, options);
@@ -654,6 +658,16 @@ namespace PeachPDF
             }
         }
 
+        /// <summary>Whether a <c>Content-Type</c> names XHTML: <c>application/xhtml+xml</c>, ignoring case and any parameters.</summary>
+        internal static bool IsXhtmlContentType(string? contentType)
+        {
+            if (string.IsNullOrWhiteSpace(contentType)) return false;
+
+            var end = contentType.IndexOf(';');
+            var mediaType = (end < 0 ? contentType : contentType[..end]).Trim();
+            return string.Equals(mediaType, "application/xhtml+xml", StringComparison.OrdinalIgnoreCase);
+        }
+
         internal static HtmlDocumentOptions ToDocumentOptions(PdfGenerateConfig config, Size sheet)
         {
             ValidateAnimationProgress(config);
@@ -675,6 +689,7 @@ namespace PeachPDF
                     PdfDocumentMode.Quirks => DocumentMode.Quirks,
                     _ => null
                 },
+                Syntax = config.DocumentSyntax == PdfDocumentSyntax.Xml ? DocumentSyntax.Xml : DocumentSyntax.Html,
                 SnapBoxDecorationsToCssPixels = config.SnapBoxDecorationsToCssPixels,
                 SnapBorderWidthsToCssPixels = config.SnapBorderWidthsToCssPixels,
                 AnimationProgress = config.AnimationProgress,

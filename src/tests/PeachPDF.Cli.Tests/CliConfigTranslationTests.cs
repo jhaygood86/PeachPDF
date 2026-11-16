@@ -1,3 +1,4 @@
+using System;
 using PeachPDF;
 using PeachPDF.Cli;
 
@@ -47,6 +48,40 @@ public class CliConfigTranslationTests
         var missing = ArgumentParser.Parse(["doc.html", "--document-mode"]);
         Assert.NotEmpty(missing.Errors);
         Assert.Equal(PdfDocumentMode.Auto, missing.DocumentMode);
+    }
+
+    [Theory]
+    [InlineData("auto", PdfDocumentSyntax.Auto)]
+    [InlineData("html", PdfDocumentSyntax.Html)]
+    [InlineData("XML", PdfDocumentSyntax.Xml)]
+    public void DocumentSyntax_IsParsed(string value, PdfDocumentSyntax expected)
+    {
+        Assert.Equal(expected, ArgumentParser.Parse([$"--document-syntax={value}", "doc.html"]).DocumentSyntax);
+    }
+
+    [Fact]
+    public void DocumentSyntax_DefaultsToAuto_AndRejectsAnUnknownValue()
+    {
+        Assert.Equal(PdfDocumentSyntax.Auto, ArgumentParser.Parse(["doc.html"]).DocumentSyntax);
+        Assert.Contains(ArgumentParser.Parse(["--document-syntax", "sgml", "doc.html"]).Errors, e => e.Contains("--document-syntax"));
+        Assert.NotEmpty(ArgumentParser.Parse(["doc.html", "--document-syntax"]).Errors);
+    }
+
+    [Theory]
+    [InlineData("a.xhtml", "File", PdfDocumentSyntax.Auto, null, PdfDocumentSyntax.Xml)]
+    [InlineData("A.XHT", "File", PdfDocumentSyntax.Auto, null, PdfDocumentSyntax.Xml)]
+    [InlineData("a.html", "File", PdfDocumentSyntax.Auto, null, PdfDocumentSyntax.Html)]
+    [InlineData("a.xml", "File", PdfDocumentSyntax.Auto, null, PdfDocumentSyntax.Html)]
+    [InlineData("a.xhtml", "File", PdfDocumentSyntax.Html, null, PdfDocumentSyntax.Html)]
+    [InlineData("a.html", "File", PdfDocumentSyntax.Xml, null, PdfDocumentSyntax.Xml)]
+    [InlineData("https://x/y", "Url", PdfDocumentSyntax.Auto, "application/xhtml+xml; charset=utf-8", PdfDocumentSyntax.Xml)]
+    [InlineData("https://x/y.xhtml", "Url", PdfDocumentSyntax.Auto, "text/html", PdfDocumentSyntax.Html)]
+    [InlineData("https://x/y", "Url", PdfDocumentSyntax.Auto, null, PdfDocumentSyntax.Html)]
+    [InlineData("-", "Stdin", PdfDocumentSyntax.Auto, null, PdfDocumentSyntax.Html)]
+    [InlineData("-", "Stdin", PdfDocumentSyntax.Xml, null, PdfDocumentSyntax.Xml)]
+    public void ResolveSyntax_UsesTheExtensionOrTheContentType(string value, string kind, PdfDocumentSyntax requested, string? contentType, PdfDocumentSyntax expected)
+    {
+        Assert.Equal(expected, CliRunner.ResolveSyntax(new CliInput(Enum.Parse<CliInputKind>(kind), value), requested, contentType));
     }
 
     [Fact]

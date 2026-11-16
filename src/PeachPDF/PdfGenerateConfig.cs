@@ -84,6 +84,14 @@ namespace PeachPDF
         public PdfDocumentMode DocumentMode { get; set; } = PdfDocumentMode.Auto;
 
         /// <summary>
+        /// How the HTML is parsed. <see cref="PdfDocumentSyntax.Auto"/> (the default) parses a document as XHTML, with an XML parser, when the loader
+        /// that supplies it reports <c>application/xhtml+xml</c> (a <c>.xhtml</c> or <c>.xht</c> file, an HTTP response of that type), and as HTML
+        /// otherwise; a string passed to <c>GeneratePdf</c> is HTML unless this says <see cref="PdfDocumentSyntax.Xml"/>. XHTML must be well-formed:
+        /// anything else throws <see cref="HtmlRenderException"/>.
+        /// </summary>
+        public PdfDocumentSyntax DocumentSyntax { get; set; } = PdfDocumentSyntax.Auto;
+
+        /// <summary>
         /// When set to <c>true</c>, the document's own author style sheets (its <c>&lt;style&gt;</c>
         /// elements and <c>&lt;link rel="stylesheet"&gt;</c> references) are ignored — only the user-agent
         /// default styles and any caller-supplied stylesheet (the <c>cssData</c> argument) are applied.

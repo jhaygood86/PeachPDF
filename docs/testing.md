@@ -44,7 +44,7 @@ Agreement between both is real evidence; a single lenient render that happens to
 
 The suite above is written by the project; the [web-platform-tests](https://web-platform-tests.org) are the browsers' own. `PeachBrackets.WptRunner` (under `src/harness/`) runs the **reftests** of 16 CSS modules (CSS 2 flow, floats, positioning, tables and generated content, flexbox, grid, tables, position, backgrounds, color, values, text, transforms, multi-column and lists) through the public `PeachBrackets` API only: each test and each of its references is loaded as a screen document in an 800×600 viewport, painted onto a `PeachDrawing` bitmap with one CSS pixel per device pixel, and compared pixel for pixel, as the [reftest rules](https://web-platform-tests.org/writing-tests/reftests.html) describe — `match` and `mismatch` references, reference chains, `<meta name=fuzzy>` allowances. Tests that need script (testharness.js, `reftest-wait`, an inline script) are skipped. A test whose images match but show nothing (one flat white or transparent image) is reported as `blank` and never counts as a pass, so a renderer that draws nothing cannot score.
 
-The tests are not part of the repository: the runner fetches the commit pinned in `wpt/WPT_COMMIT` into a cache folder.
+The tests are not part of the repository: the runner fetches the commit pinned in `wpt/WPT_COMMIT` into a cache folder. A `.xht` or `.xhtml` test is served as `application/xhtml+xml`, so it goes through the XML parser (`DocumentSyntax.Xml`), as it does in a browser.
 
 ```bash
 dotnet run --project harness/PeachBrackets.WptRunner -f net10.0 -- fetch

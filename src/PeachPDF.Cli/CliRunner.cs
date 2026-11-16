@@ -45,8 +45,9 @@ internal static class CliRunner
             {
                 logger.Info($"Rendering {Describe(input)}");
 
-                var (html, loader) = await PrepareInputAsync(input, options, httpClient, stdin, openedStreams);
+                var (html, loader, contentType) = await PrepareInputAsync(input, options, httpClient, stdin, openedStreams);
                 config.NetworkLoader = loader;
+                config.DocumentSyntax = ResolveSyntax(input, options.DocumentSyntax, contentType);
 
                 if (document is null)
                 {
@@ -273,7 +274,30 @@ internal static class CliRunner
         return cssData;
     }
 
-    private static async Task<(string? Html, RNetworkLoader Loader)> PrepareInputAsync(
+    /// <summary>
+    /// The syntax an input is parsed with: what <c>--document-syntax</c> says, and with <c>auto</c> XHTML for a <c>.xhtml</c> or <c>.xht</c> file
+    /// and for a URL that answered <c>application/xhtml+xml</c> (a browser decides from the type alone, so the extension of a URL does not count).
+    /// </summary>
+    internal static PdfDocumentSyntax ResolveSyntax(CliInput input, PdfDocumentSyntax requested, string? contentType)
+    {
+        if (requested != PdfDocumentSyntax.Auto)
+        {
+            return requested;
+        }
+
+        var isXhtml = input.Kind switch
+        {
+            CliInputKind.File => Path.GetExtension(input.Value) is { } extension
+                && (extension.Equals(".xhtml", StringComparison.OrdinalIgnoreCase) || extension.Equals(".xht", StringComparison.OrdinalIgnoreCase)),
+            CliInputKind.Url => contentType is not null
+                && contentType.Split(';')[0].Trim().Equals("application/xhtml+xml", StringComparison.OrdinalIgnoreCase),
+            _ => false,
+        };
+
+        return isXhtml ? PdfDocumentSyntax.Xml : PdfDocumentSyntax.Html;
+    }
+
+    private static async Task<(string? Html, RNetworkLoader Loader, string? ContentType)> PrepareInputAsync(
         CliInput input, CliOptions options, HttpClient? httpClient, TextReader stdin, List<Stream> openedStreams)
     {
         if (input.Kind == CliInputKind.Mhtml)
@@ -282,31 +306,43 @@ internal static class CliRunner
             // The stream is owned by the caller and disposed once rendering completes (see RunAsync).
             var stream = File.OpenRead(input.Value);
             openedStreams.Add(stream);
-            return (null, new MimeKitNetworkLoader(stream));
+            return (null, new MimeKitNetworkLoader(stream), null);
         }
 
         var baseUri = options.BaseUrl is not null ? ResolveBaseUri(options.BaseUrl) : DefaultBaseFor(input);
 
-        var html = input.Kind switch
+        string? contentType = null;
+        string html;
+
+        switch (input.Kind)
         {
-            CliInputKind.File => await File.ReadAllTextAsync(input.Value),
-            CliInputKind.Url => await FetchUrlAsync(input.Value, httpClient),
-            CliInputKind.Stdin => await stdin.ReadToEndAsync(),
-            _ => throw new InvalidOperationException($"unsupported input kind {input.Kind}"),
-        };
+            case CliInputKind.File:
+                html = await File.ReadAllTextAsync(input.Value);
+                break;
+            case CliInputKind.Url:
+                (html, contentType) = await FetchUrlAsync(input.Value, httpClient);
+                break;
+            case CliInputKind.Stdin:
+                html = await stdin.ReadToEndAsync();
+                break;
+            default:
+                throw new InvalidOperationException($"unsupported input kind {input.Kind}");
+        }
 
         var loader = new CliNetworkLoader(baseUri, options.NoNetwork ? null : httpClient);
-        return (html, loader);
+        return (html, loader, contentType);
     }
 
-    private static async Task<string> FetchUrlAsync(string url, HttpClient? httpClient)
+    private static async Task<(string Html, string? ContentType)> FetchUrlAsync(string url, HttpClient? httpClient)
     {
         if (httpClient is null)
         {
             throw new InvalidOperationException($"cannot fetch '{url}' because network access is disabled");
         }
 
-        return await httpClient.GetStringAsync(url);
+        using var response = await httpClient.GetAsync(url);
+        response.EnsureSuccessStatusCode();
+        return (await response.Content.ReadAsStringAsync(), response.Content.Headers.ContentType?.MediaType);
     }
 
     internal static Uri DefaultBaseFor(CliInput input) => input.Kind switch

@@ -19,7 +19,8 @@ public sealed class RendererAndResultsTests : IDisposable
     [InlineData("a.otf", "font/otf")]
     [InlineData("a.woff", "font/woff")]
     [InlineData("a.woff2", "font/woff2")]
-    [InlineData("a.xht", "text/html")]
+    [InlineData("a.xht", "application/xhtml+xml")]
+    [InlineData("a.xhtml", "application/xhtml+xml")]
     [InlineData("a.htm", "text/html")]
     [InlineData("a.bin", "application/octet-stream")]
     public void AResourcesContentTypeFollowsItsExtension(string name, string expected) =>

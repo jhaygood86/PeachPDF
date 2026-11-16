@@ -1346,6 +1346,9 @@ namespace PeachBrackets.Html
         /// <summary>The mode the host asks for in place of the DOCTYPE's (<see cref="HtmlDocumentOptions.DocumentMode"/>), or <c>null</c>.</summary>
         internal DocumentMode? DocumentModeOverride { get; set; }
 
+        /// <summary>The syntax the source is parsed with (<see cref="HtmlDocumentOptions.Syntax"/>): decided by the host, never from the text, and kept for every parse of the same source.</summary>
+        internal DocumentSyntax DocumentSyntax { get; set; }
+
         /// <summary>
         /// The medium the document is laid out for (<see cref="HtmlDocumentOptions.MediaType"/>). It is the one source of truth for both what the
         /// cascade matches <c>@media</c> rules against (<see cref="Media"/>) and whether the document is paged or one continuous surface

@@ -25,9 +25,6 @@ internal sealed partial class WptRenderer(string wptRoot) : IReftestRenderer
     [GeneratedRegex(@"^\s*(<!--.*?-->\s*)*<!DOCTYPE[^>]*>", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Singleline)]
     private static partial Regex Doctype();
 
-    [GeneratedRegex(@"<\?xml[^>]*\?>", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
-    private static partial Regex XmlDeclaration();
-
     public string FullPath(string wptPath) => Path.Combine(wptRoot, wptPath.Replace('/', Path.DirectorySeparatorChar));
 
     public async Task<RgbaImage> RenderAsync(string wptPath)
@@ -52,8 +49,8 @@ internal sealed partial class WptRenderer(string wptRoot) : IReftestRenderer
             SnapBoxDecorationsToCssPixels = true,
             SnapBorderWidthsToCssPixels = true,
 
-            // An XML document (.xht) is never in quirks mode; the HTML parser would otherwise put one with no DOCTYPE there.
-            DocumentMode = IsXmlDocument(wptPath) ? DocumentMode.NoQuirks : null,
+            // An .xht or .xhtml file is served as application/xhtml+xml, so a browser parses it as XML (and never in quirks mode).
+            Syntax = IsXmlDocument(wptPath) ? DocumentSyntax.Xml : DocumentSyntax.Html,
         };
         options.SetMargins(0);
 
@@ -77,18 +74,12 @@ internal sealed partial class WptRenderer(string wptRoot) : IReftestRenderer
         return new RgbaImage(buffer.Width, buffer.Height, pixels);
     }
 
-    /// <summary>Makes the source loadable as the WPT server would serve it: XML syntax a browser's XML parser would take is rewritten, and a base URL is set so relative references (stylesheets, images, fonts) resolve.</summary>
+    /// <summary>Makes the source loadable as the WPT server would serve it: a base URL is set so relative references (stylesheets, images, fonts) resolve. An XML document is left as it is, apart from the base element, which is closed so the document stays well-formed.</summary>
     internal static string Prepare(string wptPath, string source)
     {
-        if (wptPath.EndsWith(".xht", StringComparison.OrdinalIgnoreCase) || wptPath.EndsWith(".xhtml", StringComparison.OrdinalIgnoreCase))
-        {
-            source = XmlDeclaration().Replace(source, string.Empty);
-            source = source.Replace("<![CDATA[", string.Empty, StringComparison.Ordinal).Replace("]]>", string.Empty, StringComparison.Ordinal);
-        }
-
         var directory = ReftestParser.DirectoryOf(wptPath);
         var baseUri = new Uri($"{Origin}/{directory}/");
-        var baseTag = $"<base href=\"{baseUri}\">";
+        var baseTag = IsXmlDocument(wptPath) ? $"<base href=\"{baseUri}\"/>" : $"<base href=\"{baseUri}\">";
 
         if (HeadTag().Match(source) is { Success: true } head)
             return source.Insert(head.Index + head.Length, baseTag);
@@ -103,7 +94,7 @@ internal sealed partial class WptRenderer(string wptRoot) : IReftestRenderer
     }
 
     /// <summary>
-    /// Whether the test is an XML document (<c>.xht</c>, <c>.xhtml</c>), which a browser never puts in quirks mode, whatever it says about a DOCTYPE.
+    /// Whether the test is an XML document (<c>.xht</c>, <c>.xhtml</c>): the WPT server serves it as <c>application/xhtml+xml</c>, which a browser parses with its XML parser.
     /// </summary>
     internal static bool IsXmlDocument(string wptPath) =>
         wptPath.EndsWith(".xht", StringComparison.OrdinalIgnoreCase) || wptPath.EndsWith(".xhtml", StringComparison.OrdinalIgnoreCase);
@@ -134,7 +125,8 @@ internal sealed partial class WptRenderer(string wptRoot) : IReftestRenderer
         ".otf" => "font/otf",
         ".woff" => "font/woff",
         ".woff2" => "font/woff2",
-        ".html" or ".htm" or ".xht" or ".xhtml" => "text/html",
+        ".html" or ".htm" => "text/html",
+        ".xht" or ".xhtml" => "application/xhtml+xml",
         _ => "application/octet-stream",
     };
 }

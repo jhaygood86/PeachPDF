@@ -114,6 +114,7 @@ namespace PeachPDF.Network
         internal static string? TryGetFromStaticMap(string extensionNoDot) => extensionNoDot switch
         {
             "html" or "htm" => "text/html",
+            "xhtml" or "xht" => "application/xhtml+xml",
             "css" => "text/css",
             "svg" => "image/svg+xml",
             "png" => "image/png",

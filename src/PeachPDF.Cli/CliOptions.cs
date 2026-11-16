@@ -75,6 +75,9 @@ internal sealed class CliOptions
     /// <summary>The mode to lay the HTML out in (<c>--document-mode</c>); <see cref="PdfDocumentMode.Auto"/> takes it from the DOCTYPE, as a browser does.</summary>
     public PdfDocumentMode DocumentMode { get; set; } = PdfDocumentMode.Auto;
 
+    /// <summary>How the HTML is parsed (<c>--document-syntax</c>); <see cref="PdfDocumentSyntax.Auto"/> parses a <c>.xhtml</c>/<c>.xht</c> file or an <c>application/xhtml+xml</c> response as XHTML.</summary>
+    public PdfDocumentSyntax DocumentSyntax { get; set; } = PdfDocumentSyntax.Auto;
+
     /// <summary>Where in its run every CSS animation is sampled, 0 to 1 (<c>--animation-progress</c>); null leaves animations unapplied.</summary>
     public double? AnimationProgress { get; set; }
 

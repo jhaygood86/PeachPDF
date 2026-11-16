@@ -461,6 +461,9 @@ PeachBrackets.DocumentPaintLayer : enum Int32
   Animated = 3
   Content = 1
   ViewportAttached = 2
+PeachBrackets.DocumentSyntax : enum Int32
+  Html = 0
+  Xml = 1
 PeachBrackets.FontDefaults : static class
   method static IReadOnlyList<AxisSetting> ToAxisSettings(String encoded, Double sizeInPixels)
   property static Double DefaultSizePoints { get; }
@@ -607,6 +610,7 @@ PeachBrackets.HtmlDocument : sealed class
   property DocumentAnnotations Annotations { get; }
   property DocumentMode DocumentMode { get; }
   property DocumentSelection Selection { get; }
+  property DocumentSyntax Syntax { get; }
   property HtmlDocumentMetadata Metadata { get; }
   property IReadOnlyList<ClippedTextEntry> ClippedText { get; }
   property IReadOnlyList<DocumentPage> Pages { get; }
@@ -650,6 +654,7 @@ PeachBrackets.HtmlDocumentOptions : sealed class
   property Boolean SynchronousOnly { get; set; }
   property ColorSchemePreference ColorScheme { get; set; }
   property DocumentMode? DocumentMode { get; set; }
+  property DocumentSyntax Syntax { get; set; }
   property Double DevicePixelRatio { get; set; }
   property Double FontScale { get; set; }
   property Double MarginBottomPoints { get; set; }

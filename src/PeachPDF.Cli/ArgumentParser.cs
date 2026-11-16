@@ -118,6 +118,7 @@ internal static class ArgumentParser
                 case "no-default-style": _options.NoDefaultStyle = true; break;
                 case "no-author-style": _options.NoAuthorStyle = true; break;
                 case "document-mode": ParseDocumentMode(_options, RequireValue(name, inlineValue)); break;
+                case "document-syntax": ParseDocumentSyntax(_options, RequireValue(name, inlineValue)); break;
                 case "animation-progress": SetAnimationProgress(_options, RequireValue(name, inlineValue)); break;
                 case "page-size": ParsePageSize(_options, RequireValue(name, inlineValue)); break;
                 case "page-margin": ParsePageMargin(_options, RequireValue(name, inlineValue)); break;
@@ -313,6 +314,22 @@ internal static class ArgumentParser
         ["4e"] = PdfAConformance.PdfA4E,
         ["4f"] = PdfAConformance.PdfA4F,
     };
+
+    private static void ParseDocumentSyntax(CliOptions options, string? value)
+    {
+        if (value is null)
+        {
+            return;
+        }
+
+        switch (value.ToLowerInvariant())
+        {
+            case "auto": options.DocumentSyntax = PdfDocumentSyntax.Auto; break;
+            case "html": options.DocumentSyntax = PdfDocumentSyntax.Html; break;
+            case "xml": options.DocumentSyntax = PdfDocumentSyntax.Xml; break;
+            default: options.Errors.Add($"invalid --document-syntax value '{value}' (expected auto, html or xml)"); break;
+        }
+    }
 
     private static void ParseDocumentMode(CliOptions options, string? value)
     {

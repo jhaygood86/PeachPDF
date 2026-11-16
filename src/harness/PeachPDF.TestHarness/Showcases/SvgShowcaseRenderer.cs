@@ -42,6 +42,7 @@ internal static class SvgShowcaseRenderer
             MarginLeftPoints = config.MarginLeft,
             ColorScheme = config.PreferredColorScheme == PdfColorScheme.Dark ? ColorSchemePreference.Dark : ColorSchemePreference.Light,
             IgnoreAuthorStyleSheets = config.IgnoreAuthorStyleSheets,
+            Syntax = config.DocumentSyntax == PdfDocumentSyntax.Xml ? DocumentSyntax.Xml : DocumentSyntax.Html,
             DocumentMode = config.DocumentMode switch
             {
                 PdfDocumentMode.NoQuirks => DocumentMode.NoQuirks,
