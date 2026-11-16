@@ -77,6 +77,9 @@ internal static class CliProgram
                                      run). Default: animations are not applied.
               --no-default-style     Ignore the default (user-agent) style sheet.
               --no-author-style      Ignore the document's own style sheets.
+              --document-mode=MODE   Lay the HTML out in this mode: auto (from the DOCTYPE, as
+                                     a browser does; the default), no-quirks, limited-quirks
+                                     or quirks.
               --page-size=SIZE       Page size (e.g. A4, letter, "210mm 297mm").
               --page-margin=MARGIN   Page margin (1-4 CSS lengths, e.g. 20mm).
 

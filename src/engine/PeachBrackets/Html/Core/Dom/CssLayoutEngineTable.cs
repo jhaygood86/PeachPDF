@@ -553,6 +553,25 @@ namespace PeachBrackets.Html.Dom
         }
 
         /// <summary>
+        /// The table cell nowrap minimum width quirk (Quirks Mode Standard 3.9): in quirks mode a <c>td</c> or <c>th</c> with a <c>nowrap</c> attribute and a
+        /// <c>width</c> that is a non-zero length has an outer min-content width of at least that width, so a nowrap cell is not narrower than the width
+        /// it asks for when its content could be.
+        /// </summary>
+        /// <param name="cell">the cell</param>
+        /// <param name="minWidth">its min-content width from its content</param>
+        /// <param name="percentageBasis">what a percentage in its <c>width</c> resolves against</param>
+        /// <returns>the width the column needs for it</returns>
+        private static double QuirksNowrapMinimumWidth(CssBox cell, double minWidth, double percentageBasis)
+        {
+            if (cell.HtmlContainer?.DocumentMode != DocumentMode.Quirks || cell.HtmlTag is not { } tag || !tag.HasAttribute(HtmlConstants.Nowrap)
+                || !CssValueParser.IsValidLength(cell.Width) || CssValueParser.DependsOnPercentage(cell.Width))
+                return minWidth;
+
+            var width = CssValueParser.ParseLength(cell.Width, percentageBasis, cell);
+            return width > 0 ? Math.Max(minWidth, width + cell.ActualBoxSizeIncludedWidth) : minWidth;
+        }
+
+        /// <summary>
         ///
         /// </summary>
         /// <param name="g"></param>
@@ -7760,6 +7779,7 @@ namespace PeachBrackets.Html.Dom
 
                     if ((onlyNans && !double.IsNaN(_columnWidths[col])) || i >= row.Boxes.Count) continue;
                     cell.GetMinMaxWidth(_graphics, out var minWidth, out var maxWidth);
+                    minWidth = QuirksNowrapMinimumWidth(cell, minWidth, availCellWidth);
 
                     // Clamp by the cell's own CSS min-width/max-width, if explicitly set, so a cell
                     // can cap or raise the column's content-driven bounds independent of its content.
@@ -8007,7 +8027,10 @@ namespace PeachBrackets.Html.Dom
                     // does not describe this cell's own (vertical) flow.
                     var cellMinWidth = 0d;
                     if (!_isVertical)
+                    {
                         cell.GetMinMaxWidth(_graphics, out cellMinWidth, out _);
+                        cellMinWidth = QuirksNowrapMinimumWidth(cell, cellMinWidth, availCellWidth);
+                    }
 
                     // A vertical table's column-sizing hint IS a cell's own explicit `height`
                     // (CellInlineSize - see CalculateColumnWidths), and CSS 2.1 17.5.3 makes a table

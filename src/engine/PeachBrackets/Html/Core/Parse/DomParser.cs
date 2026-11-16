@@ -122,8 +122,12 @@ namespace PeachBrackets.Html.Parse
         {
             CssBox.ClearCounter();
             CssBox root;
+            DocumentMode mode;
             using (EngineTelemetry.Source.StartActivity("html.parse"))
-                root = HtmlParser.ParseDocument(html, document: true);
+                root = HtmlParser.ParseDocument(html, out mode, document: true);
+
+            // Before anything reads it: the style sheets' @media block for quirks mode, selector matching and layout all go by it.
+            htmlContainer.DocumentMode = htmlContainer.DocumentModeOverride ?? mode;
 
             NumberElements(root, new int[1]);
             SeedTextAreaValues(root);
@@ -1452,6 +1456,22 @@ namespace PeachBrackets.Html.Parse
             // 2. Inherit inheritable properties from parent
             box.InheritStyle();
 
+            // Quirks Mode Standard 3.12: in quirks mode a table that nothing gives a color takes the body's color, not its parent's, so a table in a
+            // colored div is not that color. What the rules below declare (the user-agent sheet's too) still replaces it.
+            if (box.HtmlTag is { } quirkTag && quirkTag.Name.Equals(HtmlConstants.Table, StringComparison.OrdinalIgnoreCase)
+                && box.HtmlContainer?.DocumentMode == DocumentMode.Quirks)
+            {
+                for (var ancestor = box.ParentBox; ancestor is not null; ancestor = ancestor.ParentBox)
+                {
+                    if (ancestor.HtmlTag is { } ancestorTag && ancestorTag.Name.Equals("body", StringComparison.OrdinalIgnoreCase))
+                    {
+                        if (CssUtils.GetPropertyValue(ancestor, PropertyNames.Color) is { } bodyColor)
+                            CssUtils.SetPropertyValue(valueParser, box, PropertyNames.Color, bodyColor);
+                        break;
+                    }
+                }
+            }
+
             // Regular property declarations whose value contains var(...) are deferred here and resolved
             // once, after the whole cascade (all phases below) has finished, so var() sees this box's
             // FINAL custom property values regardless of which phase declared them.
@@ -1487,7 +1507,7 @@ namespace PeachBrackets.Html.Parse
                 // Machine-generated markup often repeats the same style="..." text across many
                 // elements (e.g. every cell in a table), so the parsed rule is cached by its raw
                 // attribute text on valueParser rather than re-tokenized per box.
-                inlineRule = valueParser.GetOrParseInlineStyleRule(styleAttributeText);
+                inlineRule = valueParser.GetOrParseInlineStyleRule(styleAttributeText, box.HtmlContainer?.DocumentMode == DocumentMode.Quirks);
             }
 
             // The relatively expensive property/custom-property snapshots below are only ever read
@@ -2093,7 +2113,7 @@ namespace PeachBrackets.Html.Parse
 
                 IStyleRule? inlineRule = null;
                 if (box.HtmlTag is { } tag && tag.HasAttribute("style"))
-                    inlineRule = valueParser.GetOrParseInlineStyleRule(tag.TryGetAttribute("style")!);
+                    inlineRule = valueParser.GetOrParseInlineStyleRule(tag.TryGetAttribute("style")!, box.HtmlContainer?.DocumentMode == DocumentMode.Quirks);
 
                 AssignCssBlocks(valueParser, shadowBox, uaRules, importantPass: false, null, null, null, null, pendingVarProperties);
                 if (box.HtmlTag is not null) TranslateAttributes(box.HtmlTag, shadowBox, valueParser);
@@ -3336,7 +3356,11 @@ namespace PeachBrackets.Html.Parse
                             TranslateLength(value), Map.AutoKeywords, CssValueParser.TryParseLengthOrCalc, AutoKeyword.Auto);
                         break;
                     case HtmlConstants.Nowrap:
-                        box.TextWrapMode = CssProperty<TextWrapMode>.FromValue(Keywords.Nowrap, TextWrapMode.NoWrap);
+                        // HTML Standard 15.3.8: in quirks mode a td or th with a nowrap attribute and a width attribute that is a length (not a
+                        // percentage) wraps as usual: its width, not its content, decides how wide it is.
+                        box.TextWrapMode = IsQuirksCellWithLengthWidth(tag, box)
+                            ? CssProperty<TextWrapMode>.FromValue(Keywords.Wrap, TextWrapMode.Wrap)
+                            : CssProperty<TextWrapMode>.FromValue(Keywords.Nowrap, TextWrapMode.NoWrap);
                         break;
                     case HtmlConstants.Size:
                         TranslateSize(tag, box, value);
@@ -3764,6 +3788,25 @@ namespace PeachBrackets.Html.Parse
             var len = new CssLength(htmlLength);
 
             return len.HasError ? string.Format(NumberFormatInfo.InvariantInfo, "{0}px", htmlLength) : htmlLength;
+        }
+
+        /// <summary>
+        /// Whether <paramref name="tag"/> is a <c>td</c> or <c>th</c> of a document in quirks mode whose <c>width</c> attribute parses (HTML Standard
+        /// 2.3.4.4, "rules for parsing dimension values") to a length rather than a percentage or an error.
+        /// </summary>
+        private static bool IsQuirksCellWithLengthWidth(HtmlTag tag, CssBox box)
+        {
+            if (!(tag.Name.Equals("td", StringComparison.OrdinalIgnoreCase) || tag.Name.Equals("th", StringComparison.OrdinalIgnoreCase))
+                || box.HtmlContainer?.DocumentMode != DocumentMode.Quirks)
+                return false;
+
+            var digits = (tag.TryGetAttribute("width") ?? "").AsSpan().Trim();
+            if (digits.IsEmpty || !char.IsAsciiDigit(digits[0])) return false;
+
+            // The number, then anything but a percent sign: a percentage is not a length.
+            var end = 0;
+            while (end < digits.Length && (char.IsAsciiDigit(digits[end]) || digits[end] == '.')) end++;
+            return end >= digits.Length || digits[end] != '%';
         }
 
         /// <summary>

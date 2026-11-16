@@ -27,6 +27,9 @@ namespace PeachBrackets.Css
                     PseudoClassNames.AnyLink,
                     PseudoClassNames.Empty,
                     PseudoClassNames.PlaceholderShown,
+                    PseudoClassNames.QuirkNoSubstantialPrevious,
+                    PseudoClassNames.QuirkNoSubstantialFollowing,
+                    PseudoClassNames.QuirkBlank,
                 }
                 .Union(UnmatchableSelectors.PseudoClasses, StringComparer.OrdinalIgnoreCase)
                 .ToDictionary(x => x, PseudoClassSelector.Create, StringComparer.OrdinalIgnoreCase);

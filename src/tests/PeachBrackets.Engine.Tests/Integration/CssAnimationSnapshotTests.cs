@@ -943,7 +943,7 @@ namespace PeachBrackets.Engine.Tests.Integration
             // The UA sheet gives a <p> its margins; the author sheet overrides one, and revert undoes the override
             // - so it matches an untouched <p>, which an ignored keyword would not.
             var root = await BuildAsync("""
-                <style>@keyframes k { from { margin-top: revert } to { margin-top: revert } }
+                <!DOCTYPE html><style>@keyframes k { from { margin-top: revert } to { margin-top: revert } }
                 #a { margin-top: 3pt; animation: k 1s; }</style><p id="a">x</p><p id="b">y</p>
                 """, 0.5);
 

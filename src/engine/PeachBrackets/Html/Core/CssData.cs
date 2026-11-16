@@ -70,7 +70,7 @@ namespace PeachBrackets.Html
         // (null = unlayered). The layer's numeric precedence rank is resolved lazily at sort time from
         // _layerRanks - which is only known after the whole layer tree has been walked (a nested
         // sub-layer's rank depends on where its parent first appeared), so it can't be baked in here.
-        private readonly record struct IndexedRule(IStyleRule Rule, bool IsUserAgent, int DocumentOrder, MediaList[]? EnclosingMedia, ContainerCondition[]? EnclosingContainers, string? LayerName, RuleSharing Sharing, bool IsStartingStyle = false);
+        private readonly record struct IndexedRule(IStyleRule Rule, bool IsUserAgent, int DocumentOrder, MediaList[]? EnclosingMedia, ContainerCondition[]? EnclosingContainers, string? LayerName, RuleSharing Sharing, bool IsStartingStyle = false, bool QuirksOnly = false);
 
         // Whether the rule being indexed is inside an @starting-style block, which can hold @media and the like around the style rules.
         private bool _indexInStartingStyle;
@@ -417,7 +417,7 @@ namespace PeachBrackets.Html
                 switch (rule)
                 {
                     case IStyleRule styleRule:
-                        var indexedRule = new IndexedRule(styleRule, isUserAgent, order++, enclosingMedia, enclosingContainers, currentLayer, RuleSharing.Of(styleRule.Selector), _indexInStartingStyle);
+                        var indexedRule = new IndexedRule(styleRule, isUserAgent, order++, enclosingMedia, enclosingContainers, currentLayer, RuleSharing.Of(styleRule.Selector), _indexInStartingStyle, MediaQueryMatcher.RequiresQuirksMode(enclosingMedia));
 
                         if (!hasFirstLineRules && CouldMatchAsFirstLineSelector(styleRule.Selector))
                             hasFirstLineRules = true;
@@ -961,7 +961,7 @@ namespace PeachBrackets.Html
                 // firstLineOnly is HTML-cascade-only (DomParser.ResolveFirstLineStyle), always a CssBox.
                 var isMatch = firstLineOnly
                     ? MatchesAsPseudoSubject(indexed.Rule.Selector, (CssBox)node, pseudoName)
-                    : DoesSelectorMatch(indexed.Rule.Selector, node);
+                    : DoesRuleSelectorMatch(indexed.Rule.Selector, node);
                 if (!isMatch) return;
                 // A short match list is checked by a scan; the set is built only once it grows past that (most boxes match a handful of rules).
                 if (seen is null)
@@ -1083,6 +1083,10 @@ namespace PeachBrackets.Html
         {
             if (indexed.EnclosingContainers is not null) return false;
 
+            // A rule that applies to quirks mode alone (the user-agent sheet's block for it) is no rule at all in another mode, however
+            // unstable its selector is: without this, its structural selectors would keep every paragraph in every document from sharing a style.
+            if (indexed.QuirksOnly && box.HtmlContainer?.DocumentMode != DocumentMode.Quirks) return true;
+
             var sharing = indexed.Sharing;
             if (sharing.UsesInteractionState) box.NoteStatefulCandidate(sharing.StateOnSubjectOnly);
             if (!sharing.Stable) return false;
@@ -1132,7 +1136,7 @@ namespace PeachBrackets.Html
                     }
                 }
 
-                return !rule.EndsWithPseudoElement && DoesSelectorMatch(indexed.Rule.Selector, node);
+                return !rule.EndsWithPseudoElement && DoesRuleSelectorMatch(indexed.Rule.Selector, node);
             }
 
             var universal = _consequentialUniversalRules!;
@@ -1408,6 +1412,20 @@ namespace PeachBrackets.Html
             }
 
             return selector.Specificity;
+        }
+
+        /// <summary>
+        /// <see cref="DoesSelectorMatch(ISelector, ICssDomNode?)"/> for a rule's own selector. A rule whose whole selector is a lone <c>:hover</c> or
+        /// <c>:active</c> is the Quirks Mode Standard 4.1 case, like a compound of the two (<see cref="QuirksExcludesInteractionOnlyCompound"/>).
+        /// </summary>
+        private static bool DoesRuleSelectorMatch(ISelector selector, ICssDomNode? node)
+        {
+            if (selector is PseudoClassSelector { Class: var name } && node is CssBox { HtmlContainer: { Interaction: not null, DocumentMode: DocumentMode.Quirks } } box
+                && !box.IsClickable
+                && (name.Equals(PseudoClassNames.Hover, StringComparison.OrdinalIgnoreCase) || name.Equals(PseudoClassNames.Active, StringComparison.OrdinalIgnoreCase)))
+                return false;
+
+            return DoesSelectorMatch(selector, node);
         }
 
         private static bool DoesSelectorMatch(ISelector selector, ICssDomNode? node)
@@ -1756,6 +1774,8 @@ namespace PeachBrackets.Html
             // handling is required for them beyond the plain path below.
             if (lastSelector is not PseudoElementSelector)
             {
+                if (QuirksExcludesInteractionOnlyCompound(compoundSelector, node)) return false;
+
                 // Indexed via MatchOrder (cheapest selector first, see SelectorMatchCost) rather than
                 // LINQ's All(): Selectors only implements IEnumerable<ISelector>, so All() boxes an
                 // enumerator and allocates a closure per call on what is the hottest path in the whole
@@ -1917,7 +1937,7 @@ namespace PeachBrackets.Html
             var classNames = node.GetAttribute("class");
             if (string.IsNullOrEmpty(classNames)) return false;
 
-            var comparison = node.NameComparison;
+            var comparison = ClassAndIdComparison(node);
             foreach (var className in new SpaceSeparatedTokens(classNames))
             {
                 if (className.Equals(classSelector.Class, comparison)) return true;
@@ -1940,7 +1960,36 @@ namespace PeachBrackets.Html
         {
             if (node is null) return false;
             var id = node.GetAttribute("id");
-            return id is not null && id.Equals(idSelector.Id, node.NameComparison);
+            return id is not null && id.Equals(idSelector.Id, ClassAndIdComparison(node));
+        }
+
+        /// <summary>
+        /// How a class or ID selector compares with the element's names: ASCII case-insensitively in a document in quirks mode, and exactly
+        /// otherwise (Selectors 4 §6.6 and §6.7). An SVG or MathML element is always exact, as <see cref="ICssDomNode.NameComparison"/> says.
+        /// </summary>
+        private static StringComparison ClassAndIdComparison(ICssDomNode node) =>
+            node is CssBox { IsWithinForeignContent: false } box
+                ? box.HtmlContainer?.DocumentMode == DocumentMode.Quirks ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal
+                : node.NameComparison;
+
+        /// <summary>
+        /// The quirk of the Quirks Mode Standard 4.1: in quirks mode a compound selector of nothing but <c>:hover</c> and <c>:active</c> (no type,
+        /// class, id or attribute, no other pseudo-class) does not match an element that is not also <c>:any-link</c>. Only a document a host tracks
+        /// the pointer in can match them at all, so that is asked first.
+        /// </summary>
+        private static bool QuirksExcludesInteractionOnlyCompound(CompoundSelector compound, ICssDomNode node)
+        {
+            if (node is not CssBox { HtmlContainer: { Interaction: not null, DocumentMode: DocumentMode.Quirks } } box || box.IsClickable)
+                return false;
+
+            for (var i = 0; i < compound.Length; i++)
+            {
+                if (compound[i] is not PseudoClassSelector { Class: var name }
+                    || !(name.Equals(PseudoClassNames.Hover, StringComparison.OrdinalIgnoreCase) || name.Equals(PseudoClassNames.Active, StringComparison.OrdinalIgnoreCase)))
+                    return false;
+            }
+
+            return true;
         }
 
         // The HTML Standard's "Case-sensitivity of selectors" (§4.16.2) limits ASCII case-insensitive
@@ -2063,6 +2112,17 @@ namespace PeachBrackets.Html
             {
                 return node is CssBox { IsClickable: true };
             }
+
+            // The three the quirks-mode margin rules of the user-agent sheet are written with (HTML Standard 15.3.9). They are the standard's own
+            // "substantial" and "blank" tests, which :first-child and :empty cannot give: text counts as a sibling there.
+            if (name == PseudoClassNames.QuirkNoSubstantialPrevious)
+                return node is CssBox { HtmlTag: not null } previousBox && !QuirkSiblings.HasSubstantialSibling(previousBox, following: false);
+
+            if (name == PseudoClassNames.QuirkNoSubstantialFollowing)
+                return node is CssBox { HtmlTag: not null } followingBox && !QuirkSiblings.HasSubstantialSibling(followingBox, following: true);
+
+            if (name == PseudoClassNames.QuirkBlank)
+                return node is CssBox { HtmlTag: not null } blankBox && QuirkSiblings.IsBlank(blankBox);
 
             // :placeholder-shown is the one form-control state a generated PDF can answer: it is
             // fixed by the source attributes at generation time. It deliberately does not try to

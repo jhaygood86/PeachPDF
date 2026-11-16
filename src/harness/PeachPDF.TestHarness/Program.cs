@@ -4975,6 +4975,7 @@ await SaveShowcaseAsync("stretch_sizing", "Layout", "Stretch Sizing",
 await SaveShowcaseAsync("grid_replaced_items", "Layout", "Replaced Grid Items",
     "Replaced content as grid items: images keep their size or stretch by their ratio (clamped by max-width against the grid area), percentage widths resolve against the area, iframes and one-sided SVGs take the 300x150px default size, and justify-self: baseline lines items of a column up.",
     """
+    <!DOCTYPE html>
     <html><body style="font-family: sans-serif; font-size: 8pt;">
       <p>Stretched 2:1 image, 80pt row: overflows its 100pt area, then clamped by max-width: 100%, then width: 50% of the area.</p>
       <div style="display:grid; grid-template-columns:100pt 100pt 100pt; grid-template-rows:80pt; gap:10pt; width:340pt; border:1px solid #999;">
@@ -5002,6 +5003,7 @@ await SaveShowcaseAsync("grid_replaced_items", "Layout", "Replaced Grid Items",
 await SaveShowcaseAsync("grid_lanes", "Layout", "Grid Lanes",
     "display: grid-lanes packs items of different heights into lanes (the layout formerly called masonry): each item goes where it can start highest, within fit-tolerance of the shortest lane; spans cover several lanes; grid-lanes-direction: row turns the rows into lanes, and dense packing backfills the room a spanning item skipped.",
     """
+    <!DOCTYPE html>
     <html><body style="font-family: sans-serif; font-size: 8pt; color:#fff;">
       <p style="color:#000">Column lanes: three 100pt lanes, 6pt gaps, fit-tolerance 0 - each item takes the shortest lane.</p>
       <div style="display:grid-lanes; grid-template-columns:repeat(3, 100pt); gap:6pt; fit-tolerance:0; width:318pt; padding:6pt; background:#ddd;">
@@ -11256,7 +11258,7 @@ var aspectRatioHtml = $$"""
 
 await SaveShowcaseAsync("aspect_ratio", "Layout", "aspect-ratio",
     "CSS aspect-ratio in both directions: width→height (with a percentage-height child resolving against the ratio-derived height) and height→width for shrink-to-fit boxes, replaced-element natural ratio vs. a specified/auto ratio, and indefinite-percentage-height sizing.",
-    aspectRatioHtml, pdfConfig);
+    "<!DOCTYPE html>" + aspectRatioHtml, pdfConfig);
 
 // ── Charts.css showcase ─────────────────────────────────────────────────────
 // Renders charts with the pure-CSS Charts.css framework (https://chartscss.org, MIT, v1.2.0).
@@ -11899,7 +11901,7 @@ await SaveShowcaseAsync("png_passthrough", "Images & Replaced Content", "PNG Los
     "pass-through - the PNG's own compressed IDAT data, unchanged, with an /Indexed color space for a " +
     "palette source or a color-key /Mask array for tRNS chroma-key transparency - instead of being " +
     "decoded and re-encoded as a lossy JPEG at quality 75.",
-    pngPassthroughHtml, pdfConfig);
+    "<!DOCTYPE html>" + pngPassthroughHtml, pdfConfig);
 
 // ── Modern CSS colors: oklch/oklab/lab/lch palette + color-mix() opacity ──────────────
 var modernColorHtml =
@@ -11997,7 +11999,7 @@ var valueFunctionsHtml =
 await SaveShowcaseAsync("css_value_functions", "CSS Values & Functions", "CSS Value Functions",
     "The math functions beyond calc() (round(), mod(), rem(), trigonometric, pow(), sqrt(), hypot(), log(), exp(), abs(), sign()), " +
     "env() with fallbacks, sibling-index()/sibling-count(), contrast-color() and calc-size(), each resolved to real PDF geometry and colors.",
-    valueFunctionsHtml, pdfConfig);
+    "<!DOCTYPE html>" + valueFunctionsHtml, pdfConfig);
 
 // ── @layer cascade layers: layer order beats specificity; unlayered beats layered ─────
 var cascadeLayerHtml =
@@ -12081,7 +12083,7 @@ await SaveShowcaseAsync("css_nesting", "Selectors & Cascade", "CSS Nesting",
     "CSS Nesting: a card styled entirely by rules nested inside `.card` — the `&` nesting selector " +
     "(`&.accent`), an implicit-descendant nested selector (`.body`), a child combinator (`> .tag`), and a " +
     "two-level-deep nested combinator (`& + .tag`), resolved against the parent exactly like `:is(.card)`.",
-    nestingHtml, pdfConfig);
+    "<!DOCTYPE html>" + nestingHtml, pdfConfig);
 
 // ── Selectors PeachPDF recognizes but never matches: they must not invalidate their list ───
 // Every declaration below arrives through a selector list that also names something PeachPDF has no
@@ -12142,7 +12144,7 @@ await SaveShowcaseAsync("unmatchable_selectors", "Selectors & Cascade", "Unmatch
     "extensions like `::-webkit-file-upload-button` — no longer invalidate the selector list they share with a " +
     "real selector. Every token, colour and measure here arrives through such a list, including a Tailwind-v4-" +
     "shaped `:root, :host` design-token block.",
-    unmatchableSelectorHtml, pdfConfig);
+    "<!DOCTYPE html>" + unmatchableSelectorHtml, pdfConfig);
 
 // ── The pseudo-classes a document tree alone can answer (issue #417) ───────────────────────
 // :empty, :any-link and :scope used to sit in the recognized-but-unmatchable list with :hover and
@@ -15946,7 +15948,7 @@ await SaveShowcaseAsync("lossless_webp_avif", "Images & Replaced Content", "Loss
     "detected via PeachImage's ImageInfo.IsLosslessEncoding and embedded as a raw /FlateDecode stream " +
     "under ImageCompression.Auto/Lossless, instead of always being re-encoded as lossy JPEG the way every " +
     "earlier PeachPDF version did regardless of the source's own encoding.",
-    losslessRasterHtml, pdfConfig);
+    "<!DOCTYPE html>" + losslessRasterHtml, pdfConfig);
 
 // ── JPEG XL (PeachImage 0.5.0) ─────────────────────────────────────────────────────────
 // PeachImage decodes JPEG XL but has no encoder, so the images are small committed files (linked from
@@ -15989,7 +15991,7 @@ await SaveShowcaseAsync("jpeg_xl", "Images & Replaced Content", "JPEG XL Images"
     "JPEG XL (decode only, via PeachImage 0.5.0): lossy and lossless, alpha, 16-bit samples, animation (first frame), " +
     "ICC profiles, and files made by recompressing a JPEG, which are turned back into the original JPEG and then " +
     "embedded under the usual JPEG rules (a CMYK or ICC-tagged one byte for byte).",
-    jpegXlHtml, pdfConfig);
+    "<!DOCTYPE html>" + jpegXlHtml, pdfConfig);
 
 // ── image-orientation ──────────────────────────────────────────────────────────────────
 // recompressed_sideways_bench.jxl is a JPEG recompressed to JPEG XL: it comes back as a JPEG whose pixels are
@@ -16066,7 +16068,7 @@ await SaveShowcaseAsync("gif_passthrough", "Images & Replaced Content", "GIF Los
     "full logical canvas embeds the same LZW codes its own encoder produced as /LZWDecode with an " +
     "/Indexed color space - re-packed from GIF's bit order into PDF's, instead of being decoded and " +
     "re-encoded.",
-    gifPassthroughHtml, pdfConfig);
+    "<!DOCTYPE html>" + gifPassthroughHtml, pdfConfig);
 
 // ── PNG alpha-channel /SMask split (issue #1109) ───────────────────────────────────────
 static byte[] BuildAlphaGradientPngBytes(int size)
@@ -16298,7 +16300,7 @@ var svgColorManagementHtml =
 
 await SaveShowcaseAsync("svg_color_management", "Graphics & Effects", "SVG Color Management",
     "SVG icc-color() resolved through a <color-profile>, and color-interpolation: linearRGB blending gradient stops in linear light.",
-    svgColorManagementHtml, pdfConfig);
+    "<!DOCTYPE html>" + svgColorManagementHtml, pdfConfig);
 
 // ── text-underline-offset / text-underline-position ─────────────────────────────────
 var textUnderlineOffsetPositionHtml =
@@ -16694,6 +16696,47 @@ const string cssBarcodesHtml = """
 await SaveShowcaseAsync("css_barcodes", "Document Building", "Barcodes as CSS Images",
     "-peachpdf-barcode() is an <image> function: QR codes, Data Matrix, Code 128, GS1-128, EAN-13, EAN-8 and UPC-A as backgrounds and generated content, drawn as vector shapes with colors and sizing from ordinary CSS.",
     cssBarcodesHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
+
+// ── Document modes: the same HTML with and without a DOCTYPE ──────────────
+// A document with no DOCTYPE is in quirks mode, as in a browser: the first paragraph of the body has no
+// top margin, a table does not inherit the font of what it sits in (nor a color but the body's), a form
+// has a bottom margin, `width: 120` is 120px, `color: c0392b` is a color and a class matches whatever its
+// case. The DOCTYPE'd copy is the standards: none of that.
+const string documentModeBody = """
+    <html>
+    <head>
+    <style>
+      body { font-family: sans-serif; font-size: 11pt; color: #1f2937; background: #fdf6e3; }
+      .Note { color: c0392b; font-weight: bold }
+      .box { width: 120; height: 28; background-color: 2980b9; color: #ffffff; padding: 4 }
+      table { border: 1px solid #94a3b8 }
+      td { border: 1px solid #94a3b8 }
+      form { background: #e2e8f0 }
+    </style>
+    </head>
+    <body>
+    <p>This is the first paragraph of the body.</p>
+    <p class="note">A class written .Note matches class="note" in quirks mode only.</p>
+    <div class="box">120 x 28, no units</div>
+    <form><input value="a form"></form>
+    <div style="font-style: italic; font-size: 15pt; color: #7c3aed; margin-top: 12px">
+      <table><tr><td><p>The first paragraph of a cell, in a table that does not inherit the italic, the size or the color.</p></td></tr></table>
+    </div>
+    </body>
+    </html>
+    """;
+
+await SaveShowcaseAsync("document_mode_quirks", "Selectors & Cascade", "Document modes: no DOCTYPE (quirks mode)",
+    "HTML with no DOCTYPE is laid out in quirks mode, as in a browser: the first paragraph of the body has no top margin, the " +
+    "table takes the initial font and the body's color, the form has a bottom margin, and `.Note` matches `class=\"note\"`, " +
+    "`width: 120` is 120px and `color: c0392b` is a color. The next showcase is the same HTML with a DOCTYPE.",
+    documentModeBody, new PdfGenerateConfig { PageSize = PageSize.A5 });
+
+await SaveShowcaseAsync("document_mode_standards", "Selectors & Cascade", "Document modes: with a DOCTYPE (standards)",
+    "The same HTML with `<!DOCTYPE html>`: the standards. The paragraph keeps its top margin, the table inherits the italic, " +
+    "the size and the color of the `div` around it, and the rules that rely on quirks (`.Note`, `width: 120`, `color: c0392b`) " +
+    "do not apply. `PdfGenerateConfig.DocumentMode = PdfDocumentMode.NoQuirks` does the same to HTML with no DOCTYPE.",
+    "<!DOCTYPE html>" + documentModeBody, new PdfGenerateConfig { PageSize = PageSize.A5 });
 
 const string barcodesSource =
     """"

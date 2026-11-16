@@ -111,6 +111,7 @@ internal static class CliRunner
             SnapBorderWidthsToCssPixels = options.SnapBorderWidthsToCssPixels,
             EnableInteractivePdfForms = options.InteractivePdfForms,
             IgnoreAuthorStyleSheets = options.NoAuthorStyle,
+            DocumentMode = options.DocumentMode,
             // Set on the config rather than on the loader, so it holds for every input kind - including
             // MHTML, which is rendered through a bare MimeKitNetworkLoader that never saw this option.
             AllowLocalFileAccess = !options.NoLocalFiles,

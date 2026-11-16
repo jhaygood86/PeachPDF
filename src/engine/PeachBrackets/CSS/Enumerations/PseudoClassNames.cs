@@ -76,6 +76,12 @@ namespace PeachBrackets.Css
         public static readonly string Lang = "lang";
         public static readonly string Contains = "contains";
         public static readonly string HostContext = "host-context";
+        /// <summary>Internal, for the user-agent sheet's quirks-mode margin rules (HTML Standard 15.3.9): an element with no substantial previous sibling.</summary>
+        public static readonly string QuirkNoSubstantialPrevious = "-peachpdf-no-substantial-previous";
+        /// <summary>Internal: an element with no substantial following sibling (HTML Standard 15.3.9).</summary>
+        public static readonly string QuirkNoSubstantialFollowing = "-peachpdf-no-substantial-following";
+        /// <summary>Internal: an element that contains no substantial node (HTML Standard 15.3.9's "blank").</summary>
+        public static readonly string QuirkBlank = "-peachpdf-blank";
         public static readonly string Separator = ":";
     }
 }

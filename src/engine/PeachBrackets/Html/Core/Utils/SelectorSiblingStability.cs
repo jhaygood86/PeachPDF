@@ -54,7 +54,10 @@ namespace PeachBrackets.Html.Utils
                 // Named pseudo-classes: most answer a constant (a static PDF has no hover, focus or history), :root and :scope the
                 // element's place at the top of the tree, :link and :any-link its tag and href. These two read the element's content.
                 case PseudoClassSelector pseudoClass:
-                    return pseudoClass.Class != PseudoClassNames.Empty && pseudoClass.Class != PseudoClassNames.PlaceholderShown;
+                    return pseudoClass.Class != PseudoClassNames.Empty && pseudoClass.Class != PseudoClassNames.PlaceholderShown
+                        && pseudoClass.Class != PseudoClassNames.QuirkNoSubstantialPrevious
+                        && pseudoClass.Class != PseudoClassNames.QuirkNoSubstantialFollowing
+                        && pseudoClass.Class != PseudoClassNames.QuirkBlank;
 
                 case NotSelector not:
                     return IsStable(not.Inner);

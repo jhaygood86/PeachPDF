@@ -134,6 +134,13 @@ public sealed class HtmlDocumentOptions
     public Building.StyleSheet? StyleSheet { get; set; }
 
     /// <summary>
+    /// The mode to lay the document out in, or <see langword="null"/> (the default) for the one its DOCTYPE gives it, as a browser would: a document
+    /// with no DOCTYPE, or a legacy one, is in <see cref="PeachBrackets.DocumentMode.Quirks"/> mode. HTML handed over without a DOCTYPE is
+    /// laid out the way a browser lays it out; set <see cref="PeachBrackets.DocumentMode.NoQuirks"/> to have the standards apply to it anyway.
+    /// </summary>
+    public DocumentMode? DocumentMode { get; set; }
+
+    /// <summary>
     /// The language to assume when the document declares none (<c>&lt;html lang&gt;</c>), as a BCP 47 tag, or null to assume none. It
     /// drives hyphenation and language-dependent line breaking.
     /// </summary>

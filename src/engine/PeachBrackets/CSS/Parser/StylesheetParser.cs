@@ -14,6 +14,9 @@ namespace PeachBrackets.Css
     {
         internal static readonly StylesheetParser Default = new();
 
+        /// <summary>The parser for the style sheets and <c>style</c> attributes of a document in quirks mode.</summary>
+        internal static readonly StylesheetParser Quirks = new(quirksMode: true);
+
         public StylesheetParser(
             bool includeUnknownRules = false,
             bool includeUnknownDeclarations = false,
@@ -21,7 +24,8 @@ namespace PeachBrackets.Css
             bool tolerateInvalidValues = false,
             bool tolerateInvalidConstraints = false,
             bool preserveComments = false,
-            bool preserveDuplicateProperties = false
+            bool preserveDuplicateProperties = false,
+            bool quirksMode = false
         )
         {
             Options = new ParserOptions
@@ -33,6 +37,7 @@ namespace PeachBrackets.Css
                 AllowInvalidConstraints = tolerateInvalidConstraints,
                 PreserveComments = preserveComments,
                 PreserveDuplicateProperties = preserveDuplicateProperties,
+                QuirksMode = quirksMode,
             };
         }
 

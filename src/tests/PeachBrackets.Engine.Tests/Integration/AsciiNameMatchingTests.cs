@@ -31,17 +31,41 @@ namespace PeachBrackets.Engine.Tests.Integration
         }
 
         [Fact]
-        public async Task AnAsciiClassStillMatchesCaseInsensitively()
+        public async Task AnAsciiClassInQuirksModeMatchesCaseInsensitively()
         {
-            // The contrast case: ASCII case-insensitivity is the rule and must survive. Both an exact
-            // and a differently-cased ASCII class still match.
+            // The contrast case: ASCII case-insensitivity is what quirks mode does (Selectors 4 section 6.6), and must survive there. Both an exact
+            // and a differently-cased ASCII class match. No DOCTYPE: this document is in quirks mode.
             var (root, _) = await LayoutAsync(
-                "<!DOCTYPE html><html><head><style>.k { color: rgb(255,0,0) }</style></head>"
+                "<html><head><style>.k { color: rgb(255,0,0) }</style></head>"
                 + "<body style='margin:0'><div id='lower' class='k'>x</div>"
                 + "<div id='upper' class='K'>x</div></body></html>");
 
             Assert.Equal("rgb(255, 0, 0)", FindById(root, "lower")!.Color);
             Assert.Equal("rgb(255, 0, 0)", FindById(root, "upper")!.Color);
+        }
+
+        [Theory]
+        [InlineData("<!DOCTYPE html>")]
+        [InlineData("<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Transitional//EN\" \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd\">")]
+        public async Task AClassOrIdOutsideQuirksModeMatchesCaseSensitively(string doctype)
+        {
+            // Standards and limited-quirks mode: the names must be the same, byte for byte.
+            var (root, _) = await LayoutAsync(
+                doctype + "<html><head><style>.k { color: rgb(255,0,0) } #a { color: rgb(0,0,255) }</style></head>"
+                + "<body style='margin:0'><div id='x' class='k'>x</div><div id='y' class='K'>x</div><div id='A'>x</div></body></html>");
+
+            Assert.Equal("rgb(255, 0, 0)", FindById(root, "x")!.Color);
+            Assert.NotEqual("rgb(255, 0, 0)", FindById(root, "y")!.Color);
+            Assert.NotEqual("rgb(0, 0, 255)", FindById(root, "A")!.Color);
+        }
+
+        [Fact]
+        public async Task AnIdInQuirksModeMatchesCaseInsensitively()
+        {
+            var (root, _) = await LayoutAsync(
+                "<html><head><style>#lower { color: rgb(0,0,255) }</style></head><body style='margin:0'><div id='LOWER'>x</div></body></html>");
+
+            Assert.Equal("rgb(0, 0, 255)", FindById(root, "LOWER")!.Color);
         }
 
         [Fact]

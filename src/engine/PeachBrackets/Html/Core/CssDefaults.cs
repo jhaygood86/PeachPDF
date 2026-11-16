@@ -83,8 +83,8 @@ namespace PeachBrackets.Html
             caption         { text-align: center }
             body            { margin: 8px }
             /* HTML Standard 15.3.3, 15.3.6 and 15.3.7: the block margins of headings, paragraphs and
-               lists. `fieldset` and `form` have none (a quirks-mode `form` gets a bottom margin, which
-               is not applied: see docs/html-css-support.md). The inline margins are the physical
+               lists. `fieldset` and `form` have none (a quirks-mode `form` gets a bottom margin, in the
+               quirks block at the end of the sheet). The inline margins are the physical
                spelling of the standard's logical ones, for the reason given at the `hr` rule. */
             h1              { font-size: 2em; margin: .67em 0 }
             h2              { font-size: 1.5em; margin: .83em 0 }
@@ -337,6 +337,45 @@ namespace PeachBrackets.Html
             /* A details element that is not open shows only its first summary. The rest of it is hidden by the content box DomParser puts around it
                (WrapDetailsContents), not by a rule here: the HTML Standard hides it with content-visibility: hidden, which an author's display cannot undo, and a
                rule on the children would lose to an author rule such as .panel { display: flex }. */
+
+            /* The rules the HTML Standard expects "in quirks mode" (rendering 15.3.3, 15.3.7, 15.3.8, 15.3.9, 15.3.10 and 15.4.2), which apply only
+               to a document in quirks mode: -peachpdf-quirks-mode is true for it alone (DocumentMode.Quirks), so the other modes never see them. It
+               comes last so that it wins a tie of specificity with the rules above; being in the user-agent origin, it loses to any author rule.
+
+               Margins are written with the physical properties for the reason given at the `hr` rule: a logical declaration here would defeat
+               an author's physical margin. That makes 15.3.9 right for a horizontal writing mode only, and the standard's "block start" for
+               a vertical one is not reached.
+
+               15.3.9: an element with default margins that is the first thing in a body or cell loses its top margin, and its bottom one when it
+               also holds nothing, and so on. "Substantial" counts text, which :first-child does not, hence the three -peachpdf pseudo-classes.
+               The listed elements are the standard's "elements with default margins". */
+            @media (-peachpdf-quirks-mode) {
+              form          { margin-bottom: 1em }
+
+              li            { list-style-position: inside }
+              li :is(dir, menu, ol, ul)
+                            { list-style-position: outside }
+              :is(dir, menu, ol, ul) :is(dir, menu, ol, ul, li)
+                            { list-style-position: unset }
+
+              table         { font-weight: initial; font-style: initial; font-variant: initial; font-size: initial;
+                              line-height: initial; white-space: initial; text-align: initial }
+
+              input:not([type=image i]), textarea
+                            { box-sizing: border-box }
+
+              img[align=left i]  { margin-right: 3px }
+              img[align=right i] { margin-left: 3px }
+
+              :is(body, td, th) > :is(blockquote, dir, dl, h1, h2, h3, h4, h5, h6, listing, menu, ol, p, plaintext, pre, ul, xmp):-peachpdf-no-substantial-previous
+                            { margin-top: 0 }
+              :is(body, td, th) > :is(blockquote, dir, dl, h1, h2, h3, h4, h5, h6, listing, menu, ol, p, plaintext, pre, ul, xmp):-peachpdf-no-substantial-previous:-peachpdf-blank
+                            { margin-bottom: 0 }
+              :is(td, th) > :is(blockquote, dir, dl, h1, h2, h3, h4, h5, h6, listing, menu, ol, p, plaintext, pre, ul, xmp):-peachpdf-no-substantial-following:-peachpdf-blank
+                            { margin-top: 0 }
+              :is(td, th) > p:-peachpdf-no-substantial-following
+                            { margin-bottom: 0 }
+            }
         """;
 
         /// <summary>

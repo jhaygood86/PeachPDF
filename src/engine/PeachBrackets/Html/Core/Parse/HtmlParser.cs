@@ -38,9 +38,25 @@ namespace PeachBrackets.Html.Parse
         /// <param name="document">whether the source is a whole document, which gets the <c>html</c>, <c>head</c> and <c>body</c> elements it leaves out,
         /// rather than a fragment whose elements go in as they come</param>
         /// <exception cref="ArgumentOutOfRangeException"></exception>
-        public static CssBox ParseDocument(string source, CssBox? root = null, bool document = false)
+        public static CssBox ParseDocument(string source, CssBox? root = null, bool document = false) =>
+            ParseDocument(source, out _, root, document);
+
+        /// <summary>
+        /// Parses the source html to css boxes tree structure, and reports the document's mode (HTML Standard 13.2.6.4.1).
+        /// </summary>
+        /// <param name="source">the html source to parse</param>
+        /// <param name="mode">the mode the DOCTYPE puts a whole document in; <see cref="DocumentMode.NoQuirks"/> for a fragment</param>
+        /// <param name="root">the root box (null for document root)</param>
+        /// <param name="document">whether the source is a whole document, which gets the <c>html</c>, <c>head</c> and <c>body</c> elements it leaves out,
+        /// rather than a fragment whose elements go in as they come</param>
+        public static CssBox ParseDocument(string source, out DocumentMode mode, CssBox? root = null, bool document = false)
         {
             root ??= CssBox.CreateBlock();
+
+            // A byte order mark is the encoding's, not the document's: a decoder that left one at the start would otherwise make it a character of the
+            // page, and the first token that is not white space - which decides the mode - would no longer be the DOCTYPE.
+            if (document && source.StartsWith('\uFEFF')) source = source[1..];
+
             var state = new ParserState(root) { IsDocument = document, Phase = document ? DocumentPhase.Initial : DocumentPhase.InBody };
             MathSourceParser? mathParser = null;
 
@@ -51,9 +67,9 @@ namespace PeachBrackets.Html.Parse
             while (tokenizer.ReadNextToken(out var token))
             {
                 if (document && state is { Phase: DocumentPhase.Initial, QuirksDecided: false } && token.Kind is not HtmlTokenKind.Comment
-                    && !(token is HtmlDataToken { Data: { } lead } && string.IsNullOrWhiteSpace(lead)))
+                    && !(token is HtmlDataToken { Data: { } lead } && IsInitialModeWhitespace(lead)))
                 {
-                    state.IsQuirksMode = DeterminesQuirksMode(token);
+                    state.Mode = DeterminesMode(token);
                     state.QuirksDecided = true;
                 }
 
@@ -124,11 +140,25 @@ namespace PeachBrackets.Html.Parse
 
             if (document) FinishDocument(state);
 
+            // A source that ends before it has said anything has no DOCTYPE either (13.2.6.4.1, "initial": an end of file is quirks mode).
+            mode = document && !state.QuirksDecided ? DocumentMode.Quirks : state.Mode;
             return root;
         }
 
 
         #region Private methods
+
+        // The "initial" insertion mode ignores a character that is a tab, line feed, form feed, carriage return or space (13.2.6.4.1), and nothing else:
+        // not a no-break space, which .NET calls white space.
+        private static bool IsInitialModeWhitespace(string text)
+        {
+            foreach (var c in text)
+            {
+                if (c is not (' ' or '\t' or '\n' or '\f' or '\r')) return false;
+            }
+
+            return true;
+        }
 
         /// <summary>
         /// Parse the html part, the part from prev parsing index to the beginning of the next html tag.<br/>

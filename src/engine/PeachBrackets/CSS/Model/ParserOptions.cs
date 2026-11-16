@@ -9,5 +9,8 @@
         public bool AllowInvalidConstraints { get; set; }
         public bool PreserveComments { get; set; }
         public bool PreserveDuplicateProperties { get; set; }
+
+        /// <summary>Whether the text is read for a document in quirks mode: a hex color may lack its <c>#</c> and a length its unit (<see cref="QuirkyValues"/>).</summary>
+        public bool QuirksMode { get; set; }
     }
 }

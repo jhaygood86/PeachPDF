@@ -72,6 +72,9 @@ internal sealed class CliOptions
     public bool NoDefaultStyle { get; set; }
     public bool NoAuthorStyle { get; set; }
 
+    /// <summary>The mode to lay the HTML out in (<c>--document-mode</c>); <see cref="PdfDocumentMode.Auto"/> takes it from the DOCTYPE, as a browser does.</summary>
+    public PdfDocumentMode DocumentMode { get; set; } = PdfDocumentMode.Auto;
+
     /// <summary>Where in its run every CSS animation is sampled, 0 to 1 (<c>--animation-progress</c>); null leaves animations unapplied.</summary>
     public double? AnimationProgress { get; set; }
 

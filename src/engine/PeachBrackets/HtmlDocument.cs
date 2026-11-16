@@ -127,6 +127,7 @@ public sealed partial class HtmlDocument : IDisposable
             container.AnimationsEnabled = options.AnimationsEnabled && options.AnimationProgress is null;
             container.InteractiveForms = options.CollectFormFields;
             container.PaintFormControls = options.PaintFormControls;
+            container.DocumentModeOverride = options.DocumentMode;
             document.ApplyTextOptions(options);
 
             // Read while the DOM tree is generated, when every text box is cut into words: hyphens: auto and the language-dependent
@@ -317,6 +318,12 @@ public sealed partial class HtmlDocument : IDisposable
 
     /// <summary>The language the document declares (<c>&lt;html lang&gt;</c>) or was given as the default, or null if there is none.</summary>
     public string? Language => _container.DocumentLanguage;
+
+    /// <summary>
+    /// The mode the document is laid out in: <see cref="HtmlDocumentOptions.DocumentMode"/> when it was set, otherwise the one the DOCTYPE gives.
+    /// A document built with <see cref="CreateAsync"/> is always <see cref="PeachBrackets.DocumentMode.NoQuirks"/>.
+    /// </summary>
+    public DocumentMode DocumentMode => _container.DocumentMode;
 
     /// <summary>What the document says about itself - its title and <c>&lt;meta&gt;</c> elements - or null if it says nothing.</summary>
     public HtmlDocumentMetadata? Metadata => _container.DocumentMetadata;

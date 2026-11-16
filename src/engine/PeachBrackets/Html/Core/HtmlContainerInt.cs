@@ -1337,6 +1337,16 @@ namespace PeachBrackets.Html
         internal string? DefaultLanguage { get; set; }
 
         /// <summary>
+        /// The document's mode (HTML Standard 13.2.6.4.1): what its DOCTYPE says, or <see cref="DocumentModeOverride"/>. Set once per document
+        /// parse (<c>DomParser.GenerateCssTree</c>), before the style sheets are cascaded, because selector matching, the user-agent sheet's
+        /// <c>@media</c> block and layout all read it. A document built from fragments or declaratively is never in quirks mode.
+        /// </summary>
+        internal DocumentMode DocumentMode { get; set; }
+
+        /// <summary>The mode the host asks for in place of the DOCTYPE's (<see cref="HtmlDocumentOptions.DocumentMode"/>), or <c>null</c>.</summary>
+        internal DocumentMode? DocumentModeOverride { get; set; }
+
+        /// <summary>
         /// The medium the document is laid out for (<see cref="HtmlDocumentOptions.MediaType"/>). It is the one source of truth for both what the
         /// cascade matches <c>@media</c> rules against (<see cref="Media"/>) and whether the document is paged or one continuous surface
         /// (<see cref="Continuous"/>). Set before the DOM/CSS tree is generated.
@@ -1594,6 +1604,7 @@ namespace PeachBrackets.Html
             // the footnote tracking resets below already exist to avoid.
             FragmentTree = null;
             DocumentLanguage = null;
+            DocumentMode = DocumentMode.NoQuirks;
             // Dropped with the tree it was keyed on, so a disposed tree is not kept reachable by the memo
             // until the next document happens to read through it.
             _documentBase = null;
@@ -1717,6 +1728,7 @@ namespace PeachBrackets.Html
             // writing-mode declaration, which a declarative document has no equivalent of.
             RootWritingMode = WritingMode.HorizontalTb;
             DocumentLanguage = documentLanguage;
+            DocumentMode = DocumentMode.NoQuirks;
 
             // Mirrors SetHtml's own "use the caller's CssData directly" idiom (no clone) - there is nothing
             // appended to it on this path (no <style>/<link> discovery step exists for a declarative tree),

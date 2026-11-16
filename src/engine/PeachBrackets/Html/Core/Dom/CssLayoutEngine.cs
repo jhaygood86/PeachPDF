@@ -3562,6 +3562,44 @@ namespace PeachBrackets.Html.Dom
             box.Position.Value is PositionMode.Absolute ? DomUtils.GetNearestPositionedAncestor(box) : box.ContainingBlock;
 
         /// <summary>
+        /// <see cref="PercentageBase"/> for a percentage <i>height</i>. In quirks mode the Quirks Mode Standard 3.5 has it skip the containing blocks
+        /// whose height is <c>auto</c>, to the first one with a height of its own, a table cell, or the initial containing block - so a
+        /// <c>height: 100%</c> in a <c>body</c> and an <c>html</c> that have no height is the page's, as it is in a browser. It applies to an
+        /// element that is static, relative or sticky and is not a table part, and stops at anything that is not a block container.
+        /// </summary>
+        private static CssBox PercentageHeightBase(CssBox box)
+        {
+            var containingBlock = PercentageBase(box);
+
+            if (box.HtmlContainer?.DocumentMode != DocumentMode.Quirks
+                || box.Position.Value is not (PositionMode.Static or PositionMode.Relative or PositionMode.Sticky)
+                || !CssValueParser.DependsOnPercentage(box.Height)
+                || box.DerivedStyle.ActualDisplay is Keywords.TableRow or Keywords.TableRowGroup or Keywords.TableHeaderGroup
+                    or Keywords.TableFooterGroup or Keywords.TableCell or Keywords.TableCaption)
+                return containingBlock;
+
+            var start = containingBlock;
+
+            while (true)
+            {
+                // A table cell's percentage heights are the UA's (the standard leaves them undefined): a browser does not apply the quirk to what is
+                // inside a cell, so the walk that reaches one from further down stops where the standard does and the percentage is the ordinary one.
+                if (containingBlock.IsTableCell)
+                    return ReferenceEquals(containingBlock, start) ? containingBlock : start;
+
+                // The initial containing block, or a box with a height of its own.
+                if (ReferenceEquals(containingBlock, containingBlock.ContainingBlock) || CssValueParser.IsValidLength(containingBlock.Height))
+                    return containingBlock;
+
+                if (containingBlock.Position.Value is PositionMode.Absolute
+                    || containingBlock.DerivedStyle.ActualDisplay is not (Keywords.Block or Keywords.ListItem or Keywords.FlowRoot or Keywords.InlineBlock or Keywords.Table))
+                    return containingBlock;
+
+                containingBlock = PercentageBase(containingBlock);
+            }
+        }
+
+        /// <summary>
         /// The containing block of an absolutely positioned <paramref name="box"/> whose nearest positioned
         /// ancestor is an inline (<see cref="DomUtils.InlineContainingBlockOf"/>), or null. Consulted ahead of
         /// <see cref="PercentageBase"/>, whose box an inline's sizes would be read off meaninglessly.
@@ -3641,7 +3679,7 @@ namespace PeachBrackets.Html.Dom
             // margin/size override changes what a fixed box's own canonical height resolves against (issue
             // #146); FragmentEmitter.ComputeFixedSizeOverride corrects the delta for every LATER page
             // relative to whatever this establishes here.
-            var heightCb = PercentageBase(box);
+            var heightCb = PercentageHeightBase(box);
             var isFixedToPage = box.Position.Value is PositionMode.Fixed && box.HtmlContainer is not null;
             // CSS Sizing 3 makes an absolutely-positioned element's containing-block size definite with
             // respect to that element even when the positioned ancestor's own height is content-driven.
@@ -3812,7 +3850,7 @@ namespace PeachBrackets.Html.Dom
             if (box.Position.Value is PositionMode.Fixed && box.HtmlContainer is not null) return true;
             if (box.Position.Value is PositionMode.Absolute) return true;
 
-            return IsHeightDefinite(PercentageBase(box));
+            return IsHeightDefinite(PercentageHeightBase(box));
         }
 
         /// <summary>
@@ -3917,7 +3955,7 @@ namespace PeachBrackets.Html.Dom
                 PositionMode.Fixed when box.HtmlContainer is not null
                     => box.HtmlContainer.FirstPageBandHeight,
                 PositionMode.Absolute => null,
-                _ => ResolveDefiniteHeightValue(PercentageBase(box)),
+                _ => ResolveDefiniteHeightValue(PercentageHeightBase(box)),
             };
 
             double? declared = null;
@@ -4234,6 +4272,48 @@ namespace PeachBrackets.Html.Dom
                     }
                 }
             }
+
+            ApplyQuirksViewportFill(box);
+        }
+
+        /// <summary>
+        /// The Quirks Mode Standard 3.6 and 3.7: in quirks mode an <c>html</c> element with an <c>auto</c> height is at least as tall as the initial
+        /// containing block less its own margins, and a <c>body</c> with an <c>auto</c> height at least as tall as the <c>html</c> element's content box
+        /// less its own margins, so the page fills the viewport (here the first page's area), and a background on the body covers it. Only a horizontal
+        /// writing mode: the standard leaves two writing modes in one document open.
+        /// </summary>
+        private static void ApplyQuirksViewportFill(CssBox box)
+        {
+            if (box.HtmlContainer is not { DocumentMode: DocumentMode.Quirks } container || box.HtmlTag is null
+                || CssValueParser.IsValidLength(box.Height) || box.WritingMode.Value.IsVertical())
+                return;
+
+            if (container.FirstPageBandHeight is not > 0) return;
+            var band = container.FirstPageBandHeight.Value;
+
+            double target;
+
+            if (box.HtmlTag.Name == "html" && box.ParentBox is { IsRoot: true })
+            {
+                target = band - box.ActualMarginTop - box.ActualMarginBottom;
+            }
+            else if (box.HtmlTag.Name == "body" && box.ParentBox is { HtmlTag.Name: "html", ParentBox.IsRoot: true } html
+                && box.Position.Value is not (PositionMode.Absolute or PositionMode.Fixed)
+                && !box.IsFloated && box.DerivedStyle.ActualDisplay != Keywords.Inline)
+            {
+                // The html element's own height: the one it declares, or the fill it is given just above.
+                var htmlBorderBoxHeight = CssValueParser.IsValidLength(html.Height)
+                    ? GetBoxHeight(html) ?? 0
+                    : band - html.ActualMarginTop - html.ActualMarginBottom;
+                var htmlContentHeight = htmlBorderBoxHeight - html.ActualPaddingTop - html.ActualPaddingBottom - html.ActualBorderTopWidth - html.ActualBorderBottomWidth;
+                target = htmlContentHeight - box.ActualMarginTop - box.ActualMarginBottom;
+            }
+            else
+            {
+                return;
+            }
+
+            box.ActualBottom = Math.Max(box.ActualBottom, box.Location.Y + target);
         }
 
         /// <summary>
@@ -4890,7 +4970,7 @@ namespace PeachBrackets.Html.Dom
 
                     // A line holding nothing else still has its strut (the same floor TryGrowLineForBaselessAtomic gives it).
                     var held = line.BaselineAlignedExtent ?? line.BaselineExtent
-                               ?? HalfLeadingExtentOf(blockBox.ActualFont, blockBox.ActualLineHeight);
+                               ?? (SizesLinesTheQuirkyWay(blockBox) ? default : HalfLeadingExtentOf(blockBox.ActualFont, blockBox.ActualLineHeight));
                     CommitLineExtent(coordinates, held);
                 }
 
@@ -5414,7 +5494,8 @@ namespace PeachBrackets.Html.Dom
             // baseline, and the line's strut hangs its descent below the baseline: a 30px box alone on a line at 13px Arial is a 33px line (CSS 2.1 section
             // 10.8.1), where the line ended at the box's own bottom.
             if (BaselineIsBottomMarginEdge(b, coordinates.Line) && b.VerticalAlign.Value is { IsValue: false, Keyword: VerticalAlignment.Baseline }
-                && coordinates.Line.OwnerBox is { IsReplacedBlockWrapper: false } lineOwner && lineOwner is not (CssBoxImage or CssBoxSvg or CssBoxFrame))
+                && coordinates.Line.OwnerBox is { IsReplacedBlockWrapper: false } lineOwner && lineOwner is not (CssBoxImage or CssBoxSvg or CssBoxFrame)
+                && !SizesLinesTheQuirkyWay(lineOwner))
             {
                 coordinates.MaxBottom = Math.Max(coordinates.MaxBottom,
                     b.Location.Y + b.ActualBoxSizingHeight + b.ActualMarginBottom + HalfLeadingExtentOf(lineOwner.ActualFont, lineOwner.ActualLineHeight).BelowBaseline);
@@ -6406,6 +6487,40 @@ namespace PeachBrackets.Html.Dom
             LineBoxContributionOf(word, blockBox, pixelsPerPoint: 0, reserveDoubleOverlineReach: false).Height;
 
         /// <summary>
+        /// Whether <paramref name="blockBox"/>'s document is in quirks or limited-quirks mode, which size line boxes by the Quirks Mode Standard 3.3 and 3.4:
+        /// the block's own <c>line-height</c> gives its line boxes no minimum height (no strut), and an inline box with no text and no border or padding
+        /// along the line does not make a line taller.
+        /// </summary>
+        private static bool SizesLinesTheQuirkyWay(CssBox blockBox) =>
+            blockBox.HtmlContainer?.DocumentMode is DocumentMode.Quirks or DocumentMode.LimitedQuirks;
+
+        /// <summary>
+        /// The line height calculation quirk (Quirks Mode Standard 3.3): an inline element box with no text, or only collapsed white space, and with no
+        /// border or padding on the sides the line runs along acts as if its <c>line-height</c> were zero, so it adds nothing to the line's height.
+        /// </summary>
+        private static bool IsQuirkyEmptyInline(CssBox inline)
+        {
+            if (inline.HtmlTag is null || !SizesLinesTheQuirkyWay(inline)) return false;
+
+            var spacing = inline.WritingMode.Value.IsVertical()
+                ? inline.ActualBorderTopWidth + inline.ActualBorderBottomWidth + inline.ActualPaddingTop + inline.ActualPaddingBottom
+                : inline.ActualBorderLeftWidth + inline.ActualBorderRightWidth + inline.ActualPaddingLeft + inline.ActualPaddingRight;
+
+            return spacing == 0 && !HoldsText(inline);
+        }
+
+        // Whether anything inside holds text that is not collapsible white space, in an inline box or one it contains. It stops at the first.
+        private static bool HoldsText(CssBox box)
+        {
+            foreach (var child in box.Boxes)
+            {
+                if (!HtmlUtils.IsNullOrCollapsibleWhitespace(child.Text) || HoldsText(child)) return true;
+            }
+
+            return false;
+        }
+
+        /// <summary>
         /// One inline box's share of a line box, split at the baseline, per
         /// <see href="https://www.w3.org/TR/CSS21/visudet.html#line-height">CSS 2.1 §10.8.1</see>: its
         /// glyph content area (<c>ascent</c>/<c>descent</c>) with the <b>leading</b> —
@@ -6524,7 +6639,11 @@ namespace PeachBrackets.Html.Dom
             // A replaced flex/grid item is its own block container (the cascade blockifies it and
             // CorrectReplacedElementBoxes leaves it unwrapped), so it holds only its own atomic word and
             // no text a strut could serve: the same bookkeeping-only line as the wrapper's.
-            var extent = blockBox.IsReplacedBlockWrapper || blockBox is CssBoxImage or CssBoxSvg or CssBoxFrame
+            //
+            // In quirks and limited-quirks mode a line with no text has no strut (Quirks Mode Standard 3.4): a line holding only an image is the image's
+            // height, with no descent hanging below it. A line with text keeps the block's own strut, as in a browser; the standard's "ignored" is for
+            // the minimum height a line of nothing but replaced content would get.
+            var extent = blockBox.IsReplacedBlockWrapper || blockBox is CssBoxImage or CssBoxSvg or CssBoxFrame || (word.IsImage && SizesLinesTheQuirkyWay(blockBox))
                 ? default
                 : ExtentOf(strutStyle, text: false);
 
@@ -6550,6 +6669,13 @@ namespace PeachBrackets.Html.Dom
                  inlineAncestor is not null && !ReferenceEquals(inlineAncestor, blockBox);
                  inlineAncestor = inlineAncestor.ParentBox)
             {
+                // An ancestor with no text of its own to put on the line does not size it in quirks mode (Quirks Mode Standard 3.3).
+                if (IsQuirkyEmptyInline(inlineAncestor))
+                {
+                    raise -= OwnRaiseOf(inlineAncestor);
+                    continue;
+                }
+
                 // On the first line an inline ancestor contributes the font it has there, which inherits from ::first-line.
                 extent = extent.Union(RaisedBy(
                     ExtentOf(word.FirstLineStyle is null ? inlineAncestor : inlineAncestor.FirstLineInlineStyle ?? inlineAncestor), raise));
@@ -7003,6 +7129,9 @@ namespace PeachBrackets.Html.Dom
                 // The pass that broke here gave it to the line before the break, and kept that line.
                 if (coordinates.EmptyInlinesBeforeResume?.Contains(emptyInline) == true) return;
 
+                // An empty inline with no border or padding makes no line taller in quirks mode (Quirks Mode Standard 3.3).
+                if (IsQuirkyEmptyInline(emptyInline)) return;
+
                 // On the first line of a block with a ::first-line rule an inline has the font it inherits from that rule.
                 var onFirstLine = blockBox.ResolvedFirstLineStyle is not null && ReferenceEquals(coordinates.Line, blockBox.LineBoxes.FirstOrDefault());
                 CssBox StyleOn(CssBox inline) => onFirstLine ? inline.FirstLineInlineStyle ?? inline : inline;
@@ -7016,7 +7145,8 @@ namespace PeachBrackets.Html.Dom
                      inline is not null && !ReferenceEquals(inline, blockBox);
                      inline = inline.ParentBox)
                 {
-                    extent = extent.Union(RaisedBy(HalfLeadingExtentWithDecoration(StyleOn(inline), g.PixelsPerPoint), raise));
+                    if (!IsQuirkyEmptyInline(inline))
+                        extent = extent.Union(RaisedBy(HalfLeadingExtentWithDecoration(StyleOn(inline), g.PixelsPerPoint), raise));
                     raise -= OwnRaiseOf(inline);
                 }
 
@@ -9377,7 +9507,7 @@ namespace PeachBrackets.Html.Dom
             // A line holding nothing but this box still has its strut (CSS 2.1 section 10.8.1: every line box starts with a zero-width inline box with the
             // block's own font and line-height), whose descent hangs below the baseline the box sits on: an inline-block of 30px with nothing else on its line
             // is a 33px line at 13px Arial, as in a browser. Words on the line bring their own strut, so it is only added where there is none.
-            if (held is null && !blockBox.IsReplacedBlockWrapper && blockBox is not (CssBoxImage or CssBoxSvg or CssBoxFrame))
+            if (held is null && !blockBox.IsReplacedBlockWrapper && blockBox is not (CssBoxImage or CssBoxSvg or CssBoxFrame) && !SizesLinesTheQuirkyWay(blockBox))
                 held = HalfLeadingExtentOf(blockBox.ActualFont, blockBox.ActualLineHeight);
 
             CommitLineExtent(coordinates, held is { } known ? known.Union(extent) : extent);
