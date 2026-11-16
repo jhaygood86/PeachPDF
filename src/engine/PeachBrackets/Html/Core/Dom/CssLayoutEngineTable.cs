@@ -1092,36 +1092,48 @@ namespace PeachBrackets.Html.Dom
         /// somehow changed collapse mode since a previous pass) is explicitly cleared back to
         /// <see cref="BorderEdges.None"/> rather than left however an earlier pass set it.
         /// </summary>
+        /// <remarks>
+        /// Two different edge sets, not one: a cell (and the table box itself) genuinely draws its own
+        /// border in the separated model - only the collapsed model replaces it with its own collapsed
+        /// border segments, so those two keep the collapse-mode-gated <c>cellAndTableEdges</c> below. A
+        /// row, row group, column or column group never draws its own border in EITHER model (CSS 2.1
+        /// SS17.6: "Rows, columns, row groups, and column groups cannot have borders... user agents must
+        /// ignore the 'border' properties for those elements") - wpt css-tables/row-margin-border-padding
+        /// and row-group-margin-border-padding, titled "...has no effect in border-collapse:separate
+        /// tables", caught this when those boxes were sharing <c>cellAndTableEdges</c> instead and so
+        /// painted their own border normally whenever the table was separate.
+        /// </remarks>
         private void SuppressParticipantBorderPaint()
         {
-            var edges = _tableBox.BorderCollapse.Value == BorderCollapseMode.Collapse ? BorderEdges.All : BorderEdges.None;
+            var cellAndTableEdges = _tableBox.BorderCollapse.Value == BorderCollapseMode.Collapse ? BorderEdges.All : BorderEdges.None;
+            const BorderEdges structuralEdges = BorderEdges.All;
 
-            _tableBox.SuppressedBorderEdges = edges;
+            _tableBox.SuppressedBorderEdges = cellAndTableEdges;
 
             foreach (var box in _tableBox.Boxes)
             {
                 if (box.DerivedStyle.ActualDisplay == Keywords.TableRowGroup)
-                    box.SuppressedBorderEdges = edges;
+                    box.SuppressedBorderEdges = structuralEdges;
             }
 
-            if (_headerBox is not null) _headerBox.SuppressedBorderEdges = edges;
-            if (_footerBox is not null) _footerBox.SuppressedBorderEdges = edges;
+            if (_headerBox is not null) _headerBox.SuppressedBorderEdges = structuralEdges;
+            if (_footerBox is not null) _footerBox.SuppressedBorderEdges = structuralEdges;
 
             // <col>/<colgroup> - their own border paint (they are never painted at all otherwise; see
             // SetColumnBoxDimensions) is suppressed the same way once they participate in resolution.
-            foreach (var column in _columns) column.SuppressedBorderEdges = edges;
+            foreach (var column in _columns) column.SuppressedBorderEdges = structuralEdges;
             foreach (var box in _tableBox.Boxes)
             {
                 if (box.DerivedStyle.ActualDisplay == Keywords.TableColumnGroup)
-                    box.SuppressedBorderEdges = edges;
+                    box.SuppressedBorderEdges = structuralEdges;
             }
 
             foreach (var row in _allRows)
             {
-                row.SuppressedBorderEdges = edges;
+                row.SuppressedBorderEdges = structuralEdges;
 
                 // Includes CssSpacingBox - harmless, it paints nothing of its own regardless.
-                foreach (var cell in row.Boxes) cell.SuppressedBorderEdges = edges;
+                foreach (var cell in row.Boxes) cell.SuppressedBorderEdges = cellAndTableEdges;
             }
         }
 
