@@ -79,7 +79,7 @@ namespace PeachBrackets.Html
             td, th          { display: table-cell }
             td, th          { padding: 1px }
             caption         { display: table-caption }
-            th              { font-weight: bolder; text-align: center }
+            th              { font-weight: bolder }
             caption         { text-align: center }
             body            { margin: 8px }
             /* HTML Standard 15.3.3, 15.3.6 and 15.3.7: the block margins of headings, paragraphs and

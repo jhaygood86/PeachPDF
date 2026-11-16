@@ -1460,6 +1460,27 @@ namespace PeachBrackets.Html.Parse
             // 2. Inherit inheritable properties from parent
             box.InheritStyle();
 
+            // HTML Standard, rendering: "User agents are expected to have a rule in their user agent
+            // style sheet that matches th elements that have a parent node whose computed value for the
+            // 'text-align' property is its initial value, whose declaration block consists of just a
+            // single declaration that sets the 'text-align' property to the value 'center'." This is not
+            // a flat `th { text-align: center }` UA rule - that would override an ancestor's own
+            // text-align (even one that merely re-asserts the initial value) the same way it overrides
+            // an unset one, which is exactly backwards (wpt css-tables/th-text-align). Applied here,
+            // right after inheritance and before any UA/author/inline declaration, at exactly the
+            // CssProperty state inheritance alone would have left the th in - so a real declaration on
+            // the th itself (even `text-align: inherit`) still overrides it normally in the phases below.
+            if (box.HtmlTag is { } thTag && thTag.Name.Equals(HtmlConstants.Th, StringComparison.OrdinalIgnoreCase)
+                && box.ComputedStyle.Text.TextAlignAll.Value == HorizontalAlignment.Start
+                && box.ComputedStyle.Text.TextAlignLast.Value == TextAlignLast.Auto)
+            {
+                // "text-align" itself is a shorthand (expanded to these two longhands only by the CSS-OM
+                // parsing layer, PeachBrackets.Css.TextAlignProperty) - CssUtils.SetPropertyValue only
+                // ever reaches a registered longhand, so the shorthand name here would silently no-op.
+                CssUtils.SetPropertyValue(valueParser, box, PropertyNames.TextAlignAll, Keywords.Center);
+                CssUtils.SetPropertyValue(valueParser, box, PropertyNames.TextAlignLast, Keywords.Auto);
+            }
+
             // Quirks Mode Standard 3.12: in quirks mode a table that nothing gives a color takes the body's color, not its parent's, so a table in a
             // colored div is not that color. What the rules below declare (the user-agent sheet's too) still replaces it.
             if (box.HtmlTag is { } quirkTag && quirkTag.Name.Equals(HtmlConstants.Table, StringComparison.OrdinalIgnoreCase)
