@@ -1,3 +1,4 @@
+using PeachDrawing.Core.Barcodes;
 using PeachBrackets.Css;
 using PeachDrawing.Core;
 using PeachBrackets.Html.Dom;
@@ -82,6 +83,10 @@ namespace PeachBrackets.Html.Handlers
                 }
                 case CssImage.Url urlImage when urlImage.SvgDocument != null:
                     PaintSvgLayer(g, urlImage.SvgDocument.Current, layerIndex, positioningRect, clipRect, roundedClipPath,
+                        positionList, sizeList, repeatList, box);
+                    break;
+                case CssImage.BarcodeImage barcodeImage:
+                    PaintBarcodeLayer(g, barcodeImage, currentColor ?? box.ActualColor, layerIndex, positioningRect, clipRect, roundedClipPath,
                         positionList, sizeList, repeatList, box);
                     break;
                 case CssImage.LinearGradient lg:
@@ -202,6 +207,50 @@ namespace PeachBrackets.Html.Handlers
             var repeatValue = BackgroundLayerResolver.LayerAt(BackgroundLayerResolver.SplitLayers(repeatList), layerIndex);
             BackgroundImageDrawHandler.DrawBackgroundImage(
                 g, image, Keywords.Auto, positionValue, repeatValue, originRect, clipRect, roundedClipPath, box,
+                intrinsicSizeInCssPixels: false);
+        }
+
+        /// <summary>
+        /// Paints a <c>-peachpdf-barcode()</c> layer: draws the barcode once, as vector rectangles through <c>Canvas.DrawBarcode</c>, into a
+        /// <see cref="Canvas.CreateTile"/> tile of the resolved layer size (its natural size is the symbol with its light margin at its module size),
+        /// then hands the tile to <see cref="BackgroundImageDrawHandler"/> so it is positioned and repeated like any other image. The symbol is scaled
+        /// evenly to fit the tile and centered in it, never stretched.
+        /// </summary>
+        private static void PaintBarcodeLayer(
+            Canvas g, CssImage.BarcodeImage image, PaintColor elementColor,
+            int layerIndex, Rect originRect, Rect clipRect, GraphicsPath? roundedClipPath,
+            string positionList, string sizeList, string repeatList,
+            CssBox box)
+        {
+            var layout = image.Symbol.CreateLayout();
+            if (!(layout.Width > 0) || !(layout.Height > 0)) return;
+
+            var intrinsicWidth = layout.Width * image.ModuleSizeInCssPixels * Length.PointsPerPx;
+            var intrinsicHeight = layout.Height * image.ModuleSizeInCssPixels * Length.PointsPerPx;
+
+            var sizeValue = BackgroundLayerResolver.LayerAt(BackgroundLayerResolver.SplitLayers(sizeList), layerIndex);
+            var (tileWidth, tileHeight) = BackgroundLayerResolver.ResolveSize(
+                sizeValue, originRect.Width, originRect.Height, intrinsicWidth, intrinsicHeight, layout.Width / layout.Height, box);
+
+            if (tileWidth <= 0 || tileHeight <= 0)
+                return;
+
+            // No real page/document context to own a tile in (e.g. a measure-only pass): nothing to draw into.
+            if (g.CreateTile(tileWidth, tileHeight) is not { } tile)
+                return;
+
+            var scale = Math.Min(tileWidth / layout.Width, tileHeight / layout.Height);
+            var origin = new PaintPoint((tileWidth - layout.Width * scale) / 2, (tileHeight - layout.Height * scale) / 2);
+            var renderContext = box.HtmlContainer?.RenderContext;
+            tile.Graphics.DrawBarcode(image.Symbol, origin, scale, image.Bars.Resolve(elementColor),
+                image.Background?.Resolve(elementColor),
+                renderContext is null ? null : size => renderContext.GetFont("monospace", size, PaintFontStyle.Regular)!);
+            tile.Graphics.Dispose();
+
+            var positionValue = BackgroundLayerResolver.LayerAt(BackgroundLayerResolver.SplitLayers(positionList), layerIndex);
+            var repeatValue = BackgroundLayerResolver.LayerAt(BackgroundLayerResolver.SplitLayers(repeatList), layerIndex);
+            BackgroundImageDrawHandler.DrawBackgroundImage(
+                g, tile.Image, Keywords.Auto, positionValue, repeatValue, originRect, clipRect, roundedClipPath, box,
                 intrinsicSizeInCssPixels: false);
         }
 

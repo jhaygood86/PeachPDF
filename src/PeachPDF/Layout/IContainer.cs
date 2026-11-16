@@ -294,6 +294,37 @@ namespace PeachPDF.Layout
         void Svg(Func<PdfSize, string> generator);
 
         /// <summary>
+        /// Places an encoded barcode (see <see cref="PeachDrawing.Core.Barcodes.Barcode"/>) as vector artwork. Its
+        /// size follows from the module size in <paramref name="configure"/>'s <see cref="BarcodeStyle"/>. The
+        /// barcode keeps the options it was created with. Terminal - may be called at most once.
+        /// </summary>
+        void Barcode(PeachDrawing.Core.Barcodes.Barcode barcode, Action<BarcodeStyle>? configure = null);
+
+        /// <summary>Places a QR code holding <paramref name="text"/>. Terminal - may be called at most once.</summary>
+        void QrCode(string text, Action<BarcodeStyle>? configure = null);
+
+        /// <summary>Places a Data Matrix (ECC 200) symbol holding <paramref name="text"/>. Terminal - may be called at most once.</summary>
+        void DataMatrix(string text, Action<BarcodeStyle>? configure = null);
+
+        /// <summary>Places a Code 128 barcode of ASCII <paramref name="text"/>. Terminal - may be called at most once.</summary>
+        void Code128(string text, Action<BarcodeStyle>? configure = null);
+
+        /// <summary>
+        /// Places a GS1-128 barcode from GS1 element strings with parenthesized application identifiers, such as
+        /// <c>(01)09501101530003(10)AB-123</c>. Terminal - may be called at most once.
+        /// </summary>
+        void Gs1128(string elements, Action<BarcodeStyle>? configure = null);
+
+        /// <summary>Places an EAN-13 barcode of 12 digits, or 13 with the check digit. Terminal - may be called at most once.</summary>
+        void Ean13(string digits, Action<BarcodeStyle>? configure = null);
+
+        /// <summary>Places an EAN-8 barcode of 7 digits, or 8 with the check digit. Terminal - may be called at most once.</summary>
+        void Ean8(string digits, Action<BarcodeStyle>? configure = null);
+
+        /// <summary>Places a UPC-A barcode of 11 digits, or 12 with the check digit. Terminal - may be called at most once.</summary>
+        void UpcA(string digits, Action<BarcodeStyle>? configure = null);
+
+        /// <summary>
         /// Parses <paramref name="html"/> as an HTML fragment (through the same HTML parser and cascade the
         /// HTML-string rendering path uses) and splices the result into this container's tree, in place, as
         /// one new child holding the fragment's own top-level nodes (which may be more than one - unlike

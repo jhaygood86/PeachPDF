@@ -16664,6 +16664,93 @@ await SaveDeclarativeShowcaseAsync("document_merge", "Document Building", "Mergi
         return await gen.CreateMergedDocument(DocumentMerge.Of(Report("Q1", 14), Report("Q2", 22)).UseContinuousPageNumbers());
     });
 
+const string cssBarcodesHtml = """
+    <!DOCTYPE html><html><head><title>Barcodes as CSS images</title>
+    <style>
+    @page { size: a4; margin: 15mm }
+    body { font: 11pt Arial, sans-serif }
+    h1 { font-size: 16pt }
+    .row { display: flex; gap: 18pt; align-items: flex-end; margin-bottom: 14pt }
+    .b { background-repeat: no-repeat; background-size: contain; background-position: center }
+    .qr { width: 110pt; height: 110pt; background-image: -peachpdf-barcode(qr, "https://peachpdf.net/", navy, white) }
+    .dm { width: 90pt; height: 90pt; background-image: -peachpdf-barcode(data-matrix, "PeachPDF 0.10") }
+    .c128 { width: 200pt; height: 60pt; background-image: -peachpdf-barcode(code128, "PeachPDF-2026") }
+    .gs1 { width: 260pt; height: 60pt; background-image: -peachpdf-barcode(gs1-128, "(01)09501101530003(10)AB-123") }
+    .ean13 { width: 130pt; height: 80pt; background-image: -peachpdf-barcode(ean13, "590123412345") }
+    .ean8 { width: 100pt; height: 80pt; background-image: -peachpdf-barcode(ean8, "9638507") }
+    .upca { width: 130pt; height: 80pt; background-image: -peachpdf-barcode(upca, "03600029145") }
+    .tag::before { content: -peachpdf-barcode(code128, "TAG-0042"); display: inline-block; width: 124pt; height: 48pt; vertical-align: middle; margin-right: 8pt }
+    </style></head><body>
+    <h1>Barcodes as CSS images</h1>
+    <p><code>-peachpdf-barcode()</code> is an image function, so it works as a background and as generated content - always as vector shapes.</p>
+    <div class="row"><div class="b qr"></div><div class="b dm"></div></div>
+    <div class="row"><div class="b c128"></div></div>
+    <div class="row"><div class="b gs1"></div></div>
+    <div class="row"><div class="b ean13"></div><div class="b ean8"></div><div class="b upca"></div></div>
+    <p class="tag">Generated content: a barcode before the text.</p>
+    </body></html>
+    """;
+
+await SaveShowcaseAsync("css_barcodes", "Document Building", "Barcodes as CSS Images",
+    "-peachpdf-barcode() is an <image> function: QR codes, Data Matrix, Code 128, GS1-128, EAN-13, EAN-8 and UPC-A as backgrounds and generated content, drawn as vector shapes with colors and sizing from ordinary CSS.",
+    cssBarcodesHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
+
+const string barcodesSource =
+    """"
+    var document = await generator.CreateDocument(doc => doc.Page(page =>
+    {
+        page.Size(400, 480);
+        page.Margin(24);
+        page.Content(container => container.Column(column =>
+        {
+            column.Spacing(14);
+            column.Item().Row(row =>
+            {
+                row.Spacing(24);
+                row.Item().Width(120).QrCode("https://peachpdf.net/", s => s.ModuleSize = PdfLength.Points(2.5));
+                row.Item().Width(120).DataMatrix("PeachPDF 0.10", s => s.ModuleSize = PdfLength.Points(4));
+            });
+            column.Item().Code128("PeachPDF-2026", s => s.ModuleSize = PdfLength.Points(1.1));
+            column.Item().Gs1128("(01)09501101530003(10)AB-123", s => s.ModuleSize = PdfLength.Points(1));
+            column.Item().Row(row =>
+            {
+                row.Spacing(18);
+                row.Item().Width(125).Ean13("590123412345");
+                row.Item().Width(100).Ean8("9638507");
+                row.Item().Width(125).UpcA("03600029145");
+            });
+        }));
+    }));
+    """";
+
+await SaveDeclarativeShowcaseAsync("barcodes", "Document Building", "Barcodes",
+    "QrCode, DataMatrix, Code128, Gs1128, Ean13, Ean8 and UpcA on the container: every barcode is drawn as vector rectangles of one path, so it stays sharp at any zoom and prints with razor-sharp bars.",
+    barcodesSource,
+    async gen => await gen.CreateDocument(doc => doc.Page(page =>
+    {
+        page.Size(400, 480);
+        page.Margin(24);
+        page.Content(container => container.Column(column =>
+        {
+            column.Spacing(14);
+            column.Item().Row(row =>
+            {
+                row.Spacing(24);
+                row.Item().Width(120).QrCode("https://peachpdf.net/", s => s.ModuleSize = PdfLength.Points(2.5));
+                row.Item().Width(120).DataMatrix("PeachPDF 0.10", s => s.ModuleSize = PdfLength.Points(4));
+            });
+            column.Item().Code128("PeachPDF-2026", s => s.ModuleSize = PdfLength.Points(1.1));
+            column.Item().Gs1128("(01)09501101530003(10)AB-123", s => s.ModuleSize = PdfLength.Points(1));
+            column.Item().Row(row =>
+            {
+                row.Spacing(18);
+                row.Item().Width(125).Ean13("590123412345");
+                row.Item().Width(100).Ean8("9638507");
+                row.Item().Width(125).UpcA("03600029145");
+            });
+        }));
+    })));
+
 const string documentAppendPdfSource =
     """"
     // A static file the project ships (here made on the spot), put in front of and behind a generated page.

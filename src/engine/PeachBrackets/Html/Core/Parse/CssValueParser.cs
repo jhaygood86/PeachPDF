@@ -2391,6 +2391,9 @@ namespace PeachBrackets.Html.Parse
             if (TryParseImageSet(value.Trim(), container, out var chosen))
                 return chosen;
 
+            if (TryParseBarcode(value.Trim(), out var barcode))
+                return barcode;
+
             Token? urlToken;
             Token? funcToken;
             using (var pooledTokens = GetCssTokensPooled(value))
@@ -2552,6 +2555,80 @@ namespace PeachBrackets.Html.Parse
             }
 
             return true;
+        }
+
+        /// <summary>
+        /// <c>-peachpdf-barcode( &lt;symbology&gt;, &lt;string&gt; [, &lt;color&gt; [, &lt;color&gt; ]] )</c>: encodes the text and returns the barcode as an image
+        /// the painter draws straight onto the canvas. Returns false when <paramref name="value"/> is not a whole call of that function;
+        /// <paramref name="image"/> is null when it is one that does not resolve (an unknown symbology, text the symbology cannot hold), which
+        /// paints nothing. A <c>currentcolor</c> is left for the painter, which knows the element's color.
+        /// </summary>
+        private bool TryParseBarcode(string value, out CssImage? image)
+        {
+            image = null;
+
+            var open = value.IndexOf('(');
+            if (open <= 0 || !value[^1].Equals(')')) return false;
+            if (!value[..open].Equals(FunctionNames.PeachBarcode, StringComparison.OrdinalIgnoreCase)) return false;
+
+            var args = SplitTopLevelCommas(value[(open + 1)..^1]).Select(a => a.Trim()).ToList();
+            if (args.Count is < 2 or > 4 || !BarcodeImageGrammar.TryParseSymbology(args[0], out var symbology)) return true;
+
+            if (!TryReadCssString(args[1], out var text)) return true;
+
+            var barcode = BarcodeImageGrammar.TryCreate(symbology, text);
+            if (barcode == null) return true;
+
+            CssImage.BarcodeColor ColorOf(string arg) =>
+                arg.Equals("currentcolor", StringComparison.OrdinalIgnoreCase) ? new(null) : new(GetActualColor(arg));
+
+            image = new CssImage.BarcodeImage(barcode,
+                args.Count > 2 ? ColorOf(args[2]) : new(PaintColor.Black),
+                args.Count > 3 ? ColorOf(args[3]) : null);
+            return true;
+        }
+
+        /// <summary>
+        /// Reads a whole CSS <c>&lt;string&gt;</c> (CSS Syntax 4.3.5): the closing quote must be the first unescaped one and end the text; a backslash
+        /// then 1-6 hex digits (and one whitespace after them) is that code point, a backslash before a newline continues the string, and a backslash
+        /// before any other character is that character.
+        /// </summary>
+        private static bool TryReadCssString(string token, out string value)
+        {
+            value = "";
+            if (token.Length < 2 || token[0] is not ('"' or '\'')) return false;
+
+            var quote = token[0];
+            var sb = new System.Text.StringBuilder(token.Length);
+            for (var i = 1; i < token.Length; i++)
+            {
+                var c = token[i];
+                if (c == quote)
+                {
+                    value = sb.ToString();
+                    return i == token.Length - 1;
+                }
+                if (c is '\n' or '\r' or '\f') return false;
+                if (c != '\\') { sb.Append(c); continue; }
+
+                if (++i >= token.Length) return false;
+                c = token[i];
+                if (c is '\n' or '\f') continue;
+                if (c == '\r')
+                {
+                    if (i + 1 < token.Length && token[i + 1] == '\n') i++;
+                    continue;
+                }
+                if (!System.Uri.IsHexDigit(c)) { sb.Append(c); continue; }
+
+                var start = i;
+                while (i + 1 < token.Length && i + 1 - start < 6 && System.Uri.IsHexDigit(token[i + 1])) i++;
+                var code = System.Convert.ToInt32(token.Substring(start, i - start + 1), 16);
+                if (i + 2 < token.Length && token[i + 1] == '\r' && token[i + 2] == '\n') i += 2;
+                else if (i + 1 < token.Length && token[i + 1] is ' ' or '\t' or '\n' or '\f') i++;
+                sb.Append(code is 0 or > 0x10FFFF || (code >= 0xD800 && code <= 0xDFFF) ? "\uFFFD" : char.ConvertFromUtf32(code));
+            }
+            return false;
         }
 
         /// <summary>A CSS <c>&lt;resolution&gt;</c> in dots per CSS pixel: <c>x</c>/<c>dppx</c>, <c>dpi</c> (96 per px) or <c>dpcm</c>.</summary>

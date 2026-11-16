@@ -2709,6 +2709,26 @@ Accepted values: `self`, `url(<url>)`, or `attr(<attribute-name>)`. A value reso
 
 A heading that only ever appears as [running element](usage-examples.md) content in an `@page` margin box (repeated per page, with no single canonical position) does not get a bookmark, even if it would otherwise have a non-`none` `bookmark-level` — only the main document content tree is walked for bookmark candidates. The same applies to a `<thead>`/`<tfoot>` repeated across a page break: a heading placed there produces no bookmark either.
 
+### `-peachpdf-barcode()` (barcodes as CSS images)
+
+`-peachpdf-barcode(<symbology>, <string> [, <color> [, <color>]])` is PeachPDF's own `<image>` function (not part of CSS Images, which defines no such function; it follows the `-peachpdf-` naming convention of the other extensions). It encodes the string as a barcode and yields a **vector** image, so it works wherever an `<image>` does: `background-image` (with `background-size`, `background-repeat` and the rest), `content` on a box or pseudo-element and `list-style-image`.
+
+```css
+.ticket   { width: 120px; height: 120px; background: -peachpdf-barcode(qr, "https://peachpdf.net/") center / contain no-repeat; }
+.sku      { width: 180px; height: 70px; background: -peachpdf-barcode(ean13, "590123412345") no-repeat; background-size: contain; }
+.label::before { content: -peachpdf-barcode(code128, "PeachPDF-2026", navy, white); display: inline-block; width: 160px; height: 50px; }
+```
+
+| Symbology keyword | Barcode |
+|---|---|
+| `qr` | QR code |
+| `data-matrix` | Data Matrix (ECC 200) |
+| `code128` | Code 128 |
+| `gs1-128` | GS1-128; the string is GS1 element strings with parenthesized application identifiers, such as `"(01)09501101530003(10)AB-123"` |
+| `ean13`, `ean8`, `upca` | EAN-13, EAN-8, UPC-A; the string is the digits with or without the check digit |
+
+The first color is the bars and the digits (default black); the second is the light margin and spaces (default transparent, so give one when the page behind is not light). Either can be `currentcolor`, which is the `color` of the element the image belongs to, as it is in a gradient. The image's natural size is the symbol with its light margin at 2 CSS px per module for QR codes and Data Matrix and 1 CSS px per module for the linear codes; `background-size` scales it (a `content` image is painted at its natural size, so give its box room for the digits under a linear code). The barcode is painted as vector rectangles directly, not as an SVG, and keeps its proportions: it is scaled evenly to fit the size and centered. Text that is not valid for the symbology (a wrong EAN check digit, an empty string, an unknown keyword) makes the image paint nothing. For the full set of options (error correction level, bar height, hiding the digits) use the [declarative API](declarative-api.md#barcodes) or [`PeachDrawing.Core`](peachdrawing-core.md#barcodes-on-any-canvas).
+
 ---
 
 ## Unsupported CSS Features

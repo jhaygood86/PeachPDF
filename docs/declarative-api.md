@@ -20,6 +20,7 @@ using PeachPDF.Layout;
 - [Class, Id, Tag, and a document-level stylesheet](#class-id-tag-and-a-document-level-stylesheet)
 - [Text and rich text](#text-and-rich-text)
 - [Images](#images)
+- [Barcodes](#barcodes)
 - [HTML fragments and slots](#html-fragments-and-slots)
 - [Hyperlinks and bookmarks](#hyperlinks-and-bookmarks)
 - [Rows and columns](#rows-and-columns)
@@ -298,6 +299,31 @@ container.Width(300).Height(160).Svg(size => RenderChartAsSvgMarkup(size.Width, 
 ```
 
 `Image(Func<PdfSize, byte[]>)`/`Svg(Func<PdfSize, string>)` run their callback once layout knows the container's resolved size, and - unlike the other overloads above - fill that container by default (`width: 100%; height: 100%`), so the generated content is sized to fit rather than needing its own explicit dimensions. The container itself still needs a definite resolved size for this to mean anything: an explicit `Width`/`Height`, or an ancestor that already has one (the page content area, a table cell with a definite column width, a `Row`/`Column` item with an explicit size); an indefinite container throws `InvalidOperationException` rather than generating content at a garbled or zero size. Each callback runs exactly once, even across the layout engine's own internal convergence passes.
+
+## Barcodes
+
+`QrCode`, `DataMatrix`, `Code128`, `Gs1128`, `Ean13`, `Ean8` and `UpcA` place a barcode in a container. Each is a terminal method (once per container) and takes an optional `Action<BarcodeStyle>`:
+
+```csharp
+container.Column(column =>
+{
+    column.Item().QrCode("https://peachpdf.net/", s => s.ModuleSize = PdfLength.Points(2.5));
+    column.Item().Code128("PeachPDF-2026", s => s.ModuleSize = PdfLength.Points(1.1));
+    column.Item().Gs1128("(01)09501101530003(10)AB-123");
+    column.Item().Ean13("590123412345");     // 12 digits, or 13 with the check digit
+    column.Item().DataMatrix("PeachPDF", s =>
+    {
+        s.ModuleSize = PdfLength.Millimeters(1);
+        s.Color = PdfColor.FromRgb(0, 60, 120);
+        s.BackgroundColor = PdfColor.White;
+        s.AltText = "Order PeachPDF";
+    });
+});
+```
+
+Barcodes are drawn as **vector rectangles** (one path, placed as SVG artwork rather than a bitmap), so they stay sharp at any zoom or print resolution. The symbol's size follows from `BarcodeStyle.ModuleSize` (an absolute length: the narrowest bar or one square module; default 2pt for QR code and Data Matrix, 1pt for linear codes) and includes the standard's light margin. `BarcodeStyle.Options` is the [`BarcodeOptions`](peachdrawing-core.md#barcodes-on-any-canvas) of the symbology - QR error correction and version, Data Matrix size, bar height, `ShowText` for the digits under a linear code, `QuietZone`. A transparent background is the default; give `BackgroundColor` when the page behind a barcode is not light. `AltText` (defaulting to the barcode's text) becomes the image's alternative text in a tagged PDF.
+
+`Barcode(barcode, configure)` places a `PeachDrawing.Core.Barcodes.Barcode` you created yourself (keeping the options it was created with), for example to read its `Columns`/`Rows` first.
 
 ## HTML fragments and slots
 

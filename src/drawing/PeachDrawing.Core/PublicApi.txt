@@ -1,3 +1,77 @@
+PeachDrawing.Core.Barcodes.Barcode : sealed class
+  method BarcodeLayout CreateLayout()
+  method Boolean IsDark(Int32 row, Int32 column)
+  method static Barcode CreateCode128(String text, BarcodeOptions options = null)
+  method static Barcode CreateDataMatrix(String text, BarcodeOptions options = null)
+  method static Barcode CreateEan13(String digits, BarcodeOptions options = null)
+  method static Barcode CreateEan8(String digits, BarcodeOptions options = null)
+  method static Barcode CreateGs1128(String elements, BarcodeOptions options = null)
+  method static Barcode CreateQrCode(String text, BarcodeOptions options = null)
+  method static Barcode CreateUpcA(String digits, BarcodeOptions options = null)
+  property BarcodeOptions Options { get; }
+  property BarcodeSymbology Symbology { get; }
+  property Boolean IsLinear { get; }
+  property Int32 Columns { get; }
+  property Int32 Rows { get; }
+  property String DisplayText { get; }
+  property String Text { get; }
+PeachDrawing.Core.Barcodes.BarcodeDrawing : static class
+  method static Rect DrawBarcode(Canvas canvas, Barcode barcode, PaintPoint origin, Double moduleSize, PaintColor color, PaintColor? background = null, Func<Double, Font> textFont = null)
+  method static Void AddBarcode(GraphicsPath path, Barcode barcode, PaintPoint origin, Double moduleSize)
+PeachDrawing.Core.Barcodes.BarcodeLayout : sealed class
+  property Double Height { get; }
+  property Double Width { get; }
+  property IReadOnlyList<BarcodeText> Texts { get; }
+  property IReadOnlyList<Rect> Bars { get; }
+  property Rect SymbolBounds { get; }
+PeachDrawing.Core.Barcodes.BarcodeOptions : sealed class
+  ctor()
+  property Boolean ShowText { get; set; }
+  property Boolean Utf8Eci { get; set; }
+  property DataMatrixEncoding DataMatrixEncoding { get; set; }
+  property Double BarHeight { get; set; }
+  property Double? QuietZone { get; set; }
+  property Int32 DataMatrixColumns { get; set; }
+  property Int32 DataMatrixRows { get; set; }
+  property Int32 QrVersion { get; set; }
+  property QrErrorCorrectionLevel ErrorCorrection { get; set; }
+PeachDrawing.Core.Barcodes.BarcodeSvg : static class
+  method static String ToSvg(Barcode barcode, Double moduleSize, PaintColor color, PaintColor? background = null, String fontFamily = null)
+PeachDrawing.Core.Barcodes.BarcodeSymbology : enum Int32
+  Code128 = 2
+  DataMatrix = 1
+  Ean13 = 4
+  Ean8 = 5
+  Gs1128 = 3
+  QrCode = 0
+  UpcA = 6
+PeachDrawing.Core.Barcodes.BarcodeText : struct
+  ctor(String Text, Rect Bounds, Double FontSize)
+  method Void Deconstruct(out String Text, out Rect Bounds, out Double FontSize)
+  method virtual Boolean Equals(BarcodeText other)
+  method virtual Boolean Equals(Object obj)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property Double FontSize { get; init; }
+  property Rect Bounds { get; init; }
+  property String Text { get; init; }
+PeachDrawing.Core.Barcodes.Code128 : static class
+  field const Char Fnc1
+  method static Boolean[] GetModules(String text)
+  method static Int32[] GetSymbolValues(String text)
+  method static String HumanReadableText(String text)
+  method static Void Check(String text)
+PeachDrawing.Core.Barcodes.DataMatrixEncoding : enum Int32
+  Ascii = 0
+  Base256 = 1
+PeachDrawing.Core.Barcodes.Gs1Elements : static class
+  method static String ToCode128Text(String elements)
+  method static String ToHumanReadable(String elements)
+PeachDrawing.Core.Barcodes.QrErrorCorrectionLevel : enum Int32
+  H = 3
+  L = 0
+  M = 1
+  Q = 2
 PeachDrawing.Core.BlurEffect : sealed class
   ctor(Double SigmaX, Double SigmaY)
   ctor(Double sigma)

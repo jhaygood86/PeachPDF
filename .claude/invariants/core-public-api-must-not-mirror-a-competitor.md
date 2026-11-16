@@ -69,6 +69,19 @@ naming came from, which mostly predates this register.
 | `RasterRegion`, `RasterSurface`, `IntRect`, `PixelMath` | An offscreen pixel surface a `Canvas` hands out for raster effects, its pixel rectangle type, and shared 8-bit pixel arithmetic | "Region"/"surface" are standard graphics vocabulary; `IntRect` is `System.Drawing.Rectangle`'s shape reduced to what the raster code needs; the members are the ones PeachPDF's effects pipeline reads |
 | `Canvas.TileCacheOwner`, `BeginRasterSurface`, `DrawRaster`, `TransformScale`, `CurrentTransform`, `PrefersRasterGroups`, `FlattensTransparency`, `InvisibleText`; `RenderContext.RasterizationDpi`/`TextHinting`/`TextStemDarkening`/`MaxRasterPixels`/`RasterAntiAliasing`/`LayoutUnitsPerPoint`/`CreateSvgGlyphPainter`; `ISvgGlyphPainter` | The optional hooks a backend overrides to join the raster-effects and SVG-glyph pipeline | Formerly `internal` (named for PeachPDF's own pipeline); now the documented contract - names kept, with `FormCacheOwner` renamed `TileCacheOwner` because it identifies the owner of tiles, not PDF forms |
 
+### Barcodes
+
+FreePDF (MIT, empira Software GmbH) is the source the encoders and the barcode API shape are ported from, with the user's explicit go-ahead to mirror its shapes and with attribution in `PeachDrawing.Core/THIRD-PARTY-LICENSES.md`. The invariant above still holds for non-MIT libraries (ZXing, QRCoder, IronBarcode...): none of their vocabulary is used.
+
+| Public name | Role | Origin of the name and shape |
+|---|---|---|
+| `Barcode` (`CreateQrCode`/`CreateDataMatrix`/`CreateCode128`/`CreateGs1128`/`CreateEan13`/`CreateEan8`/`CreateUpcA`, `IsDark`, `CreateLayout`) | An encoded symbol | FreePDF's `CodeQR`/`CodeDataMatrix`/`Code128`/`Ean13`... one class per symbology folded into one; "Create" factories as `PeachDrawing.Core`'s own `Canvas.Get*` register |
+| `BarcodeOptions` (`QuietZone`, `ErrorCorrection`, `QrVersion`, `Utf8Eci`, `DataMatrixRows`/`Columns`, `BarHeight`, `ShowText`) | Layout and encoding choices | FreePDF's `QuietZone`, `ErrorCorrectionLevel`, `Version`, `Utf8Eci`; the rest ours |
+| `QrErrorCorrectionLevel` (`L`/`M`/`Q`/`H`), `DataMatrixEncoding`, `BarcodeSymbology` | Enums | ISO/IEC 18004 level names; FreePDF's `DataMatrixEncoding` reduced to the two encodations actually implemented |
+| `Code128` (`Fnc1`, `GetSymbolValues`, `GetModules`), `Gs1Elements` | The Code 128 encoder and GS1 element-string conversion | FreePDF's `Code128`; `Gs1Elements` is ours (GS1 General Specifications vocabulary) |
+| `BarcodeLayout`, `BarcodeText` | A barcode measured in modules | Ours |
+| `BarcodeDrawing.DrawBarcode`/`AddBarcode`, `BarcodeSvg.ToSvg` | Draw on any `Canvas`, add to a `GraphicsPath`, write SVG | Ours, after `CanvasParagraphExtensions` and `PathShapes` |
+
 ### Geometry
 
 | Public name | Role | Origin of the name and shape |
