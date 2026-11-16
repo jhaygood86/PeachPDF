@@ -99,6 +99,21 @@ internal class CharacterMapInfo
         {
             var glyph = glyphs[i];
             GlyphIndices.Add(glyph.GlyphIndex);
+
+            // A glyph the shaper produced from no source characters of its own - the component glyphs a
+            // decomposing substitution adds beside the glyph that carries the character (an Arabic letter's
+            // dots, say) - has an empty cluster, and so no text of its own to extract. An empty destination
+            // is not valid ToUnicode (ISO 32000-2, 9.10.3; PdfPig throws on it), and leaving the glyph
+            // unmapped makes readers fall back to reading its code as a character (MuPDF and PDFium extract
+            // a glyph 45 as '-'), so it maps to an invisible character instead; the glyph that does carry
+            // the character keeps the real text.
+            if (glyph.ClusterLength <= 0)
+            {
+                if (!LigatureGlyphToText.ContainsKey(glyph.GlyphIndex))
+                    LigatureGlyphToText[glyph.GlyphIndex] = NoText;
+                continue;
+            }
+
             MapGlyphToText(glyph.GlyphIndex, source, glyph.ClusterStart, glyph.ClusterLength);
         }
     }
@@ -188,4 +203,7 @@ internal class CharacterMapInfo
     /// <summary>Glyph index to source text, for glyphs <see cref="AddShapedText"/> produced that
     /// represent more than one character (GSUB ligatures) or an astral codepoint.</summary>
     public Dictionary<int, string> LigatureGlyphToText = [];
+
+    /// <summary>What a glyph that carries no character of its own maps to: U+200B ZERO WIDTH SPACE.</summary>
+    internal const string NoText = "\u200B";
 }

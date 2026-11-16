@@ -68,7 +68,8 @@ internal sealed class PdfToUnicodeMap : PdfDictionary
             int index = entry.Key;
             lowIndex = Math.Min(lowIndex, index);
             hiIndex = Math.Max(hiIndex, index);
-            glyphIndexToText[index] = entry.Value;
+            // A destination must hold at least one UTF-16 code unit (ISO 32000-2, 9.10.3).
+            glyphIndexToText[index] = entry.Value.Length == 0 ? CharacterMapInfo.NoText : entry.Value;
         }
 
         // Lines end with a plain line feed on every platform, so the same document gives the same bytes everywhere.

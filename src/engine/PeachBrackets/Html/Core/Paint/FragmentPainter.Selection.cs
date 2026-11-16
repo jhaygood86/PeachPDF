@@ -130,7 +130,7 @@ namespace PeachBrackets.Html.Paint
         /// colour, shadow or stroke the word is drawn once per stretch of one look, clipped to it, the highest-priority highlight covering a stretch
         /// winning - a PDF written this way holds that word's text more than once.
         /// </summary>
-        private void PaintHighlightedWord(Canvas g, CssBox box, CssRect word, Rect rect, string text, string? logicalText, double? separatorEdge,
+        private void PaintHighlightedWord(Canvas g, CssBox box, CssRect word, Rect rect, string text, string? logicalText, SeparatorAnchor? separatorEdge,
             List<HighlightPaint> layers)
         {
             var ppp = container.RenderContext.LayoutUnitsPerPoint;
@@ -209,7 +209,7 @@ namespace PeachBrackets.Html.Paint
             }
         }
 
-        private static void DrawClipped(Canvas g, CssBox box, CssRect word, Rect rect, string text, Size size, string? logicalText, double? separatorEdge, PaintColor? color, Rect clip, CssBox? effects = null)
+        private static void DrawClipped(Canvas g, CssBox box, CssRect word, Rect rect, string text, Size size, string? logicalText, SeparatorAnchor? separatorEdge, PaintColor? color, Rect clip, CssBox? effects = null)
         {
             if (clip.Width <= 0)
                 return;
