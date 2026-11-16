@@ -165,7 +165,7 @@ namespace PeachPDF.Tests.Integration
             // (Chrome 70.5pt), and the first column is the width of its words, not 40pt more because the table was sized by the longer line.
             var fills = await FillsAsync(
                 $"<div style='{wrapperStyle}'><table><tr><td style='background:#fcc'><div>dolor dolor a t8</div></td>"
-                + "<td style='background:#cfc;width:80px;padding:7px'><div>consectetur lorem t7</div></td></tr></table></div><div style='clear:both'>z</div>");
+                + "<td style='background:#cfc;width:80px;padding:7px'><div>lorem ipsum dolor sit t7</div></td></tr></table></div><div style='clear:both'>z</div>");
 
             Assert.Equal(70.5, fills[Green].Width, 0.05);
             Assert.True(fills[Red].Width < 90, $"the first column was {fills[Red].Width:F1}pt wide, Chrome has 75.8pt");
