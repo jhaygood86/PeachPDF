@@ -10,7 +10,7 @@ padding and border, over the aspect ratio, plus padding and border). A stretched
   re-laying the item out and reading `ActualBoxSizingHeight`: for an image the word's height already carries the padding in some states and the engine
   then added it again, giving a floor of 124pt for a border-box picture that should floor at 80pt (the pinned `StretchedBorderBoxColumnItem_WithPadding_FillsLineCrossSize`
   caught it). `ReplacedNaturalSize` now carries `HeightUnits` computed straight from the picture (raster natural size / `srcset` density, svg
-  `SvgIntrinsicSize`, the 150px default of an iframe or poster-less video), so no layout runs for the suggestion.
+  `SvgIntrinsicSize`, the 150px default of an iframe), so no layout runs for the suggestion.
 - **Not done.** The `MeasureItem` exemption for a `flex: 1 1 0` image in an auto-height column (`!box.IsImage`) is untouched; it uses the stretched ratio
   height as its floor, which differs from §4.5 only for stretched pictures in that rare shape.
 

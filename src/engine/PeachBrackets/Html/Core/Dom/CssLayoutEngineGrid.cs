@@ -2752,8 +2752,7 @@ namespace PeachBrackets.Html.Dom
                 var unit = Length.PointsPerPx * ppp;
                 return new ReplacedNaturalSize(true, true,
                     CssLayoutEngine.DefaultObjectWidth / CssLayoutEngine.DefaultObjectHeight,
-                    (CssLayoutEngine.DefaultObjectWidth * unit, CssLayoutEngine.DefaultObjectHeight * unit),
-                    CssLayoutEngine.DefaultObjectHeight * unit);
+                    (CssLayoutEngine.DefaultObjectWidth * unit, CssLayoutEngine.DefaultObjectHeight * unit));
             }
 
             return await GetImageNaturalSizeAsync(g, box);
