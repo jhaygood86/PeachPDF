@@ -193,5 +193,33 @@ namespace PeachBrackets.Engine.Tests.Integration
             Assert.Equal(inline, inBlock, 0.6);
             Assert.True(inBlock > 60, $"the second column was squeezed to {inBlock:F1}pt");
         }
+
+        [Theory]
+        [InlineData("float:left")]
+        [InlineData("display:grid;justify-content:start")]
+        public async Task ABlockCellsDeclaredWidthIsWhatItContributesNotItsTextsWidth(string wrapperStyle)
+        {
+            // The second cell is declared 80px (+ 7px padding each side) and holds a longer line than that. A table sized to its content gives the
+            // column its declared width - Chrome 70.5pt - and the first column the width of its words; measuring the cell by its text instead made
+            // the table 40pt wider than that in a grid item.
+            var body = $"<div style='{wrapperStyle}'><table><tr><td id='a'><div>dolor dolor a t8</div></td>"
+                + "<td id='b' style='width:80px;padding:7px'><div>consectetur lorem t7</div></td></tr></table></div><div style='clear:both'>z</div>";
+
+            Assert.Equal(70.5, await WidthOfAsync(body, "b"), 0.05);
+            var first = await WidthOfAsync(body, "a");
+            Assert.True(first < 90, $"the first column was {first:F1}pt wide, Chrome has 75.8pt");
+        }
+
+        [Fact]
+        public async Task ANestedTableOfDeclaredWidthIsAsWideAsThatInATableCellWhoseRowsHoldBlocks()
+        {
+            // The nested table is declared 500px (375pt) and its first cell holds a 400px block (300pt), beside a 100px cell of text. Its content
+            // would take more than 375pt, but the table prefers the width it was given - it only cannot go below its narrowest content - so the cell
+            // it sits in is 375pt + the cell's own padding, as in Chrome. Read as a floor under the content's width it came out 7.5pt wider.
+            var body = "<table><tr><td id='o'><table style='width:500px'><tr><td><div style='width:400px'>x</div></td>"
+                + "<td style='width:100px'><p>dolor Unbreakable amet amet bb t8 sit</p></td></tr></table></td><td>t</td></tr></table>";
+
+            Assert.Equal(376.5, await WidthOfAsync(body, "o"), 0.05);
+        }
     }
 }

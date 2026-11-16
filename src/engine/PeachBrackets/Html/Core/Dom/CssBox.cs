@@ -10007,7 +10007,7 @@ namespace PeachBrackets.Html.Dom
 
                     cell.GetMinMaxWidth(g, out var cellMin, out var cellMax);
                     if (CssValueParser.IsValidLength(cell.Width) && !cell.Width.EndsWith('%'))
-                        cellMax = Math.Max(cellMax, CssValueParser.ParseLength(cell.Width, 0, cell) + cell.ActualBoxSizeIncludedWidth);
+                        cellMax = Math.Max(cellMin, CssValueParser.ParseLength(cell.Width, 0, cell) + cell.ActualBoxSizeIncludedWidth);
 
                     rowMax += cellMax;
                     rowMin += cellMin;
@@ -10405,6 +10405,19 @@ namespace PeachBrackets.Html.Dom
                     // so a `flex: none` item (which no longer shrinks) was laid out 75px too wide. A `<br>` inside the
                     // box closed a line into widestLine, which belongs to the content discarded here.
                     maxSum = explicitSum;
+                    paddingSum = explicitDecoration;
+                    widestLine = widestLineBeforeBox;
+                    trailingSpace = 0;
+                }
+                else if (box.DerivedStyle.ActualDisplay is Keywords.Table or Keywords.InlineTable
+                         && explicitSum + explicitDecoration < maxSum + paddingSum)
+                {
+                    // A table with a declared width that its content would overflow prefers that width, not its content's: the columns
+                    // wrap inside it, down to the narrowest they can be. Reading the declared width as only a floor under the content
+                    // measured it 64pt too wide in a `flex: none` item whose rows hold a 400px block (Chrome 376.5pt, 440pt here).
+                    box.GetMinMaxWidth(g, out var tableMin, out _);
+                    var preferred = Math.Max(explicitContentWidth, tableMin - box.ActualBoxSizeIncludedWidth);
+                    maxSum = (startsNewLine ? marginSum : maxSumBeforeBox) + preferred;
                     paddingSum = explicitDecoration;
                     widestLine = widestLineBeforeBox;
                     trailingSpace = 0;
