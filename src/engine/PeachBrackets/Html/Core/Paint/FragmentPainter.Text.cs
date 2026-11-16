@@ -178,16 +178,37 @@ namespace PeachBrackets.Html.Paint
         /// the first word inside an <c>overflow: hidden</c> inline-block, whose separator sits in the
         /// outer line's gap - the glyph would be clipped away where it is anchored.
         /// </summary>
-        private double? PrecedingWordEdge(Canvas g, CssRect word, Rect rect)
+        private SeparatorAnchor? PrecedingWordEdge(Canvas g, CssRect word, Rect rect)
         {
             if (!word.PrecededByWordSeparator || PaintedPredecessor(word) is not { } last) return null;
             if (last.Transform != g.CurrentTransform || last.Clip != g.GetClip()) return null;
 
             const double tolerance = 0.01;
-            return (word.BidiLevel & 1) == 1
-                ? last.Rect.Left >= rect.Right - tolerance ? last.Rect.Left : null
-                : last.Rect.Right <= rect.X + tolerance ? last.Rect.Right : null;
+            var wordRightToLeft = (word.BidiLevel & 1) == 1;
+            if (wordRightToLeft == ((last.Word.BidiLevel & 1) == 1))
+            {
+                return wordRightToLeft
+                    ? last.Rect.Left >= rect.Right - tolerance ? new SeparatorAnchor(last.Rect.Left, true) : null
+                    : last.Rect.Right <= rect.X + tolerance ? new SeparatorAnchor(last.Rect.Right, false) : null;
+            }
+
+            // The direction changes across the gap, so the two words are generally not neighbours on the
+            // page: the separator belongs to neither of them (UAX #9 N1/N2 give it the level of the
+            // paragraph's own direction), and the layout reserved its advance beside its predecessor, on the side
+            // the line runs toward. Anchored against the word instead, it would land at the far end of the
+            // run that word starts - the space between a number and the Arabic that follows it drawn after
+            // the Arabic, so the extracted text read "42مقر".
+            var lineRightToLeft = word.OwnerBox.ContainingBlock.Direction.Value == DirectionMode.Rtl;
+            return lineRightToLeft
+                ? new SeparatorAnchor(last.Rect.Left, true)
+                : new SeparatorAnchor(last.Rect.Right, false);
         }
+
+        /// <summary>
+        /// Where a word separator is anchored: the <paramref name="Edge"/> of the word before it that faces the gap,
+        /// and the direction the separator itself runs in (which side of that edge its glyph is on).
+        /// </summary>
+        private readonly record struct SeparatorAnchor(double Edge, bool RightToLeft);
 
         /// <summary>
         /// Records a word that was drawn but whose visible rect is smaller than its own - the loss
@@ -283,7 +304,7 @@ namespace PeachBrackets.Html.Paint
         /// (<see cref="PrecedingWordEdge"/>), where the separator is anchored; null to anchor it against
         /// this word instead
         /// </param>
-        private static void DrawWordGlyphs(Canvas g, CssBox box, CssRect word, Rect rect, string text, Size textSize, Font? fontOverride = null, string? logicalText = null, bool precededBySeparator = false, double? separatorEdge = null, PaintColor? colorOverride = null, CssBox? effectsStyle = null)
+        private static void DrawWordGlyphs(Canvas g, CssBox box, CssRect word, Rect rect, string text, Size textSize, Font? fontOverride = null, string? logicalText = null, bool precededBySeparator = false, SeparatorAnchor? separatorEdge = null, PaintColor? colorOverride = null, CssBox? effectsStyle = null)
         {
             // A word on the target's first formatted line, under a ::first-line rule, uses that
             // resolved shadow box's font/color/letter-spacing instead of the box's own - it was
@@ -425,8 +446,9 @@ namespace PeachBrackets.Html.Paint
         /// same transform (see <see cref="PrecedingWordEdge"/>); otherwise, and in vertical text, it is
         /// drawn flush against the word on the side its predecessor would be: the start edge for a
         /// left-to-right word, the end edge for a right-to-left one (odd <see cref="CssRect.BidiLevel"/>).
-        /// Where the direction changes across the gap, the word's own level can pick the wrong side: the
-        /// glyph then sits at the far edge of the word instead of in the visual gap, while the
+        /// Where the direction changes across the gap and the predecessor was drawn, the glyph is
+        /// anchored to that predecessor on the side the line runs toward; with no such anchor the word's own level can
+        /// pick the wrong side, and the glyph sits at the far edge of the word instead of in the visual gap, while the
         /// content-stream order stays right. It is drawn before the word, so the content stream reads
         /// <c>word␠word</c> in logical order.
         /// </para>
@@ -465,14 +487,14 @@ namespace PeachBrackets.Html.Paint
         /// the previous word's edge facing the gap, for an <see cref="SeparatorPlacement.Inline"/> separator
         /// anchored there; null to anchor it against <paramref name="rect"/>
         /// </param>
-        private static void PaintWordSeparator(Canvas g, CssBox styleSource, CssRect word, Rect rect, double baselineShift, SeparatorPlacement placement, double? edge)
+        private static void PaintWordSeparator(Canvas g, CssBox styleSource, CssRect word, Rect rect, double baselineShift, SeparatorPlacement placement, SeparatorAnchor? edge)
         {
             var separatorStyle = word.WordSeparatorStyle ?? styleSource;
             var font = separatorStyle.ActualSpaceFont;
             if (!font.HasGlyph(new Rune(' '))) return;
 
             var advance = font.GetWhitespaceWidth(g);
-            var rightToLeft = (word.BidiLevel & 1) == 1;
+            var rightToLeft = edge?.RightToLeft ?? (word.BidiLevel & 1) == 1;
 
             var (point, size) = placement switch
             {
@@ -484,7 +506,7 @@ namespace PeachBrackets.Html.Paint
                 // the gap and can be larger or smaller than the word's, whose baseline sits at
                 // rect.Y + its own box font's ascent.
                 _ => (
-                    new PaintPoint(rightToLeft ? (edge ?? rect.Right + advance) - advance : edge ?? rect.X - advance,
+                    new PaintPoint(rightToLeft ? (edge?.Edge ?? rect.Right + advance) - advance : edge?.Edge ?? rect.X - advance,
                         rect.Y + styleSource.ActualFont.Ascent - font.Ascent + baselineShift),
                     new Size(advance, font.Height)),
             };

@@ -1,6 +1,7 @@
 using System.Text;
 using PeachDrawing.PDF.Engine;
 using PeachDrawing.PDF.Engine.Advanced;
+using PeachDrawing.Text.Shaping;
 using PeachPDF.Tests.TestSupport;
 
 namespace PeachPDF.Tests.PdfEngineTests.Fonts;
@@ -41,5 +42,46 @@ public class PdfToUnicodeMapTests
         Assert.Contains("><0041>\n", cmap);
         Assert.Contains("><D83DDE00>\n", cmap);
         Assert.Contains("endbfrange\nendcmap", cmap);
+    }
+
+    [Fact]
+    public void ShapedArabic_NoGlyphGetsAnEmptyDestination()
+    {
+        // The bundled Arabic font draws a letter as a body glyph plus separate dot glyphs; the dots are
+        // shaped from no characters of their own. They once got an empty destination ("<013D><013D><>"),
+        // which is not valid ToUnicode and makes PdfPig throw reading the page.
+        var document = new PdfDocument();
+        document.Options.CompressContentStreams = false;
+        var info = new CharacterMapInfo(TypefaceFixtures.FromFile(BundledFonts.Arabic));
+        info.AddShapedText("\u0628\u064A\u062A", ShapeSettings.Default);
+
+        var map = new PdfToUnicodeMap(document, info);
+        map.PrepareForSave();
+        string cmap = Encoding.UTF8.GetString(map.Stream!.Value);
+
+        Assert.DoesNotContain("><>", cmap);
+        // BEH and TEH share their body glyph (they differ only in the dots), so one destination serves both.
+        Assert.Contains("\u062A", info.LigatureGlyphToText.Values);
+        Assert.Contains("\u064A", info.LigatureGlyphToText.Values);
+        // The component glyphs map to an invisible character rather than being left unmapped, which makes
+        // readers extract their glyph code as text.
+        Assert.Contains(CharacterMapInfo.NoText, info.LigatureGlyphToText.Values);
+        Assert.Contains("<200B>\n", cmap);
+    }
+
+    [Fact]
+    public void EmptySourceText_IsWrittenAsAnInvisibleCharacter()
+    {
+        var document = new PdfDocument();
+        document.Options.CompressContentStreams = false;
+        var info = new CharacterMapInfo(TypefaceFixtures.FromFile(BundledFonts.Ttf));
+        info.AddShapedGlyph(5, "");
+
+        var map = new PdfToUnicodeMap(document, info);
+        map.PrepareForSave();
+        string cmap = Encoding.UTF8.GetString(map.Stream!.Value);
+
+        Assert.DoesNotContain("><>", cmap);
+        Assert.Contains("><200B>\n", cmap);
     }
 }

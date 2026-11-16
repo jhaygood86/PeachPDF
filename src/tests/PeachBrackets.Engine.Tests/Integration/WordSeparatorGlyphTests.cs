@@ -236,6 +236,31 @@ namespace PeachBrackets.Engine.Tests.Integration
         }
 
         [Fact]
+        public async Task SpaceBetweenANumberAndARightToLeftRun_StaysBesideTheNumber()
+        {
+            // "42" is left-to-right and the run after it right-to-left, so the run's first word ("ba",
+            // logically "ab") is painted at the far end of the run, not next to the number. The space
+            // between them is a left-to-right character of the paragraph (UAX #9 N2) and the layout
+            // reserved it right after "42"; drawn against the word that follows it, it landed at the
+            // other end of the run and the text read "42ab".
+            var ops = await PaintTextAsync("""<p>42 <bdo dir="rtl">ab cd</bdo></p>""");
+
+            Assert.Equal(["42", " ", "ba", " ", "dc"], ops.Select(o => o.Text));
+            Assert.Equal(ops[0].Bounds.Right, ops[1].Bounds.Left, 3);
+        }
+
+        [Fact]
+        public async Task SpaceBetweenANumberAndARightToLeftRun_InARightToLeftParagraph_StaysBesideTheNumber()
+        {
+            // In a right-to-left paragraph the same space is a right-to-left character: it follows "42"
+            // toward the left.
+            var ops = await PaintTextAsync("""<p dir="rtl">42 <bdo dir="rtl">ab cd</bdo></p>""");
+
+            Assert.Equal(["42", " ", "ba", " ", "dc"], ops.Select(o => o.Text));
+            Assert.Equal(ops[0].Bounds.Left, ops[1].Bounds.Right, 3);
+        }
+
+        [Fact]
         public async Task SidewaysVerticalWords_PaintTheSpaceInTheGapDownTheColumn()
         {
             // vertical-rl with the default text-orientation:mixed draws Latin words rotated 90°, each
