@@ -4842,13 +4842,22 @@ namespace PeachBrackets.Html.Dom
             // inline-end border + spacing slot per re-layout (issue #1267). Not GetWidthSum() either:
             // it counts spacing for trailing <col>-only columns no cell reaches, which browsers leave out.
             var trailingInlineEdge = HorizontalSpacingAt(_columnCount) + TableInlineBorderEnd;
+            // A table with no columns at all has no cell for the cursor to have advanced past, so
+            // cursor.MaxRight is still exactly where the row loop started - GetWidthSum() is the one
+            // exception to the "not GetWidthSum()" rule just above, because _columnCount == 0 is
+            // exactly the case its own guard (see GetWidthSum's remarks) excludes the rejected
+            // trailing-<col>-only-columns behavior from.
+            var columnAxisFarEdge = _columnCount == 0
+                ? Math.Max(cursor.MaxRight + trailingInlineEdge,
+                    (_isVertical ? _tableBox.Location.Y : _tableBox.Location.X) + GetWidthSum())
+                : cursor.MaxRight + trailingInlineEdge;
             if (_isVertical)
             {
-                _tableBox.ActualBottom = cursor.MaxRight + trailingInlineEdge;
+                _tableBox.ActualBottom = columnAxisFarEdge;
             }
             else
             {
-                _tableBox.ActualRight = cursor.MaxRight + trailingInlineEdge;
+                _tableBox.ActualRight = columnAxisFarEdge;
             }
 
             // Computed ahead of ActualBottom rather than only assigned to TableContinuation below,
@@ -7763,9 +7772,18 @@ namespace PeachBrackets.Html.Dom
             // a containing block whose height genuinely can't be resolved this way (a table cell stretched
             // by its own row, or a float-containing box with a ratio-derived height - see
             // ResolveDefiniteHeightValue's own remarks).
+            //
+            // An absolutely positioned table's own percentage/auto width resolves against the padding
+            // box of its nearest positioned ancestor (CSS 2.1 SS10.1), not _tableBox.ContainingBlock
+            // (the nearest in-flow block container, which differs from it whenever the parent chain
+            // isn't itself positioned) - the same basis CssLayoutEngine.GetBoxWidth's own abspos branch
+            // uses via AbsolutePaddingBoxWidth. This method bypasses GetBoxWidth entirely (a table's
+            // width has its own column-width-driven resolution), so it needs that basis directly.
             var containingBlockInlineSize = _isVertical
                 ? CssLayoutEngine.ResolveDefiniteHeightValue(_tableBox.ContainingBlock) ?? _tableBox.ContainingBlock.Size.Height
-                : CssLayoutEngine.PageAwareWidthBasis(_tableBox.ContainingBlock, _tableBox.ClientTop);
+                : _tableBox.Position.Value is PositionMode.Absolute
+                    ? CssBox.AbsoluteContainingBlockWidth(DomUtils.GetNearestPositionedAncestor(_tableBox))
+                    : CssLayoutEngine.PageAwareWidthBasis(_tableBox.ContainingBlock, _tableBox.ClientTop);
 
             if (!CssValueParser.IsValidLength(inlineSizeCss)) return containingBlockInlineSize;
 
@@ -8052,6 +8070,19 @@ namespace PeachBrackets.Html.Dom
 
             //Take table borders
             f += TableInlineBorderStart + TableInlineBorderEnd;
+
+            // A table with no columns at all - no cell anywhere, so _columnWidths is empty - has
+            // nothing here to size from: every term above is 0 or a border/spacing constant that
+            // doesn't depend on content. CSS 2.1 SS17.4 still gives such a table its own specified
+            // width, same as a non-empty one, so floor at GetAvailableTableWidth()'s resolved value
+            // when the author wrote one. (A non-empty table's trailing col-only columns are NOT this
+            // case - _columnWidths is non-empty there, and GetWidthSum must NOT be bumped up to the
+            // specified width in that case; see the ActualRight/ActualBottom comment in PerformLayout
+            // for why - issue #1267.)
+            if (_columnWidths!.Length == 0 && _widthSpecified)
+            {
+                f = Math.Max(f, GetAvailableTableWidth());
+            }
 
             return f;
         }
