@@ -151,6 +151,26 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(0, depth);
         }
 
+        [Fact]
+        public async Task SeparatorBetweenANumberAndARightToLeftRun_FollowsTheNumberInItsTextRun()
+        {
+            // The run after "42" is right-to-left, so its first word is painted at the far end of it. The
+            // space is anchored beside "42" (where the layout reserved it) and so continues that word's own
+            // text-showing operator; anchored against the next word it needed a Td of its own.
+            var pdf = await RenderAsync("""<p>42 <bdo dir="rtl">ab cd</bdo></p>""");
+
+            Assert.Equal(2, Count(pdf, SpaceShow));
+            Assert.Matches(@"Td <[0-9A-F]+> Tj\n<0003> Tj\n", pdf);
+        }
+
+        [Fact]
+        public async Task SeparatorBetweenANumberAndARightToLeftRun_InARightToLeftParagraph_IsStillShown()
+        {
+            var pdf = await RenderAsync("""<p dir="rtl">42 <bdo dir="rtl">ab cd</bdo></p>""");
+
+            Assert.Equal(2, Count(pdf, SpaceShow));
+        }
+
         // ─── Helpers ─────────────────────────────────────────────────────────────
 
         private static async Task<string> RenderAsync(string body, string? fontPath = null, bool tagged = false)
