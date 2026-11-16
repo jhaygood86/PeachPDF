@@ -33,6 +33,11 @@ namespace PeachPDF.Network
         /// <inheritdoc/>
         public override Uri? BaseUri => primaryContentsUri;
 
+        private volatile string? _primaryContentType;
+
+        /// <summary>The <c>Content-Type</c> the primary document was served with, once <see cref="GetPrimaryContents"/> has fetched it.</summary>
+        public override string? PrimaryContentType => _primaryContentType;
+
         /// <inheritdoc/>
         public override async Task<string> GetPrimaryContents()
         {
@@ -46,6 +51,12 @@ namespace PeachPDF.Network
             if (networkResponse?.ResourceStream is null)
             {
                 throw new InvalidOperationException("Primary contents stream is null.");
+            }
+
+            if (networkResponse.ResponseHeaders is { } headers
+                && headers.FirstOrDefault(h => string.Equals(h.Key, "Content-Type", StringComparison.OrdinalIgnoreCase)).Value is { Length: > 0 } values)
+            {
+                _primaryContentType = values[0];
             }
 
             using var streamReader = new StreamReader(networkResponse.ResourceStream);

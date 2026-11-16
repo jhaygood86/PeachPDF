@@ -87,13 +87,24 @@ public sealed class ResultsAndSourceTests : IDisposable
     }
 
     [Fact]
-    public void Prepare_ReadsAnXhtmlFileAsHtml()
+    public void Prepare_LeavesAnXhtmlFileAsXml_AndClosesTheBaseElement()
     {
-        var html = WptRenderer.Prepare("css/t.xht", "<?xml version=\"1.0\"?><html><head><style><![CDATA[ p { color: red } ]]></style></head></html>");
+        var xhtml = WptRenderer.Prepare("css/t.xht", "<?xml version=\"1.0\"?><html xmlns=\"http://www.w3.org/1999/xhtml\"><head><style><![CDATA[ p { color: red } ]]></style></head></html>");
 
-        Assert.DoesNotContain("CDATA", html);
-        Assert.DoesNotContain("<?xml", html);
-        Assert.Contains("p { color: red }", html);
+        // The declaration and the CDATA section stay (the XML parser takes them), and the injected base element is well-formed.
+        Assert.StartsWith("<?xml", xhtml);
+        Assert.Contains("<![CDATA[ p { color: red } ]]>", xhtml);
+        Assert.Contains("<base href=\"http://wpt.test/css/\"/>", xhtml);
+        System.Xml.Linq.XDocument.Parse(xhtml);
+    }
+
+    [Fact]
+    public void Prepare_AddsAHeadToAnXhtmlFileWithNone()
+    {
+        var xhtml = WptRenderer.Prepare("css/t.xhtml", "<html xmlns=\"http://www.w3.org/1999/xhtml\"><body/></html>");
+
+        Assert.Contains("<head><base href=\"http://wpt.test/css/\"/></head>", xhtml);
+        System.Xml.Linq.XDocument.Parse(xhtml);
     }
 
     [Fact]

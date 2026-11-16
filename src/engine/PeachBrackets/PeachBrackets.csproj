@@ -48,6 +48,10 @@
 	<ItemGroup>
 		<InternalsVisibleTo Include="PeachBrackets.Engine.Tests" />
 	</ItemGroup>
+	<!-- The named character entities of XHTML: the external DTD an XHTML document's XML parser is given (XhtmlEntityResolver). -->
+	<ItemGroup>
+		<EmbeddedResource Include="Html\Core\Parse\Xhtml\xhtml-entities.dtd" LogicalName="PeachBrackets.xhtml-entities.dtd" />
+	</ItemGroup>
 	<!--
 		css-properties.json is the source of truth CssPropertyRegistry.g.cs / SvgPropertyRegistry.g.cs
 		are generated from - see PeachPDF.SourceGenerators and CLAUDE.md's generator section. It's build

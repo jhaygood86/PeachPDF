@@ -80,6 +80,9 @@ internal static class CliProgram
               --document-mode=MODE   Lay the HTML out in this mode: auto (from the DOCTYPE, as
                                      a browser does; the default), no-quirks, limited-quirks
                                      or quirks.
+              --document-syntax=SYN  Parse the HTML as: auto (a .xhtml/.xht file or an
+                                     application/xhtml+xml response is XHTML; the default),
+                                     html, or xml (XHTML, which must be well-formed).
               --page-size=SIZE       Page size (e.g. A4, letter, "210mm 297mm").
               --page-margin=MARGIN   Page margin (1-4 CSS lengths, e.g. 20mm).
 

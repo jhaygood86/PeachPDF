@@ -15,6 +15,7 @@ using PeachPDF.Network;
 - [Rendering HTML from a local string](#rendering-html-from-a-local-string)
 - [Document mode: HTML with no DOCTYPE](#document-mode-html-with-no-doctype)
 - [Rendering a local HTML file](#rendering-a-local-html-file)
+- [Rendering XHTML](#rendering-xhtml)
 - [Rendering an MHTML file](#rendering-an-mhtml-file)
 - [Fetching HTML over HTTP](#fetching-html-over-http)
 - [Disabling local file access](#disabling-local-file-access)
@@ -133,9 +134,31 @@ document.Save(stream);
 
 ### How a local file's content type is determined
 
-Each local file's `Content-Type` is resolved from the **operating system's own MIME mechanism by default** — the shell file-association database on Windows, the Uniform Type Identifiers API on macOS/iOS, and `/etc/mime.types` on Linux — **falling back to a built-in set** when the OS provides nothing: HTML, CSS, SVG, common raster image extensions (PNG, JPEG, BMP, GIF, WebP, AVIF, TGA, PSD, HDR — this only resolves a MIME type string for the extension, independent of whether PeachPDF can actually decode that format; it decodes PNG/JPEG/BMP/GIF/WebP/AVIF/TIFF, not TGA/PSD/HDR — TIFF decodes even though `tif`/`tiff` have no entry in this built-in list, since images are recognized by their bytes rather than their resolved content type, as described below), and the TTF/OTF/WOFF/WOFF2 font formats. Anything else resolves to `application/octet-stream`.
+Each local file's `Content-Type` is resolved from the **operating system's own MIME mechanism by default** — the shell file-association database on Windows, the Uniform Type Identifiers API on macOS/iOS, and `/etc/mime.types` on Linux — **falling back to a built-in set (HTML, XHTML, CSS, SVG, ...)** when the OS provides nothing: HTML, CSS, SVG, common raster image extensions (PNG, JPEG, BMP, GIF, WebP, AVIF, TGA, PSD, HDR — this only resolves a MIME type string for the extension, independent of whether PeachPDF can actually decode that format; it decodes PNG/JPEG/BMP/GIF/WebP/AVIF/TIFF, not TGA/PSD/HDR — TIFF decodes even though `tif`/`tiff` have no entry in this built-in list, since images are recognized by their bytes rather than their resolved content type, as described below), and the TTF/OTF/WOFF/WOFF2 font formats. Anything else resolves to `application/octet-stream`.
 
 If you reference a local file whose extension falls outside that built-in set and your OS has no MIME association for it, **register the type with the OS** — for example, set the shell `Content Type` association for the extension on Windows, or add an entry to `/etc/mime.types` (or `~/.local/share/mime`) on Linux — so PeachPDF can resolve it. This matters only where the content type is actually enforced: as in a browser, PeachPDF accepts a linked stylesheet only when its type is `text/css`, whereas images and fonts are recognized by their bytes and load regardless of content type.
+
+## Rendering XHTML
+
+A document served as `application/xhtml+xml` is parsed with an XML parser, as a browser does (see [XHTML](html-css-support.md#xhtml)). `FileUriNetworkLoader` reports that type for a `.xhtml` or `.xht` file, and `HttpClientNetworkLoader` for an HTTP response of that type, so both are rendered as XHTML with no further setup. XHTML must be well-formed: a document that is not throws an `HtmlRenderException` that says where.
+
+```csharp
+var pdfConfig = new PdfGenerateConfig
+{
+    NetworkLoader = new FileUriNetworkLoader("report.xhtml")
+};
+
+var document = await new PdfGenerator().GeneratePdf(null, pdfConfig);
+```
+
+A string has no type, so it is HTML unless you say otherwise; `PdfDocumentSyntax.Html` parses a `.xhtml` file as HTML instead:
+
+```csharp
+var pdfConfig = new PdfGenerateConfig { DocumentSyntax = PdfDocumentSyntax.Xml };
+var document = await new PdfGenerator().GeneratePdf(xhtmlString, pdfConfig);
+```
+
+On the command line, `peachpdf report.xhtml` does the same, and `--document-syntax=xml|html` overrides it (see [the CLI reference](cli.md)).
 
 ## Rendering an MHTML file
 

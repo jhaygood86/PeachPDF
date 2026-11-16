@@ -128,6 +128,7 @@ downward. With the default of one unit per point, a canvas for a 400 x 300 point
 | `SynchronousOnly` | The document needs nothing asynchronous; see [Synchronous layout](#synchronous-layout). |
 | `IgnoreAuthorStyleSheets` | Drop the document's own `<style>` and `<link rel=stylesheet>` rules, leaving the defaults and `UserStyleSheet`. |
 | `DefaultLanguage` | The language to assume when the document declares none; it drives hyphenation and language-dependent line breaking. |
+| `Syntax` | `DocumentSyntax.Html` (the default) parses the source as HTML; `DocumentSyntax.Xml` parses it as XHTML with an XML parser, as a browser does for `application/xhtml+xml`: it must be well-formed (`HtmlRenderException` otherwise), the named entities of XHTML are known, and the document is never in quirks mode. It is never guessed from the text. See [XHTML](html-css-support.md#xhtml). |
 | `DocumentMode` | The mode to lay the document out in, or `null` (the default) for the one its DOCTYPE gives: a document with no DOCTYPE is in `DocumentMode.Quirks`, and the quirks of a browser's quirks mode apply to it. `DocumentMode.NoQuirks` lays it out by the standards. `HtmlDocument.DocumentMode` reports the mode. See [Document modes](html-css-support.md#document-modes-quirks-mode). |
 | `AnimationProgress` | Paint the document at a point in its animations, from 0 to 1, instead of its static look. |
 | `AnimationsEnabled` | Play the document's CSS animations, transitions and animated images over time; see [Animations and transitions](#animations-and-transitions). |

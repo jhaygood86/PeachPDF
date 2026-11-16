@@ -210,7 +210,7 @@ namespace PeachBrackets.Html.Parse
         /// </summary>
         internal const int MaxElementDepth = 400;
 
-        private static void EnsureWithinMaxDepth(CssBox box)
+        internal static void EnsureWithinMaxDepth(CssBox box)
         {
             var depth = 0;
 

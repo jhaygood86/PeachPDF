@@ -54,6 +54,15 @@ namespace PeachPDF.Network
         /// <inheritdoc/>
         public override Uri? BaseUri { get; }
 
+        /// <summary>The MIME type of the primary file, from its extension (<c>.xhtml</c> and <c>.xht</c> are <c>application/xhtml+xml</c>), or <c>null</c> with no primary file.</summary>
+        public override string? PrimaryContentType => _primaryFilePath is null ? null : IsXhtmlFile(_primaryFilePath) ? "application/xhtml+xml" : MimeTypeResolver.GetMimeType(_primaryFilePath);
+
+        // The extension decides, not the host's own MIME database (which may have .xhtml registered as text/html): the same file is the same document
+        // on every machine.
+        private static bool IsXhtmlFile(string path) =>
+            Path.GetExtension(path) is { } extension
+            && (extension.Equals(".xhtml", StringComparison.OrdinalIgnoreCase) || extension.Equals(".xht", StringComparison.OrdinalIgnoreCase));
+
         /// <inheritdoc/>
         public override async Task<string> GetPrimaryContents()
         {

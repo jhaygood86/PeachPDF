@@ -381,12 +381,14 @@ PeachPDF.Network.FileUriNetworkLoader : class
   ctor(String primaryFilePath)
   method virtual Task<RNetworkResponse> GetResourceStream(Uri uri)
   method virtual Task<String> GetPrimaryContents()
+  property String PrimaryContentType { get; }
   property Uri BaseUri { get; }
 PeachPDF.Network.HttpClientNetworkLoader : class
   ctor(HttpClient httpClient, String primaryContentsUri)
   ctor(HttpClient httpClient, Uri primaryContentsUri)
   method virtual Task<RNetworkResponse> GetResourceStream(Uri uri)
   method virtual Task<String> GetPrimaryContents()
+  property String PrimaryContentType { get; }
   property Uri BaseUri { get; }
 PeachPDF.Network.MimeKitNetworkLoader : class
   ctor(Stream stream)
@@ -396,6 +398,7 @@ PeachPDF.Network.MimeKitNetworkLoader : class
 PeachPDF.Network.RNetworkLoader : abstract class
   method abstract Task<RNetworkResponse> GetResourceStream(Uri uri)
   method abstract Task<String> GetPrimaryContents()
+  property String PrimaryContentType { get; }
   property Uri BaseUri { get; }
 PeachPDF.PageOrientation : enum Int32
   Landscape = 1
@@ -510,6 +513,10 @@ PeachPDF.PdfDocumentMode : enum Int32
   LimitedQuirks = 2
   NoQuirks = 1
   Quirks = 3
+PeachPDF.PdfDocumentSyntax : enum Int32
+  Auto = 0
+  Html = 1
+  Xml = 2
 PeachPDF.PdfEncryptionOptions : sealed class
   ctor()
   method static PdfEncryptionOptions ReadOnly(String userPassword = null, String ownerPassword = null)
@@ -561,6 +568,7 @@ PeachPDF.PdfGenerateConfig : sealed class
   property PdfColorScheme PreferredColorScheme { get; set; }
   property PdfDocumentMetadata Metadata { get; set; }
   property PdfDocumentMode DocumentMode { get; set; }
+  property PdfDocumentSyntax DocumentSyntax { get; set; }
   property PdfEncryptionOptions Encryption { get; set; }
   property PdfUAConformance PdfUAConformance { get; set; }
   property PdfVersion PdfVersion { get; set; }

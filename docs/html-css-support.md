@@ -279,7 +279,7 @@ document follows them for formatting elements, paragraphs, lists, headings and b
 
 The DOCTYPE decides the document's mode (13.2.6.4.1), which also changes how the document is laid out: see [Document modes](#document-modes-quirks-mode).
 Not yet the spec's: the legacy `frameset` modes, the mixed-case form of SVG and MathML attribute names, and
-the tokenizer, which is MimeKit's rather than the standard's state machine.
+the tokenizer, which is MimeKit's rather than the standard's state machine. A document served as XHTML is not parsed by any of this: see [XHTML](#xhtml).
 
 ---
 
@@ -310,6 +310,27 @@ What quirks mode changes (the Quirks Mode Standard and the "in quirks mode" rule
 | `:hover` and `:active` | quirks | on their own (`:hover { }`, with no type, class or other selector) match links only |
 
 Not done: a table with no rows, columns or captions does not collapse to nothing (Quirks Mode Standard 3.10); the same-origin condition on the hashless and unitless quirks (they apply to every style sheet in the document and to `style` attributes, but never to a style sheet the host supplies); the quirks that are margins are written for a horizontal writing mode; an image or `input` with no picture is not shown as its alt text when it already has a size; `html` and `body` in different writing modes.
+
+
+## XHTML
+
+A document served as XHTML (`application/xhtml+xml`) is parsed with an XML parser, not the HTML parser, as a browser does. It is chosen by the host, never guessed from the text: `PdfGenerateConfig.DocumentSyntax` (`PdfDocumentSyntax.Auto` by default), `HtmlDocumentOptions.Syntax` (`DocumentSyntax.Html` by default) or `--document-syntax` on the command line. With `Auto`, a document the loader supplies is XHTML when the loader reports `application/xhtml+xml`: a local `.xhtml` or `.xht` file (`FileUriNetworkLoader`), an HTTP response of that type (`HttpClientNetworkLoader`), or the same file or URL given to the command-line tool. A string passed to `GeneratePdf` is HTML unless the config says `Xml`, because a string has no type, and a document that merely starts with `<?xml` is HTML: a browser does not guess either.
+
+What changes in XHTML:
+
+| | HTML | XHTML |
+|---|---|---|
+| Markup that is wrong | repaired (`<p>` closed by the next `<p>`, a `<table>` gets its `<tbody>`) | an error: the document must be well-formed and `GeneratePdf` throws `HtmlRenderException` with the line and position |
+| `<html>`, `<head>`, `<body>` | made up when left out | not made up; the document element must be `<html>` (in the XHTML namespace, or none) |
+| Empty elements | the void elements (`<br>`, `<img>`) | whatever the markup says: `<div/>` is empty, `<div></div>` is empty, `<br>` is an error |
+| `<style>` and `<script>` | raw text | ordinary elements: `<![CDATA[ ... ]]>` works, and `&gt;` is `>` (in HTML it stays `&gt;`) |
+| Named entities | all of HTML's | the 248 of XHTML 1.0 (`&nbsp;`, `&copy;`, `&eacute;`, `&mdash;`, ...) and the five of XML, with an XHTML DOCTYPE or any DOCTYPE; one with no DOCTYPE at all, and an entity that does not exist, is an error. A DOCTYPE's internal subset can declare more |
+| Document mode | from the DOCTYPE | always no-quirks |
+| Namespaces | `<svg>` and `<math>` are recognized by name | by namespace: `svg` in `http://www.w3.org/2000/svg`, `math` in the MathML namespace; `xlink:href` and `xml:lang` are read (and `xml:lang` also gives the language) |
+
+The document type declaration is never fetched: every DTD a document names is answered from an embedded list of the named entities, and no other external reference (an external entity, another DTD) is loaded from the file system or the network. Entity expansion is capped, so a document cannot expand itself into gigabytes.
+
+Not done: a fragment (the declarative builder's HTML content and the like) is always HTML; an `<?xml-stylesheet?>` processing instruction is ignored; the element names of the XHTML namespace are taken as their lowercase form (`<DIV>` is a `div`, where a browser makes it an unknown element); a `.xhtml` body part of an MHTML archive is not recognized (`MimeKitNetworkLoader` reports no type); the `HtmlView` controls parse HTML unless the host sets `Syntax`.
 
 ---
 

@@ -124,7 +124,11 @@ namespace PeachBrackets.Html.Parse
             CssBox root;
             DocumentMode mode;
             using (EngineTelemetry.Source.StartActivity("html.parse"))
-                root = HtmlParser.ParseDocument(html, out mode, document: true);
+            {
+                root = htmlContainer.DocumentSyntax == DocumentSyntax.Xml
+                    ? XhtmlParser.ParseDocument(html, out mode)
+                    : HtmlParser.ParseDocument(html, out mode, document: true);
+            }
 
             // Before anything reads it: the style sheets' @media block for quirks mode, selector matching and layout all go by it.
             htmlContainer.DocumentMode = htmlContainer.DocumentModeOverride ?? mode;

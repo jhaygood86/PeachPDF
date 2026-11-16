@@ -36,5 +36,13 @@ namespace PeachPDF.Network
         /// references. If <c>null</c>, relative references are resolved against the local file system.
         /// </summary>
         public abstract Uri? BaseUri { get; }
+
+        /// <summary>
+        /// The MIME type of the root document <see cref="GetPrimaryContents"/> returns, or <c>null</c> when the loader does not know it (the
+        /// default). A document of <c>application/xhtml+xml</c> is parsed as XHTML with an XML parser, as a browser does, unless
+        /// <c>PeachPDF.PdfGenerateConfig.DocumentSyntax</c> says otherwise. Only read for a document the loader supplies (a <c>null</c> HTML
+        /// argument to <c>PdfGenerator.GeneratePdf</c>).
+        /// </summary>
+        public virtual string? PrimaryContentType => null;
     }
 }

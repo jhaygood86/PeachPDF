@@ -128,6 +128,7 @@ public sealed partial class HtmlDocument : IDisposable
             container.InteractiveForms = options.CollectFormFields;
             container.PaintFormControls = options.PaintFormControls;
             container.DocumentModeOverride = options.DocumentMode;
+            container.DocumentSyntax = options.Syntax;
             document.ApplyTextOptions(options);
 
             // Read while the DOM tree is generated, when every text box is cut into words: hyphens: auto and the language-dependent
@@ -324,6 +325,9 @@ public sealed partial class HtmlDocument : IDisposable
     /// A document built with <see cref="CreateAsync"/> is always <see cref="PeachBrackets.DocumentMode.NoQuirks"/>.
     /// </summary>
     public DocumentMode DocumentMode => _container.DocumentMode;
+
+    /// <summary>The syntax the source was parsed with: <see cref="HtmlDocumentOptions.Syntax"/>.</summary>
+    public DocumentSyntax Syntax => _container.DocumentSyntax;
 
     /// <summary>What the document says about itself - its title and <c>&lt;meta&gt;</c> elements - or null if it says nothing.</summary>
     public HtmlDocumentMetadata? Metadata => _container.DocumentMetadata;

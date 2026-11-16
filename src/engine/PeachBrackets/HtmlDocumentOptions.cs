@@ -141,6 +141,12 @@ public sealed class HtmlDocumentOptions
     public DocumentMode? DocumentMode { get; set; }
 
     /// <summary>
+    /// How the source is parsed: <see cref="DocumentSyntax.Html"/> (the default) as HTML, or <see cref="DocumentSyntax.Xml"/> as XHTML with an XML
+    /// parser, which is what a browser does for a document served as <c>application/xhtml+xml</c>. The syntax is never guessed from the text.
+    /// </summary>
+    public DocumentSyntax Syntax { get; set; }
+
+    /// <summary>
     /// The language to assume when the document declares none (<c>&lt;html lang&gt;</c>), as a BCP 47 tag, or null to assume none. It
     /// drives hyphenation and language-dependent line breaking.
     /// </summary>
