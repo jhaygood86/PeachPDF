@@ -9860,6 +9860,8 @@ namespace PeachBrackets.Html.Dom
             var maxSumBeforeBox = maxSum;
             var paddingSumBeforeBox = paddingSum;
             var widestLineBeforeBox = widestLine;
+            var minBeforeBox = min;
+            var minDecorationBeforeBox = minDecoration;
             double? oldSum = null;
             double? oldPaddingSum = null;
 
@@ -10387,6 +10389,17 @@ namespace PeachBrackets.Html.Dom
                         explicitContentWidth = Math.Max(explicitContentWidth, CssValueParser.ParseLength(box.MinWidth, 0, box));
                 }
 
+                // A fixed-layout table (`table-layout: fixed` with a width) is as wide as it was told whatever its cells hold
+                // (CSS 2.1 section 17.5.2.1), so what is inside it contributes no minimum of its own: the declared width, folded in below, is
+                // all of it. Two 400px tables in the cells of a 500px fixed table gave a minimum of 800px, and a `flex: none` item (whose
+                // automatic minimum size is its min-content) was laid out 232px too wide.
+                if (box.DerivedStyle.ActualDisplay is Keywords.Table or Keywords.InlineTable
+                    && box.TableLayout.Value == TableLayoutMode.Fixed)
+                {
+                    min = minBeforeBox;
+                    minDecoration = minDecorationBeforeBox;
+                }
+
                 // A box that opens its own line carries its margins (and its ancestors') in marginSum, where the walk seeds
                 // an auto-width one from it; an inline-level box had them added to maxSum before this call.
                 var explicitSum = startsNewLine
@@ -10415,8 +10428,18 @@ namespace PeachBrackets.Html.Dom
                     // A table with a declared width that its content would overflow prefers that width, not its content's: the columns
                     // wrap inside it, down to the narrowest they can be. Reading the declared width as only a floor under the content
                     // measured it 64pt too wide in a `flex: none` item whose rows hold a 400px block (Chrome 376.5pt, 440pt here).
-                    box.GetMinMaxWidth(g, out var tableMin, out _);
-                    var preferred = Math.Max(explicitContentWidth, tableMin - box.ActualBoxSizeIncludedWidth);
+                    //
+                    // A fixed-layout table (`table-layout: fixed` with a width) is exactly the width it was given whatever its cells hold
+                    // (CSS 2.1 section 17.5.2.1: the columns come from the first row and the cells' content never widens them), so it has no
+                    // content minimum to honour: a 500px fixed table holding two 400px tables measured 607pt, and the flex item around it
+                    // pushed its sibling off the page.
+                    var preferred = explicitContentWidth;
+                    if (box.TableLayout.Value != TableLayoutMode.Fixed)
+                    {
+                        box.GetMinMaxWidth(g, out var tableMin, out _);
+                        preferred = Math.Max(preferred, tableMin - box.ActualBoxSizeIncludedWidth);
+                    }
+
                     maxSum = (startsNewLine ? marginSum : maxSumBeforeBox) + preferred;
                     paddingSum = explicitDecoration;
                     widestLine = widestLineBeforeBox;

@@ -3199,6 +3199,13 @@ namespace PeachBrackets.Html.Dom
         private bool HasNoDefiniteExtentToShrinkToward =>
             _isVertical && !_widthSpecified && !CssLayoutEngine.IsHeightDefinite(_tableBox.ContainingBlock);
 
+        /// <summary>Whether <paramref name="available"/> is the table's own maximum content width, to within two pixels (see <see cref="TakeExcessFromUndeclaredColumns"/>).</summary>
+        private bool IsSizedToThisTablesMaximum(double available)
+        {
+            _tableBox.GetMinMaxWidth(_graphics, out _, out var tableMaximum);
+            return Math.Abs(available - tableMaximum) <= _tableBox.ActualBoxSizeIncludedWidth + 2 * Length.PointsPerPx;
+        }
+
         /// <summary>
         /// Takes what the table is wider than it may be from the columns no cell or <c>&lt;col&gt;</c> gave a width, in proportion to how much each has
         /// above its own minimum, so a column that asked for a share (<c>width: 20%</c>) keeps it while the unsized ones absorb the squeeze.
@@ -3208,8 +3215,15 @@ namespace PeachBrackets.Html.Dom
         {
             if (_columnWidthDeclared is not { } declared || declared.Length != _columnWidths!.Length || HasNoDefiniteExtentToShrinkToward) return;
 
-            var excess = GetWidthSumExcludingCollapsedColumnWidths() - GetAvailableTableWidth();
+            var available = GetAvailableTableWidth();
+            var excess = GetWidthSumExcludingCollapsedColumnWidths() - available;
             if (!(excess > 0)) return;
+
+            // An auto-width table whose container was itself sized to this table's maximum width (a float, an inline-block, an absolutely
+            // positioned box, a `flex: none` item) was not given a width to squeeze into: what it is "over" is only the difference between the
+            // intrinsic measure and the columns' own, a pixel or so (the half of a collapsed border the widest row does not carry). A browser
+            // lays such a table out at its content width, so squeezing the columns here wrapped the last word of a row that fits.
+            if (!_widthSpecified && IsSizedToThisTablesMaximum(available)) return;
 
             var spare = new double[_columnWidths.Length];
             var spareTotal = 0d;

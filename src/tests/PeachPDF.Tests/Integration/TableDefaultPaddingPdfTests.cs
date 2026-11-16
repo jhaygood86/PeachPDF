@@ -183,6 +183,47 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(376.5, fills[Red].Width, 0.05);
         }
 
+        [Theory]
+        [InlineData("<td><table width='400'><tr><td>a</td></tr></table></td><td><table width='400'><tr><td>t1 t2 t3 t4 t5 t6 t7</td></tr></table></td>")]
+        [InlineData("<td colspan='2' width='50' style='width:120px'><table width='400' style='border-collapse:collapse;width:500px'><tr><td>a</td><th width='50'>w1</th></tr></table></td>"
+            + "<td><table width='400'><tr><td>t1 t2 t3 t4 t5 t6 t7</td></tr></table></td>")]
+        public async Task AFixedLayoutTableIsAsWideAsItWasToldWhateverItsCellsHold(string cells)
+        {
+            // Two 400px tables in the cells of a 500px `table-layout: fixed` table: the columns come from the first row and never from the content
+            // (CSS 2.1 17.5.2.1), so the table is 500px (375pt) and a `flex: none` item holding it is no wider. The measure took the cells' content
+            // for the item's minimum (607pt), which pushed the `flex: 1` item beside it off the page, where Chrome keeps it at 375pt.
+            var fills = await FillsAsync(
+                $"<div style='display:flex;width:600px'><div style='flex:none'><table style='table-layout:fixed;width:500px'><tr>{cells}</tr></table></div>"
+                + "<div style='flex:1;background:#cfc'>q</div></div>");
+            var reference = await FillsAsync(
+                "<div style='display:flex;width:600px'><div style='flex:none;width:500px'>x</div><div style='flex:1;background:#cfc'>q</div></div>");
+
+            Assert.Equal(reference[Green].X, fills[Green].X, 0.05);
+            Assert.Equal(75, fills[Green].Width, 0.05);
+        }
+
+        [Fact]
+        public async Task ACollapsedBordersTableInAFloatKeepsTheRowThatFitsOnOneLine()
+        {
+            // A float is as wide as its table's content, and a cell with a declared width and a collapsed border (a half of it on the table's
+            // outer edge, which the widest row does not carry) made the columns a pixel more than that. Squeezing the last column by it wrapped
+            // the last word of a row that fits (the row came out 14pt higher); Chrome keeps the row on one line, which is its height with the
+            // same words in a cell of their own.
+            static string Table(string firstCellWidth) =>
+                "<div style='float:left'><table style='border-collapse:collapse'><tr>"
+                + $"<td style='border:6px solid #444;{firstCellWidth}'>w561<br>w562 w563</td><td style='padding:2px 12px'>w564</td></tr>"
+                + "<tr><td style='padding:5px'>Un565mmmmmmmmmmmmmmmmmmmmmm</td>"
+                + "<td style='padding:5px;background:#cfc'>t566 t567 t568 t569 t570 t571 t572</td></tr></table></div><div style='clear:both'>z</div>";
+
+            var oneLine = await FillsAsync(
+                "<div style='float:left'><table><tr><td style='padding:5px;background:#cfc'>t566 t567 t568 t569 t570 t571 t572</td></tr></table></div><div style='clear:both'>z</div>");
+            var declared = await FillsAsync(Table("width:120px"));
+
+            // The collapsed borders add a little to the row; a second line adds a whole line height (15pt).
+            Assert.True(declared[Green].Height < oneLine[Green].Height + 7,
+                $"the last row is {declared[Green].Height:F2}pt high, one line is {oneLine[Green].Height:F2}pt");
+        }
+
         [Fact]
         public async Task ADeclarativeTableCellIsNotGivenTheDefaultPadding()
         {
