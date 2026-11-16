@@ -4327,6 +4327,12 @@ namespace PeachBrackets.Html.Dom
             // CSS 2.1 §10.7 leaves the effect of max-height on a table cell undefined, and a cell's height is a minimum (§17.5.3): browsers ignore it.
             if (box.IsTableCell) return null;
 
+            // css-tables-3's own "computing the table height" algorithm has no shrinking step at all - a
+            // table's height is always at least the greater of its own specified height and the row
+            // grid's natural extent (CSS 2.1 §17.5.3), and max-height cannot cut into that (wpt
+            // css-tables/max-height-table: "max-height cannot shrink a table under its intrinsic size").
+            if (box.DerivedStyle.ActualDisplay is Keywords.Table or Keywords.InlineTable) return null;
+
             if (!IsHeightDefinite(box.ContainingBlock) && CssValueParser.DependsOnPercentage(box.MaxHeight)) return null;
 
             var maxHeightBasis = ResolveDefiniteHeightValue(box.ContainingBlock) ?? box.ContainingBlock.Size.Height;
