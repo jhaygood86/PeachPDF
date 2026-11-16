@@ -39,6 +39,9 @@ namespace PeachPDF.Layout
 
         private bool _terminalUsed;
 
+        /// <summary>Whether this container is the content of a multi-column flow, whose <see cref="Column"/> then stacks blocks rather than a flex column so it can continue into the next column.</summary>
+        internal bool FlowsInColumns { get; init; }
+
         /// <summary>Whether this container's one piece of terminal content has already been placed - used by <see cref="Html(string, PeachPdfCssContent?, Action{SlotContext, IContainer}?)"/>'s slot handling to tell whether a slot callback actually populated the container it was given.</summary>
         internal bool HasContent => _terminalUsed;
 
@@ -233,6 +236,143 @@ namespace PeachPDF.Layout
         {
             box.SetStyle("height", value);
             return this;
+        }
+
+        public IContainer MinWidth(PdfLength value)
+        {
+            box.SetStyle("min-width", value);
+            return this;
+        }
+
+        public IContainer MaxWidth(PdfLength value)
+        {
+            box.SetStyle("max-width", value);
+            return this;
+        }
+
+        public IContainer MinHeight(PdfLength value)
+        {
+            box.SetStyle("min-height", value);
+            return this;
+        }
+
+        public IContainer MaxHeight(PdfLength value)
+        {
+            box.SetStyle("max-height", value);
+            return this;
+        }
+
+        public IContainer Opacity(double value)
+        {
+            box.SetStyle("opacity", Number(double.IsNaN(value) ? 1 : Math.Clamp(value, 0, 1)));
+            return this;
+        }
+
+        public IContainer ZIndex(int value)
+        {
+            box.SetStyle("position", "relative");
+            box.SetStyle("z-index", value.ToString(CultureInfo.InvariantCulture));
+            return this;
+        }
+
+        public IContainer Direction(PdfTextDirection direction)
+        {
+            new TextStyleApplier(box).Direction(direction);
+            return this;
+        }
+
+        public IContainer ContentFromLeftToRight() => Direction(PdfTextDirection.Ltr);
+
+        public IContainer ContentFromRightToLeft() => Direction(PdfTextDirection.Rtl);
+
+        // ─── transforms ─────────────────────────────────────────────────────────
+
+        // Calls combine in the order they are made, so each one appends a function and the whole list is written back: setting
+        // `transform` per call would let a later call replace an earlier one.
+        private readonly List<string> _transforms = [];
+
+        private static string Number(double value) => value.ToString("0.######", CultureInfo.InvariantCulture);
+
+        private IContainer AddTransform(string function)
+        {
+            // A declaratively built box has no user-agent style, so it is `display: inline` unless something says otherwise, and `transform`
+            // does not apply to a non-replaced inline box. A container is a block of content, so the first transform makes it one.
+            if (_transforms.Count == 0) box.SetStyle("display", "block");
+            _transforms.Add(function);
+            box.SetStyle("transform", string.Join(' ', _transforms));
+            return this;
+        }
+
+        public IContainer Rotate(double degrees) => AddTransform($"rotate({Number(degrees)}deg)");
+
+        public IContainer FlipHorizontal() => AddTransform("scaleX(-1)");
+
+        public IContainer FlipVertical() => AddTransform("scaleY(-1)");
+
+        public IContainer FlipOver() => AddTransform("scale(-1, -1)");
+
+        public IContainer TranslateX(PdfLength distance) => AddTransform($"translateX({distance.ToCssText()})");
+
+        public IContainer TranslateY(PdfLength distance) => AddTransform($"translateY({distance.ToCssText()})");
+
+        public IContainer TransformScale(double factor) => AddTransform($"scale({Number(factor)})");
+
+        public IContainer TransformScaleX(double factor) => AddTransform($"scaleX({Number(factor)})");
+
+        public IContainer TransformScaleY(double factor) => AddTransform($"scaleY({Number(factor)})");
+
+        // ─── page flow and columns ──────────────────────────────────────────────
+
+        public IContainer PreventPageBreak()
+        {
+            box.SetStyle("break-inside", "avoid");
+            return this;
+        }
+
+        public IContainer ShowEntire() => PreventPageBreak();
+
+        public IContainer Columns(int count)
+        {
+            ArgumentOutOfRangeException.ThrowIfLessThan(count, 1);
+            box.SetStyle("column-count", count.ToString(CultureInfo.InvariantCulture));
+            return this;
+        }
+
+        public IContainer ColumnGap(PdfLength gap)
+        {
+            box.SetStyle("column-gap", gap);
+            return this;
+        }
+
+        public IContainer ColumnRule(PdfLength width, PdfColor color)
+        {
+            box.SetStyle("column-rule-width", width);
+            box.SetStyle("column-rule-style", "solid");
+            box.SetStyle("column-rule-color", color);
+            return this;
+        }
+
+        public IContainer ColumnFill(bool balance)
+        {
+            box.SetStyle("column-fill", balance ? "balance" : "auto");
+            return this;
+        }
+
+        public void PageBreak()
+        {
+            MarkTerminal();
+            // On the container itself: a break on a block nested in a flex item is not carried up to the flex container's next item.
+            box.SetStyle("break-after", "page");
+        }
+
+        public void MultiColumn(Action<IMultiColumnDescriptor> handler)
+        {
+            ArgumentNullException.ThrowIfNull(handler);
+            MarkTerminal();
+            var flow = box.AppendBlock();
+            // A declaratively built box has no user-agent style, so a plain one is inline.
+            flow.SetStyle("display", "block");
+            handler(new MultiColumnDescriptorBuilder(flow));
         }
 
         public IContainer Grow(double ratio = 1)
@@ -620,9 +760,17 @@ namespace PeachPDF.Layout
             ArgumentNullException.ThrowIfNull(handler);
             MarkTerminal();
             var columnBox = box.AppendBlock();
-            columnBox.SetStyle("display", "flex");
-            columnBox.SetStyle("flex-direction", "column");
-            handler(new ColumnDescriptorBuilder(columnBox));
+            if (FlowsInColumns)
+            {
+                columnBox.SetStyle("display", "block");
+            }
+            else
+            {
+                columnBox.SetStyle("display", "flex");
+                columnBox.SetStyle("flex-direction", "column");
+            }
+
+            handler(new ColumnDescriptorBuilder(columnBox, FlowsInColumns));
         }
 
         public void Table(Action<ITableDescriptor> handler)

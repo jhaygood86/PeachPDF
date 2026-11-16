@@ -22,6 +22,18 @@ namespace PeachPDF.Layout
             return this;
         }
 
+        public ITextSpanContainer AlignLeft() => Alignment(TextAlignment.Left);
+
+        public ITextSpanContainer AlignCenter() => Alignment(TextAlignment.Center);
+
+        public ITextSpanContainer AlignRight() => Alignment(TextAlignment.Right);
+
+        public ITextSpanContainer Justify() => Alignment(TextAlignment.Justify);
+
+        public ITextSpanContainer AlignStart() => Alignment(TextAlignment.Start);
+
+        public ITextSpanContainer AlignEnd() => Alignment(TextAlignment.End);
+
         public ITextSpan Span(string text)
         {
             var span = box.AppendBlock();

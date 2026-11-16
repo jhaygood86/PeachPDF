@@ -1301,10 +1301,6 @@ namespace PeachBrackets.Html.Dom
                     || box.Overflow.Value != Css.Overflow.Visible
                     || (overflows && ParseFloat(box.FlexShrink) <= 0))
                     continue;
-                // A replaced item takes its main size from its aspect ratio and its stretched width, which the specification
-                // gives its own transferred minimum; it keeps shrinking as it always did.
-                if (box.IsImage) continue;
-
                 var content = item.NaturalMainSize;
                 var heightIsDefinite = CssValueParser.IsValidLength(box.Height);
                 // NaturalMainSize is the content height when nothing but auto layout sized the item: no height, and a
@@ -1314,7 +1310,14 @@ namespace PeachBrackets.Html.Dom
                          && ParseFloat(box.FlexGrow) <= 0)
                         || item.HypotheticalMainSize == 0);
 
-                if (!hypotheticalFromAuto)
+                if (box.IsImage)
+                {
+                    // A replaced item's content size is its natural height, not the height its stretched width gave it, and the
+                    // specification gives it a transferred minimum of its own: see ReplacedContentSuggestionAsync.
+                    if (await ReplacedContentSuggestionAsync(g, item, container) is not { } suggestion) continue;
+                    content = suggestion;
+                }
+                else if (!hypotheticalFromAuto)
                 {
                     var saved = box.Height;
                     box.Height = Keywords.Auto;
@@ -1339,6 +1342,36 @@ namespace PeachBrackets.Html.Dom
 
                 RecordAutoMinimum(item, minimum);
             }
+        }
+
+        /// <summary>
+        /// The size a replaced column item's <c>min-height: auto</c> starts from (CSS Flexbox 1 §4.5): the smaller of its content size
+        /// suggestion, the natural height of the picture, and its transferred size suggestion, the height its aspect ratio gives the
+        /// width the author specified. Null when it has neither (no natural height and no definite width), where nothing floors it.
+        /// </summary>
+        /// <remarks>
+        /// The natural height is not <see cref="FlexItem.NaturalMainSize"/>: for a picture stretched across the cross axis that is the
+        /// height its stretched width gave it, and flooring at it would stop the picture shrinking at all. A stretched width is not a
+        /// definite cross size either, so it gives no transferred suggestion; a percentage width is left out for the same reason the
+        /// row rule leaves it out (it is compressible).
+        /// </remarks>
+        private async ValueTask<double?> ReplacedContentSuggestionAsync(Canvas g, FlexItem item, double container)
+        {
+            var box = item.Box;
+            if (await CssLayoutEngineGrid.GetReplacedNaturalSizeAsync(g, box) is not { } natural) return null;
+
+            var verticalExtras = box.ActualPaddingTop + box.ActualPaddingBottom + box.ActualBorderTopWidth + box.ActualBorderBottomWidth;
+            double? suggestion = natural.HeightUnits is { } naturalHeight ? naturalHeight + verticalExtras : null;
+
+            if (CssValueParser.IsValidLength(box.Width) && !box.Width.EndsWith('%') && natural.Ratio is > 0 and var ratio)
+            {
+                var horizontalExtras = box.ActualPaddingLeft + box.ActualPaddingRight + box.ActualBorderLeftWidth + box.ActualBorderRightWidth;
+                var outerWidth = CssValueParser.ParseLength(box.Width, container, box) + CrossBoxSizeIncluded(box);
+                var transferred = Math.Max(0, outerWidth - horizontalExtras) / ratio + verticalExtras;
+                suggestion = suggestion is { } fromContent ? Math.Min(fromContent, transferred) : transferred;
+            }
+
+            return suggestion;
         }
 
         /// <summary>

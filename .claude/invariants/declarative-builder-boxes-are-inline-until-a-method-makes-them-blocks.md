@@ -1,0 +1,8 @@
+# A declaratively built box is `display: inline` until something makes it a block
+
+`DocumentNode.AppendBlock` creates a box through `CssPropertyFactory.CreateAnonymousBox`, which is a `div` with **no user-agent style** (a declarative tree never runs the default stylesheet), so its computed `display` is `inline`. Flex items are blockified at layout, which is why `Row`/`Column` items and everything under them look fine, but properties that read the computed `display` do not see that:
+
+- **`transform`** does not apply to a non-replaced inline box (CSS Transforms 1). `Rotate`, `Flip*`, `Translate*` and `TransformScale*` set the property and `CssUtils.GetPropertyValue(box, "transform")` returns it, yet nothing is painted rotated. Measured: the first showcase render of the transform methods looked untransformed in PDFium and MuPDF alike while every style-level test passed. `ContainerBuilder.AddTransform` therefore sets `display: block` on the first transform, and `Transforms_ActuallyApplyToTheBox` asserts `HasTransform`/`IsTransformed`, which the style assertion alone cannot.
+- **Multi-column containers and block stacking.** A `column-count` box that is inline lays out to 0x0 and its items keep `Location` (0,0). `MultiColumn` makes its flow `display: block`, and a `Column` inside it (`ColumnDescriptorBuilder` with `blockFlow`) makes the column box and every item `display: block` too: a flex column's items do not continue into the next column.
+
+Any new builder method whose CSS property is conditional on the box's display (`transform`, `column-*`, `break-*` on an inline, `vertical-align`) has to make the box a block itself or be tested for its effect on the resolved box, not only for the property string.

@@ -23,6 +23,7 @@ namespace PeachPDF.Layout
         private PdfLength? _marginRight;
         private PdfColor? _background;
         private Action<ITextStyle>? _defaultTextStyleHandler;
+        private PdfTextDirection? _direction;
         private Action<IContainer>? _headerHandler;
         private Action<IContainer>? _footerHandler;
         private DeclarativePage? _page;
@@ -95,6 +96,18 @@ namespace PeachPDF.Layout
             return this;
         }
 
+        public IPageDescriptor ContentFromLeftToRight()
+        {
+            _direction = PdfTextDirection.Ltr;
+            return this;
+        }
+
+        public IPageDescriptor ContentFromRightToLeft()
+        {
+            _direction = PdfTextDirection.Rtl;
+            return this;
+        }
+
         public IPageDescriptor DefaultTextStyle(Action<ITextStyle> handler)
         {
             ArgumentNullException.ThrowIfNull(handler);
@@ -133,6 +146,11 @@ namespace PeachPDF.Layout
             if (_defaultTextStyleHandler is { } styleHandler)
             {
                 styleHandler(new TextStyleApplier(root));
+            }
+
+            if (_direction is { } direction)
+            {
+                new TextStyleApplier(root).Direction(direction);
             }
 
             if (_headerHandler is { } headerHandler)

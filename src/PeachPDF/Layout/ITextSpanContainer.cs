@@ -8,6 +8,24 @@ namespace PeachPDF.Layout
         /// <summary>Sets this paragraph's text alignment.</summary>
         ITextSpanContainer Alignment(TextAlignment alignment);
 
+        /// <summary>Aligns this paragraph to the left edge - <see cref="Alignment"/> with <see cref="TextAlignment.Left"/>.</summary>
+        ITextSpanContainer AlignLeft();
+
+        /// <summary>Centers this paragraph - <see cref="Alignment"/> with <see cref="TextAlignment.Center"/>.</summary>
+        ITextSpanContainer AlignCenter();
+
+        /// <summary>Aligns this paragraph to the right edge - <see cref="Alignment"/> with <see cref="TextAlignment.Right"/>.</summary>
+        ITextSpanContainer AlignRight();
+
+        /// <summary>Justifies this paragraph - <see cref="Alignment"/> with <see cref="TextAlignment.Justify"/>.</summary>
+        ITextSpanContainer Justify();
+
+        /// <summary>Aligns this paragraph to the start edge of its direction - <see cref="Alignment"/> with <see cref="TextAlignment.Start"/>.</summary>
+        ITextSpanContainer AlignStart();
+
+        /// <summary>Aligns this paragraph to the end edge of its direction - <see cref="Alignment"/> with <see cref="TextAlignment.End"/>.</summary>
+        ITextSpanContainer AlignEnd();
+
         /// <summary>Appends a run of text and returns its style, for chaining.</summary>
         ITextSpan Span(string text);
 

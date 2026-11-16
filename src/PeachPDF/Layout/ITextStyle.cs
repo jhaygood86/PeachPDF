@@ -61,6 +61,36 @@ namespace PeachPDF.Layout
         /// <summary>Sets the base text direction, for bidi/RTL content.</summary>
         ITextStyle Direction(PdfTextDirection direction);
 
+        /// <summary>Sets the weight to 100 (thin).</summary>
+        ITextStyle Thin();
+
+        /// <summary>Sets the weight to 200 (extra light).</summary>
+        ITextStyle ExtraLight();
+
+        /// <summary>Sets the weight to 300 (light).</summary>
+        ITextStyle Light();
+
+        /// <summary>Sets the weight to 400 (regular).</summary>
+        ITextStyle NormalWeight();
+
+        /// <summary>Sets the weight to 500 (medium).</summary>
+        ITextStyle Medium();
+
+        /// <summary>Sets the weight to 600 (semi-bold).</summary>
+        ITextStyle SemiBold();
+
+        /// <summary>Sets the weight to 800 (extra bold).</summary>
+        ITextStyle ExtraBold();
+
+        /// <summary>Sets the weight to 900 (black).</summary>
+        ITextStyle Black();
+
+        /// <summary>
+        /// Lets a word that is too long for its line break at any point to fit (<c>overflow-wrap: anywhere</c>), without allowing breaks
+        /// inside words that fit - unlike <see cref="BreakAnywhere"/>, which breaks every word between characters.
+        /// </summary>
+        ITextStyle WrapAnywhere();
+
         /// <summary>Allows a line to break anywhere between characters when it would otherwise overflow (<c>word-break: break-all</c>).</summary>
         ITextStyle BreakAnywhere();
     }
