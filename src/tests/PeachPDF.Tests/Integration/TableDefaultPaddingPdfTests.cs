@@ -156,6 +156,33 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(outerCell, fills[Red].Width, 0.05);
         }
 
+        [Theory]
+        [InlineData("float:left")]
+        [InlineData("display:grid;justify-content:start")]
+        public async Task ABlockCellsDeclaredWidthIsWhatItContributesNotItsTextsWidth(string wrapperStyle)
+        {
+            // The second cell is declared 80px (+ 7px padding each side) and holds a longer line than that: the column is its declared width
+            // (Chrome 70.5pt), and the first column is the width of its words, not 40pt more because the table was sized by the longer line.
+            var fills = await FillsAsync(
+                $"<div style='{wrapperStyle}'><table><tr><td style='background:#fcc'><div>dolor dolor a t8</div></td>"
+                + "<td style='background:#cfc;width:80px;padding:7px'><div>consectetur lorem t7</div></td></tr></table></div><div style='clear:both'>z</div>");
+
+            Assert.Equal(70.5, fills[Green].Width, 0.05);
+            Assert.True(fills[Red].Width < 90, $"the first column was {fills[Red].Width:F1}pt wide, Chrome has 75.8pt");
+        }
+
+        [Fact]
+        public async Task ANestedTableOfDeclaredWidthIsAsWideAsThatInATableCellWhoseRowsHoldBlocks()
+        {
+            // The nested table is declared 500px (375pt); its first cell holds a 400px block beside a 100px cell of text. It prefers the width it
+            // was given, so the cell it sits in is 375pt plus that cell's own padding (Chrome 376.5pt), not the 440pt of the content.
+            var fills = await FillsAsync(
+                "<table><tr><td style='background:#fcc'><table style='width:500px'><tr><td><div style='width:400px'>x</div></td>"
+                + "<td style='width:100px'><p>dolor Unbreakable amet amet bb t8 sit</p></td></tr></table></td><td>t</td></tr></table>");
+
+            Assert.Equal(376.5, fills[Red].Width, 0.05);
+        }
+
         [Fact]
         public async Task ADeclarativeTableCellIsNotGivenTheDefaultPadding()
         {
