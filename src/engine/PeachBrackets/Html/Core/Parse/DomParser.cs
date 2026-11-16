@@ -3948,8 +3948,16 @@ namespace PeachBrackets.Html.Parse
                     // is the box is only one in the parent
                     keepBox = keepBox || liveCount == 1;
 
-                    // is it a whitespace between two inline boxes
-                    keepBox = keepBox || (i > 0 && nextLive >= 0 && children[i - 1].IsInline && children[nextLive].IsInline);
+                    // is it a whitespace between two inline (or table-internal) boxes. CSS2.1 §17.2.1 rule
+                    // 1.4 only removes a whitespace-only anonymous inline box when BOTH its immediate
+                    // siblings are internal table boxes or 'table-caption' (it would otherwise survive
+                    // rules 2.x/3.x as a stray non-cell child of the row/table they build); an ordinary
+                    // inline box next to a misparented table-cell about to be wrapped into its own
+                    // anonymous row/table is not an internal table box, so the whitespace next to it must
+                    // stay, exactly as it would next to any other inline sibling.
+                    keepBox = keepBox || (i > 0 && nextLive >= 0
+                        && IsWhitespaceNeighborKeepWorthy(children[i - 1]) && IsWhitespaceNeighborKeepWorthy(children[nextLive])
+                        && !(IsInternalTableBoxOrCaption(children[i - 1]) && IsInternalTableBoxOrCaption(children[nextLive])));
 
                     // is first/last box where is in inline box and it's next/previous box is inline
                     keepBox = keepBox || (i == 0 && liveCount > 1 && children[nextLive].IsInline && box.IsInline) || (nextLive < 0 && liveCount > 1 && children[i - 1].IsInline && box.IsInline);
@@ -4962,12 +4970,24 @@ namespace PeachBrackets.Html.Parse
                 CorrectAnonymousTablesGenerateMissingChildWrappers(childBox);
             }
 
-            // 3. Generate Missing Parents
-            CorrectAnonymousTablesGenerateMissingParents(box);
+            // 3.1 Generate missing table-row parents for every cell first, then 3.2 (missing table/
+            // inline-table parents) over a fresh snapshot of the children. Interleaving them per child
+            // evaluated rule 3.2 on a misparented cell, never on the anonymous row rule 3.1 wrapped around it,
+            // so a following row group's anonymous table collected only later siblings and the row ended up in
+            // a separate table (CSS 2.1 §17.2.1: the anonymous row is itself a misparented proper table child
+            // that joins the same anonymous table as its consecutive siblings).
+            CorrectAnonymousTablesGenerateMissingRowParents(box);
 
             foreach (var childBox in box.Boxes.ToArray())
             {
-                CorrectAnonymousTablesGenerateMissingParents(childBox);
+                CorrectAnonymousTablesGenerateMissingRowParents(childBox);
+            }
+
+            CorrectAnonymousTablesGenerateMissingTableParents(box);
+
+            foreach (var childBox in box.Boxes.ToArray())
+            {
+                CorrectAnonymousTablesGenerateMissingTableParents(childBox);
             }
 
             foreach (var childBox in box.Boxes.ToArray())
@@ -5005,6 +5025,40 @@ namespace PeachBrackets.Html.Parse
             // 1.4 This is handled via CorrectTextBoxes above
         }
 
+        /// <summary>
+        /// Creates an anonymous table-structure box (CSS 2.1 §17.2.1) under <paramref name="parent"/>. Like any
+        /// other box, an anonymous box inherits the inheritable properties of its parent (CSS 2.1 §6.2) -
+        /// font, white-space, visibility, direction, border-collapse, empty-cells, ... - rather than keeping the
+        /// initial values, which is what a bare <c>new CssBox(parent, null)</c> left behind. Non-inherited
+        /// properties (border, margin, padding, background) stay at their initial values.
+        /// </summary>
+        private static CssBox CreateAnonymousTableBox(CssBox? parent)
+        {
+            return parent is null ? new CssBox(null, null) : CssBox.CreateBox(parent);
+        }
+
+        /// <summary>
+        /// CSS 2.1 §17.2.1's "internal table box" (a 'table-cell', 'table-row', row group, 'table-column' or
+        /// 'table-column-group' box), extended with 'table-caption' - the two are always listed together in
+        /// the whitespace-removal rules (1.3/1.4) and the "proper table child"/"misparented" rules (2.1, 3.2).
+        /// </summary>
+        private static bool IsInternalTableBoxOrCaption(CssBox box)
+        {
+            return box.DerivedStyle.ActualDisplay is Keywords.TableCell or Keywords.TableRow or Keywords.TableColumn
+                or Keywords.TableColumnGroup or Keywords.TableCaption || box.IsTableRowGroupBox;
+        }
+
+        /// <summary>
+        /// Whether <paramref name="box"/> can stand next to a whitespace-only anonymous inline box without
+        /// that whitespace being removed by CSS 2.1 §17.2.1 rule 1.4 - true for an ordinary inline box (the
+        /// pre-existing rule) and, now, for an internal table box or 'table-caption' too, since rule 1.4 only
+        /// fires when <em>both</em> immediate siblings are internal-table-box/caption (see the call site).
+        /// </summary>
+        private static bool IsWhitespaceNeighborKeepWorthy(CssBox box)
+        {
+            return box.IsInline || IsInternalTableBoxOrCaption(box);
+        }
+
         private static void CorrectAnonymousTablesGenerateMissingChildWrappers(CssBox box)
         {
             // 2.1 If a child C of a 'table' or 'inline-table' box is not a proper table child, then generate an anonymous 'table-row' box around C and all consecutive siblings of C that are not proper table children.
@@ -5024,7 +5078,7 @@ namespace PeachBrackets.Html.Parse
                     // (the constructor above only appends it at the end) - required so the wrapper
                     // takes C's place in document/column order instead of drifting to the end once C
                     // itself is reparented into it below.
-                    var tableRowBox = new CssBox(box.ParentBox, null);
+                    var tableRowBox = CreateAnonymousTableBox(box.ParentBox);
                     tableRowBox.Display = CssProperty<DisplayMode>.FromValue(Keywords.TableRow, DisplayMode.TableRow);
                     tableRowBox.SetBeforeBox(box);
                     box.ParentBox = tableRowBox;
@@ -5046,7 +5100,7 @@ namespace PeachBrackets.Html.Parse
                         DomUtils.GetFollowingSiblings(box, sibling => sibling.DerivedStyle.ActualDisplay is not Keywords.TableRow, true)
                             .ToList();
 
-                    var tableRowBox = new CssBox(box.ParentBox, null);
+                    var tableRowBox = CreateAnonymousTableBox(box.ParentBox);
                     tableRowBox.Display = CssProperty<DisplayMode>.FromValue(Keywords.TableRow, DisplayMode.TableRow);
                     tableRowBox.SetBeforeBox(box);
                     box.ParentBox = tableRowBox;
@@ -5069,7 +5123,7 @@ namespace PeachBrackets.Html.Parse
                         DomUtils.GetFollowingSiblings(box, sibling => sibling.DerivedStyle.ActualDisplay is not Keywords.TableCell, true)
                             .ToList();
 
-                    var tableCellBox = new CssBox(box.ParentBox, null);
+                    var tableCellBox = CreateAnonymousTableBox(box.ParentBox);
                     tableCellBox.Display = CssProperty<DisplayMode>.FromValue(Keywords.TableCell, DisplayMode.TableCell);
                     tableCellBox.SetBeforeBox(box);
                     box.ParentBox = tableCellBox;
@@ -5079,7 +5133,7 @@ namespace PeachBrackets.Html.Parse
             }
         }
 
-        private static void CorrectAnonymousTablesGenerateMissingParents(CssBox box)
+        private static void CorrectAnonymousTablesGenerateMissingRowParents(CssBox box)
         {
             // 3.1 For each 'table-cell' box C in a sequence of consecutive internal table and 'table-caption' siblings, if C's parent is not a 'table-row' then generate an anonymous 'table-row' box around C and all consecutive siblings of C that are 'table-cell' boxes.
             if (box.DerivedStyle.ActualDisplay is Keywords.TableCell)
@@ -5090,7 +5144,7 @@ namespace PeachBrackets.Html.Parse
                         DomUtils.GetFollowingSiblings(box, sibling => sibling.DerivedStyle.ActualDisplay is Keywords.TableCell, true)
                             .ToList();
 
-                    var tableRowBox = new CssBox(box.ParentBox, null);
+                    var tableRowBox = CreateAnonymousTableBox(box.ParentBox);
                     tableRowBox.Display = CssProperty<DisplayMode>.FromValue(Keywords.TableRow, DisplayMode.TableRow);
                     tableRowBox.SetBeforeBox(box);
                     box.ParentBox = tableRowBox;
@@ -5099,6 +5153,10 @@ namespace PeachBrackets.Html.Parse
                 }
             }
 
+        }
+
+        private static void CorrectAnonymousTablesGenerateMissingTableParents(CssBox box)
+        {
             // 3.2 For each proper table child C in a sequence of consecutive proper table children, if C is misparented then generate an anonymous 'table' or 'inline-table' box T around C and all consecutive siblings of C that are proper table children. (If C's parent is an 'inline' box, then T must be an 'inline-table' box; otherwise it must be a 'table' box.)
             // - A 'table-row' is misparented if its parent is neither a row group box nor a 'table' or 'inline-table' box.
             // - A 'table-column' box is misparented if its parent is neither a 'table-column-group' box nor a 'table' or 'inline-table' box.
@@ -5137,7 +5195,7 @@ namespace PeachBrackets.Html.Parse
                         DomUtils.GetFollowingSiblings(box, DomUtils.IsProperTableChild, true)
                             .ToList();
 
-                    var tableBox = new CssBox(originalParent, null);
+                    var tableBox = CreateAnonymousTableBox(originalParent);
                     tableBox.Display = CssProperty<DisplayMode>.FromValue(parentDisplay, parentDisplayMode);
 
                     // Position the synthesized table at the child's original index in the grandparent (the

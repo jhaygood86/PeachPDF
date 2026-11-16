@@ -170,6 +170,123 @@ namespace PeachBrackets.Engine.Tests.Integration
             Assert.Equal(new[] { before, anonTable, after }, body.Boxes);
         }
 
+        [Fact]
+        public async Task MisparentedRowFollowedByRealRowGroup_JoinsTheSameAnonymousTable()
+        {
+            // CSS2.1 §17.2.1 rule 3.1 wraps the stray cell in an anonymous table-row; rule 3.2 then
+            // must see that row and the following, already-proper, row group as *consecutive proper
+            // table children* and wrap both into one anonymous table. Running 3.1 and 3.2 interleaved,
+            // per child, evaluated 3.2 on the cell before 3.1 had wrapped it into a row - so the row
+            // group (whose own turn came later in the same single pass) built its own, separate,
+            // anonymous table instead of joining the first one.
+            var html = """
+                <!DOCTYPE html><html><head></head><body>
+                  <span class="cell" style="display:table-cell"></span>
+                  <div class="group" style="display:table-row-group">
+                    <div class="row" style="display:table-row"></div>
+                  </div>
+                </body></html>
+                """;
+
+            var root = await BuildOnly(html);
+
+            var body = FindByTag(root, "body")!;
+            var cell = FindByClass(root, "cell")!;
+            var group = FindByClass(root, "group")!;
+
+            var anonRow = cell.ParentBox!;
+            Assert.Equal(DisplayMode.TableRow, anonRow.Display.Value);
+
+            var anonTable = anonRow.ParentBox!;
+            Assert.Equal(DisplayMode.Table, anonTable.Display.Value);
+
+            // The row group must be a child of the very same anonymous table as the anonymous row,
+            // not of a second, separately-synthesized one.
+            Assert.Same(anonTable, group.ParentBox);
+            Assert.Single(body.Boxes);
+            Assert.Equal(new[] { anonRow, group }, anonTable.Boxes);
+        }
+
+        [Fact]
+        public async Task AnonymousTableStructureBoxes_InheritStyleFromTheirParent()
+        {
+            // CSS2.1 §6.2: every box, anonymous ones included, inherits the inheritable properties of
+            // its parent rather than keeping the initial values - a bare `new CssBox(parent, null)`
+            // (as opposed to `CssBox.CreateBox`) left the anonymous row/cell/table at the CSS initial
+            // values instead, e.g. painting in the UA default color/font regardless of what the
+            // misparented content around it actually specified.
+            var html = """
+                <!DOCTYPE html><html><head></head><body>
+                  <div style="color: rgb(1, 2, 3); font-size: 20pt">
+                    <span class="cell" style="display:table-cell"></span>
+                  </div>
+                </body></html>
+                """;
+
+            var root = await BuildOnly(html);
+            var cell = FindByClass(root, "cell")!;
+
+            var anonRow = cell.ParentBox!;
+            Assert.Equal(DisplayMode.TableRow, anonRow.Display.Value);
+            Assert.Equal("rgb(1, 2, 3)", anonRow.Color);
+
+            var anonTable = anonRow.ParentBox!;
+            Assert.Equal(DisplayMode.Table, anonTable.Display.Value);
+            Assert.Equal("rgb(1, 2, 3)", anonTable.Color);
+            Assert.Equal(20.0, anonTable.ActualFont.Size, 3);
+        }
+
+        [Fact]
+        public async Task WhitespaceBetweenTwoMisparentedCells_IsRemoved_ButWhitespaceNextToOrdinaryInlineContentSurvives()
+        {
+            // CSS2.1 §17.2.1 rule 1.4: a whitespace-only anonymous inline box is only removed when
+            // *both* its immediate siblings are internal table boxes (or 'table-caption') - the
+            // pre-existing heuristic instead kept whitespace only when both neighbors were "IsInline",
+            // which is false for an unwrapped 'table-cell' span, so it wrongly dropped the space
+            // between ordinary text and a misparented cell that is about to become its own anonymous
+            // table sibling, while still (by the same wrong test, coincidentally) removing the space
+            // rule 1.4 actually requires removed, between the two cells. "wrap" is a block (not
+            // inline) parent, so CSS2.1 §9.2.1.1 wraps the ordinary inline runs either side of the
+            // resulting block-level anonymous table in their own anonymous block boxes - the kept
+            // whitespace rides along as the last/first child of those wrappers, rather than staying a
+            // direct child of "wrap" itself.
+            var html = """
+                <!DOCTYPE html><html><head></head><body>
+                  <div class="wrap">
+                    <span class="a">a</span>
+                    <span class="b" style="display:table-cell">b</span>
+                    <span class="c" style="display:table-cell">c</span>
+                    <span class="d">d</span>
+                  </div>
+                </body></html>
+                """;
+
+            var root = await BuildOnly(html);
+
+            var wrap = FindByClass(root, "wrap")!;
+            var a = FindByClass(root, "a")!;
+            var d = FindByClass(root, "d")!;
+
+            // "a" is followed by a real whitespace-only text box, a sibling within its own anonymous
+            // block wrapper - it must survive, not be stripped, since "a" isn't an internal table box.
+            var aBlock = a.ParentBox!;
+            var afterA = aBlock.Boxes[aBlock.Boxes.IndexOf(a) + 1];
+            Assert.True(string.IsNullOrWhiteSpace(afterA.Text));
+
+            // Likewise before "d", in its own anonymous block wrapper.
+            var dBlock = d.ParentBox!;
+            var beforeD = dBlock.Boxes[dBlock.Boxes.IndexOf(d) - 1];
+            Assert.True(string.IsNullOrWhiteSpace(beforeD.Text));
+
+            // The anonymous table wrapping "b"/"c" (between the two anonymous block wrappers) has
+            // exactly two cells as its row's children - no stray whitespace-only cell in between them
+            // (rule 1.4 removed that whitespace box before rule 2.3 could wrap it into one of its own).
+            var anonTable = wrap.Boxes[wrap.Boxes.IndexOf(aBlock) + 1];
+            Assert.Equal(DisplayMode.Table, anonTable.Display.Value);
+            var row = anonTable.Boxes[0];
+            Assert.Equal(2, row.Boxes.Count);
+        }
+
         // ─── Helpers ─────────────────────────────────────────────────────────────
 
         // The anonymous-table-box correction pass (DomParser.CorrectAnonymousTables) runs during

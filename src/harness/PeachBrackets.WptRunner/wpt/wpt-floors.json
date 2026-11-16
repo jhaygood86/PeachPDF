@@ -9,7 +9,7 @@
     "css-lists": 45,
     "css-multicol": 141,
     "css-position": 32,
-    "css-tables": 56,
+    "css-tables": 62,
     "css-text": 634,
     "css-transforms": 513,
     "css-values": 83,
@@ -17,6 +17,6 @@
     "css2-flow": 1718,
     "css2-generated": 212,
     "css2-positioning": 447,
-    "css2-tables": 111
+    "css2-tables": 136
   }
 }
