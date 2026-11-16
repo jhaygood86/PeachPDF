@@ -9993,6 +9993,30 @@ namespace PeachBrackets.Html.Dom
                 // white-space: nowrap (which inherits, so the row need not declare it).
                 trailingSpace = 0;
             }
+            else if (box.DerivedStyle.ActualDisplay == Keywords.TableRow && RowHoldsBlockLevelCellContent(box))
+            {
+                // The cells of a row sit side by side, so the row's intrinsic width is the SUM of theirs. The flat walk below adds a cell's words to the
+                // running line, which is the sum for text, but a block-level child of a cell opens a line of its own and so competes with the cells
+                // before it for the widest line instead of adding to them: a 60px cell holding a 400px block beside a cell of text measured as the
+                // widest of the two, and a table shrunk to fit was laid out narrower than its content needs. Each cell is measured in isolation, as
+                // the flex row above measures an item, and a declared (non-percentage) width is the width the cell prefers, never a floor.
+                double rowMax = 0, rowMin = 0;
+                foreach (var cell in box.Boxes)
+                {
+                    if (cell.DerivedStyle.ActualDisplay == Keywords.None) continue;
+
+                    cell.GetMinMaxWidth(g, out var cellMin, out var cellMax);
+                    if (CssValueParser.IsValidLength(cell.Width) && !cell.Width.EndsWith('%'))
+                        cellMax = Math.Max(cellMax, CssValueParser.ParseLength(cell.Width, 0, cell) + cell.ActualBoxSizeIncludedWidth);
+
+                    rowMax += cellMax;
+                    rowMin += cellMin;
+                }
+
+                maxSum += rowMax;
+                UpdateMinWidth(ref min, ref minDecoration, rowMin, paddingSum);
+                trailingSpace = 0;
+            }
             else if (TryMeasureFlexColumnWrapWidth(g, box, out var columnWrapMin, out var columnWrapMax))
             {
                 // A wrapping flex column of a definite height is its lines side by side, so its intrinsic width is the sum of their widths, not the
@@ -10440,6 +10464,23 @@ namespace PeachBrackets.Html.Dom
             !box.IsImage
             && box.DerivedStyle.ActualDisplay is not (Keywords.Table or Keywords.InlineTable or Keywords.TableCell
                 or Keywords.TableCaption or Keywords.Inline);
+
+        /// <summary>
+        /// Whether a cell of this table row holds an in-flow block-level child, which opens a line of its own in the intrinsic-width walk
+        /// (see the table row branch of <see cref="GetMinMaxSumWords"/>) where the cells beside it should add to one another.
+        /// </summary>
+        private static bool RowHoldsBlockLevelCellContent(CssBox row)
+        {
+            foreach (var cell in row.Boxes)
+            {
+                if (cell.DerivedStyle.ActualDisplay != Keywords.TableCell) continue;
+                foreach (var child in cell.Boxes)
+                    if (child.DerivedStyle.ActualDisplay != Keywords.None && !child.IsAbsolutelyPositioned && !child.IsFloated && StartsNewLine(child))
+                        return true;
+            }
+
+            return false;
+        }
 
         private static void UpdateMinWidth(ref double min, ref double minDecoration,
             double candidate, double candidateDecoration)

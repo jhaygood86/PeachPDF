@@ -172,5 +172,26 @@ namespace PeachBrackets.Engine.Tests.Integration
             Assert.Equal(67.5, await WidthOfAsync(body, "o"), 0.05);
             Assert.Equal(61.5, await WidthOfAsync(body, "i"), 0.05);
         }
+
+        [Theory]
+        [InlineData("float:left", "div")]
+        [InlineData("float:left", "p")]
+        [InlineData("display:inline-block", "div")]
+        [InlineData("position:absolute", "div")]
+        public async Task ABlockInACellDoesNotShrinkTheTableBesideItBelowItsText(string wrapperStyle, string tag)
+        {
+            // The first cell holds a 400px block, the second a line of words. Chrome gives the second column the width of the line in a float, an inline
+            // block or an absolutely positioned box alike; the table's width to shrink to is the sum of its cells', so it is the same whether the words
+            // sit in a block or straight in the cell (a span), and the cell is as wide as that.
+            string Table(string inner) => $"<div style='{wrapperStyle}'><table><tr><td id='a' style='width:60px'><div style='width:400px'>x</div></td><td id='b'>{inner}</td></tr></table></div><div style='clear:both'>z</div>";
+            const string words = "t7 t8 t9 t10 t11 t12";
+
+            var inBlock = await WidthOfAsync(Table($"<{tag}>{words}</{tag}>"), "b");
+            var inline = await WidthOfAsync(Table($"<span>{words}</span>"), "b");
+
+            Assert.Equal(301.5, await WidthOfAsync(Table($"<{tag}>{words}</{tag}>"), "a"), 0.05);
+            Assert.Equal(inline, inBlock, 0.6);
+            Assert.True(inBlock > 60, $"the second column was squeezed to {inBlock:F1}pt");
+        }
     }
 }
