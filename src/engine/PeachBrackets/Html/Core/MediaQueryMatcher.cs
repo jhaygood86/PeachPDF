@@ -44,6 +44,34 @@ namespace PeachBrackets.Html
             return result;
         }
 
+        /// <summary>
+        /// Whether the rules under <paramref name="enclosingMedia"/> apply to a document in quirks mode and to no other: some level of the chain is a
+        /// list whose every query is the boolean <c>(-peachpdf-quirks-mode)</c>.
+        /// </summary>
+        internal static bool RequiresQuirksMode(MediaList[]? enclosingMedia)
+        {
+            if (enclosingMedia is null) return false;
+
+            foreach (var mediaList in enclosingMedia)
+            {
+                var all = true;
+                var any = false;
+                foreach (var medium in mediaList)
+                {
+                    any = true;
+                    if (medium.IsInverse || !medium.Features.Any(f => f.Name == FeatureNames.QuirksMode && !f.HasValue))
+                    {
+                        all = false;
+                        break;
+                    }
+                }
+
+                if (all && any) return true;
+            }
+
+            return false;
+        }
+
         private sealed class CachedMatch(MediaQueryContext context, bool result)
         {
             internal readonly MediaQueryContext Context = context;
@@ -176,6 +204,9 @@ namespace PeachBrackets.Html
                         "fine" => any.HasFlag(PointerTypes.Fine),
                         _ => false,
                     };
+                case "-peachpdf-quirks-mode":
+                    // Boolean only: `(-peachpdf-quirks-mode)` is the document being in quirks mode, and `(-peachpdf-quirks-mode: 0)` is it not.
+                    return !feature.HasValue || feature.Value == "1" ? context.QuirksMode : !context.QuirksMode;
                 case "update":
                 case "scripting":
                 // A PDF is not drawn under a user agent's forced palette (Media Queries 5, forced-colors), and has no other

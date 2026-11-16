@@ -984,12 +984,17 @@ namespace PeachBrackets.Html.Dom
             {
                 return BoxSizing.Value switch
                 {
-                    BoxSizingMode.ContentBox => ActualPaddingTop + ActualPaddingBottom + ActualBorderTopWidth + ActualBorderBottomWidth,
+                    // The Quirks Mode Standard 3.13: a table cell's height, min-height and max-height are those of its border box in quirks mode,
+                    // whatever box-sizing says. The widths are not (ActualBoxSizeIncludedWidth).
+                    BoxSizingMode.ContentBox => IsQuirksTableCell ? 0 : ActualPaddingTop + ActualPaddingBottom + ActualBorderTopWidth + ActualBorderBottomWidth,
                     BoxSizingMode.BorderBox => 0,
                     _ => throw new HtmlRenderException("Unknown box sizing", HtmlRenderErrorType.Layout)
                 };
             }
         }
+
+        /// <summary>Whether this is a table cell in a document in quirks mode, whose heights are border-box heights (Quirks Mode Standard 3.13).</summary>
+        private bool IsQuirksTableCell => IsTableCell && HtmlContainer?.DocumentMode == DocumentMode.Quirks;
 
         public double ActualBoxSizingHeight => Size.Height + ActualBoxSizeIncludedHeight;
 

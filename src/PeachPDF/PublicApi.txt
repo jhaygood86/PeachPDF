@@ -505,6 +505,11 @@ PeachPDF.PdfDocumentMetadata : sealed class
   property String Keywords { get; set; }
   property String Subject { get; set; }
   property String Title { get; set; }
+PeachPDF.PdfDocumentMode : enum Int32
+  Auto = 0
+  LimitedQuirks = 2
+  NoQuirks = 1
+  Quirks = 3
 PeachPDF.PdfEncryptionOptions : sealed class
   ctor()
   method static PdfEncryptionOptions ReadOnly(String userPassword = null, String ownerPassword = null)
@@ -555,6 +560,7 @@ PeachPDF.PdfGenerateConfig : sealed class
   property PdfAConformance PdfAConformance { get; set; }
   property PdfColorScheme PreferredColorScheme { get; set; }
   property PdfDocumentMetadata Metadata { get; set; }
+  property PdfDocumentMode DocumentMode { get; set; }
   property PdfEncryptionOptions Encryption { get; set; }
   property PdfUAConformance PdfUAConformance { get; set; }
   property PdfVersion PdfVersion { get; set; }

@@ -13,6 +13,7 @@ using PeachPDF.Network;
 
 - [Thread safety](#thread-safety)
 - [Rendering HTML from a local string](#rendering-html-from-a-local-string)
+- [Document mode: HTML with no DOCTYPE](#document-mode-html-with-no-doctype)
 - [Rendering a local HTML file](#rendering-a-local-html-file)
 - [Rendering an MHTML file](#rendering-an-mhtml-file)
 - [Fetching HTML over HTTP](#fetching-html-over-http)
@@ -95,6 +96,17 @@ document.Save(stream);
 ```
 
 When the config names no page size (neither `PageSize` nor both `ManualPageWidth` and `ManualPageHeight`), pages are US Letter; an `@page { size }` rule in the document still takes precedence, and setting `PageSize` or the manual dimensions overrides the default.
+
+## Document mode: HTML with no DOCTYPE
+
+PeachPDF takes the layout mode from the DOCTYPE, as a browser does. HTML with no DOCTYPE, which is what a fragment usually is, is laid out in **quirks mode**: the first paragraph of the body has no top margin, a table does not inherit the font it sits in, class and ID selectors ignore case, `width: 100` means `100px`, and so on (the full list is in [Document modes](html-css-support.md#document-modes-quirks-mode)). For HTML that was written for the standards, add `<!DOCTYPE html>`, or say so in the config:
+
+```csharp
+var pdfConfig = new PdfGenerateConfig
+{
+    DocumentMode = PdfDocumentMode.NoQuirks   // Auto (the DOCTYPE decides) is the default
+};
+```
 
 ## Rendering a local HTML file
 

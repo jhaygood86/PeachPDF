@@ -44,9 +44,42 @@ namespace PeachBrackets.Engine.Tests.Html.Core.Parse
         public void TableStaysInTheParagraphOnlyInQuirksMode(string html, bool inParagraph) =>
             Assert.Equal(inParagraph, TableIsInParagraph(html));
 
+        [Theory]
+        [InlineData("<!DOCTYPE html><html>", DocumentMode.NoQuirks)]
+        [InlineData("<!doctype HTML><html>", DocumentMode.NoQuirks)]
+        [InlineData("<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.01//EN\" \"http://www.w3.org/TR/html4/strict.dtd\"><html>", DocumentMode.NoQuirks)]
+        [InlineData("<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Strict//EN\" \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd\"><html>", DocumentMode.NoQuirks)]
+        [InlineData("<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Transitional//EN\" \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd\"><html>", DocumentMode.LimitedQuirks)]
+        [InlineData("<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Transitional//EN\"><html>", DocumentMode.LimitedQuirks)]
+        [InlineData("<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Frameset//EN\" \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-frameset.dtd\"><html>", DocumentMode.LimitedQuirks)]
+        [InlineData("<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.01 Transitional//EN\" \"http://www.w3.org/TR/html4/loose.dtd\"><html>", DocumentMode.LimitedQuirks)]
+        [InlineData("<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.01 Frameset//EN\" \"http://www.w3.org/TR/html4/frameset.dtd\"><html>", DocumentMode.LimitedQuirks)]
+        [InlineData("<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.01 Transitional//EN\"><html>", DocumentMode.Quirks)]
+        [InlineData("<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.01 Frameset//EN\"><html>", DocumentMode.Quirks)]
+        [InlineData("<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.0 Transitional//EN\"><html>", DocumentMode.Quirks)]
+        [InlineData("<!DOCTYPE HTML PUBLIC \"-//IETF//DTD HTML 2.0//EN\"><html>", DocumentMode.Quirks)]
+        [InlineData("<!DOCTYPE HTML PUBLIC \"HTML\"><html>", DocumentMode.Quirks)]
+        [InlineData("<!DOCTYPE html SYSTEM \"http://www.ibm.com/data/dtd/v11/ibmxhtml1-transitional.dtd\"><html>", DocumentMode.Quirks)]
+        [InlineData("<!DOCTYPE foo><html>", DocumentMode.Quirks)]
+        [InlineData("<!DOCTYPE><html>", DocumentMode.Quirks)]
+        [InlineData("<html><body>x", DocumentMode.Quirks)]
+        [InlineData("<!-- c --> \n <!DOCTYPE html><html>", DocumentMode.NoQuirks)]
+        [InlineData("x", DocumentMode.Quirks)]
+        [InlineData("", DocumentMode.Quirks)]
+        [InlineData("   ", DocumentMode.Quirks)]
+        public void TheDoctypeDecidesTheDocumentMode(string html, DocumentMode expected)
+        {
+            HtmlParser.ParseDocument(html, out var mode, document: true);
+
+            Assert.Equal(expected, mode);
+        }
+
         [Fact]
         public void AFragmentIsNeverInQuirksMode()
         {
+            HtmlParser.ParseDocument(Body, out var mode, document: false);
+            Assert.Equal(DocumentMode.NoQuirks, mode);
+
             var table = Find(HtmlParser.ParseDocument(Body, document: false), "table")!;
 
             Assert.False(string.Equals(table.ParentBox?.HtmlTag?.Name, "p", StringComparison.OrdinalIgnoreCase));

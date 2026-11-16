@@ -53,10 +53,10 @@ namespace PeachBrackets.Html.Parse
             /// <summary>The stack of template insertion modes: one for each open <c>template</c>, the innermost last.</summary>
             public List<Mode> TemplateModes { get; } = [];
 
-            /// <summary>Whether the document is in quirks mode (HTML Standard 13.2.6.4.1): its first token was not an acceptable DOCTYPE. Never so for a fragment.</summary>
-            public bool IsQuirksMode { get; set; }
+            /// <summary>The document's mode (HTML Standard 13.2.6.4.1), decided by its first token. Never anything but no-quirks for a fragment.</summary>
+            public DocumentMode Mode { get; set; }
 
-            /// <summary>Whether the token that decides <see cref="IsQuirksMode"/> has been seen.</summary>
+            /// <summary>Whether the token that decides <see cref="Mode"/> has been seen.</summary>
             public bool QuirksDecided { get; set; }
 
             /// <summary>Whether a line feed that starts the next text is dropped (after <c>pre</c>, <c>listing</c> and <c>textarea</c>).</summary>
@@ -865,38 +865,50 @@ namespace PeachBrackets.Html.Parse
             "-//webtechs//dtd mozilla html 2.0//", "-//webtechs//dtd mozilla html//"
         ];
 
+        private static readonly string[] LimitedQuirksPublicIdPrefixes =
+        [
+            "-//w3c//dtd xhtml 1.0 frameset//", "-//w3c//dtd xhtml 1.0 transitional//"
+        ];
+
         /// <summary>
-        /// The quirks-mode determination of HTML Standard 13.2.6.4.1, for the token that decides it: a DOCTYPE is quirky when it is forced so, is not
-        /// named <c>html</c>, or carries one of the legacy public identifiers; the caller skips comments and whitespace, and any other
-        /// token with no DOCTYPE before it is quirky. Limited-quirks mode is not told apart from no-quirks: nothing here depends on it.
+        /// The mode of HTML Standard 13.2.6.4.1, for the token that decides it: a DOCTYPE puts the document in quirks mode when it is forced so, is
+        /// not named <c>html</c>, or carries one of the legacy identifiers, and in limited-quirks mode for the transitional XHTML 1.0 and HTML 4.01
+        /// ones; the caller skips comments and whitespace, and any other token with no DOCTYPE before it is quirks mode.
         /// </summary>
-        private static bool DeterminesQuirksMode(HtmlToken token)
+        private static DocumentMode DeterminesMode(HtmlToken token)
         {
-            switch (token.Kind)
-            {
-                case HtmlTokenKind.DocType:
-                    var doctype = (HtmlDocTypeToken)token;
-                    if (doctype.ForceQuirksMode || !string.Equals(doctype.Name, "html", StringComparison.OrdinalIgnoreCase)) return true;
+            if (token is not HtmlDocTypeToken doctype)
+                return DocumentMode.Quirks;
 
-                    var publicId = doctype.PublicIdentifier?.ToLowerInvariant();
-                    var systemId = doctype.SystemIdentifier?.ToLowerInvariant();
-                    if (publicId is null) return false;
+            if (doctype.ForceQuirksMode || !string.Equals(doctype.Name, "html", StringComparison.OrdinalIgnoreCase))
+                return DocumentMode.Quirks;
 
-                    if (publicId is "-//w3o//dtd w3 html strict 3.0//en//" or "-/w3c/dtd html 4.0 transitional/en" or "html"
-                        || systemId == "http://www.ibm.com/data/dtd/v11/ibmxhtml1-transitional.dtd")
-                        return true;
+            // The identifiers compare ASCII case-insensitively; a missing one (null) is not an empty one.
+            var publicId = doctype.PublicIdentifier?.ToLowerInvariant();
+            var systemId = doctype.SystemIdentifier?.ToLowerInvariant();
 
-                    if (systemId is null && (publicId.StartsWith("-//w3c//dtd html 4.01 frameset//", StringComparison.Ordinal)
-                        || publicId.StartsWith("-//w3c//dtd html 4.01 transitional//", StringComparison.Ordinal)))
-                        return true;
+            if (systemId == "http://www.ibm.com/data/dtd/v11/ibmxhtml1-transitional.dtd")
+                return DocumentMode.Quirks;
 
-                    foreach (var prefix in QuirkyPublicIdPrefixes)
-                        if (publicId.StartsWith(prefix, StringComparison.Ordinal)) return true;
+            if (publicId is null)
+                return DocumentMode.NoQuirks;
 
-                    return false;
-                default:
-                    return true;
-            }
+            if (publicId is "-//w3o//dtd w3 html strict 3.0//en//" or "-/w3c/dtd html 4.0 transitional/en" or "html")
+                return DocumentMode.Quirks;
+
+            foreach (var prefix in QuirkyPublicIdPrefixes)
+                if (publicId.StartsWith(prefix, StringComparison.Ordinal)) return DocumentMode.Quirks;
+
+            var html401 = publicId.StartsWith("-//w3c//dtd html 4.01 frameset//", StringComparison.Ordinal)
+                || publicId.StartsWith("-//w3c//dtd html 4.01 transitional//", StringComparison.Ordinal);
+
+            if (html401)
+                return systemId is null ? DocumentMode.Quirks : DocumentMode.LimitedQuirks;
+
+            foreach (var prefix in LimitedQuirksPublicIdPrefixes)
+                if (publicId.StartsWith(prefix, StringComparison.Ordinal)) return DocumentMode.LimitedQuirks;
+
+            return DocumentMode.NoQuirks;
         }
 
         // Everything the "in body" insertion mode does for a start tag before it inserts the element.
@@ -912,7 +924,7 @@ namespace PeachBrackets.Html.Parse
             }
 
             // A table start tag closes a p only when the document is not in quirks mode (13.2.6.4.7).
-            if (ParagraphClosingStartTags.Contains(name) && !(name is "table" && state.IsQuirksMode))
+            if (ParagraphClosingStartTags.Contains(name) && !(name is "table" && state.Mode == DocumentMode.Quirks))
                 CloseParagraphInButtonScope(state);
 
             if (name.Length == 2 && name[0] == 'h' && name[1] is >= '1' and <= '6' && IsHeading(state.Current))

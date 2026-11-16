@@ -43,6 +43,7 @@ namespace PeachBrackets.Html.Parse
         /// markup often repeats the same attribute text across many elements.
         /// </summary>
         private readonly Dictionary<string, StyleRule> _inlineStyleRuleCache = [];
+        private readonly Dictionary<string, StyleRule> _quirkyInlineStyleRuleCache = [];
 
         /// <summary>
         /// The computed style a text or anonymous box ends up with, by the style it had going into the cascade and its parent's:
@@ -81,16 +82,18 @@ namespace PeachBrackets.Html.Parse
         /// Get the parsed <see cref="StyleRule"/> for an inline <c>style=""</c> attribute's text, parsing
         /// and caching it on first use so identical attribute text across boxes is only parsed once.
         /// </summary>
-        internal StyleRule GetOrParseInlineStyleRule(string styleAttributeText)
+        internal StyleRule GetOrParseInlineStyleRule(string styleAttributeText, bool quirksMode = false)
         {
-            if (_inlineStyleRuleCache.TryGetValue(styleAttributeText, out var cached))
+            var cache = quirksMode ? _quirkyInlineStyleRuleCache : _inlineStyleRuleCache;
+            if (cache.TryGetValue(styleAttributeText, out var cached))
             {
                 return cached;
             }
 
-            var rule = new StyleRule(StylesheetParser.Default);
-            StylesheetParser.Default.AppendDeclarations(rule.Style, styleAttributeText);
-            _inlineStyleRuleCache[styleAttributeText] = rule;
+            var parser = quirksMode ? StylesheetParser.Quirks : StylesheetParser.Default;
+            var rule = new StyleRule(parser);
+            parser.AppendDeclarations(rule.Style, styleAttributeText);
+            cache[styleAttributeText] = rule;
             return rule;
         }
 

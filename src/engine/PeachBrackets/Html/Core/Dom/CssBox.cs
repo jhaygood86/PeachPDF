@@ -9223,6 +9223,25 @@ namespace PeachBrackets.Html.Dom
             return true;
         }
 
+        /// <summary>
+        /// The table cell width calculation quirk (Quirks Mode Standard 3.8): in quirks mode, finding the min-content width of the content of a table
+        /// cell whose <c>width</c> is <c>auto</c>, an inline-level <c>img</c> has no soft wrap opportunity before or after it - so the least width of
+        /// a cell of images set side by side is all of them, as it is in a browser.
+        /// </summary>
+        private static bool HasNoWrapOpportunityAroundQuirkyImage(CssRect? previous, CssRect word)
+        {
+            if (previous is null) return false;
+
+            var image = word.IsImage ? word : previous.IsImage ? previous : null;
+            if (image is null) return false;
+
+            var owner = image.OwnerBox;
+            return owner.HtmlContainer?.DocumentMode == DocumentMode.Quirks
+                && owner.HtmlTag?.Name == "img"
+                && owner.ContainingBlock is { IsTableCell: true } cell
+                && !CssValueParser.IsValidLength(cell.Width);
+        }
+
         Dictionary<string, string>? ICssDomNode.CustomProperties
         {
             get => CustomProperties;
@@ -10079,10 +10098,11 @@ namespace PeachBrackets.Html.Dom
                         previousWord, word, trailingRegionalIndicatorCount, trailingGraphemeContext);
                     if ((anywhereAffectsMinContent || previousAnywhereAffectsMinContent)
                             && isGraphemeBoundary
-                        || CssLayoutEngine.HasOrdinaryWrapOpportunityBefore(
+                        || (CssLayoutEngine.HasOrdinaryWrapOpportunityBefore(
                             previousWord, word,
                             precedingRegionalIndicatorCount: trailingRegionalIndicatorCount,
-                            precedingGraphemeContext: trailingGraphemeContext))
+                            precedingGraphemeContext: trailingGraphemeContext)
+                            && !HasNoWrapOpportunityAroundQuirkyImage(previousWord, word)))
                     {
                         UpdateMinWidth(ref min, ref minDecoration, unbreakableRunWidth, paddingSum);
                         unbreakableRunWidth = 0;

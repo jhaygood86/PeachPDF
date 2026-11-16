@@ -61,6 +61,7 @@ namespace PeachBrackets.Css
                 {FeatureNames.Scan, () => new ScanMediaFeature()},
                 {FeatureNames.UpdateFrequency, () => new UpdateFrequencyMediaFeature()},
                 {FeatureNames.Scripting, () => new ScriptingMediaFeature()},
+                {FeatureNames.QuirksMode, () => new QuirksModeMediaFeature()},
                 {FeatureNames.Pointer, () => new PointerMediaFeature()},
                 {FeatureNames.Hover, () => new HoverMediaFeature()},
                 {FeatureNames.InlineSize, () => new SizeMediaFeature(FeatureNames.InlineSize)},

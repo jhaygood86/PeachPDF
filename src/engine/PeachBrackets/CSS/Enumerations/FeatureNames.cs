@@ -40,6 +40,7 @@ namespace PeachBrackets.Css
         public static readonly string DeviceAspectRatio = "device-aspect-ratio";
         public static readonly string UpdateFrequency = "update-frequency";
         public static readonly string Scripting = "scripting";
+        public static readonly string QuirksMode = "-peachpdf-quirks-mode";
         public static readonly string Pointer = "pointer";
         public static readonly string Hover = "hover";
         public static readonly string BlockSize = "block-size";

@@ -1510,6 +1510,8 @@ namespace PeachBrackets.Css
                     {
                         if (property.TrySetValue(value))
                             property.IsImportant = important;
+                        else if (_parser.Options.QuirksMode && QuirkyValues.Rewrite(propertyName, value) is { } quirky && property.TrySetValue(quirky))
+                            property.IsImportant = important;
                         else if (_parser.Options.AllowInvalidValues)
                         {
                             _nodes.Pop();

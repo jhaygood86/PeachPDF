@@ -24,6 +24,31 @@ public class CliConfigTranslationTests
         Assert.False(legacy.BrotliCompression);
     }
 
+    [Theory]
+    [InlineData("auto", PdfDocumentMode.Auto)]
+    [InlineData("no-quirks", PdfDocumentMode.NoQuirks)]
+    [InlineData("limited-quirks", PdfDocumentMode.LimitedQuirks)]
+    [InlineData("Quirks", PdfDocumentMode.Quirks)]
+    public void DocumentMode_IsAppliedToTheConfig(string value, PdfDocumentMode expected)
+    {
+        var config = CliRunner.BuildConfig(ArgumentParser.Parse([$"--document-mode={value}", "doc.html"]));
+
+        Assert.Equal(expected, config.DocumentMode);
+    }
+
+    [Fact]
+    public void DocumentMode_DefaultsToAuto_AndRejectsAnUnknownValue()
+    {
+        Assert.Equal(PdfDocumentMode.Auto, CliRunner.BuildConfig(ArgumentParser.Parse(["doc.html"])).DocumentMode);
+
+        var options = ArgumentParser.Parse(["--document-mode", "strict", "doc.html"]);
+        Assert.Contains(options.Errors, e => e.Contains("--document-mode"));
+
+        var missing = ArgumentParser.Parse(["doc.html", "--document-mode"]);
+        Assert.NotEmpty(missing.Errors);
+        Assert.Equal(PdfDocumentMode.Auto, missing.DocumentMode);
+    }
+
     [Fact]
     public void PdfVersion_WithoutAValue_IsAnError()
     {

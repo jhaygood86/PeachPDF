@@ -101,6 +101,7 @@ A long option takes its value as `--option=VALUE` or as the next argument (`--op
 | `-s`, `--style=FILE` | Apply a user style sheet. Repeatable; later sheets win. |
 | `--no-default-style` | Ignore the default (user-agent) style sheet. |
 | `--no-author-style` | Ignore the document's own `<style>`/`<link>` style sheets. |
+| `--document-mode=MODE` | Lay the HTML out in a document mode: `auto` (the default: the mode the DOCTYPE gives, as in a browser, so HTML with no DOCTYPE is in quirks mode), `no-quirks`, `limited-quirks` or `quirks`. `no-quirks` lays out a document with no DOCTYPE by the standards. See [Document modes](html-css-support.md#document-modes-quirks-mode). |
 | `--page-size=SIZE` | Page size: a keyword (`A4`, `letter`, …), one or two lengths (`"210mm 297mm"`), optionally with `portrait`/`landscape`. |
 | `--page-margin=MARGIN` | Page margin as 1–4 CSS lengths, in CSS shorthand order (e.g. `20mm`, `1cm 2cm`). |
 

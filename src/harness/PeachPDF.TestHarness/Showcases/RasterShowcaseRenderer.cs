@@ -40,6 +40,13 @@ internal static class RasterShowcaseRenderer
             MarginLeftPoints = config.MarginLeft,
             ColorScheme = config.PreferredColorScheme == PdfColorScheme.Dark ? ColorSchemePreference.Dark : ColorSchemePreference.Light,
             IgnoreAuthorStyleSheets = config.IgnoreAuthorStyleSheets,
+            DocumentMode = config.DocumentMode switch
+            {
+                PdfDocumentMode.NoQuirks => DocumentMode.NoQuirks,
+                PdfDocumentMode.LimitedQuirks => DocumentMode.LimitedQuirks,
+                PdfDocumentMode.Quirks => DocumentMode.Quirks,
+                _ => null
+            },
             SnapBoxDecorationsToCssPixels = config.SnapBoxDecorationsToCssPixels,
             SnapBorderWidthsToCssPixels = config.SnapBorderWidthsToCssPixels,
             AnimationProgress = config.AnimationProgress,

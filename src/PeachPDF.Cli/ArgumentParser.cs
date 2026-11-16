@@ -117,6 +117,7 @@ internal static class ArgumentParser
                 case "style": AddStyle(_options, RequireValue(name, inlineValue)); break;
                 case "no-default-style": _options.NoDefaultStyle = true; break;
                 case "no-author-style": _options.NoAuthorStyle = true; break;
+                case "document-mode": ParseDocumentMode(_options, RequireValue(name, inlineValue)); break;
                 case "animation-progress": SetAnimationProgress(_options, RequireValue(name, inlineValue)); break;
                 case "page-size": ParsePageSize(_options, RequireValue(name, inlineValue)); break;
                 case "page-margin": ParsePageMargin(_options, RequireValue(name, inlineValue)); break;
@@ -312,6 +313,23 @@ internal static class ArgumentParser
         ["4e"] = PdfAConformance.PdfA4E,
         ["4f"] = PdfAConformance.PdfA4F,
     };
+
+    private static void ParseDocumentMode(CliOptions options, string? value)
+    {
+        if (value is null)
+        {
+            return;
+        }
+
+        switch (value.ToLowerInvariant())
+        {
+            case "auto": options.DocumentMode = PdfDocumentMode.Auto; break;
+            case "no-quirks": options.DocumentMode = PdfDocumentMode.NoQuirks; break;
+            case "limited-quirks": options.DocumentMode = PdfDocumentMode.LimitedQuirks; break;
+            case "quirks": options.DocumentMode = PdfDocumentMode.Quirks; break;
+            default: options.Errors.Add($"invalid --document-mode value '{value}' (expected auto, no-quirks, limited-quirks or quirks)"); break;
+        }
+    }
 
     private static void ParsePdfVersion(CliOptions options, string? value)
     {

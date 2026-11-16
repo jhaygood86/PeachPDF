@@ -278,6 +278,10 @@ namespace PeachBrackets.Html.Paint
         {
             if (fragment.Box.IsOutOfFlow) return;
 
+            // The Quirks Mode Standard 3.11: in quirks mode a decoration does not propagate into a table element. (Collect is only asked of
+            // descendants of the decorating box, so a table that decorates itself is not left out.)
+            if (fragment.Box is { HtmlTag.Name: "table" } table && table.HtmlContainer?.DocumentMode == DocumentMode.Quirks) return;
+
             // A replaced element that is not inline - an <svg> or <img> blockified as a flex or grid item - is no atomic inline, but it
             // has no inline content for the decoration to land on either, and its own rectangle is not a line of text (§2.4).
             if (MonolithicContent.IsReplaced(fragment.Box)) return;

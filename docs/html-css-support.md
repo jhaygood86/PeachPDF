@@ -277,9 +277,39 @@ document follows them for formatting elements, paragraphs, lists, headings and b
   a real, empty paragraph element behind, so `p + table + p` matches *that* element rather than the
   next authored paragraph.
 
-Quirks mode follows the DOCTYPE (13.2.6.4.1): in a document without an acceptable DOCTYPE a `<table>` start tag leaves an open `<p>` open, as in a browser. Quirks mode reaches the parser only: a document without a DOCTYPE is still laid out with the standards-mode user-agent style sheet, so the quirks-mode rules (a `form`'s bottom margin, no top margin on the first paragraph of a `body` or cell, and tables not inheriting the font) are not applied.
+The DOCTYPE decides the document's mode (13.2.6.4.1), which also changes how the document is laid out: see [Document modes](#document-modes-quirks-mode).
 Not yet the spec's: the legacy `frameset` modes, the mixed-case form of SVG and MathML attribute names, and
 the tokenizer, which is MimeKit's rather than the standard's state machine.
+
+---
+
+## Document modes (quirks mode)
+
+A browser lays out an HTML document in one of three modes, which it takes from the DOCTYPE, and so does PeachPDF. `<!DOCTYPE html>` gives **no-quirks** mode, the standards. A document with **no DOCTYPE**, or with a legacy one (HTML 3.2, HTML 4.0, a transitional HTML 4.01 with no system identifier, and the others the HTML Standard lists in 13.2.6.4.1), is in **quirks** mode, which keeps what pages written before the standards were settled depend on. A few transitional DOCTYPEs (XHTML 1.0 Transitional and Frameset, and HTML 4.01 Transitional and Frameset with a system identifier) are in **limited-quirks** mode: the standards, with quirks mode's way of sizing a line box.
+
+HTML handed to a PDF library is often a fragment with no DOCTYPE, so a document of that kind is laid out in quirks mode, as it would be in a browser. A fragment built with the [declarative builder](declarative-api.md) is never in quirks mode. To lay out a document with no DOCTYPE by the standards, add `<!DOCTYPE html>`, or set the mode: `PdfGenerateConfig.DocumentMode` (`PdfDocumentMode.NoQuirks`), `HtmlDocumentOptions.DocumentMode` (`DocumentMode.NoQuirks`) or the `--document-mode=no-quirks` command-line option. `HtmlDocument.DocumentMode` reports the mode a loaded document is in.
+
+What quirks mode changes (the Quirks Mode Standard and the "in quirks mode" rules of the HTML Standard's rendering section):
+
+| Quirk | Mode | What it does |
+|---|---|---|
+| Class and ID selectors | quirks | match ASCII case-insensitively (`.Card` matches `class="card"`); in the other modes they match exactly |
+| Hashless hex color | quirks | `color: ff0000`, `123456` or `f00` is a color, in `color`, `background-color` and the `border-*-color` properties (not inside a shorthand such as `background`) |
+| Unitless length | quirks | `width: 100` is `100px`, in the properties CSS Values 4 lists (`width`, `height`, `margin`, `padding`, `font-size`, `top`, `border-width`, ...) |
+| Margins at the start of a body or cell | quirks | a paragraph, heading, list, `blockquote` or `pre` that is the first thing in a `body`, `td` or `th` has no top margin, one that is also empty has no bottom margin, the last one in a cell has no bottom margin, and a `p` last in a cell has none either (HTML 15.3.9; text counts as something before it, an empty element does not) |
+| `form` | quirks | has a bottom margin of `1em` |
+| Tables | quirks | a `table` takes the initial `font-size`, `font-weight`, `font-style`, `font-variant`, `line-height`, `white-space` and `text-align` rather than inheriting them, and the body's `color` rather than its parent's; text decoration does not propagate into it |
+| `li` | quirks | outside a list its marker is inside the box |
+| `input` and `textarea` | quirks | are `box-sizing: border-box` (except `type=image`) |
+| `img[align]` | quirks | `left` gives a 3px right margin and `right` a 3px left margin |
+| Table cell height | quirks | `height`, `min-height` and `max-height` of a `td`/`th` are those of its border box, whatever `box-sizing` says |
+| Table cell width | quirks | images in an auto-width cell have no wrap opportunity between them when the cell's least width is found; a `td`/`th` with a `nowrap` attribute and a length `width` is at least that wide, and wraps as usual |
+| `html` and `body` | quirks | an `html` with an auto height is at least as tall as the first page's area less its margins, and a `body` at least as tall as that less its own, so a background on the body covers the page |
+| Percentage heights | quirks | `height: 50%` skips the ancestors whose height is `auto`, to the first with a height of its own, a table cell, or the page |
+| Line boxes | quirks and limited-quirks | a block's own `line-height` gives its line boxes no minimum height (a line holding only an image is the image's height), and an inline box with no text and no border or padding on the line's axis makes no line taller |
+| `:hover` and `:active` | quirks | on their own (`:hover { }`, with no type, class or other selector) match links only |
+
+Not done: a table with no rows, columns or captions does not collapse to nothing (Quirks Mode Standard 3.10); the same-origin condition on the hashless and unitless quirks (they apply to every style sheet in the document and to `style` attributes, but never to a style sheet the host supplies); the quirks that are margins are written for a horizontal writing mode; an image or `input` with no picture is not shown as its alt text when it already has a size; `html` and `body` in different writing modes.
 
 ---
 

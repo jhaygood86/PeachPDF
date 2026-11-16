@@ -174,7 +174,10 @@ namespace PeachBrackets.Html.Parse
         /// </summary>
         private async ValueTask ParseStyle(CssData data, ReadOnlyMemory<char> stylesheetText, Uri? baseUri, HashSet<string> visitedImportUris)
         {
-            var stylesheet = new StylesheetParser { UrlBase = baseUri }.Parse(stylesheetText);
+            // A document in quirks mode reads its own style sheets with the quirks of the Quirks Mode Standard (hashless colors, unitless lengths).
+            var parser = _htmlContainer?.DocumentMode == DocumentMode.Quirks ? new StylesheetParser(quirksMode: true) : new StylesheetParser();
+            parser.UrlBase = baseUri;
+            var stylesheet = parser.Parse(stylesheetText);
             stylesheet.BaseUri = baseUri;
 
             // Guards against circular @import chains (A imports B imports A) recursing forever; also

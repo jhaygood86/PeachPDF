@@ -75,6 +75,15 @@ namespace PeachPDF
         public PdfColorScheme PreferredColorScheme { get; set; } = PdfColorScheme.Light;
 
         /// <summary>
+        /// The mode the HTML is laid out in. <see cref="PdfDocumentMode.Auto"/> (the default) takes it from the DOCTYPE as a browser does, so
+        /// HTML with no DOCTYPE, which is common when a fragment is handed to a PDF library, gets the quirks of a browser's quirks mode:
+        /// class and ID selectors ignore case, <c>#</c> may be left off a color and <c>px</c> off a length, the first paragraph of a
+        /// <c>body</c> or table cell has no top margin, a table does not inherit the body's font, and the other rules of the Quirks Mode
+        /// Standard. Set <see cref="PdfDocumentMode.NoQuirks"/> to lay such HTML out by the standards, or add <c>&lt;!DOCTYPE html&gt;</c>.
+        /// </summary>
+        public PdfDocumentMode DocumentMode { get; set; } = PdfDocumentMode.Auto;
+
+        /// <summary>
         /// When set to <c>true</c>, the document's own author style sheets (its <c>&lt;style&gt;</c>
         /// elements and <c>&lt;link rel="stylesheet"&gt;</c> references) are ignored — only the user-agent
         /// default styles and any caller-supplied stylesheet (the <c>cssData</c> argument) are applied.
