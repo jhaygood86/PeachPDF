@@ -131,6 +131,38 @@ namespace PeachPDF.Layout
             return this;
         }
 
+        public ITextStyle Thin() => FontWeight(100);
+
+        public ITextStyle ExtraLight() => FontWeight(200);
+
+        public ITextStyle Light() => FontWeight(300);
+
+        public ITextStyle NormalWeight() => FontWeight(400);
+
+        public ITextStyle Medium() => FontWeight(500);
+
+        public ITextStyle SemiBold() => FontWeight(600);
+
+        public ITextStyle ExtraBold() => FontWeight(800);
+
+        public ITextStyle Black() => FontWeight(900);
+
+        public ITextStyle WrapAnywhere()
+        {
+            box.SetStyle("overflow-wrap", "anywhere");
+            return this;
+        }
+
+        public ITextSpan DecorationSolid() => DecorationStyle(PdfTextDecorationStyle.Solid);
+
+        public ITextSpan DecorationDouble() => DecorationStyle(PdfTextDecorationStyle.Double);
+
+        public ITextSpan DecorationDotted() => DecorationStyle(PdfTextDecorationStyle.Dotted);
+
+        public ITextSpan DecorationDashed() => DecorationStyle(PdfTextDecorationStyle.Dashed);
+
+        public ITextSpan DecorationWavy() => DecorationStyle(PdfTextDecorationStyle.Wavy);
+
         public ITextStyle BreakAnywhere()
         {
             box.SetStyle("word-break", "break-all");

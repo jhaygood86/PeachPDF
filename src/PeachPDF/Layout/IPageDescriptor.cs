@@ -53,6 +53,12 @@ namespace PeachPDF.Layout
         /// <summary>Sets content repeated at the bottom of every physical page this page's content paginates across.</summary>
         IPageDescriptor Footer(Action<IContainer> handler);
 
+        /// <summary>Lays this page's content out from left to right (<c>direction: ltr</c>).</summary>
+        IPageDescriptor ContentFromLeftToRight();
+
+        /// <summary>Lays this page's content out from right to left (<c>direction: rtl</c>).</summary>
+        IPageDescriptor ContentFromRightToLeft();
+
         /// <summary>Sets this page's main flowing, paginated content.</summary>
         void Content(Action<IContainer> handler);
     }

@@ -14,6 +14,9 @@ using PeachPDF.Layout;
 - [Quick start](#quick-start)
 - [Pages: size, margin, background](#pages-size-margin-background)
 - [Containers: padding, border, background, corner radius, shadow](#containers-padding-border-background-corner-radius-shadow)
+- [Size limits, opacity, stacking and direction](#size-limits-opacity-stacking-and-direction)
+- [Transforms](#transforms)
+- [Page flow and columns](#page-flow-and-columns)
 - [Class, Id, Tag, and a document-level stylesheet](#class-id-tag-and-a-document-level-stylesheet)
 - [Text and rich text](#text-and-rich-text)
 - [Images](#images)
@@ -102,6 +105,46 @@ container
 ```csharp
 container.LineHorizontal(1, PdfColor.FromHex("#BBBBBB"), dashed: true);
 ```
+
+## Size limits, opacity, stacking and direction
+
+```csharp
+container
+    .MinWidth(120).MaxWidth(PdfLength.Percent(50))     // min-width / max-width; a percentage resolves against the container
+    .MinHeight(40).MaxHeight(200)                      // min-height / max-height
+    .Opacity(0.6)                                      // the box and everything in it, as one group; clamped to 0..1
+    .ZIndex(2)                                         // paints above (or below, if negative) its siblings without moving
+    .ContentFromRightToLeft();                         // direction: rtl; ContentFromLeftToRight() or Direction(PdfTextDirection)
+```
+
+These are the CSS properties of the same names (see [HTML & CSS Support](html-css-support.md)). `ZIndex` makes a box with no `position` of its own `position: relative` with no offset, which is what lets `z-index` apply to it. `IPageDescriptor` has `ContentFromLeftToRight()`/`ContentFromRightToLeft()` for the whole page.
+
+## Transforms
+
+```csharp
+container.Width(120).Height(60).Rotate(15).FlipHorizontal().TranslateX(10).TransformScale(0.8);
+```
+
+`Rotate(degrees)` turns the box clockwise around its center; `FlipHorizontal()`, `FlipVertical()` and `FlipOver()` mirror it around its center; `TranslateX`/`TranslateY` move it; `TransformScale`, `TransformScaleX` and `TransformScaleY` scale it around its center. Calls on one container combine in the order they are made (`transform` with the functions in call order), so `Rotate(30).TranslateX(10)` is not `TranslateX(10).Rotate(30)`.
+
+A transform moves what is **painted**, not what is laid out: the box keeps the room it had and its neighbors do not move, as with CSS `transform`. A non-replaced `display: inline` box ignores `transform`. There is no method that swaps a box's layout width and height for a quarter turn or scales the layout itself; `Rotate(90)` and `TransformScale` turn and scale the painting only.
+
+## Page flow and columns
+
+```csharp
+column.Item().PreventPageBreak().Column(rows => { /* keep these rows together on a page when they fit on one */ });
+column.Item().PageBreak();                                  // what follows starts on a new page
+
+container.MultiColumn(m =>
+{
+    m.Columns(2).Spacing(20).BalanceHeight();
+    m.Content().Column(c => { /* items flow from one column into the next */ });
+});
+
+container.Columns(3).ColumnGap(16).ColumnRule(1, PdfColor.FromHex("#CCCCCC")).ColumnFill(balance: false);
+```
+
+`PreventPageBreak()` and `ShowEntire()` both set `break-inside: avoid`: the box moves to the next page when it would split and fits on a page, and still splits when it is taller than one. `PageBreak()` is a terminal that sets `break-after: page` on its container. `MultiColumn` places content in columns (`column-count`, `column-gap`, `column-fill`); inside `Content()` a `Column` stacks its items as blocks rather than as a flex column, so they continue into the next column. `Columns`, `ColumnGap`, `ColumnRule` and `ColumnFill` set the same properties on any container. A container with a definite height makes no overflow columns, a float that does not fit its column overflows it, and a float inside a table cell is not split into columns.
 
 ## Class, Id, Tag, and a document-level stylesheet
 
@@ -212,7 +255,7 @@ container.Text(t =>
 });
 ```
 
-`ITextStyle` (shared by `DefaultTextStyle` and every span) also covers `FontWeight(int)` (a raw 1–1000 weight, not just `Bold()`), `LetterSpacing`/`WordSpacing`, `LineHeight`, `Subscript()`, `FontFeature(tag, enabled)` for OpenType features, `Direction(PdfTextDirection.Rtl)` for right-to-left paragraphs (or `PdfTextDirection.Auto` to detect it from the span's own text — the same first-strong-character detection `dir="auto"` uses on the HTML side), and `BreakAnywhere()`. A container itself has `ParagraphFirstLineIndentation`, `ParagraphSpacing`, and `ClampLines(n, ellipsis)` to truncate a block after a fixed number of lines, marking the cut with the usual "…" by default, a custom string (e.g. `ClampLines(2, "… [continued]")`), or nothing at all (`ClampLines(2, "")`). `ITextSpanContainer.Element(content => ...)` inserts arbitrary container content — an image, a styled box — inline between spans.
+`ITextStyle` (shared by `DefaultTextStyle` and every span) also covers `FontWeight(int)` (a raw 1–1000 weight, not just `Bold()`) and the named weights `Thin()`, `ExtraLight()`, `Light()`, `NormalWeight()`, `Medium()`, `SemiBold()`, `ExtraBold()` and `Black()`, `WrapAnywhere()` (`overflow-wrap: anywhere`: only a word too long for its line breaks, unlike `BreakAnywhere()`), the span's `DecorationSolid()`/`DecorationDouble()`/`DecorationDotted()`/`DecorationDashed()`/`DecorationWavy()` beside `DecorationStyle(...)`, and the paragraph's `AlignLeft()`/`AlignCenter()`/`AlignRight()`/`Justify()`/`AlignStart()`/`AlignEnd()` beside `Alignment(...)`, `LetterSpacing`/`WordSpacing`, `LineHeight`, `Subscript()`, `FontFeature(tag, enabled)` for OpenType features, `Direction(PdfTextDirection.Rtl)` for right-to-left paragraphs (or `PdfTextDirection.Auto` to detect it from the span's own text — the same first-strong-character detection `dir="auto"` uses on the HTML side), and `BreakAnywhere()`. A container itself has `ParagraphFirstLineIndentation`, `ParagraphSpacing`, and `ClampLines(n, ellipsis)` to truncate a block after a fixed number of lines, marking the cut with the usual "…" by default, a custom string (e.g. `ClampLines(2, "… [continued]")`), or nothing at all (`ClampLines(2, "")`). `ITextSpanContainer.Element(content => ...)` inserts arbitrary container content — an image, a styled box — inline between spans.
 
 ## Images
 

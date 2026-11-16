@@ -220,6 +220,9 @@ namespace PeachBrackets.Html.Dom
         /// </summary>
         internal SvgDocument? SvgDocument => _svgDocument;
 
+        /// <summary>The density of the chosen <c>srcset</c> candidate, which divides the picture's natural size.</summary>
+        internal double SrcsetDensity => _srcsetDensity;
+
         /// <summary>
         /// Assigns words its width and height
         /// </summary>

@@ -548,6 +548,8 @@ namespace PeachBrackets.Html.Dom
                         await MeasureSubgridItem(g, p, columns, rows, LineColumnGap(), LineRowGap(), colLineNames, rowLineNames);
 
                     // Row-spanning items grow the last auto row they cover if their content exceeds the spanned rows.
+                    var spanningNaturals = new List<(Placement Item, double Natural)>();
+                    var ratioSizesFlexRows = !_vertical && !hasDefiniteBlock && !rowSubgrid && rows.Any(t => IsFlexTrack(t.Def));
                     foreach (var p in placements.Where(p => p.RowSpan > 1 && (spanningSubgrid.Contains(p) || !IsSubgridItem(p.Box))))
                     {
                         if (spanningSubgrid.Contains(p))
@@ -557,21 +559,34 @@ namespace PeachBrackets.Html.Dom
                         }
 
                         var natural = await MeasureItemHeight(g, p.Box, SpanWidthOf(p));
+                        // An item crossing a flexible row does not grow the rows it spans: css-grid-1 section 12.5 leaves it to the flexible
+                        // rows' own sizing (section 12.7.1, below), where it sets the flex fraction.
+                        if (ratioSizesFlexRows && Enumerable.Range(p.RowStart, Math.Min(p.RowSpan, rows.Length - p.RowStart)).Any(r => IsFlexTrack(rows[r].Def)))
+                        {
+                            spanningNaturals.Add((p, natural));
+                            continue;
+                        }
+
                         GrowSpannedAutoRows(rows, p, natural, rowGap);
                     }
 
                 if (expandsFlexRows)
                     ExpandFlexibleRows(rows, BlockContentSize, rowGap);
-                else if (!_vertical && !hasDefiniteHeight && !rowSubgrid && rows.Any(t => IsFlexTrack(t.Def))
-                    && CssValueParser.IsValidLength(_gridBox.MinHeight) && !CssValueParser.DependsOnPercentage(_gridBox.MinHeight))
+                else if (!_vertical && !hasDefiniteBlock && !rowSubgrid && rows.Any(t => IsFlexTrack(t.Def)))
                 {
-                    // An auto-height grid is as tall as its rows - unless its `min-height` is taller, in which case that minimum is the space
-                    // the flexible rows share (CSS Grid 1 section 12.1: use the minimum as the available space when it would grow the grid).
-                    // The rows hold their content size as the base, so a short minimum leaves them alone.
-                    var minBlock = CssValueParser.ParseLength(_gridBox.MinHeight, 0, _gridBox) + _gridBox.ActualBoxSizeIncludedHeight
-                        - _gridBox.ActualPaddingTop - _gridBox.ActualPaddingBottom
-                        - _gridBox.ActualBorderTopWidth - _gridBox.ActualBorderBottomWidth;
-                    ExpandFlexibleRows(rows, minBlock, rowGap);
+                    // Without a definite height the flexible rows are sized by the ratio their content asks for (css-grid-1 section 12.7.1).
+                    ExpandFlexibleRowsIndefinite(rows, spanningNaturals, rowGap);
+
+                    if (CssValueParser.IsValidLength(_gridBox.MinHeight) && !CssValueParser.DependsOnPercentage(_gridBox.MinHeight))
+                    {
+                        // An auto-height grid is as tall as its rows - unless its `min-height` is taller, in which case that minimum is the space
+                        // the flexible rows share (CSS Grid 1 section 12.1: use the minimum as the available space when it would grow the grid).
+                        // The rows hold their content size as the base, so a short minimum leaves them alone.
+                        var minBlock = CssValueParser.ParseLength(_gridBox.MinHeight, 0, _gridBox) + _gridBox.ActualBoxSizeIncludedHeight
+                            - _gridBox.ActualPaddingTop - _gridBox.ActualPaddingBottom
+                            - _gridBox.ActualBorderTopWidth - _gridBox.ActualBorderBottomWidth;
+                        ExpandFlexibleRows(rows, minBlock, rowGap);
+                    }
                 }
 
                     if (!_vertical && rowGapIsPercentage && !hasDefiniteHeight)
@@ -1448,6 +1463,52 @@ namespace PeachBrackets.Html.Dom
             for (var i = 0; i < rows.Length; i++)
                 if (flexes[i] > 0)
                     rows[i].Size = Math.Max(bases[i], flexes[i] * frSize);
+        }
+
+        /// <summary>
+        /// <see href="https://www.w3.org/TR/css-grid-1/#algo-flex-tracks">CSS Grid §12.7.1</see>, the case of a container with no definite height:
+        /// there is no space to share, so the flex fraction is the largest ratio any flexible row's content asks for, the row's size over its
+        /// flex factor (a factor under one counting as one), or, for an item spanning flexible rows, the fraction its content needs across the rows
+        /// it crosses. Every flexible row is then that fraction times its own factor, and never less than its content: <c>1fr 2fr</c> over equal
+        /// content is 10 and 20, not 10 and 10.
+        /// </summary>
+        private static void ExpandFlexibleRowsIndefinite(Track[] rows, List<(Placement Item, double Natural)> spanning, double rowGap)
+        {
+            static double FlexOf(Track row) => !IsFlexTrack(row.Def) ? 0
+                : row.Def.Kind == GridTrackKind.Flex ? row.Def.Flex : row.Def.Max.Flex;
+
+            double fraction = 0;
+            foreach (var row in rows)
+            {
+                var flex = FlexOf(row);
+                if (flex > 0) fraction = Math.Max(fraction, row.Size / Math.Max(flex, 1));
+            }
+
+            foreach (var (item, natural) in spanning)
+            {
+                var first = Math.Max(0, item.RowStart);
+                var last = Math.Min(rows.Length, item.RowStart + item.RowSpan);
+                if (last - first < 2 || !Enumerable.Range(first, last - first).Any(r => FlexOf(rows[r]) > 0)) continue;
+
+                var bases = new double[last - first];
+                var flexes = new double[last - first];
+                double nonFlexSize = 0;
+                for (var r = first; r < last; r++)
+                {
+                    bases[r - first] = rows[r].Size;
+                    flexes[r - first] = FlexOf(rows[r]);
+                    if (flexes[r - first] <= 0) nonFlexSize += rows[r].Size;
+                }
+
+                var spanned = natural - nonFlexSize - rowGap * (last - first - 1);
+                fraction = Math.Max(fraction, FindFlexFraction(bases, flexes, Math.Max(0, spanned)));
+            }
+
+            foreach (var row in rows)
+            {
+                var flex = FlexOf(row);
+                if (flex > 0) row.Size = Math.Max(row.Size, flex * fraction);
+            }
         }
 
         private static bool IsFlexTrack(GridTrackSize def) =>
@@ -2662,14 +2723,14 @@ namespace PeachBrackets.Html.Dom
 
         /// <summary>A replaced item's natural size: whether it has one in each axis (an aspect ratio alone is
         /// not one), and its aspect ratio.</summary>
-        private readonly record struct ReplacedNaturalSize(bool Width, bool Height, double? Ratio,
-            (double Width, double Height)? DefaultSize = null);
+        internal readonly record struct ReplacedNaturalSize(bool Width, bool Height, double? Ratio,
+            (double Width, double Height)? DefaultSize = null, double? HeightUnits = null);
 
         /// <summary>The natural size of an image or inline svg, or null for any other box. The item's words
         /// are measured first, which is what loads an image and builds an inline svg - until then neither
         /// knows its size - and that leaves the word at the size its own <c>width</c>/<c>height</c> give it,
         /// so callers ask while the box is still <c>auto</c> sized and before they pin anything.</summary>
-        private static async ValueTask<ReplacedNaturalSize?> GetReplacedNaturalSizeAsync(Canvas g, CssBox box)
+        internal static async ValueTask<ReplacedNaturalSize?> GetReplacedNaturalSizeAsync(Canvas g, CssBox box)
         {
             if (box is CssBoxFrame frame)
             {
@@ -2677,7 +2738,8 @@ namespace PeachBrackets.Html.Dom
                 // measured at that size by CssBoxFrame), and a ratio from that word.
                 await box.MeasureWordsSize(g);
                 var word = frame.ImageWord;
-                return new ReplacedNaturalSize(true, true, word.Image is null ? null : word.Height > 0 ? word.Width / word.Height : null);
+                return new ReplacedNaturalSize(true, true, word.Image is null ? null : word.Height > 0 ? word.Width / word.Height : null,
+                    HeightUnits: word.Image is null ? CssLayoutEngine.DefaultObjectHeight * NaturalUnit(box) : null);
             }
 
             if (box is CssBoxVideo)
@@ -2706,16 +2768,22 @@ namespace PeachBrackets.Html.Dom
             {
                 var image = raster.Image;
                 return new ReplacedNaturalSize(image is not null, image is not null,
-                    image is { Height: > 0 } ? image.Width / image.Height : null);
+                    image is { Height: > 0 } ? image.Width / image.Height : null,
+                    HeightUnits: image is null ? null : ImageResolutionResolver.NaturalSize(raster, image).Height / raster.SrcsetDensity * NaturalUnit(box));
             }
 
             var document = box is CssBoxImage svgImage ? svgImage.SvgDocument : ((CssBoxSvg)box).Document;
             var (width, height, hasRatio) = SvgIntrinsicSize.ResolveForBox(document);
+            var hasNaturalHeight = SvgIntrinsicSize.HasNaturalSize(document, horizontal: false);
             return new ReplacedNaturalSize(
                 SvgIntrinsicSize.HasNaturalSize(document, horizontal: true),
-                SvgIntrinsicSize.HasNaturalSize(document, horizontal: false),
-                hasRatio && width is > 0 && height is > 0 ? width / height : SvgIntrinsicSize.RatioOnly(document));
+                hasNaturalHeight,
+                hasRatio && width is > 0 && height is > 0 ? width / height : SvgIntrinsicSize.RatioOnly(document),
+                HeightUnits: hasNaturalHeight && height is { } naturalHeight ? naturalHeight * NaturalUnit(box) : null);
         }
+
+        /// <summary>The layout units one CSS pixel of a picture's natural size is.</summary>
+        private static double NaturalUnit(CssBox box) => Length.PointsPerPx * (box.HtmlContainer?.RenderContext?.LayoutUnitsPerPoint ?? 1.0);
 
         /// <summary>Replaces an item's percentage <c>width</c>, <c>min-width</c> and <c>max-width</c> with the
         /// lengths they resolve to against its grid area's content width (css-grid-2 §6.2: an item's

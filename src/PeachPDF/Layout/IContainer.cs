@@ -90,6 +90,102 @@ namespace PeachPDF.Layout
         /// <summary>Sets an explicit height.</summary>
         IContainer Height(PdfLength value);
 
+        /// <summary>Sets the smallest width this container may be laid out at (<c>min-width</c>).</summary>
+        IContainer MinWidth(PdfLength value);
+
+        /// <summary>Sets the largest width this container may be laid out at (<c>max-width</c>).</summary>
+        IContainer MaxWidth(PdfLength value);
+
+        /// <summary>Sets the smallest height this container may be laid out at (<c>min-height</c>).</summary>
+        IContainer MinHeight(PdfLength value);
+
+        /// <summary>Sets the largest height this container may be laid out at (<c>max-height</c>).</summary>
+        IContainer MaxHeight(PdfLength value);
+
+        /// <summary>
+        /// Sets how opaque this container and everything in it is, from 0 (invisible) to 1 (the default), as one group
+        /// (<c>opacity</c>); a value outside the range is clamped to it.
+        /// </summary>
+        IContainer Opacity(double value);
+
+        /// <summary>
+        /// Raises this container above (positive) or below (negative) its siblings in paint order (<c>z-index</c>), without moving it:
+        /// a container with no <c>position</c> of its own is made <c>position: relative</c> with no offset, which is what lets
+        /// <c>z-index</c> apply to it.
+        /// </summary>
+        IContainer ZIndex(int value);
+
+        /// <summary>Sets the direction text and inline content flow in inside this container (<c>direction</c>); inherited by what it holds.</summary>
+        IContainer Direction(PdfTextDirection direction);
+
+        /// <summary>Lays this container's content out from left to right - <see cref="Direction"/> with <see cref="PdfTextDirection.Ltr"/>.</summary>
+        IContainer ContentFromLeftToRight();
+
+        /// <summary>Lays this container's content out from right to left - <see cref="Direction"/> with <see cref="PdfTextDirection.Rtl"/>.</summary>
+        IContainer ContentFromRightToLeft();
+
+        /// <summary>
+        /// Rotates this container by <paramref name="degrees"/> clockwise around its center. Like every transform here it moves what is
+        /// painted, not what is laid out: the container keeps the room it had and its neighbors do not move (<c>transform: rotate()</c>).
+        /// Transform calls on one container combine in the order they are made. Swapping the layout width and height for a quarter
+        /// turn is not offered; <c>Rotate(90)</c> and <c>Rotate(-90)</c> turn the painting only.
+        /// </summary>
+        IContainer Rotate(double degrees);
+
+        /// <summary>Mirrors this container left to right around its center, painting only (<c>scaleX(-1)</c>).</summary>
+        IContainer FlipHorizontal();
+
+        /// <summary>Mirrors this container top to bottom around its center, painting only (<c>scaleY(-1)</c>).</summary>
+        IContainer FlipVertical();
+
+        /// <summary>Mirrors this container on both axes around its center, painting only.</summary>
+        IContainer FlipOver();
+
+        /// <summary>Moves what is painted horizontally by <paramref name="distance"/> (positive to the right) without changing the layout.</summary>
+        IContainer TranslateX(PdfLength distance);
+
+        /// <summary>Moves what is painted vertically by <paramref name="distance"/> (positive downward) without changing the layout.</summary>
+        IContainer TranslateY(PdfLength distance);
+
+        /// <summary>
+        /// Scales what is painted by <paramref name="factor"/> around the container's center (<c>transform: scale()</c>). The layout is
+        /// not scaled: the container keeps its size and its neighbors stay where they were.
+        /// </summary>
+        IContainer TransformScale(double factor);
+
+        /// <summary>Scales what is painted horizontally by <paramref name="factor"/> around the container's center, without changing the layout.</summary>
+        IContainer TransformScaleX(double factor);
+
+        /// <summary>Scales what is painted vertically by <paramref name="factor"/> around the container's center, without changing the layout.</summary>
+        IContainer TransformScaleY(double factor);
+
+        /// <summary>
+        /// Keeps this container whole on one page when it fits on one, moving it to the next page rather than splitting it
+        /// (<c>break-inside: avoid</c>); a container taller than a page still splits.
+        /// </summary>
+        IContainer PreventPageBreak();
+
+        /// <summary>
+        /// Keeps this container whole on one page when it fits on one - <see cref="PreventPageBreak"/>. A container taller than a page
+        /// still splits across pages rather than failing.
+        /// </summary>
+        IContainer ShowEntire();
+
+        /// <summary>
+        /// Lays this container's content out in <paramref name="count"/> columns (<c>column-count</c>). The columns are balanced
+        /// unless <see cref="ColumnFill"/> says otherwise. A container with a definite height makes no overflow columns.
+        /// </summary>
+        IContainer Columns(int count);
+
+        /// <summary>Sets the gap between this container's columns (<c>column-gap</c>).</summary>
+        IContainer ColumnGap(PdfLength gap);
+
+        /// <summary>Draws a rule of the given width and color in the middle of the gap between this container's columns (<c>column-rule</c>).</summary>
+        IContainer ColumnRule(PdfLength width, PdfColor color);
+
+        /// <summary>Balances the height of this container's columns (<c>column-fill: balance</c>, the default) or fills each in turn (<c>auto</c>).</summary>
+        IContainer ColumnFill(bool balance);
+
         /// <summary>Inside a <see cref="IColumnDescriptor"/>/<see cref="IRowDescriptor"/> item, lets this item grow to fill available space (<c>flex-grow</c>).</summary>
         IContainer Grow(double ratio = 1);
 
@@ -267,6 +363,16 @@ namespace PeachPDF.Layout
 
         /// <summary>Places a vertical rule of the given thickness, filled with <paramref name="color"/> (default black), or dashed when <paramref name="dashed"/> is true. Terminal - may be called at most once.</summary>
         void LineVertical(PdfLength thickness, PdfColor? color = null, bool dashed = false);
+
+        /// <summary>Places a break that starts whatever follows on a new page. Terminal - may be called at most once.</summary>
+        void PageBreak();
+
+        /// <summary>
+        /// Places content flowing through several columns (<c>column-count</c>). Terminal - may be called at most once. A container
+        /// with a definite height makes no overflow columns, a float that does not fit its column overflows it, and a float inside a
+        /// table cell is not split into columns.
+        /// </summary>
+        void MultiColumn(Action<IMultiColumnDescriptor> handler);
 
         /// <summary>Places a horizontal row of items. Terminal - may be called at most once.</summary>
         void Row(Action<IRowDescriptor> handler);

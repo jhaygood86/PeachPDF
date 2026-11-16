@@ -17323,6 +17323,107 @@ await SaveDeclarativeShowcaseAsync("declarative_stylesheet_and_html", "Document 
         });
     });
 
+const string declarativeTransformsAndFlowSource =
+    """
+    var generator = new PdfGenerator();
+
+    var document = await generator.CreateDocument(doc =>
+    {
+        doc.Page(page =>
+        {
+            page.Size(PageSize.A4);
+            page.Margin(36);
+            page.Content(content => content.Column(column =>
+            {
+                column.Spacing(24);
+
+                // Transforms move the painting only: the 60pt row keeps its room and nothing below it shifts.
+                column.Item().Row(row =>
+                {
+                    row.Spacing(40);
+                    row.Item().Width(110).Height(60).Background(PdfColor.FromHex("#4C8BF5")).Text("Plain");
+                    row.Item().Width(110).Height(60).Background(PdfColor.FromHex("#4C8BF5")).Rotate(15).Text("Rotate(15)");
+                    row.Item().Width(110).Height(60).Background(PdfColor.FromHex("#4C8BF5")).FlipHorizontal().Text("FlipHorizontal");
+                    row.Item().Width(110).Height(60).Background(PdfColor.FromHex("#4C8BF5")).Opacity(0.4).Text("Opacity(0.4)");
+                });
+
+                // MinWidth/MaxWidth bound a width given as a percentage; ZIndex lifts the second card over the first.
+                column.Item().Width(PdfLength.Percent(100)).MaxWidth(300).Background(PdfColor.FromHex("#E6EEFC")).Padding(8).Text("MaxWidth(300) caps a 100% width");
+                column.Item().Height(70).Row(row =>
+                {
+                    row.Item().Width(200).Height(60).Background(PdfColor.FromHex("#F4B183")).ZIndex(2).Text("ZIndex(2)");
+                    row.Item().Width(200).Height(60).TranslateX(-60).TranslateY(20).Background(PdfColor.FromHex("#A9D18E")).Text("TranslateX(-60)");
+                });
+
+                // Columns fill in turn; the rule sits in the gap.
+                column.Item().MultiColumn(m =>
+                {
+                    m.Columns(3).Spacing(18).BalanceHeight();
+                    m.Content().Column(c =>
+                    {
+                        c.Spacing(6);
+                        for (var i = 1; i <= 9; i++)
+                        {
+                            c.Item().Text($"Column item {i}");
+                        }
+                    });
+                });
+            }));
+        });
+    });
+
+    var stream = new MemoryStream();
+    document.Save(stream);
+    """;
+
+await SaveDeclarativeShowcaseAsync("declarative_transforms_and_flow", "Document Building", "Transforms, Opacity, Stacking and Columns",
+    "Container methods that set a CSS property directly: Rotate/Flip/Translate/TransformScale move the painting while the layout stays put, Opacity fades a box and everything in it, ZIndex raises a box over its siblings, MaxWidth caps a percentage width, and MultiColumn flows items through balanced columns.",
+    declarativeTransformsAndFlowSource,
+    async gen =>
+    {
+        return await gen.CreateDocument(doc =>
+        {
+            doc.Page(page =>
+            {
+                page.Size(PageSize.A4);
+                page.Margin(36);
+                page.Content(content => content.Column(column =>
+                {
+                    column.Spacing(24);
+
+                    column.Item().Row(row =>
+                    {
+                        row.Spacing(40);
+                        row.Item().Width(110).Height(60).Background(PdfColor.FromHex("#4C8BF5")).Text("Plain");
+                        row.Item().Width(110).Height(60).Background(PdfColor.FromHex("#4C8BF5")).Rotate(15).Text("Rotate(15)");
+                        row.Item().Width(110).Height(60).Background(PdfColor.FromHex("#4C8BF5")).FlipHorizontal().Text("FlipHorizontal");
+                        row.Item().Width(110).Height(60).Background(PdfColor.FromHex("#4C8BF5")).Opacity(0.4).Text("Opacity(0.4)");
+                    });
+
+                    column.Item().Width(PdfLength.Percent(100)).MaxWidth(300).Background(PdfColor.FromHex("#E6EEFC")).Padding(8).Text("MaxWidth(300) caps a 100% width");
+                    column.Item().Height(70).Row(row =>
+                    {
+                        row.Item().Width(200).Height(60).Background(PdfColor.FromHex("#F4B183")).ZIndex(2).Text("ZIndex(2)");
+                        row.Item().Width(200).Height(60).TranslateX(-60).TranslateY(20).Background(PdfColor.FromHex("#A9D18E")).Text("TranslateX(-60)");
+                    });
+
+                    column.Item().MultiColumn(m =>
+                    {
+                        m.Columns(3).Spacing(18).BalanceHeight();
+                        m.Content().Column(c =>
+                        {
+                            c.Spacing(6);
+                            for (var i = 1; i <= 9; i++)
+                            {
+                                c.Item().Text($"Column item {i}");
+                            }
+                        });
+                    });
+                }));
+            });
+        });
+    });
+
 if (benchmarkMode)
 {
     PrintBenchmarkReport();
