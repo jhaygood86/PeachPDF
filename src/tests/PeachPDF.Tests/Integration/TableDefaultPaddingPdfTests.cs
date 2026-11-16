@@ -95,6 +95,136 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task ASpanningCellHasTheSpacingBetweenItsColumnsAlreadyInItsWidth()
+        {
+            const string block60 = "<div style='display:inline-block;width:60px;height:10px'></div>";
+            const string block20 = "<div style='display:inline-block;width:20px;height:10px'></div>";
+
+            // The cell is its 60px of content and 1px of padding either side; the columns it spans and the spacing between them make that up, and the
+            // spacing is not added again (Chrome: 46.5pt, and a 16.5pt cell beside it).
+            var fills = await FillsAsync(
+                $"<table><tr><td rowspan='2' colspan='2' style='background:#fcc'>{block60}</td><td style='background:#cfc'>{block20}</td></tr><tr><td>{block20}</td></tr></table>");
+
+            Assert.Equal(46.5, fills[Red].Width, 0.05);
+            Assert.Equal(16.5, fills[Green].Width, 0.05);
+        }
+
+        [Theory]
+        [InlineData("padding:20px")]
+        [InlineData("padding:0")]
+        [InlineData("padding:20px;box-sizing:border-box")]
+        public async Task APercentageCellWidthIsTheCellsWholeShareOfTheTable(string cellStyle)
+        {
+            var fills = await FillsAsync(
+                $"<table style='width:600px;border-spacing:0'><tr><td style='background:#fcc;width:50%;{cellStyle}'>x</td><td style='background:#cfc;padding:0'>y</td></tr></table>");
+
+            Assert.Equal(225, fills[Red].Width, 0.05);
+            Assert.Equal(225, fills[Green].Width, 0.05);
+        }
+
+        [Fact]
+        public async Task APercentageCellWidthIsAShareOfTheGridWithoutItsSpacing()
+        {
+            var fills = await FillsAsync("<table style='width:600px'><tr><td style='background:#fcc;width:50%'>x</td><td style='background:#cfc'>y</td></tr></table>");
+
+            Assert.Equal(222.75, fills[Red].Width, 0.05);
+            Assert.Equal(222.75, fills[Green].Width, 0.05);
+        }
+
+        [Fact]
+        public async Task APercentageColumnNarrowerThanItsContentDoesNotWidenTheTable()
+        {
+            var fills = await FillsAsync(
+                "<table style='width:400px;border-spacing:0'><tr><td style='background:#fcc;width:10%;padding:40px'><div style='display:inline-block;width:10px;height:10px'></div></td>" +
+                "<td style='background:#cfc'><div style='display:inline-block;width:10px;height:10px'></div></td></tr></table>");
+
+            // Chrome: the first column is its content (67.5pt) and the second takes the rest of the 300pt table.
+            Assert.Equal(67.5, fills[Red].Width, 0.05);
+            Assert.Equal(232.5, fills[Green].Width, 0.05);
+            Assert.Equal(300, fills[Red].Width + fills[Green].Width, 0.05);
+        }
+
+        [Theory]
+        [InlineData(20, 61.5)]
+        [InlineData(120, 96)]
+        public async Task ADeclaredWidthOfANestedTablesCellIsNotAMinimumForTheOuterCell(int contentPx, double outerCell)
+        {
+            // The outer cell asks for 80px. The nested table would like more, but only content that cannot shrink holds a column wider than it asked.
+            var fills = await FillsAsync(
+                $"<table><tr><td width='80' style='background:#fcc'><table><tr><td width='80'><div style='display:inline-block;width:{contentPx}px;height:10px'></div></td></tr></table></td></tr></table>");
+
+            Assert.Equal(outerCell, fills[Red].Width, 0.05);
+        }
+
+        [Theory]
+        [InlineData("float:left")]
+        [InlineData("display:grid;justify-content:start")]
+        public async Task ABlockCellsDeclaredWidthIsWhatItContributesNotItsTextsWidth(string wrapperStyle)
+        {
+            // The second cell is declared 80px (+ 7px padding each side) and holds a longer line than that: the column is its declared width
+            // (Chrome 70.5pt), and the first column is the width of its words, not 40pt more because the table was sized by the longer line.
+            var fills = await FillsAsync(
+                $"<div style='{wrapperStyle}'><table><tr><td style='background:#fcc'><div>dolor dolor a t8</div></td>"
+                + "<td style='background:#cfc;width:80px;padding:7px'><div>lorem ipsum dolor sit t7</div></td></tr></table></div><div style='clear:both'>z</div>");
+
+            Assert.Equal(70.5, fills[Green].Width, 0.05);
+            Assert.True(fills[Red].Width < 90, $"the first column was {fills[Red].Width:F1}pt wide, Chrome has 75.8pt");
+        }
+
+        [Fact]
+        public async Task ANestedTableOfDeclaredWidthIsAsWideAsThatInATableCellWhoseRowsHoldBlocks()
+        {
+            // The nested table is declared 500px (375pt); its first cell holds a 400px block beside a 100px cell of text. It prefers the width it
+            // was given, so the cell it sits in is 375pt plus that cell's own padding (Chrome 376.5pt), not the 440pt of the content.
+            var fills = await FillsAsync(
+                "<table><tr><td style='background:#fcc'><table style='width:500px'><tr><td><div style='width:400px'>x</div></td>"
+                + "<td style='width:100px'><p>dolor Unbreakable amet amet bb t8 sit</p></td></tr></table></td><td>t</td></tr></table>");
+
+            Assert.Equal(376.5, fills[Red].Width, 0.05);
+        }
+
+        [Theory]
+        [InlineData("<td><table width='400'><tr><td>a</td></tr></table></td><td><table width='400'><tr><td>t1 t2 t3 t4 t5 t6 t7</td></tr></table></td>")]
+        [InlineData("<td colspan='2' width='50' style='width:120px'><table width='400' style='border-collapse:collapse;width:500px'><tr><td>a</td><th width='50'>w1</th></tr></table></td>"
+            + "<td><table width='400'><tr><td>t1 t2 t3 t4 t5 t6 t7</td></tr></table></td>")]
+        public async Task AFixedLayoutTableIsAsWideAsItWasToldWhateverItsCellsHold(string cells)
+        {
+            // Two 400px tables in the cells of a 500px `table-layout: fixed` table: the columns come from the first row and never from the content
+            // (CSS 2.1 17.5.2.1), so the table is 500px (375pt) and a `flex: none` item holding it is no wider. The measure took the cells' content
+            // for the item's minimum (607pt), which pushed the `flex: 1` item beside it off the page, where Chrome keeps it at 375pt.
+            var fills = await FillsAsync(
+                $"<div style='display:flex;width:600px'><div style='flex:none'><table style='table-layout:fixed;width:500px'><tr>{cells}</tr></table></div>"
+                + "<div style='flex:1;background:#cfc'>q</div></div>");
+            var reference = await FillsAsync(
+                "<div style='display:flex;width:600px'><div style='flex:none;width:500px'>x</div><div style='flex:1;background:#cfc'>q</div></div>");
+
+            Assert.Equal(reference[Green].X, fills[Green].X, 0.05);
+            Assert.Equal(75, fills[Green].Width, 0.05);
+        }
+
+        [Fact]
+        public async Task ACollapsedBordersTableInAFloatKeepsTheRowThatFitsOnOneLine()
+        {
+            // A float is as wide as its table's content, and a cell with a declared width and a collapsed border (a half of it on the table's
+            // outer edge, which the widest row does not carry) made the columns a pixel more than that. Squeezing the last column by it wrapped
+            // the last word of a row that fits (the row came out 14pt higher); Chrome keeps the row on one line, which is its height with the
+            // same words in a cell of their own.
+            static string Table(string firstCellWidth) =>
+                "<div style='float:left'><table style='border-collapse:collapse'><tr>"
+                + $"<td style='border:6px solid #444;{firstCellWidth}'>w561<br>w562 w563</td><td style='padding:2px 12px'>w564</td></tr>"
+                + "<tr><td style='padding:5px'>Un565mmmmmmmmmmmmmmmmmmmmmm</td>"
+                + "<td style='padding:5px;background:#cfc'>t566 t567 t568 t569 t570 t571 t572</td></tr></table></div><div style='clear:both'>z</div>";
+
+            var oneLine = await FillsAsync(
+                "<div style='float:left'><table><tr><td style='padding:5px;background:#cfc'>t566 t567 t568 t569 t570 t571 t572</td></tr></table></div><div style='clear:both'>z</div>");
+            var declared = await FillsAsync(Table("width:120px"));
+
+            // The collapsed borders add a little to the row; a second line adds a whole line height (15pt).
+            Assert.True(declared[Green].Height < oneLine[Green].Height + 7,
+                $"the last row is {declared[Green].Height:F2}pt high, one line is {oneLine[Green].Height:F2}pt");
+        }
+
+        [Fact]
         public async Task ADeclarativeTableCellIsNotGivenTheDefaultPadding()
         {
             async Task<(double Width, double Height)> CellAsync(float? padding)

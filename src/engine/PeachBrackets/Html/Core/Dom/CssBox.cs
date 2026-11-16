@@ -9879,6 +9879,8 @@ namespace PeachBrackets.Html.Dom
             var maxSumBeforeBox = maxSum;
             var paddingSumBeforeBox = paddingSum;
             var widestLineBeforeBox = widestLine;
+            var minBeforeBox = min;
+            var minDecorationBeforeBox = minDecoration;
             double? oldSum = null;
             double? oldPaddingSum = null;
 
@@ -10010,6 +10012,30 @@ namespace PeachBrackets.Html.Dom
                 // space. Left stale, the epilogue below would take a real gap back off - reached
                 // by an inline-level flex row on a line that is not reset before it, i.e. under
                 // white-space: nowrap (which inherits, so the row need not declare it).
+                trailingSpace = 0;
+            }
+            else if (box.DerivedStyle.ActualDisplay == Keywords.TableRow && RowHoldsBlockLevelCellContent(box))
+            {
+                // The cells of a row sit side by side, so the row's intrinsic width is the SUM of theirs. The flat walk below adds a cell's words to the
+                // running line, which is the sum for text, but a block-level child of a cell opens a line of its own and so competes with the cells
+                // before it for the widest line instead of adding to them: a 60px cell holding a 400px block beside a cell of text measured as the
+                // widest of the two, and a table shrunk to fit was laid out narrower than its content needs. Each cell is measured in isolation, as
+                // the flex row above measures an item, and a declared (non-percentage) width is the width the cell prefers, never a floor.
+                double rowMax = 0, rowMin = 0;
+                foreach (var cell in box.Boxes)
+                {
+                    if (cell.DerivedStyle.ActualDisplay == Keywords.None) continue;
+
+                    cell.GetMinMaxWidth(g, out var cellMin, out var cellMax);
+                    if (CssValueParser.IsValidLength(cell.Width) && !cell.Width.EndsWith('%'))
+                        cellMax = Math.Max(cellMin, CssValueParser.ParseLength(cell.Width, 0, cell) + cell.ActualBoxSizeIncludedWidth);
+
+                    rowMax += cellMax;
+                    rowMin += cellMin;
+                }
+
+                maxSum += rowMax;
+                UpdateMinWidth(ref min, ref minDecoration, rowMin, paddingSum);
                 trailingSpace = 0;
             }
             else if (TryMeasureFlexColumnWrapWidth(g, box, out var columnWrapMin, out var columnWrapMax))
@@ -10383,6 +10409,17 @@ namespace PeachBrackets.Html.Dom
                         explicitContentWidth = Math.Max(explicitContentWidth, CssValueParser.ParseLength(box.MinWidth, 0, box));
                 }
 
+                // A fixed-layout table (`table-layout: fixed` with a width) is as wide as it was told whatever its cells hold
+                // (CSS 2.1 section 17.5.2.1), so what is inside it contributes no minimum of its own: the declared width, folded in below, is
+                // all of it. Two 400px tables in the cells of a 500px fixed table gave a minimum of 800px, and a `flex: none` item (whose
+                // automatic minimum size is its min-content) was laid out 232px too wide.
+                if (box.DerivedStyle.ActualDisplay is Keywords.Table or Keywords.InlineTable
+                    && box.TableLayout.Value == TableLayoutMode.Fixed)
+                {
+                    min = minBeforeBox;
+                    minDecoration = minDecorationBeforeBox;
+                }
+
                 // A box that opens its own line carries its margins (and its ancestors') in marginSum, where the walk seeds
                 // an auto-width one from it; an inline-level box had them added to maxSum before this call.
                 var explicitSum = startsNewLine
@@ -10405,6 +10442,29 @@ namespace PeachBrackets.Html.Dom
                     widestLine = widestLineBeforeBox;
                     trailingSpace = 0;
                 }
+                else if (box.DerivedStyle.ActualDisplay is Keywords.Table or Keywords.InlineTable
+                         && explicitSum + explicitDecoration < maxSum + paddingSum)
+                {
+                    // A table with a declared width that its content would overflow prefers that width, not its content's: the columns
+                    // wrap inside it, down to the narrowest they can be. Reading the declared width as only a floor under the content
+                    // measured it 64pt too wide in a `flex: none` item whose rows hold a 400px block (Chrome 376.5pt, 440pt here).
+                    //
+                    // A fixed-layout table (`table-layout: fixed` with a width) is exactly the width it was given whatever its cells hold
+                    // (CSS 2.1 section 17.5.2.1: the columns come from the first row and the cells' content never widens them), so it has no
+                    // content minimum to honour: a 500px fixed table holding two 400px tables measured 607pt, and the flex item around it
+                    // pushed its sibling off the page.
+                    var preferred = explicitContentWidth;
+                    if (box.TableLayout.Value != TableLayoutMode.Fixed)
+                    {
+                        box.GetMinMaxWidth(g, out var tableMin, out _);
+                        preferred = Math.Max(preferred, tableMin - box.ActualBoxSizeIncludedWidth);
+                    }
+
+                    maxSum = (startsNewLine ? marginSum : maxSumBeforeBox) + preferred;
+                    paddingSum = explicitDecoration;
+                    widestLine = widestLineBeforeBox;
+                    trailingSpace = 0;
+                }
                 else if (explicitSum + explicitDecoration > maxSum + paddingSum)
                 {
                     maxSum = explicitSum;
@@ -10412,7 +10472,10 @@ namespace PeachBrackets.Html.Dom
                     trailingSpace = 0;
                 }
 
-                UpdateMinWidth(ref min, ref minDecoration, explicitContentWidth, explicitDecoration);
+                // A table cell's declared width is the width its column prefers, not one it cannot be narrower than: the column
+                // still shrinks to the cell's content (a nested table with a width="80" cell has a minimum of that cell's text, not 80).
+                if (box.DerivedStyle.ActualDisplay != Keywords.TableCell)
+                    UpdateMinWidth(ref min, ref minDecoration, explicitContentWidth, explicitDecoration);
             }
 
             // max sum (and its matching padding contribution) is the max of all the lines in the box
@@ -10457,6 +10520,23 @@ namespace PeachBrackets.Html.Dom
             !box.IsImage
             && box.DerivedStyle.ActualDisplay is not (Keywords.Table or Keywords.InlineTable or Keywords.TableCell
                 or Keywords.TableCaption or Keywords.Inline);
+
+        /// <summary>
+        /// Whether a cell of this table row holds an in-flow block-level child, which opens a line of its own in the intrinsic-width walk
+        /// (see the table row branch of <see cref="GetMinMaxSumWords"/>) where the cells beside it should add to one another.
+        /// </summary>
+        private static bool RowHoldsBlockLevelCellContent(CssBox row)
+        {
+            foreach (var cell in row.Boxes)
+            {
+                if (cell.DerivedStyle.ActualDisplay != Keywords.TableCell) continue;
+                foreach (var child in cell.Boxes)
+                    if (child.DerivedStyle.ActualDisplay != Keywords.None && !child.IsAbsolutelyPositioned && !child.IsFloated && StartsNewLine(child))
+                        return true;
+            }
+
+            return false;
+        }
 
         private static void UpdateMinWidth(ref double min, ref double minDecoration,
             double candidate, double candidateDecoration)
