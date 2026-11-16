@@ -2690,27 +2690,37 @@ namespace PeachBrackets.Html.Dom
 
             // Also covers the ordinary case of a min-size smaller than content, and a plain size this
             // pass's own content already exceeded - nothing to redistribute either way.
-            if (surplus <= 0 || _bodyRows.Count == 0) return false;
+            if (surplus <= 0) return false;
 
-            var naturalHeights = new double[_bodyRows.Count];
+            // A table with no tbody rows at all (css-tables' own section-no-tbody-*-distribution tests)
+            // has nowhere in _bodyRows to put the surplus - but CSS 2.1 SS17.5.3's "the height of a table
+            // is the maximum of its own specified height and the sum of its row heights" draws no
+            // distinction between a body row and a header/footer one, so the surplus belongs to whichever
+            // rows the table actually has. _headerBox/_footerBox's own rows are never added to
+            // _bodyRows (AssignBoxKinds keeps them in their own group boxes instead), so they need their
+            // own list here, built the same way the header/footer measurement pass above builds one.
+            var targetRows = _bodyRows.Count > 0 ? _bodyRows : GetHeaderAndFooterRows();
+            if (targetRows.Count == 0) return false;
+
+            var naturalHeights = new double[targetRows.Count];
             var totalNatural = 0d;
 
-            for (var i = 0; i < _bodyRows.Count; i++)
+            for (var i = 0; i < targetRows.Count; i++)
             {
-                var row = _bodyRows[i];
+                var row = targetRows[i];
                 naturalHeights[i] = Math.Max(0, _isVertical
                     ? row.ActualRight - row.Location.X
                     : row.ActualBottom - row.Location.Y);
                 totalNatural += naturalHeights[i];
             }
 
-            var computed = new Dictionary<CssBox, double>(_bodyRows.Count);
+            var computed = new Dictionary<CssBox, double>(targetRows.Count);
 
             if (totalNatural > 0)
             {
-                for (var i = 0; i < _bodyRows.Count; i++)
+                for (var i = 0; i < targetRows.Count; i++)
                 {
-                    computed[_bodyRows[i]] = naturalHeights[i] + surplus * (naturalHeights[i] / totalNatural);
+                    computed[targetRows[i]] = naturalHeights[i] + surplus * (naturalHeights[i] / totalNatural);
                 }
             }
             else
@@ -2718,8 +2728,8 @@ namespace PeachBrackets.Html.Dom
                 // Every row measured zero-height (e.g. every cell empty) - nothing to be proportional to,
                 // so split the surplus evenly instead, mirroring DetermineMissingColumnWidths' own
                 // equal-share fallback for the analogous all-columns-unset case.
-                var share = surplus / _bodyRows.Count;
-                foreach (var row in _bodyRows)
+                var share = surplus / targetRows.Count;
+                foreach (var row in targetRows)
                 {
                     computed[row] = share;
                 }
@@ -2727,6 +2737,29 @@ namespace PeachBrackets.Html.Dom
 
             floors = computed;
             return true;
+        }
+
+        /// <summary>
+        /// Every real (non-collapsed) row of <see cref="_headerBox"/> followed by every one of
+        /// <see cref="_footerBox"/>, for <see cref="TryComputeRowHeightRedistribution"/>'s own
+        /// no-tbody fallback - the same row filter the header/footer measurement pass in
+        /// <see cref="LayoutBodyRows"/> applies, kept separate from it since that pass also lays the
+        /// rows out and this one only needs to name them.
+        /// </summary>
+        private List<CssBox> GetHeaderAndFooterRows()
+        {
+            var rows = new List<CssBox>();
+            if (_headerBox is not null)
+            {
+                rows.AddRange(_headerBox.Boxes.Where(
+                    r => r.DerivedStyle.ActualDisplay == Keywords.TableRow && !IsRowCollapsed(r)));
+            }
+            if (_footerBox is not null)
+            {
+                rows.AddRange(_footerBox.Boxes.Where(
+                    r => r.DerivedStyle.ActualDisplay == Keywords.TableRow && !IsRowCollapsed(r)));
+            }
+            return rows;
         }
 
         /// <summary>
