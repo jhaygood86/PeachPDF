@@ -7686,7 +7686,36 @@ namespace PeachBrackets.Html.Dom
 
             if (!int.TryParse(att, out var rowSpan)) return 1;
 
+            // HTML Standard, processing model for tables: rowspan="0" means "span to the last row in
+            // the row group" - the opposite of an over-long span (ClampToRowGroup's own case), but the
+            // same walk to the row group's own last row answers both.
+            if (rowSpan == 0) return SpanToEndOfRowGroup(b);
+
             return rowSpan > 1 ? ClampToRowGroup(b, rowSpan) : rowSpan;
+        }
+
+        /// <summary>
+        /// The rowspan a <c>rowspan="0"</c> cell actually covers: every row from its own to the last one
+        /// in its row group (HTML Standard). Falls back to 1 - an ordinary, unspanned cell - for a cell
+        /// with no row group to span to (not a real table cell, or not inside a <c>thead</c>/<c>tbody</c>/
+        /// <c>tfoot</c>), the same fallback an invalid/missing <c>rowspan</c> gets above.
+        /// </summary>
+        private static int SpanToEndOfRowGroup(CssBox cell)
+        {
+            if (cell is CssSpacingBox || cell.ParentBox is not { } row || row.DerivedStyle.ActualDisplay != Keywords.TableRow) return 1;
+            if (row.ParentBox is not { } group
+                || group.DerivedStyle.ActualDisplay is not (Keywords.TableRowGroup or Keywords.TableHeaderGroup or Keywords.TableFooterGroup))
+                return 1;
+
+            var remaining = 0;
+            var seenRow = false;
+            foreach (var sibling in group.Boxes)
+            {
+                if (ReferenceEquals(sibling, row)) seenRow = true;
+                if (seenRow && sibling.DerivedStyle.ActualDisplay == Keywords.TableRow) remaining++;
+            }
+
+            return remaining > 0 ? remaining : 1;
         }
 
         /// <summary>
