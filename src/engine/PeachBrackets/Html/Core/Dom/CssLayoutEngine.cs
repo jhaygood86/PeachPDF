@@ -2470,12 +2470,22 @@ namespace PeachBrackets.Html.Dom
         /// physical position by the time this runs (table layout settles cell geometry, including the
         /// <c>vertical-rl</c> mirror pass, before ever calling this), so - unlike some other axis-aware
         /// sites in <see cref="Dom.CssLayoutEngineTable"/> - no separate "which physical edge is
-        /// row-axis-start" flag is needed here: <c>top</c>/<c>baseline</c> stay a no-op (content already
-        /// lays out from the cell's own block-start edge forward) and <c>bottom</c>/<c>middle</c> push
-        /// toward <c>ClientRight</c>, uniformly for both <c>vertical-rl</c> and <c>vertical-lr</c>.
+        /// row-axis-start" flag is needed here: <c>top</c> stays a no-op (content already lays out from
+        /// the cell's own block-start edge forward) and <c>bottom</c>/<c>middle</c> push toward
+        /// <c>ClientRight</c>, uniformly for both <c>vertical-rl</c> and <c>vertical-lr</c>. Baseline
+        /// alignment is not implemented for a vertical table (see <paramref name="rowBaselineOffset"/>).
+        /// </param>
+        /// <param name="rowBaselineOffset">
+        /// the row's own baseline, as the distance from a baseline-aligned cell's border-box top
+        /// (<c>cell.Location.Y</c>) to where every baseline-aligned cell in the row lines up -
+        /// <see cref="Dom.CssLayoutEngineTable.LayoutBodyRow"/>'s own pre-pass over the row's
+        /// <c>rowSpan == 1</c> baseline cells, via <see cref="CellBaselineInfo"/>. Null where the row
+        /// has no such cell (nothing to line up against) or the table is vertical (not implemented here);
+        /// either way <paramref name="cell"/>'s own <c>baseline</c> keyword then falls back to a top-like
+        /// no-op, the same as before this parameter existed.
         /// </param>
         /// <returns>the distance every child of <paramref name="cell"/> was offset by, zero where none was</returns>
-        public static double ApplyCellVerticalAlignment(Canvas g, CssBox cell, bool isVertical = false)
+        public static double ApplyCellVerticalAlignment(Canvas g, CssBox cell, bool isVertical = false, double? rowBaselineOffset = null)
         {
             ArgumentNullException.ThrowIfNull(g);
             ArgumentNullException.ThrowIfNull(cell);
@@ -2485,7 +2495,44 @@ namespace PeachBrackets.Html.Dom
             // same no-op default as sub/super/text-top/text-bottom/PeachBaselineMiddle already do.
             var cellKeyword = cell.VerticalAlign.Value.Keyword;
 
-            if (cellKeyword is VerticalAlignment.Top or VerticalAlignment.Baseline)
+            if (cellKeyword == VerticalAlignment.Baseline)
+            {
+                // Not implemented for a vertical table (no spec guidance worked through yet - row baselines
+                // are a horizontal-tb concept in the modules this engine covers), and a no-op when the row
+                // has no baseline to line up against (every cell in it either isn't rowSpan == 1 or isn't
+                // baseline-aligned - LayoutBodyRow's pre-pass then has nothing to report).
+                if (isVertical || rowBaselineOffset is not { } rowOffset) return 0d;
+
+                var (ascent, hasInFlowContent) = CellBaselineInfo(cell);
+
+                // css-tables-3 §7.8's "no in-flow line box" cell has nothing to shift: its own
+                // "baseline" is synthesized from the bottom of its content box purely so the row can
+                // grow to fit a *sibling* cell's shift (LayoutBodyRow's own pre-pass folds that into
+                // rowBaselineOffset already). Moving this cell's content by the distance that virtual
+                // baseline implies would also carry along any out-of-flow child placed at a static
+                // position in it - and a baseline-aligned cell with nothing in flow must not do that:
+                // an absolutely positioned child's static position tracks where it would have been in
+                // flow, not a shift meant for text that was never there (found via
+                // table-cell-baseline-static-position.html, whose own title names exactly this).
+                if (!hasInFlowContent) return 0d;
+
+                var baselineDist = rowOffset - ascent;
+                if (baselineDist <= 0d) return 0d;
+
+                // The same page-foot clamp bottom/middle get below: a baseline shift that would carry a
+                // line across the band this cell's content was laid out in is capped at the room left
+                // above that foot, rather than dragging the line onto no page.
+                if (cell.HtmlContainer is { HasRealPageGrid: true } baselineHtml)
+                {
+                    baselineDist = Math.Min(baselineDist, RoomAboveTheNextFoot(cell, baselineHtml));
+                    if (baselineDist <= 0d) return 0d;
+                }
+
+                OffsetCellContent(cell, baselineDist, isVertical: false);
+                return baselineDist;
+            }
+
+            if (cellKeyword is VerticalAlignment.Top)
                 return 0d;
 
             var cellFarEdge = isVertical ? cell.ClientRight : cell.ClientBottom;
@@ -2552,6 +2599,30 @@ namespace PeachBrackets.Html.Dom
             OffsetCellContent(cell, dist, isVertical);
 
             return dist;
+        }
+
+        /// <summary>
+        /// Where <paramref name="cell"/>'s own baseline falls (<c>Ascent</c>, the distance from its
+        /// border-box top - <c>cell.Location.Y</c> - down to it: the baseline of its first in-flow line
+        /// box, reached through nested blocks (<see cref="FirstOwnLineBaselineOf"/>), plus its own top
+        /// padding and border, folded in for free since that line's coordinate and <c>Location.Y</c> are
+        /// both absolute document-space values), and whether it has one at all
+        /// (<c>HasInFlowContent</c>). A cell with no in-flow line box - css-tables-3 §7.8 (an empty
+        /// cell, or one holding only floated, absolutely positioned or otherwise out-of-flow content) -
+        /// is treated as if its baseline were the bottom of its own content box, which for such a cell
+        /// is also where its top is (so its own synthesized <c>Ascent</c> is zero too): an empty cell's
+        /// baseline sits flush with its own top. <c>HasInFlowContent</c> is false exactly then - callers
+        /// use it to tell a real baseline (something to actually shift) from this virtual one (nothing
+        /// to shift, computed only so the row's own baseline - and so a <em>sibling</em> cell's shift -
+        /// can still account for this cell's natural height).
+        /// </summary>
+        internal static (double Ascent, bool HasInFlowContent) CellBaselineInfo(CssBox cell)
+        {
+            if (FirstOwnLineBaselineOf(cell) is { } baseline) return (baseline - cell.Location.Y, true);
+
+            var contentBottom = CellContentBottom(cell);
+            var fallbackAscent = double.IsNegativeInfinity(contentBottom) ? 0d : contentBottom - cell.Location.Y;
+            return (fallbackAscent, false);
         }
 
         /// <summary>

@@ -7174,6 +7174,64 @@ namespace PeachBrackets.Html.Dom
                 rowMaxBottom = Math.Max(rowMaxBottom, currentY + rowHeightFloor);
             }
 
+            // Row baselines (CSS 2.1 §17.5.3 / css-tables-3 §7.8): a `vertical-align: baseline` cell
+            // aligns its own baseline with the row's, rather than its top or bottom - the row's baseline
+            // being the largest top-to-baseline distance (the "ascent") among the row's own baseline
+            // cells. Scoped to rowSpan == 1 cells only, matching the ordinary (non-spanning) alignment
+            // loop below (`GetRowSpan(cell) == 1`) - a spanning cell's height crosses rows this one row's
+            // baseline cannot answer for, and CloseSpanningCell closes it on its own terms instead. Also
+            // excludes exactly what that loop excludes before it ever reaches the rowSpan == 1 branch: a
+            // cell finished on an earlier fragmentainer pass, one that stopped mid-fragment, and one
+            // resuming a fragment an earlier pass opened - none of those has settled, natural geometry of
+            // its own for this pass to measure.
+            //
+            // This is the only place a baseline cell's natural height is still readable: the main
+            // alignment loop below is about to overwrite every rowSpan == 1 cell's ActualBottom with the
+            // row's own (possibly just-grown-for-this) extent.
+            double? rowBaselineAscent = null;
+            if (!_isVertical)
+            {
+                // Only a cell with real in-flow content to shift can ever need the row to grow for it -
+                // one with none (CssLayoutEngine.CellBaselineInfo's HasInFlowContent false) contributes
+                // its virtual ascent to the row's own baseline below, same as any other, but is never
+                // actually moved (ApplyCellVerticalAlignment's own guard), so it needs no entry here.
+                var shiftableCells = new List<(CssBox Cell, double Ascent)>();
+
+                foreach (var cell in row.Boxes)
+                {
+                    if (cell is CssSpacingBox) continue;
+                    if (GetRowSpan(cell) != 1) continue;
+                    if (cell.VerticalAlign.Value.Keyword != VerticalAlignment.Baseline) continue;
+                    if (cursor.FinishedOnAnEarlierPass(cell)) continue;
+                    if (stoppedCells.Contains(cell) || cursor.ResumedFromAnEarlierPass(cell)) continue;
+
+                    var (ascent, hasInFlowContent) = CssLayoutEngine.CellBaselineInfo(cell);
+                    rowBaselineAscent = rowBaselineAscent is { } current ? Math.Max(current, ascent) : ascent;
+
+                    if (hasInFlowContent) shiftableCells.Add((cell, ascent));
+                }
+
+                // The row's own cell-content tracking above (rowMaxBottom) already covers every cell's
+                // natural height, baseline cells included - but shifting a baseline cell's content down
+                // to line it up with the row's tallest ascent can push its own bottom past that natural
+                // height, and the row has to grow to still hold it (css-tables-3 §7.8's own example: a
+                // short-padding cell's content, pushed down to match a tall-padding sibling's baseline,
+                // needs the room that push costs). Measured as this cell's own already-settled
+                // ActualBottom plus exactly the shift it is about to receive - not as a row-wide
+                // ascent-plus-descent sum, which double-counts whenever two baseline cells split their
+                // own natural height between ascent and descent differently (same total, different
+                // split): the sum of one cell's largest ascent and a different cell's largest descent
+                // can overstate what either cell alone actually needs.
+                if (rowBaselineAscent is { } maxAscent)
+                {
+                    foreach (var (cell, ascent) in shiftableCells)
+                    {
+                        var shift = maxAscent - ascent;
+                        if (shift > 0d) rowMaxBottom = Math.Max(rowMaxBottom, cell.ActualBottom + shift);
+                    }
+                }
+            }
+
             // Vertical alignment
             IEnumerable<CssBox> boxesToVerticallyAlign = row.Boxes;
             if (rowSpannedBoxes.TryGetValue(rowIndex, out var boxesThatEndOnRow))
@@ -7273,7 +7331,7 @@ namespace PeachBrackets.Html.Dom
                     // there, not ActualBottom.
                     if (_isVertical) cell.ActualRight = rowMaxBottom;
                     else cell.ActualBottom = AlignmentBottomFor(cell, rowMaxBottom, cursor);
-                    CssLayoutEngine.ApplyCellVerticalAlignment(g, cell, _isVertical);
+                    CssLayoutEngine.ApplyCellVerticalAlignment(g, cell, _isVertical, rowBaselineAscent);
                 }
             }
 
