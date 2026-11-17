@@ -94,19 +94,42 @@ namespace PeachBrackets.Engine.Tests.Html.Core.Dom
         }
 
         /// <summary>
-        /// CSS 2.1 §17.5.3: a table cell's own explicit height can be stretched taller by its row, so the
-        /// value resolver defers to the live, bottom-up <c>CssBox.Size.Height</c> for this one box kind -
-        /// even though the cell's own declared height is still definite by §10.5.
+        /// CSS 2.1 §17.5.3: a table cell's own explicit height can be stretched taller by its row once the
+        /// row equalizes every cell to its tallest - but that growth is a different question from what a
+        /// cell's OWN descendants resolve a percentage height against (css-tables-3's "percentage sizing
+        /// of table cell children": a descendant resolves against the cell's own declared height, not the
+        /// larger, row-equalized one - wpt percent-height-replaced-in-percent-cell-003/004). So the value
+        /// resolver still returns the cell's own declared value here, the same as any other box with a
+        /// genuinely definite height - lone-cell layout (no sibling row to grow it) makes the two numbers
+        /// coincide in this particular test, by construction.
         /// </summary>
         [Fact]
-        public async Task TableCell_IsDefiniteButTheValueDefersToLiveSize()
+        public async Task TableCell_IsDefiniteAndTheValueIsItsOwnDeclaredHeight()
         {
             var (root, _) = await LayoutAsync(Wrap(
-                "<table><tr><td id='box' style='height:20pt'>a</td></tr></table>"));
+                "<table><tr><td id='box' style='height:20pt;padding:0;border:none'>a</td></tr></table>"));
             var box = FindById(root, "box")!;
 
             Assert.True(CssLayoutEngine.IsHeightDefinite(box));
-            Assert.Null(CssLayoutEngine.ResolveDefiniteHeightValue(box));
+            Assert.Equal(20.0, CssLayoutEngine.ResolveDefiniteHeightValue(box)!.Value, 3);
+        }
+
+        /// <summary>
+        /// CSS Box Sizing 4 §5: an indefinite percentage height with no preferred aspect-ratio and no
+        /// resolvable <c>min-height</c> to clamp it must leave <see cref="CssLayoutEngine.GetBoxHeight"/>
+        /// returning null (the contract <c>ApplyHeight</c>'s own callers rely on to keep a box's current,
+        /// live <c>ActualBottom</c> instead of overwriting it with a possibly-still-stale content height) -
+        /// not a real, but not-yet-settled, number. A grid subgrid's own standalone-axis sizing is exactly
+        /// the case this guards (wpt css-grid/subgrid/standalone-axis-size-009): returning a number here
+        /// instead of null collapsed its height to 0 rather than leaving its live size alone.
+        /// </summary>
+        [Fact]
+        public async Task IndefinitePercentageHeightWithNoMinHeightAndNoAspectRatio_IsNull()
+        {
+            var (root, _) = await LayoutAsync(Wrap("<div id='box' style='height:50%'>x</div>"));
+            var box = FindById(root, "box")!;
+
+            Assert.Null(CssLayoutEngine.GetBoxHeight(box));
         }
 
         /// <summary>

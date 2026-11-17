@@ -3634,6 +3634,18 @@ namespace PeachBrackets.Html.Dom
             return DomUtils.FormsAbsoluteContainingBlock(ancestor) || DomUtils.InlineContainingBlockOf(ancestor) is not null ? ancestor : null;
         }
 
+        /// <summary>
+        /// Whether <see cref="GetBoxHeight"/>'s own min-height clamp (right below) will actually run for
+        /// <paramref name="box"/> - mirrors that block's condition exactly, so the two must be kept in
+        /// sync. Factored out so the indefinite-percentage-`height` branch can tell, before computing
+        /// anything, whether falling through to that clamp could change the result at all, instead of
+        /// always falling through and returning a possibly-stale <c>ActualBoxSizingHeight</c> as if it
+        /// were genuinely resolved.
+        /// </summary>
+        private static bool CanApplyMinHeightClamp(CssBox box, bool heightBasisIsCalculated) =>
+            CssValueParser.IsValidLength(box.MinHeight)
+            && (heightBasisIsCalculated || !CssValueParser.DependsOnPercentage(box.MinHeight));
+
         public static double? GetBoxHeight(CssBox box)
         {
             box.ResolveStretchSizes();
@@ -3698,15 +3710,52 @@ namespace PeachBrackets.Html.Dom
             // the previous order here had it), so min-height can still win on conflict per §10.7.
             if (CssValueParser.IsValidLength(box.Height))
             {
-                if (!heightBasisIsCalculated && CssValueParser.DependsOnPercentage(box.Height))
+                // A table cell's own percentage `height` is always treated as auto for the purpose of
+                // sizing the cell itself (css-tables-3 "computing the table height": a cell's own used
+                // height for row layout never resolves a percentage against the table, even when the
+                // table's height is otherwise definite and not itself circular). Without this, a cell
+                // whose row is stretched to a definite table height (an explicit table height, or one a
+                // flex/grid item's stretch gives it) would resolve its own `height: 100%` against that
+                // table height and grow to it directly, instead of the row dividing that height among its
+                // cells the ordinary way - doubling or compounding the row's real height every time this
+                // ran again after the table grew to fit the last pass's inflated cell. A cell's
+                // DESCENDANTS resolving a percentage height against the cell's own declared height is a
+                // different question, handled separately by ResolveDefiniteHeightValue's own table-cell
+                // carve-out, not by this flag.
+                var isUnresolvableCellPercentageHeight = box.IsTableCell && CssValueParser.DependsOnPercentage(box.Height);
+
+                if ((!heightBasisIsCalculated || isUnresolvableCellPercentageHeight) && CssValueParser.DependsOnPercentage(box.Height))
                 {
                     // An indefinite percentage height behaves as automatic (CSS Box Sizing 4 §5): a
                     // preferred aspect ratio sizes the height from the (definite) width if there is one;
                     // otherwise the height stays auto.
-                    if (!TryGetAspectRatioHeight(box, out height))
+                    if (TryGetAspectRatioHeight(box, out var ratioHeightForIndefinitePercentage))
                     {
+                        height = ratioHeightForIndefinitePercentage;
+                    }
+                    else if (!CanApplyMinHeightClamp(box, heightBasisIsCalculated))
+                    {
+                        // Nothing here can still change the result min-height might have clamped below -
+                        // preserve the original contract exactly (null, "unresolvable right now") rather
+                        // than returning this box's own ActualBoxSizingHeight as if it were the genuinely
+                        // resolved used height. GetBoxHeight is called well before this box's own content
+                        // layout has necessarily finished settling ActualBoxSizingHeight in every caller
+                        // (e.g. a subgrid's own cross-size pass), and ApplyHeight's null branch
+                        // deliberately falls back to a Math.Max against the box's CURRENT ActualBottom
+                        // instead of overwriting it - assigning a real (but possibly still-stale) number
+                        // here would make ApplyHeight overwrite that live value with this stale one
+                        // instead, which is exactly what regressed
+                        // css-grid/subgrid/standalone-axis-size-009 (a subgrid's `height: 100%` against its
+                        // auto-height standalone-axis container collapsed to 0 instead of the 200px its
+                        // child content needed).
                         return null;
                     }
+                    // Otherwise `min-height` is a separate property from `height` and still has to clamp
+                    // the used height even when `height` itself resolves to auto (CSS 2.1 §10.7): `height`
+                    // is left at its content-driven value (ActualBoxSizingHeight) and falls through to the
+                    // min-height clamp below exactly as an ordinary `height: auto` box does, so a cell with
+                    // an unresolvable `height: 100%` and a `min-height` still grows to it instead of
+                    // collapsing to its unclamped content height.
                 }
                 else
                 {
@@ -3734,8 +3783,7 @@ namespace PeachBrackets.Html.Dom
                 height = ratioHeight;
             }
 
-            if (CssValueParser.IsValidLength(box.MinHeight) &&
-                (heightBasisIsCalculated || !CssValueParser.DependsOnPercentage(box.MinHeight)))
+            if (CanApplyMinHeightClamp(box, heightBasisIsCalculated))
             {
                 var minHeight = CssValueParser.ParseLength(box.MinHeight, heightBasis, box) + box.ActualBoxSizeIncludedHeight;
 
@@ -3903,19 +3951,38 @@ namespace PeachBrackets.Html.Dom
         /// (CSS 2.1 §10.5, §10.7's min/max-height clamps, CSS Sizing 3 §4, and a flex/grid algorithm's
         /// <see cref="CssBox.AlgorithmicDefiniteHeight"/>) — the value-returning twin of
         /// <see cref="IsHeightDefinite"/>. Returns <c>null</c> exactly when <see cref="IsHeightDefinite"/>
-        /// is false, OR when <paramref name="box"/> is one of the two kinds whose final used height can
-        /// still grow past this value from content even though it is "definite" by declaration: a table
-        /// cell stretched by its row (CSS 2.1 §17.5.3), or a box whose height comes from a preferred
-        /// <c>aspect-ratio</c> (not from its own <c>height</c> declaration, and not from a flex/grid
-        /// algorithm, which is its own, later-checked, always-authoritative sizing model — see below)
-        /// while also establishing an independent formatting context that could still grow it past that
-        /// ratio-derived value from a contained float (CSS 2.1 §10.6.7) — the same condition
-        /// <see cref="ApplyHeight"/>'s own float-containment growth is gated on (<c>!isDefiniteHeight</c>,
-        /// i.e. <see cref="HasDefiniteHeight"/> is false; a box whose OWN <c>height</c> is genuinely
-        /// declared is never grown past it by §10.6.3 regardless of floats, so only the ratio case needs
-        /// this carve-out). For exactly those two kinds, callers must fall back to the existing
-        /// (already-correct, if bottom-up-only) <c>CssBox.Size.Height</c> read; every other box's definite
-        /// height is fully static and this never needs that fallback.
+        /// is false, OR when <paramref name="box"/> is one of two kinds whose final used height can still
+        /// grow past this value even though it is "definite" by declaration: a <c>table</c>/<c>inline-table</c>
+        /// box itself, which CSS 2.1 §17.5.3 can grow past its own declared <c>height</c> to fit its rows'
+        /// natural total, or a box whose height comes from a preferred <c>aspect-ratio</c> (not from its own
+        /// <c>height</c> declaration, and not from a flex/grid algorithm, which is its own, later-checked,
+        /// always-authoritative sizing model — see below) while also establishing an independent formatting
+        /// context that could still grow it past that ratio-derived value from a contained float (CSS 2.1
+        /// §10.6.7) — the same condition <see cref="ApplyHeight"/>'s own float-containment growth is gated
+        /// on (<c>!isDefiniteHeight</c>, i.e. <see cref="HasDefiniteHeight"/> is false; a box whose OWN
+        /// <c>height</c> is genuinely declared is never grown past it by §10.6.3 regardless of floats, so
+        /// only the ratio case needs this carve-out). For exactly those two kinds, callers must fall back to
+        /// the existing (already-correct, if bottom-up-only) <c>CssBox.Size.Height</c> read; every other
+        /// box's definite height is fully static and this never needs that fallback.
+        /// <para>
+        /// A table CELL is deliberately NOT one of those two kinds, even though its own used height can
+        /// likewise grow past its declared <c>height</c> once its row equalizes every cell to the row's
+        /// tallest (CSS 2.1 §17.5.3) — a growth this method still cannot predict, since the row's final
+        /// height is only known after every cell in it has been laid out once. css-tables-3's own
+        /// "percentage sizing of table cell children" rule is that a cell's DESCENDANTS resolve a
+        /// percentage height against the cell's own declared height specifically, not against that larger,
+        /// row-equalized one (confirmed by WPT's own <c>percent-height-replaced-in-percent-cell-003/004</c>:
+        /// a sibling cell forces the row taller than either cell declares, and the percentage still resolves
+        /// against the shorter cell's own declared number, not the row's eventual height) - so returning the
+        /// declared value here for a cell with a genuinely definite own <c>height</c> is exactly the basis a
+        /// descendant's percentage should use, not an approximation of a still-unknown final size. A cell
+        /// whose own <c>height</c> is <c>auto</c> has no declared value to return this way; its real used
+        /// height can only come from the table's own §17.5.3 row-height distribution, fully resolved only
+        /// after this cell's own content (and so its descendants' percentage heights) has already been laid
+        /// out once - a genuine second-pass re-resolution this method does not attempt, so it still returns
+        /// null for that case (via the ordinary <see cref="HasDefiniteHeight"/> check below) and the caller's
+        /// existing <c>Size.Height</c> fallback applies, same as before.
+        /// </para>
         /// <para>
         /// A flex/grid algorithm's own resolved height (<see cref="CssBox.AlgorithmicDefiniteHeight"/>) is
         /// checked <i>before</i> the box's own declared <c>Height</c>, not after: for a flex item, the
@@ -3933,8 +4000,8 @@ namespace PeachBrackets.Html.Dom
         /// </summary>
         internal static double? ResolveDefiniteHeightValue(CssBox box)
         {
-            if (box.IsTableCell || box.DerivedStyle.ActualDisplay is Keywords.Table or Keywords.InlineTable)
-                return null; // §17.5.3 row-stretch can grow this past its own declared height
+            if (box.DerivedStyle.ActualDisplay is Keywords.Table or Keywords.InlineTable)
+                return null; // §17.5.3 row-height distribution can grow this past its own declared height
 
             // See IsHeightDefinite's own remarks on why this terminates unconditionally, not only when
             // HtmlContainer is set.
