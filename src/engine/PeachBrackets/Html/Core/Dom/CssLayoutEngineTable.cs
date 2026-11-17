@@ -1097,7 +1097,7 @@ namespace PeachBrackets.Html.Dom
         /// border in the separated model - only the collapsed model replaces it with its own collapsed
         /// border segments, so those two keep the collapse-mode-gated <c>cellAndTableEdges</c> below. A
         /// row, row group, column or column group never draws its own border in EITHER model (CSS 2.1
-        /// SS17.6: "Rows, columns, row groups, and column groups cannot have borders... user agents must
+        /// §17.6: "Rows, columns, row groups, and column groups cannot have borders... user agents must
         /// ignore the 'border' properties for those elements") - wpt css-tables/row-margin-border-padding
         /// and row-group-margin-border-padding, titled "...has no effect in border-collapse:separate
         /// tables", caught this when those boxes were sharing <c>cellAndTableEdges</c> instead and so
@@ -2705,7 +2705,7 @@ namespace PeachBrackets.Html.Dom
             if (surplus <= 0) return false;
 
             // A table with no tbody rows at all (css-tables' own section-no-tbody-*-distribution tests)
-            // has nowhere in _bodyRows to put the surplus - but CSS 2.1 SS17.5.3's "the height of a table
+            // has nowhere in _bodyRows to put the surplus - but CSS 2.1 §17.5.3's "the height of a table
             // is the maximum of its own specified height and the sum of its row heights" draws no
             // distinction between a body row and a header/footer one, so the surplus belongs to whichever
             // rows the table actually has. _headerBox/_footerBox's own rows are never added to
@@ -7848,7 +7848,7 @@ namespace PeachBrackets.Html.Dom
             // ResolveDefiniteHeightValue's own remarks).
             //
             // An absolutely positioned table's own percentage/auto width resolves against the padding
-            // box of its nearest positioned ancestor (CSS 2.1 SS10.1), not _tableBox.ContainingBlock
+            // box of its nearest positioned ancestor (CSS 2.1 §10.1), not _tableBox.ContainingBlock
             // (the nearest in-flow block container, which differs from it whenever the parent chain
             // isn't itself positioned) - the same basis CssLayoutEngine.GetBoxWidth's own abspos branch
             // uses via AbsolutePaddingBoxWidth. This method bypasses GetBoxWidth entirely (a table's
@@ -8147,7 +8147,7 @@ namespace PeachBrackets.Html.Dom
 
             // A table with no columns at all - no cell anywhere, so _columnWidths is empty - has
             // nothing here to size from: every term above is 0 or a border/spacing constant that
-            // doesn't depend on content. CSS 2.1 SS17.4 still gives such a table its own specified
+            // doesn't depend on content. CSS 2.1 §17.4 still gives such a table its own specified
             // width, same as a non-empty one, so floor at GetAvailableTableWidth()'s resolved value
             // when the author wrote one. (A non-empty table's trailing col-only columns are NOT this
             // case - _columnWidths is non-empty there, and GetWidthSum must NOT be bumped up to the
