@@ -113,7 +113,11 @@ namespace PeachBrackets.Html
             small, sub, sup { font-size: .83em }
             sub             { vertical-align: sub }
             sup             { vertical-align: super }
-            table           { border-spacing: 2px; }
+            /* HTML Standard 4.9.1 "Tables": a real table element's own `width`/`height` are border-box,
+               so a document written against today's (padding-ignored) behavior keeps it. A `display:
+               table` element with no author box-sizing stays content-box, the CSS Sizing 3 default -
+               this rule matches only the element, never the computed display value. */
+            table           { border-spacing: 2px; box-sizing: border-box; }
             thead, tbody,
             tfoot, tr       { vertical-align: middle }
             td, th          { vertical-align: inherit }
