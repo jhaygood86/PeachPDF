@@ -3334,6 +3334,7 @@ namespace PeachBrackets.Html.Parse
         {
             CenterTableInLegacyCenteredParent(tag, box);
             StopTableInheritingLegacyTextAlign(tag, box);
+            TranslateTableRulesAttribute(tag, box);
 
             if (!tag.HasAttributes()) return;
 
@@ -3483,6 +3484,44 @@ namespace PeachBrackets.Html.Parse
 
                 // The ancestor that sets the value differently from its own parent is where it comes from; if that is not a legacy element, it is inherited.
                 if (ancestor.ParentBox is { } up && !Equals(ancestor.TextAlignAll.Value, up.TextAlignAll.Value)) return;
+            }
+        }
+
+        /// <summary>
+        /// HTML Standard, rendering: a table's legacy <c>rules</c> attribute, when it is present and not
+        /// <c>none</c>, switches the table to the collapsed border model; <c>rules="groups"</c>
+        /// specifically also gives every <c>thead</c>/<c>tbody</c> a solid 1px border-block-end, so the
+        /// collapsed model draws one line at each row-group boundary (there being nothing after a
+        /// <c>tfoot</c> to separate it from). Applied as a presentational hint - same priority as every
+        /// other attribute translation, so an author rule on the group itself still overrides it (wpt
+        /// css-tables/rules-groups, whose own override rules target exactly these logical properties).
+        /// </summary>
+        private static void TranslateTableRulesAttribute(HtmlTag tag, CssBox box)
+        {
+            if (tag.Name.Equals(HtmlConstants.Table, StringComparison.OrdinalIgnoreCase))
+            {
+                if (tag.TryGetAttribute("rules") is { } rules && !rules.Trim().Equals(Keywords.None, StringComparison.OrdinalIgnoreCase))
+                    box.BorderCollapse = CssProperty<BorderCollapseMode>.FromValue(Keywords.Collapse, BorderCollapseMode.Collapse);
+
+                return;
+            }
+
+            if (!tag.Name.Equals(HtmlConstants.Thead, StringComparison.OrdinalIgnoreCase)
+                && !tag.Name.Equals(HtmlConstants.Tbody, StringComparison.OrdinalIgnoreCase))
+                return;
+
+            for (var ancestor = box.ParentBox; ancestor is not null; ancestor = ancestor.ParentBox)
+            {
+                if (ancestor.HtmlTag is not { } tableTag || !tableTag.Name.Equals(HtmlConstants.Table, StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                if (tableTag.TryGetAttribute("rules") is { } rules && rules.Trim().Equals("groups", StringComparison.OrdinalIgnoreCase))
+                {
+                    box.BorderBlockEndWidth = "1px";
+                    box.BorderBlockEndStyle = Keywords.Solid;
+                }
+
+                return;
             }
         }
 
