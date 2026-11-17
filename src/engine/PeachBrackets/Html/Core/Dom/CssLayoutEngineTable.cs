@@ -119,6 +119,16 @@ namespace PeachBrackets.Html.Dom
 
         private double TableInlineBorderEnd => _isVertical ? _tableBox.ActualBorderBottomWidth : _tableBox.ActualBorderRightWidth;
 
+        /// <summary>
+        /// The table's own padding consumed at the column axis's start/end edge - zero in the
+        /// collapsing border model (PerformLayout zeroes the style there), whatever the author
+        /// declared in the separated model otherwise. Mirrors <see cref="TableInlineBorderStart"/>'s
+        /// writing-mode switch.
+        /// </summary>
+        private double TableInlinePaddingStart => _isVertical ? _tableBox.ActualPaddingTop : _tableBox.ActualPaddingLeft;
+
+        private double TableInlinePaddingEnd => _isVertical ? _tableBox.ActualPaddingBottom : _tableBox.ActualPaddingRight;
+
         private CssBox? _headerBox;
 
         /// <summary>Where <see cref="_headerBox"/> sat among the table's children before it was detached.</summary>
@@ -879,8 +889,15 @@ namespace PeachBrackets.Html.Dom
 
             PlaceBesideFloats();
 
-            // Ensure there's no padding
-            _tableBox.PaddingLeft = _tableBox.PaddingTop = _tableBox.PaddingRight = _tableBox.PaddingBottom = "0";
+            // CSS 2.1 §17.6.2: in the collapsing border model, the table element's own padding is
+            // ignored (only cell padding and the half-border each participant keeps from
+            // ApplyCollapsedUsedBorderWidths contribute to the grid's geometry). The separated model
+            // (the default) keeps whatever padding the author declared - GetWidthSum, CellSpaceFor,
+            // GetAvailableTableWidth/GetMaxTableWidth and the row-axis far edge below all fold it in,
+            // and ClientLeft/ClientTop (CssBox's own) already include it generically, so startX/startY
+            // need no separate adjustment.
+            if (_tableBox.BorderCollapse.Value == BorderCollapseMode.Collapse)
+                _tableBox.PaddingLeft = _tableBox.PaddingTop = _tableBox.PaddingRight = _tableBox.PaddingBottom = "0";
 
             //Actually layout cells!
             await LayoutCells(g);
@@ -2518,11 +2535,11 @@ namespace PeachBrackets.Html.Dom
             for (var i = 0; i < _columnWidths.Length; i++)
                 _columnWidths[i] = double.NaN;
 
-            // Computed once and reused for both candidate table widths below (CellSpaceFor's own
-            // SumHorizontalSpacing() call is an O(_columnCount) walk of every vertical grid line, and
-            // doesn't depend on which candidate width it's converting).
-            var spacingAndBorders = SumHorizontalSpacing() + TableInlineBorderStart + TableInlineBorderEnd;
-            var availCellSpace = GetAvailableTableWidth() - spacingAndBorders;
+            // CellSpaceFor converts a candidate border-box total (GetAvailableTableWidth's own box-sizing-
+            // normalized basis - see its remarks) into the room left for columns, paying for spacing,
+            // the table's own two borders, and its own two padding edges (zero under collapse) exactly
+            // once, shared with every other caller instead of a second copy of the arithmetic.
+            var availCellSpace = CellSpaceFor(GetAvailableTableWidth());
 
             // The table's own max-width is a cheap, declarative clamp on the space available to
             // divide - no cell is measured, so unlike EnforceMaximumSize's content-based
@@ -2533,7 +2550,7 @@ namespace PeachBrackets.Html.Dom
             // silently skip the clamp for any genuinely-specified max-width just below it.
             var maxTableWidth = GetMaxTableWidth();
             if (maxTableWidth < 90999)
-                availCellSpace = Math.Min(availCellSpace, maxTableWidth - spacingAndBorders);
+                availCellSpace = Math.Min(availCellSpace, CellSpaceFor(maxTableWidth));
 
             // Step 1: "a column element with a value other than 'auto' for the 'width' property sets
             // the width for that column."
@@ -3037,7 +3054,9 @@ namespace PeachBrackets.Html.Dom
         {
             if (_isVertical || _tableBox.MinWidth == "0" || !CssValueParser.IsValidLength(_tableBox.MinWidth)) return;
 
-            var minWidth = CssValueParser.ParseLength(_tableBox.MinWidth, _tableBox.ParentBox!.AvailableWidth, _tableBox);
+            // Box-sizing-normalized to the same border-box-total basis GetWidthSum (widthSum below)
+            // returns - see GetAvailableTableWidth's own remarks.
+            var minWidth = CssValueParser.ParseLength(_tableBox.MinWidth, _tableBox.ParentBox!.AvailableWidth, _tableBox) + TableInlineBoxSizeIncluded;
             var widthSum = GetWidthSum();
             if (!(minWidth > widthSum + 0.1) || _columnWidths!.Length == 0) return;
 
@@ -3264,10 +3283,20 @@ namespace PeachBrackets.Html.Dom
             _isVertical && !_widthSpecified && !CssLayoutEngine.IsHeightDefinite(_tableBox.ContainingBlock);
 
         /// <summary>Whether <paramref name="available"/> is the table's own maximum content width, to within two pixels (see <see cref="TakeExcessFromUndeclaredColumns"/>).</summary>
+        /// <remarks>
+        /// The tolerance is the table's own border+padding along the column axis, unconditionally -
+        /// NOT <see cref="CssBox.ActualBoxSizeIncludedWidth"/> (box-sizing-dependent, zero under
+        /// <c>border-box</c>). This slack exists to absorb a collapsed border's own half-width that
+        /// the widest row doesn't carry (see the caller's remarks), which is real column-axis space
+        /// regardless of which box model the table's own <c>width</c> is interpreted against - a
+        /// border-box table (the HTML Standard's default for a real &lt;table&gt;) still has exactly
+        /// the same collapsed-border slack a content-box one does.
+        /// </remarks>
         private bool IsSizedToThisTablesMaximum(double available)
         {
             _tableBox.GetMinMaxWidth(_graphics, out _, out var tableMaximum);
-            return Math.Abs(available - tableMaximum) <= _tableBox.ActualBoxSizeIncludedWidth + 2 * Length.PointsPerPx;
+            var tolerance = TableInlineBorderStart + TableInlineBorderEnd + TableInlinePaddingStart + TableInlinePaddingEnd;
+            return Math.Abs(available - tableMaximum) <= tolerance + 2 * Length.PointsPerPx;
         }
 
         /// <summary>
@@ -4886,7 +4915,11 @@ namespace PeachBrackets.Html.Dom
             // stale extent won and had the trailing edge added on top, growing the table by one
             // inline-end border + spacing slot per re-layout (issue #1267). Not GetWidthSum() either:
             // it counts spacing for trailing <col>-only columns no cell reaches, which browsers leave out.
-            var trailingInlineEdge = HorizontalSpacingAt(_columnCount) + TableInlineBorderEnd;
+            // cursor.MaxRight only tracks cells, columns and spacing - it never advances past the
+            // table's own trailing border or padding (both outside the grid), so this closes the gap
+            // with the same two terms GetWidthSum's own trailing edge adds (TableInlinePaddingEnd is
+            // zero under collapse, where the style itself is zeroed).
+            var trailingInlineEdge = HorizontalSpacingAt(_columnCount) + TableInlineBorderEnd + TableInlinePaddingEnd;
             // A table with no columns at all has no cell for the cursor to have advanced past, so
             // cursor.MaxRight is still exactly where the row loop started - GetWidthSum() is the one
             // exception to the "not GetWidthSum()" rule just above, because _columnCount == 0 is
@@ -4920,8 +4953,11 @@ namespace PeachBrackets.Html.Dom
             // added below it. A bottom caption is positioned from this edge (flush beneath the grid's own
             // border, mirroring the top caption's own flush-above positioning in LayoutCells) rather than
             // from the bare contentBottom a caption used to start from, which put the caption where the
-            // grid's own border still had to be drawn beneath it.
-            var gridBorderBoxBottom = contentBottom + TableRowAxisBorderEnd;
+            // grid's own border still had to be drawn beneath it. contentBottom's own startY already
+            // folded the row-axis-start padding in once (via ClientLeft/ClientTop, generically) - this
+            // closes the box with the row-axis-end padding (zero under collapse), the row-axis twin of
+            // TableInlinePaddingEnd above.
+            var gridBorderBoxBottom = contentBottom + TableRowAxisBorderEnd + TableRowAxisPaddingEnd;
 
             // The row grid's own natural (content-driven) far edge, captured here rather than re-derived
             // from border/padding/spacing arithmetic a second time - read by TryComputeRowHeightRedistribution
@@ -7862,8 +7898,17 @@ namespace PeachBrackets.Html.Dom
             if (!CssValueParser.IsValidLength(inlineSizeCss)) return containingBlockInlineSize;
 
             _widthSpecified = true;
-            return CssValueParser.ParseLength(inlineSizeCss, containingBlockInlineSize, _tableBox);
 
+            // A specified width/height is interpreted per the table's own box-sizing (CSS Sizing 3):
+            // border-box (the HTML Standard's default for a real <table>, via the user-agent sheet)
+            // means the author's value already IS the grid's own border-box total that GetWidthSum
+            // returns, so TableInlineBoxSizeIncluded is 0 and this is a no-op; content-box (a
+            // `display: table` element with no author box-sizing) means the value is content-only, so
+            // the table's own padding+border is added back here, once, so every caller that compares
+            // this against GetWidthSum (CalculateFixedColumnWidths, ShrinkColumnsToFitAvailableWidth,
+            // EnforceMinimumTableWidth) - and CellSpaceFor, which subtracts that same padding+border
+            // straight back out - all agree on what the returned number represents.
+            return CssValueParser.ParseLength(inlineSizeCss, containingBlockInlineSize, _tableBox) + TableInlineBoxSizeIncluded;
         }
 
         /// <summary>
@@ -7888,7 +7933,10 @@ namespace PeachBrackets.Html.Dom
             if (CssValueParser.IsValidLength(maxInlineSizeCss))
             {
                 _widthSpecified = true;
-                return CssValueParser.ParseLength(maxInlineSizeCss, parentAvailableInlineSize, _tableBox);
+
+                // Box-sizing-normalized to the same border-box-total basis as GetAvailableTableWidth -
+                // see its remarks.
+                return CssValueParser.ParseLength(maxInlineSizeCss, parentAvailableInlineSize, _tableBox) + TableInlineBoxSizeIncluded;
             }
             else
             {
@@ -8110,13 +8158,19 @@ namespace PeachBrackets.Html.Dom
 
         /// <summary>
         /// The room left for column content once <paramref name="tableInlineSize"/> has paid for the
-        /// table's own border-spacing slots and its own two column-axis borders. Split out of
-        /// <see cref="GetAvailableCellWidth"/> so a candidate table width other than
-        /// <see cref="GetAvailableTableWidth"/>'s own (<see cref="CalculateFixedColumnWidths"/>'s
-        /// <c>max-width</c> clamp) converts through the same arithmetic instead of a second copy of it.
+        /// table's own border-spacing slots, its own two column-axis borders, and its own two
+        /// column-axis padding edges (separated model only - zero under <c>collapse</c>, where the
+        /// style itself is zeroed). Split out of <see cref="GetAvailableCellWidth"/> so a candidate
+        /// table width other than <see cref="GetAvailableTableWidth"/>'s own (<see
+        /// cref="CalculateFixedColumnWidths"/>'s <c>max-width</c> clamp) converts through the same
+        /// arithmetic instead of a second copy of it. <paramref name="tableInlineSize"/> is expected on
+        /// the same basis <see cref="GetWidthSum"/> returns - the grid's full border-box total -
+        /// which is exactly what <see cref="GetAvailableTableWidth"/>/<see cref="GetMaxTableWidth"/>
+        /// now also return, box-sizing already folded in.
         /// </summary>
         private double CellSpaceFor(double tableInlineSize) =>
-            tableInlineSize - SumHorizontalSpacing() - TableInlineBorderStart - TableInlineBorderEnd;
+            tableInlineSize - SumHorizontalSpacing() - TableInlineBorderStart - TableInlineBorderEnd
+            - TableInlinePaddingStart - TableInlinePaddingEnd;
 
         /// <summary>
         /// Gets the current sum of column widths
@@ -8144,6 +8198,12 @@ namespace PeachBrackets.Html.Dom
 
             //Take table borders
             f += TableInlineBorderStart + TableInlineBorderEnd;
+
+            // Take the table's own padding (separated model only - zero under collapse, where the
+            // style itself is zeroed in PerformLayout) - the grid's own border-box total, which this
+            // whole method returns, includes it the same way it already includes the table's own
+            // border.
+            f += TableInlinePaddingStart + TableInlinePaddingEnd;
 
             // A table with no columns at all - no cell anywhere, so _columnWidths is empty - has
             // nothing here to size from: every term above is 0 or a border/spacing constant that
@@ -8260,8 +8320,10 @@ namespace PeachBrackets.Html.Dom
         /// </summary>
         /// <remarks>
         /// Under <c>collapse</c> this is <c>-ActualBorderLeftWidth / 2</c>, not 0: <c>ClientLeft</c>
-        /// already added the whole <c>VW[0]</c> once (it is <c>Location.X + ActualBorderLeftWidth</c>, and
-        /// padding is always zero on a table), and the first cell's own border box starts at that line's
+        /// already added the whole <c>VW[0]</c> once (it is <c>Location.X + ActualBorderLeftWidth</c> here,
+        /// since the table's own padding is always zero in THIS model - PerformLayout zeroes the style;
+        /// the separated model, the other branch below, keeps whatever padding the author declared, and
+        /// ClientLeft folds that in too), and the first cell's own border box starts at that line's
         /// <i>centre</i>, one half-width inside the table's border box - so this gives back the half the
         /// cell itself reserves. That is deliberate, not a double-count: the table's border box holds the
         /// whole outermost line (see <see cref="ApplyCollapsedUsedBorderWidths"/>'s own remarks) while the
@@ -8293,6 +8355,22 @@ namespace PeachBrackets.Html.Dom
         private double TableRowAxisBorderStart => _isVertical ? _tableBox.ActualBorderLeftWidth : _tableBox.ActualBorderTopWidth;
 
         private double TableRowAxisBorderEnd => _isVertical ? _tableBox.ActualBorderRightWidth : _tableBox.ActualBorderBottomWidth;
+
+        /// <summary>The table's own padding consumed at the row axis's end edge - see <see cref="TableInlinePaddingStart"/>.</summary>
+        private double TableRowAxisPaddingEnd => _isVertical ? _tableBox.ActualPaddingRight : _tableBox.ActualPaddingBottom;
+
+        /// <summary>
+        /// The box-sizing-dependent padding+border a specified <c>width</c>/<c>height</c> on the table
+        /// element itself does NOT already cover, along the column axis - zero under
+        /// <c>box-sizing: border-box</c> (the HTML Standard's default for a real <c>&lt;table&gt;</c>,
+        /// via the user-agent sheet), the table's own padding+border under <c>content-box</c> (a
+        /// <c>display: table</c> element with no author box-sizing, per CSS Sizing 3). Added to a raw
+        /// parsed <c>width</c>/<c>height</c> in <see cref="GetAvailableTableWidth"/>/<see
+        /// cref="GetMaxTableWidth"/> so both read on the same basis <see cref="GetWidthSum"/> already
+        /// does - the grid's own full border-box total - regardless of which box model the author
+        /// specified against.
+        /// </summary>
+        private double TableInlineBoxSizeIncluded => _isVertical ? _tableBox.ActualBoxSizeIncludedHeight : _tableBox.ActualBoxSizeIncludedWidth;
 
         /// <summary>
         /// The gap a row/column cursor advances by when it crosses vertical grid line
