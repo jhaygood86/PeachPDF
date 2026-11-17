@@ -36,6 +36,17 @@ namespace PeachBrackets.Css
                 if (value.Is(Keywords.JustifyAll)) return new BothLonghandsValue(Keywords.JustifyAll, JustifyTokens);
                 if (value.Is(Keywords.MatchParent)) return new BothLonghandsValue(Keywords.MatchParent, new TokenValue(value));
 
+                // CSS Cascade & Inheritance 4 §7.3: a CSS-wide keyword applies to a shorthand as a whole
+                // too, which TextAlignAllOnly's raw grammar below has no notion of - unlike a GENERATED
+                // longhand Property class, whose own Converter is always wrapped in .OrDefault()
+                // (ValueConverterExtensions.OrGlobalValue), this hand-written shorthand converter never
+                // gets that wrapping, so e.g. "text-align: inherit" failed to parse at all - the
+                // declaration was dropped outright, not merely left unresolved (wpt
+                // css-tables/th-text-align's own `<th style="text-align: inherit">` case).
+                var identifier = value.ToIdentifier();
+                if (identifier is not null && CssGlobalKeywords.TryParse(identifier, out _))
+                    return new BothLonghandsValue(identifier, new TokenValue(value));
+
                 return TextAlignAllOnly.Convert(value);
             }
 

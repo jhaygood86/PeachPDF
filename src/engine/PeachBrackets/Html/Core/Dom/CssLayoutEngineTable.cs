@@ -1092,36 +1092,48 @@ namespace PeachBrackets.Html.Dom
         /// somehow changed collapse mode since a previous pass) is explicitly cleared back to
         /// <see cref="BorderEdges.None"/> rather than left however an earlier pass set it.
         /// </summary>
+        /// <remarks>
+        /// Two different edge sets, not one: a cell (and the table box itself) genuinely draws its own
+        /// border in the separated model - only the collapsed model replaces it with its own collapsed
+        /// border segments, so those two keep the collapse-mode-gated <c>cellAndTableEdges</c> below. A
+        /// row, row group, column or column group never draws its own border in EITHER model (CSS 2.1
+        /// §17.6: "Rows, columns, row groups, and column groups cannot have borders... user agents must
+        /// ignore the 'border' properties for those elements") - wpt css-tables/row-margin-border-padding
+        /// and row-group-margin-border-padding, titled "...has no effect in border-collapse:separate
+        /// tables", caught this when those boxes were sharing <c>cellAndTableEdges</c> instead and so
+        /// painted their own border normally whenever the table was separate.
+        /// </remarks>
         private void SuppressParticipantBorderPaint()
         {
-            var edges = _tableBox.BorderCollapse.Value == BorderCollapseMode.Collapse ? BorderEdges.All : BorderEdges.None;
+            var cellAndTableEdges = _tableBox.BorderCollapse.Value == BorderCollapseMode.Collapse ? BorderEdges.All : BorderEdges.None;
+            const BorderEdges structuralEdges = BorderEdges.All;
 
-            _tableBox.SuppressedBorderEdges = edges;
+            _tableBox.SuppressedBorderEdges = cellAndTableEdges;
 
             foreach (var box in _tableBox.Boxes)
             {
                 if (box.DerivedStyle.ActualDisplay == Keywords.TableRowGroup)
-                    box.SuppressedBorderEdges = edges;
+                    box.SuppressedBorderEdges = structuralEdges;
             }
 
-            if (_headerBox is not null) _headerBox.SuppressedBorderEdges = edges;
-            if (_footerBox is not null) _footerBox.SuppressedBorderEdges = edges;
+            if (_headerBox is not null) _headerBox.SuppressedBorderEdges = structuralEdges;
+            if (_footerBox is not null) _footerBox.SuppressedBorderEdges = structuralEdges;
 
             // <col>/<colgroup> - their own border paint (they are never painted at all otherwise; see
             // SetColumnBoxDimensions) is suppressed the same way once they participate in resolution.
-            foreach (var column in _columns) column.SuppressedBorderEdges = edges;
+            foreach (var column in _columns) column.SuppressedBorderEdges = structuralEdges;
             foreach (var box in _tableBox.Boxes)
             {
                 if (box.DerivedStyle.ActualDisplay == Keywords.TableColumnGroup)
-                    box.SuppressedBorderEdges = edges;
+                    box.SuppressedBorderEdges = structuralEdges;
             }
 
             foreach (var row in _allRows)
             {
-                row.SuppressedBorderEdges = edges;
+                row.SuppressedBorderEdges = structuralEdges;
 
                 // Includes CssSpacingBox - harmless, it paints nothing of its own regardless.
-                foreach (var cell in row.Boxes) cell.SuppressedBorderEdges = edges;
+                foreach (var cell in row.Boxes) cell.SuppressedBorderEdges = cellAndTableEdges;
             }
         }
 
@@ -2690,27 +2702,37 @@ namespace PeachBrackets.Html.Dom
 
             // Also covers the ordinary case of a min-size smaller than content, and a plain size this
             // pass's own content already exceeded - nothing to redistribute either way.
-            if (surplus <= 0 || _bodyRows.Count == 0) return false;
+            if (surplus <= 0) return false;
 
-            var naturalHeights = new double[_bodyRows.Count];
+            // A table with no tbody rows at all (css-tables' own section-no-tbody-*-distribution tests)
+            // has nowhere in _bodyRows to put the surplus - but CSS 2.1 §17.5.3's "the height of a table
+            // is the maximum of its own specified height and the sum of its row heights" draws no
+            // distinction between a body row and a header/footer one, so the surplus belongs to whichever
+            // rows the table actually has. _headerBox/_footerBox's own rows are never added to
+            // _bodyRows (AssignBoxKinds keeps them in their own group boxes instead), so they need their
+            // own list here, built the same way the header/footer measurement pass above builds one.
+            var targetRows = _bodyRows.Count > 0 ? _bodyRows : GetHeaderAndFooterRows();
+            if (targetRows.Count == 0) return false;
+
+            var naturalHeights = new double[targetRows.Count];
             var totalNatural = 0d;
 
-            for (var i = 0; i < _bodyRows.Count; i++)
+            for (var i = 0; i < targetRows.Count; i++)
             {
-                var row = _bodyRows[i];
+                var row = targetRows[i];
                 naturalHeights[i] = Math.Max(0, _isVertical
                     ? row.ActualRight - row.Location.X
                     : row.ActualBottom - row.Location.Y);
                 totalNatural += naturalHeights[i];
             }
 
-            var computed = new Dictionary<CssBox, double>(_bodyRows.Count);
+            var computed = new Dictionary<CssBox, double>(targetRows.Count);
 
             if (totalNatural > 0)
             {
-                for (var i = 0; i < _bodyRows.Count; i++)
+                for (var i = 0; i < targetRows.Count; i++)
                 {
-                    computed[_bodyRows[i]] = naturalHeights[i] + surplus * (naturalHeights[i] / totalNatural);
+                    computed[targetRows[i]] = naturalHeights[i] + surplus * (naturalHeights[i] / totalNatural);
                 }
             }
             else
@@ -2718,8 +2740,8 @@ namespace PeachBrackets.Html.Dom
                 // Every row measured zero-height (e.g. every cell empty) - nothing to be proportional to,
                 // so split the surplus evenly instead, mirroring DetermineMissingColumnWidths' own
                 // equal-share fallback for the analogous all-columns-unset case.
-                var share = surplus / _bodyRows.Count;
-                foreach (var row in _bodyRows)
+                var share = surplus / targetRows.Count;
+                foreach (var row in targetRows)
                 {
                     computed[row] = share;
                 }
@@ -2727,6 +2749,29 @@ namespace PeachBrackets.Html.Dom
 
             floors = computed;
             return true;
+        }
+
+        /// <summary>
+        /// Every real (non-collapsed) row of <see cref="_headerBox"/> followed by every one of
+        /// <see cref="_footerBox"/>, for <see cref="TryComputeRowHeightRedistribution"/>'s own
+        /// no-tbody fallback - the same row filter the header/footer measurement pass in
+        /// <see cref="LayoutBodyRows"/> applies, kept separate from it since that pass also lays the
+        /// rows out and this one only needs to name them.
+        /// </summary>
+        private List<CssBox> GetHeaderAndFooterRows()
+        {
+            var rows = new List<CssBox>();
+            if (_headerBox is not null)
+            {
+                rows.AddRange(_headerBox.Boxes.Where(
+                    r => r.DerivedStyle.ActualDisplay == Keywords.TableRow && !IsRowCollapsed(r)));
+            }
+            if (_footerBox is not null)
+            {
+                rows.AddRange(_footerBox.Boxes.Where(
+                    r => r.DerivedStyle.ActualDisplay == Keywords.TableRow && !IsRowCollapsed(r)));
+            }
+            return rows;
         }
 
         /// <summary>
@@ -4842,13 +4887,22 @@ namespace PeachBrackets.Html.Dom
             // inline-end border + spacing slot per re-layout (issue #1267). Not GetWidthSum() either:
             // it counts spacing for trailing <col>-only columns no cell reaches, which browsers leave out.
             var trailingInlineEdge = HorizontalSpacingAt(_columnCount) + TableInlineBorderEnd;
+            // A table with no columns at all has no cell for the cursor to have advanced past, so
+            // cursor.MaxRight is still exactly where the row loop started - GetWidthSum() is the one
+            // exception to the "not GetWidthSum()" rule just above, because _columnCount == 0 is
+            // exactly the case its own guard (see GetWidthSum's remarks) excludes the rejected
+            // trailing-<col>-only-columns behavior from.
+            var columnAxisFarEdge = _columnCount == 0
+                ? Math.Max(cursor.MaxRight + trailingInlineEdge,
+                    (_isVertical ? _tableBox.Location.Y : _tableBox.Location.X) + GetWidthSum())
+                : cursor.MaxRight + trailingInlineEdge;
             if (_isVertical)
             {
-                _tableBox.ActualBottom = cursor.MaxRight + trailingInlineEdge;
+                _tableBox.ActualBottom = columnAxisFarEdge;
             }
             else
             {
-                _tableBox.ActualRight = cursor.MaxRight + trailingInlineEdge;
+                _tableBox.ActualRight = columnAxisFarEdge;
             }
 
             // Computed ahead of ActualBottom rather than only assigned to TableContinuation below,
@@ -7644,7 +7698,36 @@ namespace PeachBrackets.Html.Dom
 
             if (!int.TryParse(att, out var rowSpan)) return 1;
 
+            // HTML Standard, processing model for tables: rowspan="0" means "span to the last row in
+            // the row group" - the opposite of an over-long span (ClampToRowGroup's own case), but the
+            // same walk to the row group's own last row answers both.
+            if (rowSpan == 0) return SpanToEndOfRowGroup(b);
+
             return rowSpan > 1 ? ClampToRowGroup(b, rowSpan) : rowSpan;
+        }
+
+        /// <summary>
+        /// The rowspan a <c>rowspan="0"</c> cell actually covers: every row from its own to the last one
+        /// in its row group (HTML Standard). Falls back to 1 - an ordinary, unspanned cell - for a cell
+        /// with no row group to span to (not a real table cell, or not inside a <c>thead</c>/<c>tbody</c>/
+        /// <c>tfoot</c>), the same fallback an invalid/missing <c>rowspan</c> gets above.
+        /// </summary>
+        private static int SpanToEndOfRowGroup(CssBox cell)
+        {
+            if (cell is CssSpacingBox || cell.ParentBox is not { } row || row.DerivedStyle.ActualDisplay != Keywords.TableRow) return 1;
+            if (row.ParentBox is not { } group
+                || group.DerivedStyle.ActualDisplay is not (Keywords.TableRowGroup or Keywords.TableHeaderGroup or Keywords.TableFooterGroup))
+                return 1;
+
+            var remaining = 0;
+            var seenRow = false;
+            foreach (var sibling in group.Boxes)
+            {
+                if (ReferenceEquals(sibling, row)) seenRow = true;
+                if (seenRow && sibling.DerivedStyle.ActualDisplay == Keywords.TableRow) remaining++;
+            }
+
+            return remaining > 0 ? remaining : 1;
         }
 
         /// <summary>
@@ -7763,9 +7846,18 @@ namespace PeachBrackets.Html.Dom
             // a containing block whose height genuinely can't be resolved this way (a table cell stretched
             // by its own row, or a float-containing box with a ratio-derived height - see
             // ResolveDefiniteHeightValue's own remarks).
+            //
+            // An absolutely positioned table's own percentage/auto width resolves against the padding
+            // box of its nearest positioned ancestor (CSS 2.1 §10.1), not _tableBox.ContainingBlock
+            // (the nearest in-flow block container, which differs from it whenever the parent chain
+            // isn't itself positioned) - the same basis CssLayoutEngine.GetBoxWidth's own abspos branch
+            // uses via AbsolutePaddingBoxWidth. This method bypasses GetBoxWidth entirely (a table's
+            // width has its own column-width-driven resolution), so it needs that basis directly.
             var containingBlockInlineSize = _isVertical
                 ? CssLayoutEngine.ResolveDefiniteHeightValue(_tableBox.ContainingBlock) ?? _tableBox.ContainingBlock.Size.Height
-                : CssLayoutEngine.PageAwareWidthBasis(_tableBox.ContainingBlock, _tableBox.ClientTop);
+                : _tableBox.Position.Value is PositionMode.Absolute
+                    ? CssBox.AbsoluteContainingBlockWidth(DomUtils.GetNearestPositionedAncestor(_tableBox))
+                    : CssLayoutEngine.PageAwareWidthBasis(_tableBox.ContainingBlock, _tableBox.ClientTop);
 
             if (!CssValueParser.IsValidLength(inlineSizeCss)) return containingBlockInlineSize;
 
@@ -8052,6 +8144,19 @@ namespace PeachBrackets.Html.Dom
 
             //Take table borders
             f += TableInlineBorderStart + TableInlineBorderEnd;
+
+            // A table with no columns at all - no cell anywhere, so _columnWidths is empty - has
+            // nothing here to size from: every term above is 0 or a border/spacing constant that
+            // doesn't depend on content. CSS 2.1 §17.4 still gives such a table its own specified
+            // width, same as a non-empty one, so floor at GetAvailableTableWidth()'s resolved value
+            // when the author wrote one. (A non-empty table's trailing col-only columns are NOT this
+            // case - _columnWidths is non-empty there, and GetWidthSum must NOT be bumped up to the
+            // specified width in that case; see the ActualRight/ActualBottom comment in PerformLayout
+            // for why - issue #1267.)
+            if (_columnWidths!.Length == 0 && _widthSpecified)
+            {
+                f = Math.Max(f, GetAvailableTableWidth());
+            }
 
             return f;
         }

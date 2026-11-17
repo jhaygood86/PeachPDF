@@ -1460,6 +1460,27 @@ namespace PeachBrackets.Html.Parse
             // 2. Inherit inheritable properties from parent
             box.InheritStyle();
 
+            // HTML Standard, rendering: "User agents are expected to have a rule in their user agent
+            // style sheet that matches th elements that have a parent node whose computed value for the
+            // 'text-align' property is its initial value, whose declaration block consists of just a
+            // single declaration that sets the 'text-align' property to the value 'center'." This is not
+            // a flat `th { text-align: center }` UA rule - that would override an ancestor's own
+            // text-align (even one that merely re-asserts the initial value) the same way it overrides
+            // an unset one, which is exactly backwards (wpt css-tables/th-text-align). Applied here,
+            // right after inheritance and before any UA/author/inline declaration, at exactly the
+            // CssProperty state inheritance alone would have left the th in - so a real declaration on
+            // the th itself (even `text-align: inherit`) still overrides it normally in the phases below.
+            if (box.HtmlTag is { } thTag && thTag.Name.Equals(HtmlConstants.Th, StringComparison.OrdinalIgnoreCase)
+                && box.ComputedStyle.Text.TextAlignAll.Value == HorizontalAlignment.Start
+                && box.ComputedStyle.Text.TextAlignLast.Value == TextAlignLast.Auto)
+            {
+                // "text-align" itself is a shorthand (expanded to these two longhands only by the CSS-OM
+                // parsing layer, PeachBrackets.Css.TextAlignProperty) - CssUtils.SetPropertyValue only
+                // ever reaches a registered longhand, so the shorthand name here would silently no-op.
+                CssUtils.SetPropertyValue(valueParser, box, PropertyNames.TextAlignAll, Keywords.Center);
+                CssUtils.SetPropertyValue(valueParser, box, PropertyNames.TextAlignLast, Keywords.Auto);
+            }
+
             // Quirks Mode Standard 3.12: in quirks mode a table that nothing gives a color takes the body's color, not its parent's, so a table in a
             // colored div is not that color. What the rules below declare (the user-agent sheet's too) still replaces it.
             if (box.HtmlTag is { } quirkTag && quirkTag.Name.Equals(HtmlConstants.Table, StringComparison.OrdinalIgnoreCase)
@@ -3313,6 +3334,7 @@ namespace PeachBrackets.Html.Parse
         {
             CenterTableInLegacyCenteredParent(tag, box);
             StopTableInheritingLegacyTextAlign(tag, box);
+            TranslateTableRulesAttribute(tag, box);
 
             if (!tag.HasAttributes()) return;
 
@@ -3462,6 +3484,44 @@ namespace PeachBrackets.Html.Parse
 
                 // The ancestor that sets the value differently from its own parent is where it comes from; if that is not a legacy element, it is inherited.
                 if (ancestor.ParentBox is { } up && !Equals(ancestor.TextAlignAll.Value, up.TextAlignAll.Value)) return;
+            }
+        }
+
+        /// <summary>
+        /// HTML Standard, rendering: a table's legacy <c>rules</c> attribute, when it is present and not
+        /// <c>none</c>, switches the table to the collapsed border model; <c>rules="groups"</c>
+        /// specifically also gives every <c>thead</c>/<c>tbody</c> a solid 1px border-block-end, so the
+        /// collapsed model draws one line at each row-group boundary (there being nothing after a
+        /// <c>tfoot</c> to separate it from). Applied as a presentational hint - same priority as every
+        /// other attribute translation, so an author rule on the group itself still overrides it (wpt
+        /// css-tables/rules-groups, whose own override rules target exactly these logical properties).
+        /// </summary>
+        private static void TranslateTableRulesAttribute(HtmlTag tag, CssBox box)
+        {
+            if (tag.Name.Equals(HtmlConstants.Table, StringComparison.OrdinalIgnoreCase))
+            {
+                if (tag.TryGetAttribute("rules") is { } rules && !rules.Trim().Equals(Keywords.None, StringComparison.OrdinalIgnoreCase))
+                    box.BorderCollapse = CssProperty<BorderCollapseMode>.FromValue(Keywords.Collapse, BorderCollapseMode.Collapse);
+
+                return;
+            }
+
+            if (!tag.Name.Equals(HtmlConstants.Thead, StringComparison.OrdinalIgnoreCase)
+                && !tag.Name.Equals(HtmlConstants.Tbody, StringComparison.OrdinalIgnoreCase))
+                return;
+
+            for (var ancestor = box.ParentBox; ancestor is not null; ancestor = ancestor.ParentBox)
+            {
+                if (ancestor.HtmlTag is not { } tableTag || !tableTag.Name.Equals(HtmlConstants.Table, StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                if (tableTag.TryGetAttribute("rules") is { } rules && rules.Trim().Equals("groups", StringComparison.OrdinalIgnoreCase))
+                {
+                    box.BorderBlockEndWidth = "1px";
+                    box.BorderBlockEndStyle = Keywords.Solid;
+                }
+
+                return;
             }
         }
 
