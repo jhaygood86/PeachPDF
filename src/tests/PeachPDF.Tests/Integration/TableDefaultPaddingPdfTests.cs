@@ -251,5 +251,56 @@ namespace PeachPDF.Tests.Integration
             // was. The column is as wide as the page whatever the cell holds, so the height is what shows it.
             Assert.Equal(withNone.Height, withDefault.Height, 0.05);
         }
+
+        [Fact]
+        public async Task ATableElementsOwnPaddingGrowsItInTheSeparatedModel()
+        {
+            // No declared width: the table's own padding (10px = 7.5pt each side) adds to the column's content on both axes, since <table>
+            // keeps the border-box default but nothing else here is specified to eat into.
+            var bare = await FillsAsync(
+                $"<table style='background:#cfc;padding:0;border-spacing:0'><tr><td style='padding:0'>{Content}</td></tr></table>");
+            var padded = await FillsAsync(
+                $"<table style='background:#cfc;padding:10px;border-spacing:0'><tr><td style='padding:0'>{Content}</td></tr></table>");
+
+            Assert.Equal(bare[Green].Width + 2 * 7.5, padded[Green].Width, 0.05);
+            Assert.Equal(bare[Green].Height + 2 * 7.5, padded[Green].Height, 0.05);
+        }
+
+        [Fact]
+        public async Task ATableElementsOwnPaddingIsIgnoredUnderCollapse()
+        {
+            // CSS 2.1 17.6.2: the collapsing border model drops the table element's own padding - same width/height as padding:0 would give.
+            var bare = await FillsAsync(
+                $"<table style='background:#cfc;padding:0;border-spacing:0;border-collapse:collapse'><tr><td style='padding:0'>{Content}</td></tr></table>");
+            var padded = await FillsAsync(
+                $"<table style='background:#cfc;padding:10px;border-spacing:0;border-collapse:collapse'><tr><td style='padding:0'>{Content}</td></tr></table>");
+
+            Assert.Equal(bare[Green].Width, padded[Green].Width, 0.05);
+            Assert.Equal(bare[Green].Height, padded[Green].Height, 0.05);
+        }
+
+        [Fact]
+        public async Task ATableElementsDeclaredWidthIsBorderBoxByDefault()
+        {
+            // A real <table> keeps the HTML Standard's box-sizing: border-box default, so its declared width (200px = 150pt) already covers its
+            // own padding (10px = 7.5pt each side): the column shrinks to leave room for it, and the table itself stays 150pt.
+            var fills = await FillsAsync(
+                "<table style='background:#cfc;width:200px;padding:10px;border-spacing:0'><tr><td style='padding:0'>x</td></tr></table>");
+
+            Assert.Equal(150, fills[Green].Width, 0.05);
+        }
+
+        [Fact]
+        public async Task ADisplayTableElementsDeclaredWidthIsContentBoxByDefault()
+        {
+            // display:table with no author box-sizing is content-box (CSS Sizing 3's own default, unlike the HTML Standard's <table>-only
+            // user-agent rule): the declared width (200px = 150pt) is the column's own content space, and the table's own padding (7.5pt each
+            // side) grows the box beyond it.
+            var fills = await FillsAsync(
+                "<div style='display:table;background:#cfc;width:200px;padding:10px;border-spacing:0'>"
+                + "<div style='display:table-row'><div style='display:table-cell;padding:0'>x</div></div></div>");
+
+            Assert.Equal(150 + 2 * 7.5, fills[Green].Width, 0.05);
+        }
     }
 }
