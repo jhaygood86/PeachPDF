@@ -3283,10 +3283,20 @@ namespace PeachBrackets.Html.Dom
             _isVertical && !_widthSpecified && !CssLayoutEngine.IsHeightDefinite(_tableBox.ContainingBlock);
 
         /// <summary>Whether <paramref name="available"/> is the table's own maximum content width, to within two pixels (see <see cref="TakeExcessFromUndeclaredColumns"/>).</summary>
+        /// <remarks>
+        /// The tolerance is the table's own border+padding along the column axis, unconditionally -
+        /// NOT <see cref="CssBox.ActualBoxSizeIncludedWidth"/> (box-sizing-dependent, zero under
+        /// <c>border-box</c>). This slack exists to absorb a collapsed border's own half-width that
+        /// the widest row doesn't carry (see the caller's remarks), which is real column-axis space
+        /// regardless of which box model the table's own <c>width</c> is interpreted against - a
+        /// border-box table (the HTML Standard's default for a real &lt;table&gt;) still has exactly
+        /// the same collapsed-border slack a content-box one does.
+        /// </remarks>
         private bool IsSizedToThisTablesMaximum(double available)
         {
             _tableBox.GetMinMaxWidth(_graphics, out _, out var tableMaximum);
-            return Math.Abs(available - tableMaximum) <= _tableBox.ActualBoxSizeIncludedWidth + 2 * Length.PointsPerPx;
+            var tolerance = TableInlineBorderStart + TableInlineBorderEnd + TableInlinePaddingStart + TableInlinePaddingEnd;
+            return Math.Abs(available - tableMaximum) <= tolerance + 2 * Length.PointsPerPx;
         }
 
         /// <summary>
