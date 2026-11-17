@@ -302,5 +302,18 @@ namespace PeachPDF.Tests.Integration
 
             Assert.Equal(150 + 2 * 7.5, fills[Green].Width, 0.05);
         }
+
+        [Fact]
+        public async Task ADisplayTableElementsMaxWidthIsContentBoxByDefault()
+        {
+            // Wrappable text, so the column can shrink all the way down to max-width's own basis rather than being floored by an unbreakable
+            // minimum: the same content-box default applies to max-width as to width, clamping the column's own content space (150pt) with the
+            // table's own padding (7.5pt each side) still added on top of that, not eaten from it.
+            var fills = await FillsAsync(
+                "<div style='display:table;background:#cfc;max-width:200px;padding:10px;border-spacing:0'>"
+                + "<div style='display:table-row'><div style='display:table-cell;padding:0'>aaaa bbbb cccc dddd eeee ffff gggg hhhh iiii jjjj</div></div></div>");
+
+            Assert.Equal(150 + 2 * 7.5, fills[Green].Width, 0.05);
+        }
     }
 }
