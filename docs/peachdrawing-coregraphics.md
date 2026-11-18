@@ -10,8 +10,10 @@ Windows [Win2D](peachdrawing-win2d.md) surface or a [Skia](peachdrawing-skia.md)
 dotnet add package PeachDrawing.CoreGraphics
 ```
 
-It targets `net10.0-macos`, `net10.0-ios`, `net11.0-macos` and `net11.0-ios`, so it is built on a Mac with the `macos`
-and `ios` workloads installed, and uses the .NET macOS and iOS bindings for CoreGraphics, CoreText, ImageIO, Core Image and Metal.
+It targets `net10.0-macos`, `net10.0-ios`, `net10.0-maccatalyst` and the matching `net11.0` ones, so it is built on a Mac with the `macos`,
+`ios` and `maccatalyst` workloads installed, and uses the .NET macOS, iOS and Mac Catalyst bindings for CoreGraphics, CoreText, ImageIO,
+Core Image and Metal. Mac Catalyst (what a .NET MAUI app uses on a Mac) draws through the same UIKit-style `CGContext` as iOS, so pass
+`originAtBottomLeft: false` there.
 
 > **Status: pre-1.0.** The public surface is `CoreGraphicsCanvas`, `CoreGraphicsRenderContext`, `CoreGraphicsComposer`,
 > `CoreGraphicsComposerOptions`, `CoreGraphicsTextEngine`, `CoreGraphicsImageCodec`, `CoreGraphicsImageFormat`, `CoreGraphicsLinkMap`,

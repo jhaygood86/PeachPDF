@@ -18,9 +18,10 @@ namespace PeachDrawing.PDF;
 /// document, with fonts re-embedded and text keeping the text map of the original.
 /// </para>
 /// <para>
-/// What the importer cannot draw yet (fonts without an embedded TrueType, OpenType, CFF or
-/// Type 1 program) is skipped, and <see cref="Paint(int, Canvas)"/> names each such feature in its
-/// result. A file protected with AES is read, with its password when it needs one; one that uses RC4 (which .NET does not provide) is refused.
+/// A font that is not embedded (a standard-14 name, or one the producer expected the viewer to have) is drawn with an installed
+/// family chosen by its name and descriptor, using the file's own widths; <see cref="Paint(int, Canvas)"/> names each substitution
+/// as <c>font substituted: Name -> Family</c>. What the importer cannot draw yet (a non-embedded font with no installed stand-in, one
+/// with a predefined CJK CMap) is skipped and named in the same result. A file protected with AES is read, with its password when it needs one; one that uses RC4 (which .NET does not provide) is refused.
 /// </para>
 /// </remarks>
 public sealed class PdfPageSource
@@ -134,6 +135,26 @@ public sealed class PdfPageSource
     /// <param name="pageIndex">the zero-based page number</param>
     /// <returns>the links, with their rectangles in the same terms <see cref="Paint(int, Canvas)"/> draws the page in</returns>
     public IReadOnlyList<PdfSourceLink> GetLinks(int pageIndex) => _navigation.Links(Page(pageIndex));
+
+    private readonly object _textLock = new();
+    private Canvas? _textHost;
+
+    /// <summary>
+    /// The text of a page with the position of every character, for selecting, copying and searching it. Reading it paints nothing; a font that
+    /// is not embedded is read too, since only its character codes are needed. Safe to call from several threads, one page at a time.
+    /// </summary>
+    /// <param name="pageIndex">the zero-based page number</param>
+    /// <returns>the text of the page, empty for a page with none (a scan with no text layer)</returns>
+    public PdfPageText GetText(int pageIndex)
+    {
+        var page = Page(pageIndex);
+        lock (_textLock)
+        {
+            // Fonts are registered on a context once, so one tiny host canvas serves every page.
+            _textHost ??= new RasterRenderContext().CreateCanvas(1, 1);
+            return PdfTextExtractor.Extract(_document, page, _textHost);
+        }
+    }
 
     /// <summary>The document outline (the bookmarks sidebar of a reader) flattened in reading order; an entry's <see cref="PdfBookmark.PageIndex"/> is a page of this file.</summary>
     /// <returns>the entries, each with its nesting level</returns>

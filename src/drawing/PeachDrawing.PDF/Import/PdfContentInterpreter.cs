@@ -98,6 +98,18 @@ internal sealed class PdfContentInterpreter
     /// </summary>
     public PdfTagBinding? Tags { get; init; }
 
+    /// <summary>
+    /// Where to send each shown glyph instead of drawing, or null to draw. With a sink, only the operators that decide where text goes run
+    /// (state, text and form XObjects), so a page's text is read without painting anything.
+    /// </summary>
+    public Action<PdfTextGlyph>? TextSink { get; init; }
+
+    /// <summary>Maps PDF user space to the space the sink's positions are reported in (the page's top-left, y down).</summary>
+    public Matrix3x2 TextBase { get; init; } = Matrix3x2.Identity;
+
+    static readonly HashSet<string> TextOnlyOperators =
+        ["q", "Q", "cm", "BT", "ET", "Tc", "Tw", "Tz", "TL", "Ts", "Tr", "Tf", "Td", "TD", "T*", "Tm", "Tj", "'", "\"", "TJ", "Do"];
+
     /// <summary>The parent-tree key of the stream being interpreted (the page's, or a form's <c>/StructParents</c>), or -1.</summary>
     public int StructParents { get; set; } = -1;
 
@@ -180,7 +192,7 @@ internal sealed class PdfContentInterpreter
                 if (t.Text == "BI")
                 {
                     operands.Clear();
-                    if (ReadInlineImage(lx, resources) is { } inline) DrawImage(inline, resources);
+                    if (ReadInlineImage(lx, resources) is { } inline) { if (TextSink is null) DrawImage(inline, resources); }
                     else _unsupported.Add("BI (malformed)");
                     continue;
                 }
@@ -271,6 +283,7 @@ internal sealed class PdfContentInterpreter
 
     void Execute(string op, List<PdfItem> o, PdfDictionary? res)
     {
+        if (TextSink is not null && !TextOnlyOperators.Contains(op)) return;
         if (Cur.ColorLocked && IsColorOperator(op)) return;
         switch (op)
         {
@@ -529,6 +542,7 @@ internal sealed class PdfContentInterpreter
         {
             font = PdfImportedFont.Load(_doc, fd, _canvas.RenderContext, out var why);
             if (font is null) _unsupported.Add("font: " + why);
+            else if (font.Substitution is { } substitution) _unsupported.Add("font substituted: " + substitution);
             _fonts[fd] = font;
         }
         (Cur.TextFont, Cur.Type3Font) = (font, null);
@@ -547,7 +561,7 @@ internal sealed class PdfContentInterpreter
             if (part is double adjust) { x -= adjust / 1000.0 * st.FontSize; continue; }
             foreach (var g in font.Decode((string)part))
             {
-                if (st.RenderMode != 3 && g.Procedure is { Stream: not null } proc && _formDepth < 16)
+                if (TextSink is null && st.RenderMode != 3 && g.Procedure is { Stream: not null } proc && _formDepth < 16)
                 {
                     // glyph space -> text space (font matrix) -> sized and placed in the line -> scaled horizontally -> the text matrix
                     var matrix = font.FontMatrix * Matrix3x2.CreateScale((float)st.FontSize) * Matrix3x2.CreateTranslation((float)x, (float)st.Rise)
@@ -584,6 +598,7 @@ internal sealed class PdfContentInterpreter
         if (font is null) { _unsupported.Add("font size"); return; }
         BeginUntagged();
         var glyphs = new List<GlyphPlacement>();
+        List<(string Text, double X, double Width)>? read = TextSink is null ? null : [];
         double x = 0;
         foreach (var part in parts)
         {
@@ -591,8 +606,20 @@ internal sealed class PdfContentInterpreter
             foreach (var g in st.TextFont.Decode((string)part))
             {
                 glyphs.Add(new GlyphPlacement(g.GlyphIndex, x, -st.Rise, g.Text));
+                read?.Add((g.Text, x, g.Width * st.FontSize));
                 x += g.Width * st.FontSize + st.CharSpacing + (g.IsWordSpace ? st.WordSpacing : 0);
             }
+        }
+        if (read is not null)
+        {
+            // Reading text: report each glyph where it would have been drawn, in the space of TextBase, and draw nothing.
+            var toPage = Matrix3x2.CreateScale((float)st.HorizontalScale, st.FontSize < 0 ? 1f : -1f) * _tm * Cur.Ctm * TextBase;
+            var up = Vector2.TransformNormal(new Vector2(0, -(float)Math.Abs(st.FontSize)), toPage);
+            foreach (var (text, gx, gw) in read)
+                TextSink!(new PdfTextGlyph(text, Vector2.Transform(new Vector2((float)gx, (float)-st.Rise), toPage),
+                    Vector2.Transform(new Vector2((float)(gx + gw), (float)-st.Rise), toPage), up));
+            _tm = Matrix3x2.CreateTranslation((float)(x * st.HorizontalScale), 0) * _tm;
+            return;
         }
         if (glyphs.Count > 0)
         {
@@ -1134,10 +1161,10 @@ internal sealed class PdfContentInterpreter
         var xobjects = res is null ? null : _doc.DictOf(res, "XObject");
         if (xobjects is null || _doc.Resolve(xobjects.GetRaw(name)) is not PdfDictionary x) { _unsupported.Add("Do (missing XObject)"); return; }
         string? subtype = _doc.NameOf(x.GetRaw("Subtype"));
-        if (subtype == "/Image") { BeginUntagged(); DrawImage(x, res); return; }
+        if (subtype == "/Image") { if (TextSink is null) { BeginUntagged(); DrawImage(x, res); } return; }
         if (subtype != "/Form") { _unsupported.Add("Do " + subtype); return; }
         if (_formDepth >= 16) { _unsupported.Add("Do (form nesting)"); return; }
-        if ((Cur.FillAlpha < 1 || Cur.Blend != PaintBlendMode.Normal) && _region is not null && _doc.DictOf(x, "Group") is { } group && _doc.NameOf(group.GetRaw("S")) == "/Transparency")
+        if (TextSink is null && (Cur.FillAlpha < 1 || Cur.Blend != PaintBlendMode.Normal) && _region is not null && _doc.DictOf(x, "Group") is { } group && _doc.NameOf(group.GetRaw("S")) == "/Transparency")
         {
             DrawTransparencyGroup(x, res);
             return;

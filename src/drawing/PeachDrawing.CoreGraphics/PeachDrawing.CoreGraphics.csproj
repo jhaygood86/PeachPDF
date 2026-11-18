@@ -2,8 +2,8 @@
 	<Import Project="..\..\Version.props" />
 	<Import Project="..\..\ApiReference.props" />
 	<PropertyGroup>
-		<!-- Apple platforms only: needs the macos and ios workloads, so it is not in PeachPDF.slnx (like PeachBrackets.Android). -->
-		<TargetFrameworks>net10.0-macos;net10.0-ios;net11.0-macos;net11.0-ios</TargetFrameworks>
+		<!-- Apple platforms only: needs the macos, ios and maccatalyst workloads (Mac Catalyst is what a .NET MAUI app uses on a Mac), so it is not in PeachPDF.slnx (like PeachBrackets.Android). -->
+		<TargetFrameworks>net10.0-macos;net10.0-ios;net10.0-maccatalyst;net11.0-macos;net11.0-ios;net11.0-maccatalyst</TargetFrameworks>
 		<AssemblyName>PeachDrawing.CoreGraphics</AssemblyName>
 		<RootNamespace>PeachDrawing.CoreGraphics</RootNamespace>
 		<PackageId>PeachDrawing.CoreGraphics</PackageId>

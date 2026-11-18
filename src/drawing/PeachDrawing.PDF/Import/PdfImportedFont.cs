@@ -15,8 +15,8 @@ internal readonly record struct PdfShownGlyph(int Code, int GlyphIndex, double W
 /// <summary>
 /// A font of an imported document, reduced to what showing text needs: how a string splits into character codes, which
 /// glyph and advance each code has, and the Unicode text each stands for (the font's <c>/ToUnicode</c> map first, then
-/// its encoding). Embedded TrueType and OpenType programs are drawn by glyph index through the canvas; a font with
-/// no embedded sfnt program (a bare CFF or Type 1 program, a Type 3 font, a standard-14 name) is not supported yet.
+/// its encoding). Embedded programs are drawn by glyph index through the canvas; a font with no embedded program is drawn
+/// with an installed family chosen by <see cref="PdfFontSubstitution"/>, by Unicode.
 /// </summary>
 internal sealed class PdfImportedFont
 {
@@ -49,7 +49,67 @@ internal sealed class PdfImportedFont
     public PeachDrawing.Text.Typeface? Typeface => _probe.Typeface;
 
     /// <summary>The font at <paramref name="size"/>, or null when the context cannot make it.</summary>
-    public Font? GetFont(double size) => _context.GetFont(_family, size, PaintFontStyle.Regular);
+    public Font? GetFont(double size) => _context.GetFont(_family, size, _style, _weight);
+
+    PaintFontStyle _style = PaintFontStyle.Regular;
+    double? _weight;
+    bool _substitute;
+
+    /// <summary>For a font that is not embedded and is drawn with an installed one: what the file asked for and what is drawn instead; otherwise null.</summary>
+    public string? Substitution { get; private set; }
+
+    /// <summary>
+    /// Builds a font for one whose program is not embedded (a standard-14 name, or a font the producer expected the viewer to have) from
+    /// an installed family chosen by its name and descriptor. Glyphs are found by Unicode, from the encoding or <c>/ToUnicode</c>, and the advances
+    /// are the file's own <c>/Widths</c>, so lines break and align as the producer laid them out even though the shapes differ.
+    /// </summary>
+    static PdfImportedFont? LoadSubstitute(PdfSourceDocument doc, PdfDictionary fontDict, PdfDictionary? descriptor, PdfDictionary? cidFont,
+        bool composite, RenderContext context, out string? why)
+    {
+        why = null;
+        string baseName = (doc.NameOf((cidFont ?? fontDict).GetRaw("BaseFont")) ?? doc.NameOf(fontDict.GetRaw("BaseFont")) ?? "").TrimStart('/');
+        var toUnicode = new Dictionary<int, string>();
+        if (doc.Resolve(fontDict.GetRaw("ToUnicode")) is PdfDictionary { Stream: not null } tu)
+            ParseToUnicode(doc.DecodeStream(tu).Data, toUnicode);
+        if (composite && toUnicode.Count == 0) { why = "Type0 font that is not embedded and has no ToUnicode map"; return null; }
+
+        int flags = descriptor is null ? 0 : doc.IntOf(descriptor.GetRaw("Flags"));
+        var (family, style, weight) = PdfFontSubstitution.Choose(baseName, flags,
+            descriptor is null ? 0 : doc.NumberOf(descriptor.GetRaw("FontWeight")), context.IsFontExists);
+        Font? probe = context.GetFont(family, 10, style, weight);
+        if (probe?.Typeface is null)
+        {
+            // A generic name the context cannot resolve: try the families that are common on desktops, phones and Linux.
+            foreach (var common in PdfFontSubstitution.CommonFamilies)
+            {
+                if (!context.IsFontExists(common)) continue;
+                probe = context.GetFont(common, 10, style, weight);
+                if (probe?.Typeface is not null) { family = common; break; }
+            }
+        }
+        if (probe?.Typeface is null) { why = "no installed font to stand in for " + (baseName.Length == 0 ? "an unnamed font" : baseName); return null; }
+
+        PdfImportedFont font;
+        if (composite)
+        {
+            double dw = doc.NumberOf(cidFont!.GetRaw("DW"), 1000) / 1000.0;
+            font = new PdfImportedFont(true, family, context, toUnicode, dw, null, _ => null, probe);
+            ReadCidWidths(doc, cidFont!, font._widths);
+        }
+        else
+        {
+            double missing = descriptor is null ? 0 : doc.NumberOf(descriptor.GetRaw("MissingWidth")) / 1000.0;
+            font = new PdfImportedFont(false, family, context, toUnicode, missing, null, BuildSimpleEncoding(doc, fontDict), probe);
+            int first = doc.IntOf(fontDict.GetRaw("FirstChar"));
+            if (doc.ArrayOf(fontDict, "Widths") is { } w)
+                for (int i = 0; i < w.Elements.Count; i++) font._widths[first + i] = doc.NumberOf(w.Elements[i]) / 1000.0;
+        }
+        font._style = style;
+        font._weight = weight;
+        font._substitute = true;
+        font.Substitution = (baseName.Length == 0 ? "(unnamed)" : baseName) + " -> " + family;
+        return font;
+    }
 
     static readonly ConditionalWeakTable<RenderContext, HashSet<string>> Registered = [];
 
@@ -96,7 +156,7 @@ internal sealed class PdfImportedFont
                 fileSubtype = doc.NameOf(f3.GetRaw("Subtype"));
             }
         }
-        if (file is null) { why = "no embedded TrueType, OpenType, CFF or Type 1 program"; return null; }
+        if (file is null) return LoadSubstitute(doc, fontDict, descriptor, cidFont, composite, context, out why);
         byte[] data = doc.DecodeStream(file).Data;
         CffFont? cff = null;
         byte[] program = data;
@@ -225,6 +285,15 @@ internal sealed class PdfImportedFont
             for (int i = 0; i + 1 < shown.Length; i += 2)
             {
                 int cid = (shown[i] << 8) | shown[i + 1];
+                if (_substitute)
+                {
+                    // No program of its own: the glyph is the substitute's glyph for the character the ToUnicode map gives the code.
+                    _toUnicode.TryGetValue(cid, out var shownText);
+                    int substituteGid = 0;
+                    if (_probe.Typeface is { } face && !string.IsNullOrEmpty(shownText) && Rune.TryGetRuneAt(shownText, 0, out var r) && face.TryMapRune(r, out var m)) substituteGid = m;
+                    yield return new PdfShownGlyph(cid, substituteGid, _widths.TryGetValue(cid, out var sw) ? sw : _defaultWidth, shownText ?? "", false);
+                    continue;
+                }
                 int gid = _cidToGlyph is not null ? (_cidToGlyph.TryGetValue(cid, out var mapped) ? mapped : 0) : cid;
                 if (_cidToGid is not null && cid * 2 + 1 < _cidToGid.Length) gid = (_cidToGid[cid * 2] << 8) | _cidToGid[cid * 2 + 1];
                 _toUnicode.TryGetValue(cid, out var text);

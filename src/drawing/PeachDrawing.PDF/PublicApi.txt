@@ -358,6 +358,7 @@ PeachDrawing.PDF.PdfPageSource : sealed class
   method IReadOnlyList<PdfEmbeddedFile> GetAttachments()
   method IReadOnlyList<PdfFormFieldDefinition> GetFormFields(Int32 pageIndex, Double pixelsPerPoint = 1, Func<String, String> rename = null)
   method IReadOnlyList<PdfSourceLink> GetLinks(Int32 pageIndex)
+  method PdfPageText GetText(Int32 pageIndex)
   method PdfSourceConformance GetConformance()
   method PdfSourceMetadata GetMetadata()
   method PdfSourceOutputIntent GetOutputIntent()
@@ -369,6 +370,16 @@ PeachDrawing.PDF.PdfPageSource : sealed class
   method static PdfPageSource Open(Stream stream)
   method static PdfPageSource Open(Stream stream, String password)
   property Int32 PageCount { get; }
+PeachDrawing.PDF.PdfPageText : sealed class
+  method IReadOnlyList<PdfTextRange> Find(String query, PdfTextSearchOptions options = None)
+  method IReadOnlyList<Rect> GetBounds(Int32 start, Int32 length)
+  method Int32 HitTest(PaintPoint point, Boolean nearest = False)
+  method PdfTextRange LineAt(Int32 index)
+  method PdfTextRange WordAt(Int32 index)
+  method String GetText(Int32 start, Int32 length)
+  property Int32 Length { get; }
+  property Int32 LineCount { get; }
+  property String Text { get; }
 PeachDrawing.PDF.PdfPasswordException : sealed class
   ctor(String message, Boolean passwordWasGiven = False)
   property Boolean PasswordWasGiven { get; }
@@ -491,6 +502,21 @@ PeachDrawing.PDF.PdfTagRecorder : sealed class
   method Void LinkAnnotation(Object key, PdfLink link, String contents, Object target)
   property Boolean IsInMarkedContent { get; }
 PeachDrawing.PDF.PdfTagSession : sealed class
+PeachDrawing.PDF.PdfTextRange : struct
+  ctor(Int32 Start, Int32 Length)
+  method Void Deconstruct(out Int32 Start, out Int32 Length)
+  method virtual Boolean Equals(Object obj)
+  method virtual Boolean Equals(PdfTextRange other)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property Int32 End { get; }
+  property Int32 Length { get; init; }
+  property Int32 Start { get; init; }
+PeachDrawing.PDF.PdfTextSearchOptions : enum Int32
+  IgnoreDiacritics = 4
+  MatchCase = 1
+  None = 0
+  WholeWord = 2
 PeachDrawing.PDF.PdfUAConformance : enum Int32
   None = 0
   UA1 = 1
