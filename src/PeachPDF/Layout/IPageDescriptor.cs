@@ -1,3 +1,4 @@
+using PeachDrawing.PDF;
 using System;
 
 namespace PeachPDF.Layout
@@ -46,6 +47,16 @@ namespace PeachPDF.Layout
         /// property itself.
         /// </summary>
         IPageDescriptor DefaultTextStyle(Action<ITextStyle> handler);
+
+        /// <summary>
+        /// Labels this page's pages the way a PDF viewer shows them in its page box and thumbnails ("iv", "A-3"), starting at this page's first
+        /// physical page. The label runs on over every later page until another section sets one, so a section that should go back to plain
+        /// numbering sets <see cref="PdfPageLabelStyle.Decimal"/> itself. This is the page label PDF stores, not the number a footer prints.
+        /// </summary>
+        /// <param name="style">how the page number is written</param>
+        /// <param name="prefix">text before the number, or <see langword="null"/> for none</param>
+        /// <param name="startNumber">the number of this page's first physical page, 1 or more</param>
+        IPageDescriptor PageLabel(PdfPageLabelStyle style, string? prefix = null, int startNumber = 1);
 
         /// <summary>Sets content repeated at the top of every physical page this page's content paginates across.</summary>
         IPageDescriptor Header(Action<IContainer> handler);

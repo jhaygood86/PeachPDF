@@ -478,6 +478,9 @@ namespace PeachPDF
             MarginRight = 20
         };
 
+        /// <summary>The page label each declarative section asked for (<see cref="IPageDescriptor.PageLabel"/>), keyed by its laid-out document, as a range starting at 0.</summary>
+        private readonly System.Runtime.CompilerServices.ConditionalWeakTable<HtmlDocument, PdfPageLabelRange> _sectionPageLabels = [];
+
         private async Task AddPagesCore(PeachPdfDocument document, Action<IDocumentBuilder> handler, PdfGenerateConfig? config, Func<int, (int Offset, int? Total)>? numbering)
         {
             ArgumentNullException.ThrowIfNull(handler);
@@ -494,6 +497,14 @@ namespace PeachPDF
 
             var buildContext = new DocumentBuildContext(_renderContext);
             var sections = documentBuilder.Sections;
+            var firstDocumentPage = document.Composer.Pages.Count;
+
+            // Page labels set by position count from this builder's first page; they are added once every section has put its pages in.
+            void ApplyPageLabels()
+            {
+                if (documentBuilder.PageLabelRanges.Count > 0)
+                    document.Composer.AddPageLabels(documentBuilder.PageLabelRanges.Select(r => new PdfPageLabelRange(firstDocumentPage + r.StartPageIndex, r.Style, r.Prefix, r.StartNumber)));
+            }
 
             // Pages that run on from the PDFs added around them need those PDFs' page counts before any footer is drawn. A section is numbered by its
             // place among all the sections, so the PDFs' counts and the generated pages' counts add up the same way for a merge's parts.
@@ -545,6 +556,8 @@ namespace PeachPDF
 
                         configured = true;
                     }
+
+                    ApplyPageLabels();
                 }
                 finally
                 {
@@ -590,6 +603,7 @@ namespace PeachPDF
 
                 // The links, destinations and outline of the files drawn on the pages, now that every page they can lead to exists.
                 plan.Finish(document.Composer, _renderContext);
+                ApplyPageLabels();
             }
             finally
             {
@@ -642,6 +656,8 @@ namespace PeachPDF
             };
 
             var htmlDocument = await HtmlDocument.CreateAsync(page, options, stylesheet?.StyleSheet);
+            if (pageDescriptor.PageLabelRequest is { } pageLabel)
+                _sectionPageLabels.Add(htmlDocument, pageLabel);
             PdfCanvas? measure = null;
             try
             {
@@ -818,6 +834,10 @@ namespace PeachPDF
             // UA stylesheet, everything else defaults to none), so this is unconditional: a document
             // with no headings simply collects zero bookmarks above and adds no outline.
             document.Composer.AddBookmarks(annotations.Bookmarks.Select(b => ToBookmark(b, pageBase)));
+
+            // A declarative section's own page label starts at the first page it drew.
+            if (_sectionPageLabels.TryGetValue(htmlDocument, out var sectionLabel) && htmlDocument.Pages.Count > 0)
+                document.Composer.AddPageLabels([new PdfPageLabelRange(pageBase, sectionLabel.Style, sectionLabel.Prefix, sectionLabel.StartNumber)]);
         }
 
         #region Private/Protected methods

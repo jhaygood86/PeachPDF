@@ -3,6 +3,7 @@ using PeachPDF.Rendering;
 using PeachDrawing.Core;
 using PeachPDF;
 using PeachPDF.Layout;
+using PdfPageLabelStyle = PeachDrawing.PDF.PdfPageLabelStyle;
 using PeachDrawing.PDF.Engine;
 using ScottPlot;
 using System.Diagnostics;
@@ -16793,6 +16794,67 @@ await SaveDeclarativeShowcaseAsync("barcodes", "Document Building", "Barcodes",
             });
         }));
     })));
+
+const string pageLabelsSource =
+    """"
+    // The viewer's page box and thumbnails show "i, ii" for the front matter, "1, 2, 3" for the body and "A-1" for the appendix.
+    var document = await generator.CreateDocument(doc =>
+    {
+        doc.Page(page =>
+        {
+            page.Size(300, 160).Margin(20);
+            page.PageLabel(PdfPageLabelStyle.RomanLower);
+            page.Content(c => c.Text("Front matter: the viewer labels this page i."));
+        });
+        doc.Page(page =>
+        {
+            page.Size(300, 160).Margin(20);
+            page.PageLabel(PdfPageLabelStyle.Decimal);
+            page.Content(c => c.Text("Body: the viewer labels this page 1 and the next 2."));
+        });
+        doc.Page(page =>
+        {
+            page.Size(300, 160).Margin(20);
+            page.Content(c => c.Text("Still the body: label 2."));
+        });
+        doc.Page(page =>
+        {
+            page.Size(300, 160).Margin(20);
+            page.PageLabel(PdfPageLabelStyle.Decimal, prefix: "A-");
+            page.Content(c => c.Text("Appendix: the viewer labels this page A-1."));
+        });
+    });
+    """";
+
+await SaveDeclarativeShowcaseAsync("page_labels", "Document Building", "PDF Page Labels",
+    "A section's PageLabel puts roman numerals, a restart and a prefix in the PDF's page labels: a viewer's page box and thumbnails read i, 1, 2 and A-1 where the pages' positions are 1 to 4. Open the PDF in a viewer to see them; the pages say what to expect.",
+    pageLabelsSource,
+    async gen => await gen.CreateDocument(doc =>
+    {
+        doc.Page(page =>
+        {
+            page.Size(300, 160).Margin(20);
+            page.PageLabel(PdfPageLabelStyle.RomanLower);
+            page.Content(c => c.Text("Front matter: the viewer labels this page i."));
+        });
+        doc.Page(page =>
+        {
+            page.Size(300, 160).Margin(20);
+            page.PageLabel(PdfPageLabelStyle.Decimal);
+            page.Content(c => c.Text("Body: the viewer labels this page 1 and the next 2."));
+        });
+        doc.Page(page =>
+        {
+            page.Size(300, 160).Margin(20);
+            page.Content(c => c.Text("Still the body: label 2."));
+        });
+        doc.Page(page =>
+        {
+            page.Size(300, 160).Margin(20);
+            page.PageLabel(PdfPageLabelStyle.Decimal, prefix: "A-");
+            page.Content(c => c.Text("Appendix: the viewer labels this page A-1."));
+        });
+    }));
 
 const string documentAppendPdfSource =
     """"
