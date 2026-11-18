@@ -159,10 +159,40 @@ internal sealed class PdfSourceNavigation(PdfSourceDocument doc)
     /// <summary>The label of every page (<c>/PageLabels</c>: a number tree of ranges, each with a numbering style, a prefix and a start), or the page number when the file has none.</summary>
     public IReadOnlyList<string> PageLabels()
     {
-        int count = doc.Pages.Count;
+        var values = PageLabelValues();
+        var labels = new string[values.Count];
+        for (int i = 0; i < labels.Length; i++)
+        {
+            var (style, prefix, number) = values[i];
+            labels[i] = prefix + style switch
+            {
+                PdfPageLabelStyle.Decimal => number.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                PdfPageLabelStyle.RomanUpper => Roman(number, upper: true),
+                PdfPageLabelStyle.RomanLower => Roman(number, upper: false),
+                PdfPageLabelStyle.LettersUpper => Letters(number, upper: true),
+                PdfPageLabelStyle.LettersLower => Letters(number, upper: false),
+                _ => "",
+            };
+        }
+        return labels;
+    }
+
+    /// <summary>Whether the file has a page-label range of its own.</summary>
+    public bool HasPageLabels() => Catalog is { } catalog && doc.DictOf(catalog, "PageLabels") is { } tree && PageLabelRanges(tree).Count > 0;
+
+    SortedDictionary<int, PdfDictionary> PageLabelRanges(PdfDictionary tree)
+    {
         var ranges = new SortedDictionary<int, PdfDictionary>();
-        if (Catalog is { } catalog && doc.DictOf(catalog, "PageLabels") is { } tree) WalkNumberTree(tree, ranges, 0);
-        var labels = new string[count];
+        WalkNumberTree(tree, ranges, 0);
+        return ranges;
+    }
+
+    /// <summary>What each page's label is made of - its numbering style, prefix and number - which is what a writer needs to carry the labels into another file.</summary>
+    public IReadOnlyList<(PdfPageLabelStyle Style, string Prefix, int Number)> PageLabelValues()
+    {
+        int count = doc.Pages.Count;
+        var ranges = Catalog is { } catalog && doc.DictOf(catalog, "PageLabels") is { } tree ? PageLabelRanges(tree) : [];
+        var values = new (PdfPageLabelStyle, string, int)[count];
         PdfDictionary? current = null;
         int rangeStart = 0;
         using var next = ranges.GetEnumerator();
@@ -170,20 +200,21 @@ internal sealed class PdfSourceNavigation(PdfSourceDocument doc)
         for (int i = 0; i < count; i++)
         {
             while (more && next.Current.Key <= i) { rangeStart = next.Current.Key; current = next.Current.Value; more = next.MoveNext(); }
-            if (current is null) { labels[i] = (i + 1).ToString(System.Globalization.CultureInfo.InvariantCulture); continue; }
-            int number = Math.Max(0, doc.NumberOf(current.GetRaw("St"), 1) is var st && st >= 0 ? (int)st : 1) + (i - rangeStart);
-            string prefix = TextValue(current.GetRaw("P")) ?? "";
-            labels[i] = prefix + doc.NameOf(current.GetRaw("S")) switch
+            if (current is null) { values[i] = (PdfPageLabelStyle.Decimal, "", i + 1); continue; }
+            double start = doc.NumberOf(current.GetRaw("St"), 1);
+            int number = (start >= 0 ? (int)start : 1) + (i - rangeStart);
+            var style = doc.NameOf(current.GetRaw("S")) switch
             {
-                "/D" => number.ToString(System.Globalization.CultureInfo.InvariantCulture),
-                "/R" => Roman(number, upper: true),
-                "/r" => Roman(number, upper: false),
-                "/A" => Letters(number, upper: true),
-                "/a" => Letters(number, upper: false),
-                _ => "",
+                "/D" => PdfPageLabelStyle.Decimal,
+                "/R" => PdfPageLabelStyle.RomanUpper,
+                "/r" => PdfPageLabelStyle.RomanLower,
+                "/A" => PdfPageLabelStyle.LettersUpper,
+                "/a" => PdfPageLabelStyle.LettersLower,
+                _ => PdfPageLabelStyle.None,
             };
+            values[i] = (style, TextValue(current.GetRaw("P")) ?? "", number);
         }
-        return labels;
+        return values;
     }
 
     void WalkNumberTree(PdfDictionary node, SortedDictionary<int, PdfDictionary> into, int depth)

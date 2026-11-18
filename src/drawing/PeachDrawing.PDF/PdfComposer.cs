@@ -27,6 +27,7 @@ public sealed partial class PdfComposer : IDisposable
     private readonly PdfDocument _document;
     private readonly PdfRenderContext _renderContext;
     private readonly List<PdfComposerPage> _pages = [];
+    private readonly SortedDictionary<int, PdfPageLabelRange> _pageLabels = [];
     private bool _configured;
 
     /// <summary>
@@ -209,6 +210,52 @@ public sealed partial class PdfComposer : IDisposable
     }
 
     /// <summary>
+    /// Labels pages the way a viewer shows them in its page box and thumbnails ("iv", "A-3") instead of by position. Each range starts at its
+    /// page and lasts until the next range starts. A range at the same start as an earlier one replaces it, so ranges can be added in
+    /// several batches. A document with labels but none at page 0 is written with a plain decimal range there, as the PDF format requires.
+    /// </summary>
+    /// <param name="ranges">the ranges, in any order</param>
+    /// <exception cref="ArgumentOutOfRangeException">a range starts after the last page that has been added</exception>
+    public void AddPageLabels(IEnumerable<PdfPageLabelRange> ranges)
+    {
+        ArgumentNullException.ThrowIfNull(ranges);
+
+        foreach (var range in ranges)
+        {
+            ArgumentNullException.ThrowIfNull(range);
+            if (range.StartPageIndex >= _pages.Count)
+                throw new ArgumentOutOfRangeException(nameof(ranges), range.StartPageIndex, "There is no such page.");
+            _pageLabels[range.StartPageIndex] = range;
+        }
+    }
+
+    /// <summary>Whether any page label range has been added.</summary>
+    internal bool HasPageLabels => _pageLabels.Count > 0;
+
+    private void WritePageLabels()
+    {
+        if (_pageLabels.Count == 0) return;
+
+        var entries = new List<PdfPageLabelEntry>(_pageLabels.Count + 1);
+        if (!_pageLabels.ContainsKey(0)) entries.Add(new PdfPageLabelEntry(0, "/D", null, 1));
+        foreach (var range in _pageLabels.Values)
+        {
+            string? style = range.Style switch
+            {
+                PdfPageLabelStyle.Decimal => "/D",
+                PdfPageLabelStyle.RomanUpper => "/R",
+                PdfPageLabelStyle.RomanLower => "/r",
+                PdfPageLabelStyle.LettersUpper => "/A",
+                PdfPageLabelStyle.LettersLower => "/a",
+                _ => null,
+            };
+            entries.Add(new PdfPageLabelEntry(range.StartPageIndex, style, range.Prefix, range.StartNumber));
+        }
+
+        _document.Catalog.SetPageLabels(entries);
+    }
+
+    /// <summary>
     /// Merges embedded raster images that encode to byte-identical PDF image objects, keeping one copy and pointing every other
     /// reference at it. Call it after all pages are drawn and before <see cref="Save"/>: the saved file then drops the duplicates.
     /// </summary>
@@ -251,6 +298,7 @@ public sealed partial class PdfComposer : IDisposable
         FinishPages();
         foreach (var page in _pages)
             page.ApplyPrintBoxes();
+        WritePageLabels();
 
         _document.Save(stream);
     }

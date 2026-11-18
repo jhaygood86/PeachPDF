@@ -15,6 +15,7 @@ types stay `internal` for this reason as well as for API stability: nothing publ
 | `PdfComposer` | Builds one PDF file from pages | Ours; "composer" names the act of putting pages together and deliberately is not `PdfDocument`/`PdfWriter`, which every competitor uses for this role |
 | `PdfComposerOptions` | What a composer writes besides the pages | `<Type>Options`, the ordinary .NET options-object naming |
 | `PdfVersion`, `PdfPermissions`, `PdfEncryptionOptions` | The version, the permission flags and the password settings | The PDF specification's own terms (ISO 32000, "version", the permissions word, the standard security handler's user/owner passwords); they moved here unchanged from PeachPDF's public API, where they predate the package |
+| `PdfPageLabelRange`, `PdfPageLabelStyle`, `PdfComposer.AddPageLabels` | The ranges a viewer labels pages by ("iv", "A-3"), their numbering styles and adding them | ISO 32000-1 12.4.2's own terms ("page label", the five numbering styles, prefix, start); `AddPageLabels` follows `AddBookmarks`. No competitor in the list has a writer for these (QuestPDF has none; the others name it differently or not at all), and permissively licensed libraries' naming would have been acceptable anyway |
 | `PdfComposer.AddPage`, `.Save`, `.PageCount` | Appending a page, writing the file, counting pages | Ordinary verbs and nouns for those operations |
 
 ## Rules

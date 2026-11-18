@@ -1,5 +1,7 @@
 // Derived from PDFsharp (MIT) - see LICENSE.md
 
+using System.Collections.Generic;
+using System.Linq;
 using PeachDrawing.PDF.Engine.AcroForms;
 using PeachDrawing.PDF.Engine.IO;
 using PeachDrawing.PDF.Engine.Structure;
@@ -71,6 +73,30 @@ internal sealed class PdfCatalog : PdfDictionary, IPdfDictionaryValue<PdfCatalog
     /// </summary>
     internal PdfViewerPreferences ViewerPreferences => _viewerPreferences ??= Elements.GetOrCreate<PdfViewerPreferences>(Keys.ViewerPreferences, ValueCreationFlags.CreateIndirect);
     PdfViewerPreferences _viewerPreferences = null!;
+
+    /// <summary>
+    /// Replaces the page labels (ISO 32000-1 12.4.2): a number tree whose keys are the first page of each labeling range and whose
+    /// values are label dictionaries (<c>/S</c> style, <c>/P</c> prefix, <c>/St</c> start). The tree is written as a root node with
+    /// one flat <c>/Nums</c> array, which has no <c>/Limits</c>. Called again on each save, so it rebuilds the entry.
+    /// </summary>
+    /// <param name="ranges">the ranges in ascending page order; the first must be page 0</param>
+    internal void SetPageLabels(IReadOnlyList<PdfPageLabelEntry> ranges)
+    {
+        var tree = new PdfDictionary(Owner);
+        var nums = new PdfArray(Owner);
+        foreach (var range in ranges)
+        {
+            var label = new PdfDictionary(Owner);
+            if (range.Style is { } style) label.Elements.SetName("/S", style);
+            if (!string.IsNullOrEmpty(range.Prefix))
+                label.Elements.SetValue("/P", range.Prefix.All(c => c < 0x80) ? new PdfString(range.Prefix) : new PdfString(range.Prefix, PdfStringEncoding.Unicode));
+            if (range.Start != 1) label.Elements.SetInteger("/St", range.Start);
+            nums.Elements.Add(new PdfInteger(range.PageIndex));
+            nums.Elements.Add(label);
+        }
+        tree.Elements.SetObject("/Nums", nums);
+        Elements.SetObject(Keys.PageLabels, tree);
+    }
 
     /// <summary>
     /// Implementation of PdfDocument.Outlines.
@@ -374,3 +400,6 @@ internal sealed class PdfCatalog : PdfDictionary, IPdfDictionaryValue<PdfCatalog
 
     }
 }
+
+/// <summary>One page-labeling range as the catalog writes it: the first page, the style name (<c>/D</c>, <c>/R</c>, <c>/r</c>, <c>/A</c>, <c>/a</c>) or null, the prefix and the first number.</summary>
+internal readonly record struct PdfPageLabelEntry(int PageIndex, string? Style, string? Prefix, int Start);

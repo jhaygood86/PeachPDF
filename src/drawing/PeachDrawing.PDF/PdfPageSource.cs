@@ -186,6 +186,12 @@ public sealed class PdfPageSource
         lock (_sync) return _navigation.PageLabels();
     }
 
+    /// <summary>What each page's label is made of, and whether the file has labels at all; used to carry them into another file.</summary>
+    internal (bool HasLabels, IReadOnlyList<(PdfPageLabelStyle Style, string Prefix, int Number)> Values) GetPageLabelValues()
+    {
+        lock (_sync) return (_navigation.HasPageLabels(), _navigation.PageLabelValues());
+    }
+
     /// <summary>The title, author and the other document information of the file.</summary>
     /// <returns>the information the file gives</returns>
     public PdfSourceMetadata GetMetadata()

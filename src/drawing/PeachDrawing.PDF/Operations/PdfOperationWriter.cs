@@ -336,6 +336,34 @@ internal static class PdfOperationWriter
             if (outline.Count > 0)
                 composer.AddBookmarks(outline);
         }
+
+        CarryPageLabels(composer, pages, sources, first);
+    }
+
+    /// <summary>
+    /// The page labels of the pages taken, as ranges of the output: a new range wherever a page's label is not the one after the page before
+    /// it (a different style or prefix, or a number that does not follow on), so pages taken out of order, or from several files, keep the label
+    /// they had. Nothing is written when neither the files nor the document so far has labels, since the pages then number as the viewer does.
+    /// </summary>
+    private static void CarryPageLabels(PdfComposer composer, IReadOnlyList<PdfOperation.OutputPage> pages, List<PdfPageSource> sources, int first)
+    {
+        var labels = sources.ToDictionary(s => s, s => s.GetPageLabelValues());
+        if (!composer.HasPageLabels && !labels.Values.Any(l => l.HasLabels))
+            return;
+
+        var ranges = new List<PdfPageLabelRange>();
+        (PdfPageLabelStyle Style, string Prefix, int Number)? previous = null;
+        for (var i = 0; i < pages.Count; i++)
+        {
+            var values = labels[pages[i].Source].Values;
+            (PdfPageLabelStyle Style, string Prefix, int Number) value = pages[i].SourcePage < values.Count ? values[pages[i].SourcePage] : (PdfPageLabelStyle.Decimal, "", pages[i].SourcePage + 1);
+            var continues = previous is { } p && p.Style == value.Style && p.Prefix == value.Prefix && (value.Style == PdfPageLabelStyle.None || value.Number == p.Number + 1);
+            if (!continues)
+                ranges.Add(new PdfPageLabelRange(first + i, value.Style, value.Prefix.Length == 0 ? null : value.Prefix, Math.Max(1, value.Number)));
+            previous = value;
+        }
+
+        composer.AddPageLabels(ranges);
     }
 
     /// <summary>
