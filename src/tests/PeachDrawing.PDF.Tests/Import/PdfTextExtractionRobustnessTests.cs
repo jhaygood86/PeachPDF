@@ -74,17 +74,67 @@ namespace PeachDrawing.PDF.Tests.Import
             Assert.Equal("AC", PdfPageSource.Open(pdf).GetText(0).Text);
         }
 
+        private static string CjkType0(string encoding, string ordering = "Japan1", string baseFont = "MS-Mincho") =>
+            $"<< /Type /Font /Subtype /Type0 /BaseFont /{baseFont} /Encoding {encoding} /DescendantFonts [6 0 R] >>";
+
+        private static string CjkCidFont(string ordering = "Japan1", string baseFont = "MS-Mincho") =>
+            $"<< /Type /Font /Subtype /CIDFontType2 /BaseFont /{baseFont} /CIDSystemInfo << /Registry (Adobe) /Ordering ({ordering}) /Supplement 2 >> >>";
+
         [Fact]
-        public void AType0FontWithAnEncodingOtherThanIdentityAndNoStandIn_IsLeftOut()
+        public void AType0FontWithAPredefinedCMap_IsReadThroughItsCharacterCollection()
+        {
+            // Shift-JIS: the hiragana A (two bytes), Latin A (one byte), the hiragana I.
+            var pdf = TestPdf.Build("BT /F1 10 Tf 10 40 Td <82A04182A2> Tj ET", resources: "/Font << /F1 5 0 R >>", width: 200, height: 100,
+                extraObjects: [CjkType0("/90ms-RKSJ-H"), CjkCidFont()]);
+
+            Assert.Equal("あAい", PdfPageSource.Open(pdf).GetText(0).Text);
+        }
+
+        [Theory]
+        [InlineData("/UniJIS-UCS2-H", "Japan1", "30423044", "あい")]
+        [InlineData("/UniGB-UCS2-H", "GB1", "4E2D6587", "中文")]
+        [InlineData("/UniCNS-UCS2-H", "CNS1", "4E2D6587", "中文")]
+        [InlineData("/UniKS-UCS2-H", "Korea1", "D55CAE00", "한글")]
+        public void EachCollectionsUnicodeCMap_GivesItsText(string encoding, string ordering, string hex, string expected)
+        {
+            var pdf = TestPdf.Build($"BT /F1 10 Tf 10 40 Td <{hex}> Tj ET", resources: "/Font << /F1 5 0 R >>", width: 200, height: 100,
+                extraObjects: [CjkType0(encoding), CjkCidFont(ordering)]);
+
+            Assert.Equal(expected, PdfPageSource.Open(pdf).GetText(0).Text);
+        }
+
+        [Fact]
+        public void AType0FontWithAnEmbeddedCMapStream_IsReadByThatCMap()
+        {
+            var cmap = TestPdf.Stream("/Type /CMap /CMapName /Custom", "1 begincodespacerange <00> <FF> endcodespacerange 1 begincidrange <01> <10> 843 endcidrange");
+            var pdf = TestPdf.Build("BT /F1 10 Tf 10 40 Td <0102> Tj ET", resources: "/Font << /F1 5 0 R >>", width: 200, height: 100,
+                extraObjects: [CjkType0("7 0 R"), CjkCidFont(), cmap]);
+
+            Assert.Equal("あぃ", PdfPageSource.Open(pdf).GetText(0).Text);
+        }
+
+        [Fact]
+        public void AType0FontWithAnUnknownCMap_IsStillLeftOut()
         {
             var pdf = TestPdf.Build("BT /F1 10 Tf 10 40 Td <8140> Tj ET", resources: "/Font << /F1 5 0 R >>", width: 200, height: 100,
-                extraObjects:
-                [
-                    "<< /Type /Font /Subtype /Type0 /BaseFont /MS-Mincho /Encoding /90ms-RKSJ-H /DescendantFonts [6 0 R] >>",
-                    "<< /Type /Font /Subtype /CIDFontType2 /BaseFont /MS-Mincho /CIDSystemInfo << /Registry (Adobe) /Ordering (Japan1) /Supplement 2 >> >>",
-                ]);
+                extraObjects: [CjkType0("/NoSuchCMap-H"), CjkCidFont()]);
 
             Assert.Equal("", PdfPageSource.Open(pdf).GetText(0).Text);
+        }
+
+        [Fact]
+        public void VerticalText_ReadsDownTheColumnInOrder()
+        {
+            var pdf = TestPdf.Build("BT /F1 10 Tf 100 90 Td <30423044> Tj ET", resources: "/Font << /F1 5 0 R >>", width: 200, height: 100,
+                extraObjects: [CjkType0("/UniJIS-UCS2-V"), CjkCidFont()]);
+
+            var text = PdfPageSource.Open(pdf).GetText(0);
+
+            Assert.Equal("あい", text.Text.Replace("\n", ""));
+            var first = text.GetBounds(0, 1).Single();
+            var second = text.GetBounds(text.Text.Length - 1, 1).Single();
+            Assert.True(second.Y > first.Y + 5, "the second character is below the first");
+            Assert.True(Math.Abs(second.X - first.X) < 1, "and in the same column");
         }
 
         [Fact]

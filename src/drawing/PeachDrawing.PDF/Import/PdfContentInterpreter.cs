@@ -604,6 +604,11 @@ internal sealed class PdfContentInterpreter
         var glyphs = new List<GlyphPlacement>();
         List<(string Text, double X, double Width, double Spacing)>? read = TextSink is null ? null : [];
         double x = 0;
+        if (st.TextFont.Vertical)
+        {
+            ShowVertical(parts, st, font, glyphs, read);
+            return;
+        }
         foreach (var part in parts)
         {
             if (part is double adjust) { x -= adjust / 1000.0 * st.FontSize; continue; }
@@ -650,6 +655,58 @@ internal sealed class PdfContentInterpreter
             if (stroke || clip) OutlineText(glyphs, run, stroke, clip, res);
         }
         _tm = Matrix3x2.CreateTranslation((float)(x * st.HorizontalScale), 0) * _tm;
+    }
+
+    /// <summary>
+    /// Shows text of a vertical font (writing mode 1, PDF 9.7.4.3): each glyph is centered on the pen's x, its origin dropped by the default
+    /// position vector (0.88 em), and the pen advances downward by the vertical displacement (-1 em by default, plus character and word
+    /// spacing). Drawn or read, in the same two ways as horizontal text.
+    /// </summary>
+    void ShowVertical(IReadOnlyList<object> parts, State st, Font? font, List<GlyphPlacement> glyphs, List<(string Text, double X, double Width, double Spacing)>? read)
+    {
+        double y = 0;                       // canvas space, y down: the pen's distance below where the run began
+        double flip = st.FontSize < 0 ? 1 : -1;
+        var tops = new List<(string Text, double X, double Top, double Width, double Advance)>();
+        foreach (var part in parts)
+        {
+            if (part is double adjust) { y += adjust / 1000.0 * st.FontSize; continue; }
+            foreach (var g in st.TextFont!.Decode((string)part))
+            {
+                double w0 = g.Width * st.FontSize;
+                double advance = Math.Abs(st.FontSize) + st.CharSpacing + (g.IsWordSpace ? st.WordSpacing : 0);
+                glyphs.Add(new GlyphPlacement(g.GlyphIndex, -w0 / 2, y + 0.88 * Math.Abs(st.FontSize) - st.Rise, g.Text));
+                tops.Add((g.Text, st.Rise, y, w0, Math.Abs(st.FontSize)));
+                y += advance;
+            }
+        }
+        if (read is not null)
+        {
+            var toPage = Matrix3x2.CreateScale((float)st.HorizontalScale, (float)flip) * _tm * Cur.Ctm * TextBase;
+            // Vertical text reads downward: the line direction is down the page and glyph tops point to the right.
+            var up = Vector2.TransformNormal(new Vector2((float)Math.Abs(st.FontSize), 0), toPage);
+            foreach (var (text, _, top, _, em) in tops)
+            {
+                var start = Vector2.Transform(new Vector2(0, (float)top), toPage);
+                var end = Vector2.Transform(new Vector2(0, (float)(top + em)), toPage);
+                TextSink!(new PdfTextGlyph(text, start, end, up, 0));
+            }
+        }
+        else if (glyphs.Count > 0)
+        {
+            int mode = st.RenderMode;
+            if (mode != 7)
+            {
+                var run = Matrix3x2.CreateScale((float)st.HorizontalScale, (float)flip) * _tm;
+                _canvas.PushTransform(run);
+                try
+                {
+                    bool fill = mode is 0 or 2 or 4 or 6;
+                    _canvas.DrawGlyphs(glyphs, font!, fill ? st.FillSpace.ToColor(st.Fill, st.FillAlpha) : PaintColor.Transparent);
+                }
+                finally { _canvas.PopTransform(); }
+            }
+        }
+        _tm = Matrix3x2.CreateTranslation(0, (float)(flip * y)) * _tm;
     }
 
     GraphicsPath? _textClip;

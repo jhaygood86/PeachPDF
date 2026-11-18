@@ -17,6 +17,37 @@ internal static class PdfFontSubstitution
     internal static readonly string[] CommonFamilies =
         ["Arial", "Segoe UI", "Helvetica", "Helvetica Neue", "Roboto", "Noto Sans", "DejaVu Sans", "Liberation Sans", "Verdana", "Tahoma"];
 
+    /// <summary>
+    /// Installed families that carry the ideographs of a CJK character collection, best first, or null for another collection. A
+    /// family the font names itself (MS-Mincho, SimSun...) leads the list when it is one of the usual ones.
+    /// </summary>
+    internal static string[]? CjkFamilies(string? ordering, string baseName)
+    {
+        string[] list = ordering switch
+        {
+            "Japan1" => ["Yu Gothic", "Meiryo", "MS Gothic", "MS Mincho", "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans CJK JP", "Noto Sans JP", "Source Han Sans", "IPAexGothic", "TakaoGothic", "VL Gothic"],
+            "GB1" => ["Microsoft YaHei", "SimSun", "SimHei", "PingFang SC", "Noto Sans CJK SC", "Noto Sans SC", "Source Han Sans SC", "WenQuanYi Micro Hei", "STHeiti"],
+            "CNS1" => ["Microsoft JhengHei", "PMingLiU", "MingLiU", "PingFang TC", "Noto Sans CJK TC", "Noto Sans TC", "Source Han Sans TC", "WenQuanYi Micro Hei"],
+            "Korea1" => ["Malgun Gothic", "Batang", "Gulim", "Apple SD Gothic Neo", "Noto Sans CJK KR", "Noto Sans KR", "Source Han Sans K", "NanumGothic"],
+            _ => null!,
+        };
+        if (list is null) return null;
+        string name = StripSubsetTag(baseName);
+        string key = Key(name);
+        string? named = key switch
+        {
+            _ when key.StartsWith("msmincho") => "MS Mincho",
+            _ when key.StartsWith("msgothic") => "MS Gothic",
+            _ when key.StartsWith("simsun") => "SimSun",
+            _ when key.StartsWith("simhei") => "SimHei",
+            _ when key.StartsWith("mingliu") || key.StartsWith("msung") => "MingLiU",
+            _ when key.StartsWith("batang") => "Batang",
+            _ when key.StartsWith("gulim") => "Gulim",
+            _ => null,
+        };
+        return named is null ? list : [named, .. list];
+    }
+
     /// <summary>The family, style and weight to draw a font with.</summary>
     /// <param name="baseName">the <c>/BaseFont</c> name without its slash, possibly with a subset tag and a style suffix</param>
     /// <param name="flags">the descriptor's <c>/Flags</c>, or 0</param>

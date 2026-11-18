@@ -79,7 +79,7 @@ namespace PeachDrawing.PDF.Tests.Import
 
         [Theory]
         [InlineData("/Subtype /Type3", "font /Type3")]
-        [InlineData("/Subtype /Type0 /Encoding /UniJIS-UCS2-H", "Type0 encoding /UniJIS-UCS2-H")]
+        [InlineData("/Subtype /Type0 /Encoding /NoSuchCMap-H", "Type0 encoding /NoSuchCMap-H")]
         [InlineData("/Subtype /Type0 /Encoding /Identity-H", "Type0 without descendant")]
         public void FontsThatCannotBeDrawn_SayWhy(string entries, string expected)
         {

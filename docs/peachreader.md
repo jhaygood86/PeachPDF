@@ -88,7 +88,7 @@ dotnet build src/reader/PeachReader/PeachReader.csproj -f net11.0-android -p:Run
   order is the order the file draws the text in, which is reading order for most producers but not for every multi-column layout. There is no
   recognition of text in scanned pages.
 - A font that is not embedded is drawn with an installed one chosen by its name; the layout follows the file's own widths, but the shapes differ.
-  Fonts of the predefined CJK character sets that are not embedded are not drawn. What a page could not show, or had to stand in for, is
+  CJK text in the predefined character sets is drawn with an installed CJK family when its font is not embedded, so a machine with no CJK font shows gaps. What a page could not show, or had to stand in for, is
   listed when you click the message in the status bar.
 - Files encrypted with RC4 are not opened.
 - Form fields are not interactive, and optional-content layers and page labels are not shown.
