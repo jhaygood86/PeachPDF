@@ -10,4 +10,4 @@ making the two agree needs the sequence inside the loop (and a convergence check
 
 **To close it:** compute the sequence from the slot-to-page map on every pass of the convergence loop, and read it in `CssContentEngine.AppendTargetCounter` through
 `PageCounterFor`. Delete this file and the sentence in `docs/html-css-support.md` ("`target-counter(<link>, page)` still numbers by position") when done.
-Tracking issue: filed with this change.
+Tracking issue: #2433.
