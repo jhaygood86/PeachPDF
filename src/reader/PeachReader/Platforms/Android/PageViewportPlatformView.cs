@@ -27,7 +27,8 @@ internal sealed class PageViewportPlatformView : FrameLayout
     private readonly ScaleGestureDetector _scale;
     private readonly OverScroller _scroller;
     private readonly float _density;
-    private readonly SkiaRenderContext _context = new();
+    private SkiaRenderContext? _context;
+    private readonly object _paintLock = new();
     private readonly Dictionary<(int Page, int Column, int Row), SKImage> _tiles = [];
     private readonly LinkedList<(int Page, int Column, int Row)> _tileOrder = new();
 
@@ -105,8 +106,15 @@ internal sealed class PageViewportPlatformView : FrameLayout
     {
         base.OnDetachedFromWindow();
         Disconnect();
-        lock (_tiles) ClearTiles();
-        _context.Dispose();
+        // The graphics thread may be in the middle of a frame that uses the context and the tiles; it finishes it first. The context is made again
+        // by the next frame, so a view that is attached again is not left blank.
+        lock (_paintLock)
+        {
+            lock (_tiles) ClearTiles();
+            _tilesDocument = null;
+            _context?.Dispose();
+            _context = null;
+        }
     }
 
     // ------------------------------------------------------------------ layout and scrolling
@@ -244,7 +252,7 @@ internal sealed class PageViewportPlatformView : FrameLayout
             return true;
         }
 
-        public override bool OnSingleTapUp(MotionEvent e)
+        public override bool OnSingleTapConfirmed(MotionEvent e)
         {
             if (view._controller is not { } c) return false;
             var (x, y) = view.Content(e.GetX(), e.GetY());
@@ -325,7 +333,7 @@ internal sealed class PageViewportPlatformView : FrameLayout
         if (_controller is not { } controller) return;
         try
         {
-            PaintFrame(canvas, e.Info, _surface.GRContext, controller);
+            lock (_paintLock) PaintFrame(canvas, e.Info, _surface.GRContext, controller);
         }
         catch (Exception ex)
         {
@@ -339,7 +347,8 @@ internal sealed class PageViewportPlatformView : FrameLayout
         var document = controller.Document;
         double pxPerPoint = layout.Scale * _density;
         float scrollX = _scrollX, scrollY = _scrollY;
-        _context.GpuContext = gpu;
+        var context = _context ??= new SkiaRenderContext();
+        context.GpuContext = gpu;
 
         lock (_tiles)
         {
@@ -397,7 +406,7 @@ internal sealed class PageViewportPlatformView : FrameLayout
                 if (image is null)
                 {
                     if (budget-- <= 0 || gpu is null) { more = true; continue; }
-                    image = RenderTile(gpu, controller, page, tile, w / pw, h / ph, pw, ph);
+                    image = RenderTile(context, gpu, controller, page, tile, w / pw, h / ph, pw, ph);
                     if (image is null) continue;
                     lock (_tiles)
                     {
@@ -423,7 +432,7 @@ internal sealed class PageViewportPlatformView : FrameLayout
         if (more) _surface.RequestRender();
     }
 
-    private SKImage? RenderTile(GRContext gpu, ViewportController controller, int page, PageTile tile, double scaleX, double scaleY, double widthPoints, double heightPoints)
+    private SKImage? RenderTile(SkiaRenderContext context, GRContext gpu, ViewportController controller, int page, PageTile tile, double scaleX, double scaleY, double widthPoints, double heightPoints)
     {
         using var surface = SKSurface.Create(gpu, true, new SKImageInfo(tile.Width, tile.Height, SKColorType.Rgba8888, SKAlphaType.Premul));
         if (surface is null) return null;
@@ -432,7 +441,7 @@ internal sealed class PageViewportPlatformView : FrameLayout
         canvas.Translate(-tile.X, -tile.Y);
         canvas.Scale((float)scaleX, (float)scaleY);
         IReadOnlyCollection<string> report;
-        using (var target = SkiaCanvas.FromCanvas(_context, canvas, new PeachDrawing.Core.Rect(0, 0, widthPoints, heightPoints)))
+        using (var target = SkiaCanvas.FromCanvas(context, canvas, new PeachDrawing.Core.Rect(0, 0, widthPoints, heightPoints)))
         {
             var document = controller.Document;
             lock (document.PaintGate) report = document.Source.Paint(page, target, PdfAnnotationPaint.ExceptFormFields);

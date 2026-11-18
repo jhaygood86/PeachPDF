@@ -27,13 +27,16 @@ public readonly record struct TextPosition(int Page, int Index) : IComparable<Te
 
 /// <summary>
 /// The text a reader has selected, which may run across pages: a drag from an anchor to a focus, a double-click on a word, a triple-click
-/// on a line, or everything. It answers where to paint the highlight on a page and what to copy.
+/// on a line, or everything. It answers where to paint the highlight on a page and what to copy. The selection is one immutable value that is
+/// replaced whole, so a thread that paints it while another changes it sees either the old selection or the new one, never half of each.
 /// </summary>
 public sealed class TextSelectionModel
 {
+    private sealed record Span(TextPosition Anchor, TextPosition Focus);
+
     private readonly Func<int, PdfPageText> _textOf;
     private readonly int _pageCount;
-    private TextPosition? _anchor, _focus;
+    private volatile Span? _span;
 
     /// <summary>Makes an empty selection over a document's pages.</summary>
     /// <param name="textOf">gives the text of a page, such as <see cref="ReaderDocument.GetText"/></param>
@@ -52,16 +55,21 @@ public sealed class TextSelectionModel
     public bool HasSelection => Range is { } r && r.Start != r.End;
 
     /// <summary>The selection from its first position to its last, or <see langword="null"/> when there is none.</summary>
-    public (TextPosition Start, TextPosition End)? Range =>
-        _anchor is { } a && _focus is { } f ? (a < f ? (a, f) : (f, a)) : null;
+    public (TextPosition Start, TextPosition End)? Range => _span is { } s ? (s.Anchor < s.Focus ? (s.Anchor, s.Focus) : (s.Focus, s.Anchor)) : null;
+
+    private void Set(Span? span)
+    {
+        _span = span;
+        Changed?.Invoke(this, EventArgs.Empty);
+    }
 
     /// <summary>Starts a selection at a caret position, as on pressing the pointer.</summary>
     /// <param name="page">the page</param>
     /// <param name="caret">the caret position in the page's text</param>
     public void Begin(int page, int caret)
     {
-        _anchor = _focus = new TextPosition(page, caret);
-        Changed?.Invoke(this, EventArgs.Empty);
+        var position = new TextPosition(page, caret);
+        Set(new Span(position, position));
     }
 
     /// <summary>Moves the free end of the selection, as on dragging or shift-clicking; starts one at the point when there is none.</summary>
@@ -70,44 +78,40 @@ public sealed class TextSelectionModel
     public void Extend(int page, int caret)
     {
         var position = new TextPosition(page, caret);
-        _anchor ??= position;
-        _focus = position;
-        Changed?.Invoke(this, EventArgs.Empty);
+        Set(new Span(_span?.Anchor ?? position, position));
     }
 
     /// <summary>Selects the word at a caret position.</summary>
     /// <param name="page">the page</param>
     /// <param name="caret">the caret position in the page's text; a position on the right half of a letter belongs to that letter</param>
-    public void SelectWord(int page, int caret) => Select(page, _textOf(page).WordAt(Math.Max(0, caret - (caret > 0 && caret == _textOf(page).Length ? 1 : 0))));
+    public void SelectWord(int page, int caret) => Select(page, caret, text => text.WordAt);
 
     /// <summary>Selects the whole line at a caret position.</summary>
     /// <param name="page">the page</param>
     /// <param name="caret">the caret position in the page's text</param>
-    public void SelectLine(int page, int caret) => Select(page, _textOf(page).LineAt(Math.Max(0, caret - (caret > 0 && caret == _textOf(page).Length ? 1 : 0))));
+    public void SelectLine(int page, int caret) => Select(page, caret, text => text.LineAt);
 
-    private void Select(int page, PdfTextRange range)
+    private void Select(int page, int caret, Func<PdfPageText, Func<int, PdfTextRange>> expand)
     {
+        var text = _textOf(page);
+        // A caret at the very end belongs to the last character.
+        var range = expand(text)(Math.Max(0, caret - (caret > 0 && caret == text.Length ? 1 : 0)));
         if (range.Length == 0) return;
-        _anchor = new TextPosition(page, range.Start);
-        _focus = new TextPosition(page, range.End);
-        Changed?.Invoke(this, EventArgs.Empty);
+        Set(new Span(new TextPosition(page, range.Start), new TextPosition(page, range.End)));
     }
 
     /// <summary>Selects all the text of the document.</summary>
     public void SelectAll()
     {
         if (_pageCount == 0) return;
-        _anchor = new TextPosition(0, 0);
-        _focus = new TextPosition(_pageCount - 1, _textOf(_pageCount - 1).Length);
-        Changed?.Invoke(this, EventArgs.Empty);
+        Set(new Span(new TextPosition(0, 0), new TextPosition(_pageCount - 1, _textOf(_pageCount - 1).Length)));
     }
 
     /// <summary>Selects nothing.</summary>
     public void Clear()
     {
-        if (_anchor is null && _focus is null) return;
-        _anchor = _focus = null;
-        Changed?.Invoke(this, EventArgs.Empty);
+        if (_span is null) return;
+        Set(null);
     }
 
     /// <summary>The range of a page's text that is selected.</summary>

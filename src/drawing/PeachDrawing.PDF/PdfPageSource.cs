@@ -26,6 +26,9 @@ namespace PeachDrawing.PDF;
 /// </remarks>
 public sealed class PdfPageSource
 {
+    // The reader keeps caches that are plain dictionaries, so every call that reads the file runs under this one lock: a viewer may paint a page,
+    // read the text of another and list the links of a third on three threads.
+    private readonly object _sync = new();
     private readonly PdfSourceDocument _document;
     private readonly PdfSourceNavigation _navigation;
     private readonly PdfSourceForms _forms;
@@ -90,8 +93,10 @@ public sealed class PdfPageSource
     /// <summary>The size of a page as a viewer shows it (after its rotation), in points.</summary>
     /// <param name="pageIndex">the zero-based page number</param>
     /// <returns>the width and height in points</returns>
-    public (double Width, double Height) GetPageSize(int pageIndex) =>
-        PdfPagePainter.GetPageSize(_document, Page(pageIndex));
+    public (double Width, double Height) GetPageSize(int pageIndex)
+    {
+        lock (_sync) return PdfPagePainter.GetPageSize(_document, Page(pageIndex));
+    }
 
     /// <summary>Tries to read a custom string entry from a dictionary associated with a page.</summary>
     /// <param name="pageIndex">the zero-based page number</param>
@@ -107,11 +112,14 @@ public sealed class PdfPageSource
     {
         PdfCustomString.ValidateName(dictionaryKey, nameof(dictionaryKey));
         PdfCustomString.ValidateName(key, nameof(key));
-        var dictionary = Page(pageIndex).Elements.GetDictionary(dictionaryKey);
-        if (dictionary?.Elements.TryGetString(key, out var rawValue) ?? false)
+        lock (_sync)
         {
-            value = PdfSourceNavigation.TextOf(rawValue);
-            return true;
+            var dictionary = Page(pageIndex).Elements.GetDictionary(dictionaryKey);
+            if (dictionary?.Elements.TryGetString(key, out var rawValue) ?? false)
+            {
+                value = PdfSourceNavigation.TextOf(rawValue);
+                return true;
+            }
         }
 
         value = null;
@@ -128,49 +136,62 @@ public sealed class PdfPageSource
     public IReadOnlyCollection<string> Paint(int pageIndex, Canvas canvas)
     {
         ArgumentNullException.ThrowIfNull(canvas);
-        return PdfPagePainter.Paint(_document, Page(pageIndex), canvas);
+        lock (_sync) return PdfPagePainter.Paint(_document, Page(pageIndex), canvas);
     }
 
     /// <summary>The links of a page that open a web address or lead to another place in the file; other kinds of link are left out.</summary>
     /// <param name="pageIndex">the zero-based page number</param>
     /// <returns>the links, with their rectangles in the same terms <see cref="Paint(int, Canvas)"/> draws the page in</returns>
-    public IReadOnlyList<PdfSourceLink> GetLinks(int pageIndex) => _navigation.Links(Page(pageIndex));
+    public IReadOnlyList<PdfSourceLink> GetLinks(int pageIndex)
+    {
+        lock (_sync) return _navigation.Links(Page(pageIndex));
+    }
 
-    private readonly object _textLock = new();
     private Canvas? _textHost;
 
     /// <summary>
     /// The text of a page with the position of every character, for selecting, copying and searching it. Reading it paints nothing; a font that
-    /// is not embedded is read too, since only its character codes are needed. Safe to call from several threads, one page at a time.
+    /// is not embedded is read too, since only its character codes are needed. Like every call on this source it takes the source's lock, so it may be called from any thread while another paints or reads links.
     /// </summary>
     /// <param name="pageIndex">the zero-based page number</param>
     /// <returns>the text of the page, empty for a page with none (a scan with no text layer)</returns>
     public PdfPageText GetText(int pageIndex)
     {
-        var page = Page(pageIndex);
-        lock (_textLock)
+        lock (_sync)
         {
             // Fonts are registered on a context once, so one tiny host canvas serves every page.
             _textHost ??= new RasterRenderContext().CreateCanvas(1, 1);
-            return PdfTextExtractor.Extract(_document, page, _textHost);
+            return PdfTextExtractor.Extract(_document, Page(pageIndex), _textHost);
         }
     }
 
     /// <summary>The document outline (the bookmarks sidebar of a reader) flattened in reading order; an entry's <see cref="PdfBookmark.PageIndex"/> is a page of this file.</summary>
     /// <returns>the entries, each with its nesting level</returns>
-    public IReadOnlyList<PdfBookmark> GetOutline() => _navigation.Outline();
+    public IReadOnlyList<PdfBookmark> GetOutline()
+    {
+        lock (_sync) return _navigation.Outline();
+    }
 
     /// <summary>The destinations the file gives a name, which another document can link to.</summary>
     /// <returns>each name with the place it leads to</returns>
-    public IReadOnlyDictionary<string, PdfSourceDestination> GetNamedDestinations() => _navigation.NamedDestinations();
+    public IReadOnlyDictionary<string, PdfSourceDestination> GetNamedDestinations()
+    {
+        lock (_sync) return _navigation.NamedDestinations();
+    }
 
     /// <summary>The title, author and the other document information of the file.</summary>
     /// <returns>the information the file gives</returns>
-    public PdfSourceMetadata GetMetadata() => _navigation.Metadata();
+    public PdfSourceMetadata GetMetadata()
+    {
+        lock (_sync) return _navigation.Metadata();
+    }
 
     /// <summary>The files attached to the PDF.</summary>
     /// <returns>one entry per attachment whose data could be read</returns>
-    public IReadOnlyList<PdfEmbeddedFile> GetAttachments() => _navigation.Attachments();
+    public IReadOnlyList<PdfEmbeddedFile> GetAttachments()
+    {
+        lock (_sync) return _navigation.Attachments();
+    }
 
     /// <summary>
     /// Paints a page like <see cref="Paint(int, Canvas)"/> and then the appearance of its annotations, as a viewer shows them (a highlight, a
@@ -189,7 +210,7 @@ public sealed class PdfPageSource
     public IReadOnlyCollection<string> Paint(int pageIndex, Canvas canvas, PdfAnnotationPaint annotations, PdfTagSession? tags = null)
     {
         ArgumentNullException.ThrowIfNull(canvas);
-        return PdfPagePainter.Paint(_document, Page(pageIndex), canvas, annotations, tags?.Binding);
+        lock (_sync) return PdfPagePainter.Paint(_document, Page(pageIndex), canvas, annotations, tags?.Binding);
     }
 
     /// <summary>
@@ -205,16 +226,24 @@ public sealed class PdfPageSource
     /// with the field's full name, so the buttons of a radio group, which share a name, must be given the same answer
     /// </param>
     /// <returns>the fields, with positions in points from the top-left corner of the page as it is shown</returns>
-    public IReadOnlyList<PdfFormFieldDefinition> GetFormFields(int pageIndex, double pixelsPerPoint = 1, Func<string, string>? rename = null) =>
-        _forms.Fields(Page(pageIndex), pixelsPerPoint, rename);
+    public IReadOnlyList<PdfFormFieldDefinition> GetFormFields(int pageIndex, double pixelsPerPoint = 1, Func<string, string>? rename = null)
+    {
+        lock (_sync) return _forms.Fields(Page(pageIndex), pixelsPerPoint, rename);
+    }
 
     /// <summary>The PDF/A and PDF/X levels the file claims for itself.</summary>
     /// <returns>the levels, <c>None</c> where it claims none</returns>
-    public PdfSourceConformance GetConformance() => _navigation.Conformance();
+    public PdfSourceConformance GetConformance()
+    {
+        lock (_sync) return _navigation.Conformance();
+    }
 
     /// <summary>The file's output intent, the condition its colors are meant for, when it has one with a readable ICC profile.</summary>
     /// <returns>the output intent, or <see langword="null"/></returns>
-    public PdfSourceOutputIntent? GetOutputIntent() => _navigation.OutputIntent();
+    public PdfSourceOutputIntent? GetOutputIntent()
+    {
+        lock (_sync) return _navigation.OutputIntent();
+    }
 
     /// <summary>
     /// The annotations of a page that are neither links nor form fields (highlights, notes, stamps, drawings...) and have an appearance, ready to
@@ -224,8 +253,10 @@ public sealed class PdfPageSource
     /// <param name="pageIndex">the zero-based page number</param>
     /// <param name="pixelsPerPoint">the layout units per point of the canvas the appearances are drawn at</param>
     /// <returns>the annotations, with positions in points from the top-left corner of the page as it is shown</returns>
-    public IReadOnlyList<PdfAnnotationDefinition> GetAnnotations(int pageIndex, double pixelsPerPoint = 1) =>
-        _annotations.Annotations(Page(pageIndex), pixelsPerPoint);
+    public IReadOnlyList<PdfAnnotationDefinition> GetAnnotations(int pageIndex, double pixelsPerPoint = 1)
+    {
+        lock (_sync) return _annotations.Annotations(Page(pageIndex), pixelsPerPoint);
+    }
 
     /// <summary>
     /// Starts the tagging of one drawing of a page of this file onto a document being tagged. Pass the result to <see cref="Paint(int, Canvas, PdfAnnotationPaint, PdfTagSession)"/>,

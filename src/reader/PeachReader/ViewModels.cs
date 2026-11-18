@@ -99,7 +99,7 @@ public sealed class PageRow : RowBase
     public PageRow(int index, double widthPoints, double heightPoints)
     {
         Index = index;
-        AspectHeight = 120 * heightPoints / Math.Max(1, widthPoints);
+        AspectHeight = Math.Clamp(120 * heightPoints / Math.Max(1, widthPoints), 20, 600);
     }
 
     /// <summary>The zero-based page number.</summary>

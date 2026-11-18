@@ -28,6 +28,7 @@ public partial class MainPage : ContentPage
     private SearchResults? _results;
     private string _tab = "contents";
     private bool _settingZoomPicker, _startedUp;
+    private readonly Action _onIncoming;
 
     /// <summary>Creates the page.</summary>
     public MainPage()
@@ -43,9 +44,13 @@ public partial class MainPage : ContentPage
 #if WINDOWS
             WinUI.Shortcuts.Install(Window?.Handler?.PlatformView, RunCommand);
 #endif
+            IncomingDocument.Offered -= _onIncoming;
+            IncomingDocument.Offered += _onIncoming;
             await StartUpAsync();
         };
-        IncomingDocument.Offered += () => MainThread.BeginInvokeOnMainThread(async () => await OpenIncomingAsync());
+        _onIncoming = () => MainThread.BeginInvokeOnMainThread(async () => await OpenIncomingAsync());
+        // The event is static, so a page that is gone must not stay subscribed to it.
+        Unloaded += (_, _) => IncomingDocument.Offered -= _onIncoming;
         SizeChanged += (_, _) =>
         {
             if (Width <= 0) return;
@@ -114,7 +119,14 @@ public partial class MainPage : ContentPage
 
     private async Task OpenIncomingAsync()
     {
-        if (IncomingDocument.Take() is { } incoming) await OpenBytesAsync(incoming.Bytes, incoming.Name, null);
+        try
+        {
+            if (IncomingDocument.Take() is { } incoming) await OpenBytesAsync(incoming.Bytes, incoming.Name, null);
+        }
+        catch (Exception ex)
+        {
+            await DisplayAlertAsync("Could not open the document", ex.Message, "OK");
+        }
     }
 
     private async void OnOpenClicked(object? sender, EventArgs e)
@@ -150,8 +162,9 @@ public partial class MainPage : ContentPage
         {
             await OpenBytesAsync(await File.ReadAllBytesAsync(path), Path.GetFileName(path), path);
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        catch (Exception ex)
         {
+            // A file that is not a PDF, or a PDF that is damaged in a way the reader did not expect, is a message and not the end of the app.
             await DisplayAlertAsync("Could not open the file", ex.Message, "OK");
         }
     }
@@ -174,14 +187,24 @@ public partial class MainPage : ContentPage
                     "Open", "Cancel", keyboard: Keyboard.Text);
                 if (string.IsNullOrEmpty(password)) return;
             }
-            catch (Exception ex) when (ex is InvalidDataException or NotSupportedException)
+            catch (Exception ex) when (ex is not PdfPasswordException)
             {
                 await DisplayAlertAsync("Could not open the document", ex.Message, "OK");
                 return;
             }
         }
 
-        ShowDocument(opened);
+        try
+        {
+            ShowDocument(opened);
+        }
+        catch (Exception ex)
+        {
+            // The document opened but something in it (its outline, its first page) could not be read.
+            await DisplayAlertAsync("Could not show the document", ex.Message, "OK");
+            return;
+        }
+
         if (path is not null) Remember(path);
     }
 
@@ -196,7 +219,7 @@ public partial class MainPage : ContentPage
             old.SkippedFeaturesChanged -= UpdateStatus;
         }
 
-        _search?.Cancel();
+        CancelSearch();
         _results = null;
         _thumbnailsRequested.Clear();
         _document = document;
@@ -221,7 +244,7 @@ public partial class MainPage : ContentPage
         Viewport.Controller = controller;
         TitleLabel.Text = document.Title;
         if (Window is { } window) window.Title = document.Title + " - PeachReader";
-        ZoomPicker.SelectedIndex = 0;
+        SelectZoomChoice(0);
         UpdateChrome();
         OnCurrentPageChanged(controller.CurrentPage);
         UpdateZoomLabel();
@@ -281,6 +304,15 @@ public partial class MainPage : ContentPage
     {
         if (_controller is not { } c) { ZoomLabel.Text = ""; return; }
         ZoomLabel.Text = $"{c.Layout.Zoom * 100:0}%";
+
+        // The picker follows the zoom however it was changed (buttons, pinch, a fit mode); a zoom that is none of its choices leaves it blank.
+        int choice = c.Layout.Mode switch
+        {
+            ZoomMode.FitWidth => 0,
+            ZoomMode.FitPage => 1,
+            _ => Array.FindIndex(ZoomChoices, 2, choice => double.TryParse(choice.TrimEnd('%'), out double percent) && Math.Abs(percent / 100 - c.Layout.Zoom) < 0.005),
+        };
+        SelectZoomChoice(choice);
     }
 
     private void UpdateStatus()
@@ -394,6 +426,7 @@ public partial class MainPage : ContentPage
             var row = _pageRows[page];
             _ = Task.Run(async () =>
             {
+                if (!ReferenceEquals(_document, document)) return;           // another document was opened while this waited its turn
                 var png = await renderer.RenderAsync(document, row.Index, 120);
                 if (png is null) return;
                 MainThread.BeginInvokeOnMainThread(() =>
@@ -412,11 +445,24 @@ public partial class MainPage : ContentPage
         foreach (var bookmark in _bookmarks.Items) _bookmarkRows.Add(new BookmarkRow(bookmark));
     }
 
+    private void SaveBookmarks(ReaderDocument document)
+    {
+        try
+        {
+            _storage.Save(document.Key, _bookmarks);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // A full disk or a folder that cannot be written: the bookmarks stay in the list for this session.
+            _ = DisplayAlertAsync("Could not save the bookmarks", ex.Message, "OK");
+        }
+    }
+
     private void OnToggleBookmarkClicked(object? sender, EventArgs e)
     {
         if (_controller is not { } c || _document is not { } document) return;
         _bookmarks.Toggle(c.CurrentLocation);
-        _storage.Save(document.Key, _bookmarks);
+        SaveBookmarks(document);
         RefreshBookmarks();
         ShowTab("bookmarks");
         Sidebar.IsVisible = true;
@@ -427,7 +473,7 @@ public partial class MainPage : ContentPage
     {
         if (sender is not BindableObject { BindingContext: BookmarkRow row } || _document is not { } document) return;
         _bookmarks.Remove(row.Bookmark.Id);
-        _storage.Save(document.Key, _bookmarks);
+        SaveBookmarks(document);
         RefreshBookmarks();
     }
 
@@ -487,14 +533,36 @@ public partial class MainPage : ContentPage
 
     private async void OnUriRequested(string uri)
     {
-        // A link in a document is the document's, not the reader's: say where it goes before leaving.
-        if (!await DisplayAlertAsync("Open link?", uri, "Open", "Cancel")) return;
-        try { await Launcher.Default.OpenAsync(new Uri(uri)); }
-        catch (Exception ex) { await DisplayAlertAsync("Could not open the link", ex.Message, "OK"); }
+        try
+        {
+            // An address can come from a link on a page or from the table of contents; both are the document's, and both get the same allowlist.
+            if (LinkResolver.ForUri(uri).Kind != LinkKind.External)
+            {
+                OnUriBlocked(uri);
+                return;
+            }
+
+            // A link in a document is the document's, not the reader's: say where it goes before leaving.
+            if (!await DisplayAlertAsync("Open link?", uri, "Open", "Cancel")) return;
+            await Launcher.Default.OpenAsync(new Uri(uri));
+        }
+        catch (Exception ex)
+        {
+            await DisplayAlertAsync("Could not open the link", ex.Message, "OK");
+        }
     }
 
-    private async void OnUriBlocked(string uri) =>
-        await DisplayAlertAsync("This link cannot be opened", "The document asks to open " + uri + ", which is not a web, mail or telephone address.", "OK");
+    private async void OnUriBlocked(string uri)
+    {
+        try
+        {
+            await DisplayAlertAsync("This link cannot be opened", "The document asks to open " + uri + ", which is not a web, mail or telephone address.", "OK");
+        }
+        catch (Exception)
+        {
+            // The page is gone; there is no one to tell.
+        }
+    }
 
     // ------------------------------------------------------------------ copy and select
 
@@ -535,7 +603,7 @@ public partial class MainPage : ContentPage
     private void OnFindDoneClicked(object? sender, EventArgs e)
     {
         FindBar.IsVisible = false;
-        _search?.Cancel();
+        CancelSearch();
         if (_controller is { } c) c.Search = null;
         foreach (var row in _pageRows) row.Badge = "";
         _results = null;
@@ -550,7 +618,7 @@ public partial class MainPage : ContentPage
     private async Task RunSearchAsync(int delayMilliseconds)
     {
         if (_controller is not { } c || _document is not { } document) return;
-        _search?.Cancel();
+        CancelSearch();
         var cts = _search = new CancellationTokenSource();
         string query = FindEntry.Text ?? "";
         var options = (MatchCaseBox.IsChecked ? PdfTextSearchOptions.MatchCase : 0) | (WholeWordBox.IsChecked ? PdfTextSearchOptions.WholeWord : 0);
@@ -583,6 +651,20 @@ public partial class MainPage : ContentPage
         {
             // A newer search replaced this one.
         }
+        catch (Exception)
+        {
+            // Text that cannot be read from a page (a damaged one) must not end the app; the search just finds nothing.
+            FindCountLabel.Text = "Search failed";
+        }
+    }
+
+    private void CancelSearch()
+    {
+        var old = _search;
+        _search = null;
+        if (old is null) return;
+        old.Cancel();
+        old.Dispose();
     }
 
     private void UpdateFindLabel()

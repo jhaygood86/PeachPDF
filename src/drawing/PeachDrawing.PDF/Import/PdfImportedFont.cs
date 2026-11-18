@@ -28,12 +28,12 @@ internal sealed class PdfImportedFont
     readonly double _defaultWidth;
     readonly byte[]? _cidToGid;
     readonly Func<int, string?> _encodingText;
-    readonly Font _probe;
+    readonly Font? _probe;
     Dictionary<int, int>? _cidToGlyph;
     bool _preferBuiltIn;
 
     PdfImportedFont(bool composite, string family, RenderContext context, Dictionary<int, string> toUnicode, double defaultWidth,
-        byte[]? cidToGid, Func<int, string?> encodingText, Font probe)
+        byte[]? cidToGid, Func<int, string?> encodingText, Font? probe)
     {
         _composite = composite;
         _family = family;
@@ -46,7 +46,7 @@ internal sealed class PdfImportedFont
     }
 
     /// <summary>The typeface of the embedded program, for reading glyph outlines; null when the context does not expose it.</summary>
-    public PeachDrawing.Text.Typeface? Typeface => _probe.Typeface;
+    public PeachDrawing.Text.Typeface? Typeface => _probe?.Typeface;
 
     /// <summary>The font at <paramref name="size"/>, or null when the context cannot make it.</summary>
     public Font? GetFont(double size) => _context.GetFont(_family, size, _style, _weight);
@@ -59,12 +59,36 @@ internal sealed class PdfImportedFont
     public string? Substitution { get; private set; }
 
     /// <summary>
+    /// The font of a string of text whose characters are to be read and not drawn: the same as <see cref="Load"/> when that can draw it, and otherwise a font
+    /// that has only the character codes, their text (from the encoding or <c>/ToUnicode</c>) and their widths, so a page whose font cannot be loaded
+    /// (no installed stand-in, a program the importer cannot read) still gives its text.
+    /// </summary>
+    public static PdfImportedFont? LoadForText(PdfSourceDocument doc, PdfDictionary fontDict, RenderContext context)
+    {
+        if (Load(doc, fontDict, context, out _) is { } drawable) return drawable;
+        string? subtype = doc.NameOf(fontDict.GetRaw("Subtype"));
+        bool composite = subtype == "/Type0";
+        PdfDictionary? cidFont = null;
+        if (composite)
+        {
+            // A code is two bytes only under an Identity encoding; any other CMap has its own code lengths.
+            if (doc.NameOf(fontDict.GetRaw("Encoding")) is not ("/Identity-H" or "/Identity-V")) return null;
+            cidFont = doc.ArrayOf(fontDict, "DescendantFonts") is { Elements.Count: > 0 } df ? doc.Resolve(df.Elements[0]) as PdfDictionary : null;
+            if (cidFont is null) return null;
+        }
+        else if (subtype is not ("/TrueType" or "/Type1" or "/MMType1")) return null;
+
+        var descriptor = doc.DictOf(cidFont ?? fontDict, "FontDescriptor");
+        return LoadSubstitute(doc, fontDict, descriptor, cidFont, composite, context, out _, textOnly: true);
+    }
+
+    /// <summary>
     /// Builds a font for one whose program is not embedded (a standard-14 name, or a font the producer expected the viewer to have) from
     /// an installed family chosen by its name and descriptor. Glyphs are found by Unicode, from the encoding or <c>/ToUnicode</c>, and the advances
     /// are the file's own <c>/Widths</c>, so lines break and align as the producer laid them out even though the shapes differ.
     /// </summary>
     static PdfImportedFont? LoadSubstitute(PdfSourceDocument doc, PdfDictionary fontDict, PdfDictionary? descriptor, PdfDictionary? cidFont,
-        bool composite, RenderContext context, out string? why)
+        bool composite, RenderContext context, out string? why, bool textOnly = false)
     {
         why = null;
         string baseName = (doc.NameOf((cidFont ?? fontDict).GetRaw("BaseFont")) ?? doc.NameOf(fontDict.GetRaw("BaseFont")) ?? "").TrimStart('/');
@@ -87,7 +111,7 @@ internal sealed class PdfImportedFont
                 if (probe?.Typeface is not null) { family = common; break; }
             }
         }
-        if (probe?.Typeface is null) { why = "no installed font to stand in for " + (baseName.Length == 0 ? "an unnamed font" : baseName); return null; }
+        if (probe?.Typeface is null && !textOnly) { why = "no installed font to stand in for " + (baseName.Length == 0 ? "an unnamed font" : baseName); return null; }
 
         PdfImportedFont font;
         if (composite)
@@ -99,6 +123,7 @@ internal sealed class PdfImportedFont
         else
         {
             double missing = descriptor is null ? 0 : doc.NumberOf(descriptor.GetRaw("MissingWidth")) / 1000.0;
+            if (textOnly && probe?.Typeface is null && missing <= 0) missing = 0.5;     // no stand-in to measure with: half an em, the usual average
             font = new PdfImportedFont(false, family, context, toUnicode, missing, null, BuildSimpleEncoding(doc, fontDict), probe);
             int first = doc.IntOf(fontDict.GetRaw("FirstChar"));
             if (doc.ArrayOf(fontDict, "Widths") is { } w)
@@ -107,7 +132,7 @@ internal sealed class PdfImportedFont
         font._style = style;
         font._weight = weight;
         font._substitute = true;
-        font.Substitution = (baseName.Length == 0 ? "(unnamed)" : baseName) + " -> " + family;
+        font.Substitution = probe?.Typeface is null ? null : (baseName.Length == 0 ? "(unnamed)" : baseName) + " -> " + family;
         return font;
     }
 
@@ -290,7 +315,7 @@ internal sealed class PdfImportedFont
                     // No program of its own: the glyph is the substitute's glyph for the character the ToUnicode map gives the code.
                     _toUnicode.TryGetValue(cid, out var shownText);
                     int substituteGid = 0;
-                    if (_probe.Typeface is { } face && !string.IsNullOrEmpty(shownText) && Rune.TryGetRuneAt(shownText, 0, out var r) && face.TryMapRune(r, out var m)) substituteGid = m;
+                    if (_probe?.Typeface is { } face && !string.IsNullOrEmpty(shownText) && Rune.TryGetRuneAt(shownText, 0, out var r) && face.TryMapRune(r, out var m)) substituteGid = m;
                     yield return new PdfShownGlyph(cid, substituteGid, _widths.TryGetValue(cid, out var sw) ? sw : _defaultWidth, shownText ?? "", false);
                     continue;
                 }
@@ -301,7 +326,7 @@ internal sealed class PdfImportedFont
             }
             yield break;
         }
-        var typeface = _probe.Typeface;
+        var typeface = _probe?.Typeface;
         foreach (char ch in shown)
         {
             int code = ch & 0xFF;

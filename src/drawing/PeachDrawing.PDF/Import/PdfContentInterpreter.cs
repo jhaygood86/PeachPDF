@@ -540,9 +540,12 @@ internal sealed class PdfContentInterpreter
         }
         if (!_fonts.TryGetValue(fd, out var font))
         {
-            font = PdfImportedFont.Load(_doc, fd, _canvas.RenderContext, out var why);
-            if (font is null) _unsupported.Add("font: " + why);
-            else if (font.Substitution is { } substitution) _unsupported.Add("font substituted: " + substitution);
+            string? why = null;
+            font = TextSink is null
+                ? PdfImportedFont.Load(_doc, fd, _canvas.RenderContext, out why)
+                : PdfImportedFont.LoadForText(_doc, fd, _canvas.RenderContext);
+            if (font is null) { if (TextSink is null) _unsupported.Add("font: " + why); }
+            else if (font.Substitution is { } substitution && TextSink is null) _unsupported.Add("font substituted: " + substitution);
             _fonts[fd] = font;
         }
         (Cur.TextFont, Cur.Type3Font) = (font, null);
@@ -594,11 +597,12 @@ internal sealed class PdfContentInterpreter
         var st = Cur;
         if (st.Type3Font is not null && st.FontSize != 0) { ShowType3(parts, res); return; }
         if (st.TextFont is null || st.FontSize == 0) return;
-        var font = st.TextFont.GetFont(Math.Abs(st.FontSize));
-        if (font is null) { _unsupported.Add("font size"); return; }
+        // Reading text needs only the codes and what they stand for, so a font the context cannot make is no reason to lose the text.
+        var font = TextSink is null ? st.TextFont.GetFont(Math.Abs(st.FontSize)) : null;
+        if (font is null && TextSink is null) { _unsupported.Add("font size"); return; }
         BeginUntagged();
         var glyphs = new List<GlyphPlacement>();
-        List<(string Text, double X, double Width)>? read = TextSink is null ? null : [];
+        List<(string Text, double X, double Width, double Spacing)>? read = TextSink is null ? null : [];
         double x = 0;
         foreach (var part in parts)
         {
@@ -606,7 +610,7 @@ internal sealed class PdfContentInterpreter
             foreach (var g in st.TextFont.Decode((string)part))
             {
                 glyphs.Add(new GlyphPlacement(g.GlyphIndex, x, -st.Rise, g.Text));
-                read?.Add((g.Text, x, g.Width * st.FontSize));
+                read?.Add((g.Text, x, g.Width * st.FontSize, st.CharSpacing + (g.IsWordSpace ? st.WordSpacing : 0)));
                 x += g.Width * st.FontSize + st.CharSpacing + (g.IsWordSpace ? st.WordSpacing : 0);
             }
         }
@@ -615,9 +619,12 @@ internal sealed class PdfContentInterpreter
             // Reading text: report each glyph where it would have been drawn, in the space of TextBase, and draw nothing.
             var toPage = Matrix3x2.CreateScale((float)st.HorizontalScale, st.FontSize < 0 ? 1f : -1f) * _tm * Cur.Ctm * TextBase;
             var up = Vector2.TransformNormal(new Vector2(0, -(float)Math.Abs(st.FontSize)), toPage);
-            foreach (var (text, gx, gw) in read)
-                TextSink!(new PdfTextGlyph(text, Vector2.Transform(new Vector2((float)gx, (float)-st.Rise), toPage),
-                    Vector2.Transform(new Vector2((float)(gx + gw), (float)-st.Rise), toPage), up));
+            foreach (var (text, gx, gw, spacing) in read)
+            {
+                var end = Vector2.Transform(new Vector2((float)(gx + gw), (float)-st.Rise), toPage);
+                var pen = Vector2.Transform(new Vector2((float)(gx + gw + spacing), (float)-st.Rise), toPage);
+                TextSink!(new PdfTextGlyph(text, Vector2.Transform(new Vector2((float)gx, (float)-st.Rise), toPage), end, up, (pen - end).Length()));
+            }
             _tm = Matrix3x2.CreateTranslation((float)(x * st.HorizontalScale), 0) * _tm;
             return;
         }
@@ -636,7 +643,7 @@ internal sealed class PdfContentInterpreter
             {
                 // Text that is not filled is still drawn, invisibly, so the page keeps its text for selection and search.
                 var color = fill ? st.FillSpace.ToColor(st.Fill, st.FillAlpha) : PaintColor.Transparent;
-                if (mode != 7) _canvas.DrawGlyphs(glyphs, font, color);
+                if (mode != 7) _canvas.DrawGlyphs(glyphs, font!, color);
             }
             finally { _canvas.PopTransform(); }
 

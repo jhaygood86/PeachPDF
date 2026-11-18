@@ -248,6 +248,7 @@ public sealed class PageLayoutModel
     public double ScrollAfterZoom(double scrollY, PageLayoutModel newLayout, double focusY)
     {
         ArgumentNullException.ThrowIfNull(newLayout);
+        if (_pages.Length == 0 || newLayout._pages.Length != _pages.Length) return 0;
         double contentY = scrollY + focusY;
         int page = NearestPage(contentY);
         double pointsInPage = (contentY - _tops[page]) / Scale;

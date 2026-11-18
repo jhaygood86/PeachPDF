@@ -16,6 +16,7 @@ internal sealed class ThumbnailRenderer : IThumbnailRenderer
         try
         {
             var (width, height) = document.PageSizes[pageIndex];
+            if (width <= 0 || height <= 0 || pixelWidth <= 0) return null;
             int pixelHeight = Math.Max(1, (int)Math.Ceiling(pixelWidth * height / width));
             SkiaRenderContext context;
             lock (_gate) context = _context ??= new SkiaRenderContext();

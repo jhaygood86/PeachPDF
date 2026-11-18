@@ -228,14 +228,25 @@ public sealed class PdfPageText
             text.Append(c); rects.Add(r); lineOf.Add(lines.Count);
         }
 
+        float lastTracking = 0;
         foreach (var g in glyphs)
         {
-            if (string.IsNullOrEmpty(g.Text)) continue;
             float size = g.Up.Length();
             if (size < 1e-3f) continue;
-            var glyphDir = new Vector2(-g.Up.Y, g.Up.X) / size;
+            var advance = g.End - g.Start;
+            // The direction the line runs is the direction the glyphs advance, which a mirrored text matrix or a negative horizontal scale turns away
+            // from what the up vector alone would say.
+            var glyphDir = advance.Length() > 1e-4f ? Vector2.Normalize(advance) : new Vector2(-g.Up.Y, g.Up.X) / size;
+
+            if (string.IsNullOrEmpty(g.Text))
+            {
+                // A glyph with no text still takes its room: the next one is not a gap after it.
+                if (open) { lastEnd = g.End; lastTracking = g.Tracking; }
+                continue;
+            }
+
             Vector2 delta = g.Start - lastEnd;
-            float along = open ? Vector2.Dot(delta, dir) : 0;
+            float along = open ? Vector2.Dot(delta, dir) - lastTracking : 0;      // what the file's own spacing explains is not a gap
             float across = open ? Math.Abs(delta.X * -dir.Y + delta.Y * dir.X) : 0;
             float reference = Math.Max(size, lastSize);
             bool sameLine = open && across <= 0.6f * reference && along >= -0.6f * reference && Vector2.Dot(glyphDir, dir) > 0.7f;
@@ -254,7 +265,6 @@ public sealed class PdfPageText
                 Add(' ', gapRect);
             }
 
-            var advance = g.End - g.Start;
             for (int k = 0; k < g.Text.Length; k++)
             {
                 var p0 = g.Start + advance * (k / (float)g.Text.Length);
@@ -264,6 +274,7 @@ public sealed class PdfPageText
             if (!open) dir = glyphDir;
             open = true;
             lastEnd = g.End;
+            lastTracking = g.Tracking;
             lastSize = size;
         }
 

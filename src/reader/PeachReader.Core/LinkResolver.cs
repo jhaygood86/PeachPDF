@@ -38,6 +38,12 @@ public static class LinkResolver
     public static bool IsLaunchable(string? uri) =>
         System.Uri.TryCreate(uri, UriKind.Absolute, out var parsed) && parsed.Scheme is "http" or "https" or "mailto" or "tel";
 
+    /// <summary>What an address a document gives (a link, a table-of-contents entry) may do: open with the system, or be refused.</summary>
+    /// <param name="uri">the address</param>
+    /// <returns><see cref="LinkKind.External"/> for a safe scheme, <see cref="LinkKind.Blocked"/> for any other, and <see cref="LinkTarget.None"/> for no address</returns>
+    public static LinkTarget ForUri(string? uri) =>
+        string.IsNullOrWhiteSpace(uri) ? LinkTarget.None : new LinkTarget(IsLaunchable(uri) ? LinkKind.External : LinkKind.Blocked, Uri: uri);
+
     /// <summary>The link at a point of a page, if any. When links overlap the one drawn last (the last in the file) wins, as it is on top.</summary>
     /// <param name="links">the links of the page, from <see cref="PdfPageSource.GetLinks"/></param>
     /// <param name="point">a point in points from the top-left of the page</param>
@@ -51,7 +57,7 @@ public static class LinkResolver
             var b = link.Bounds;
             if (point.X < b.X || point.X > b.X + b.Width || point.Y < b.Y || point.Y > b.Y + b.Height) continue;
             if (link.Destination is { } destination) return new LinkTarget(LinkKind.Internal, new ReaderLocation(destination.PageIndex, destination.TopPoints));
-            if (link.Uri is { Length: > 0 } uri) return new LinkTarget(IsLaunchable(uri) ? LinkKind.External : LinkKind.Blocked, Uri: uri);
+            if (ForUri(link.Uri) is { Kind: not LinkKind.None } external) return external;
         }
 
         return LinkTarget.None;

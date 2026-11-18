@@ -7,8 +7,8 @@
 		<AssemblyName>PeachDrawing.CoreGraphics</AssemblyName>
 		<RootNamespace>PeachDrawing.CoreGraphics</RootNamespace>
 		<PackageId>PeachDrawing.CoreGraphics</PackageId>
-		<Description>A CoreGraphics Canvas for PeachDrawing.Core - draw shapes, gradients, clips, layers, text and images with Apple's CoreGraphics into a caller's CGContext or an offscreen bitmap on macOS and iOS, with Core Image effects on the GPU, clickable links, and no PDF, HTML or CSS involved.</Description>
-		<PackageTags>drawing;graphics;canvas;coregraphics;quartz;metal;macos;ios;rendering</PackageTags>
+		<Description>A CoreGraphics Canvas for PeachDrawing.Core - draw shapes, gradients, clips, layers, text and images with Apple's CoreGraphics into a caller's CGContext or an offscreen bitmap on macOS, iOS and Mac Catalyst, with Core Image effects on the GPU, clickable links, and no PDF, HTML or CSS involved.</Description>
+		<PackageTags>drawing;graphics;canvas;coregraphics;quartz;metal;macos;ios;maccatalyst;rendering</PackageTags>
 		<PackageIcon>peach.png</PackageIcon>
 		<PackageReadmeFile>README.md</PackageReadmeFile>
 		<PackageProjectUrl>https://peachpdf.net/</PackageProjectUrl>

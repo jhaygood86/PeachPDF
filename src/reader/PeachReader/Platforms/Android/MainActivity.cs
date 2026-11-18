@@ -17,7 +17,9 @@ public class MainActivity : MauiAppCompatActivity
     protected override void OnCreate(Bundle? savedInstanceState)
     {
         base.OnCreate(savedInstanceState);
-        Offer(Intent);
+        // A recreated activity (after a rotation the app handles itself this does not happen, but after the process was killed it does) still holds the intent
+        // that started it; the document it named was opened then.
+        if (savedInstanceState is null) Offer(Intent);
     }
 
     /// <inheritdoc />
@@ -27,21 +29,35 @@ public class MainActivity : MauiAppCompatActivity
         Offer(intent);
     }
 
+    // A PDF handed over by another app is read here, so a file that is huge or a provider that is slow must not be able to run the app out of memory.
+    private const int MaxIncomingBytes = 256 * 1024 * 1024;
+
     private void Offer(Intent? intent)
     {
         if (intent?.Action != Intent.ActionView || intent.Data is not { } uri) return;
-        try
+        var resolver = ContentResolver;
+        _ = Task.Run(() =>
         {
-            using var input = ContentResolver?.OpenInputStream(uri);
-            if (input is null) return;
-            using var copy = new MemoryStream();
-            input.CopyTo(copy);
-            IncomingDocument.Offer(copy.ToArray(), NameOf(uri));
-        }
-        catch (Exception)
-        {
-            // A file that cannot be read is not opened; the reader stays where it was.
-        }
+            try
+            {
+                using var input = resolver?.OpenInputStream(uri);
+                if (input is null) return;
+                using var copy = new MemoryStream();
+                var buffer = new byte[81920];
+                int read;
+                while ((read = input.Read(buffer, 0, buffer.Length)) > 0)
+                {
+                    if (copy.Length + read > MaxIncomingBytes) return;
+                    copy.Write(buffer, 0, read);
+                }
+
+                IncomingDocument.Offer(copy.ToArray(), NameOf(uri));
+            }
+            catch (Exception)
+            {
+                // A file that cannot be read is not opened; the reader stays where it was.
+            }
+        });
     }
 
     private string? NameOf(Android.Net.Uri uri)

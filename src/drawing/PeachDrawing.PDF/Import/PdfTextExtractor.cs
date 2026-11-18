@@ -10,7 +10,8 @@ namespace PeachDrawing.PDF.Import;
 /// <param name="Start">where the glyph's baseline starts, from the top-left of the page, y down</param>
 /// <param name="End">where the glyph's advance ends on the baseline</param>
 /// <param name="Up">the font size along the direction the glyph points up, on the page</param>
-internal readonly record struct PdfTextGlyph(string Text, Vector2 Start, Vector2 End, Vector2 Up);
+/// <param name="Tracking">how far the character and word spacing move the pen past <paramref name="End"/>, on the page</param>
+internal readonly record struct PdfTextGlyph(string Text, Vector2 Start, Vector2 End, Vector2 Up, float Tracking = 0);
 
 /// <summary>Reads the text of a page by running its content with a sink for glyphs instead of a canvas to paint on.</summary>
 internal static class PdfTextExtractor

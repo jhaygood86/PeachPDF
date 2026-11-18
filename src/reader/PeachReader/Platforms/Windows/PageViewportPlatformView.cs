@@ -39,11 +39,24 @@ internal sealed class PageViewportPlatformView : Microsoft.UI.Xaml.Controls.Cont
     private ViewportController? _controller;
     private Views.PageViewport? _owner;
     private DateTime _lastPress;
-    private Windows_Point _lastPressAt;
+    private WindowPoint _lastPressAt;
     private int _clicks;
     private bool _dragging;
 
-    private readonly record struct Windows_Point(double X, double Y);
+    private readonly record struct WindowPoint(double X, double Y);
+
+    // One cursor object per shape, kept for the life of the app: making one on every pointer move leaks a native handle for each.
+    private static readonly Dictionary<InputSystemCursorShape, InputSystemCursor> Cursors = [];
+    private InputSystemCursorShape _cursorShape = InputSystemCursorShape.Arrow;
+
+    private static InputSystemCursor CursorFor(InputSystemCursorShape shape)
+    {
+        lock (Cursors)
+        {
+            if (!Cursors.TryGetValue(shape, out var cursor)) Cursors[shape] = cursor = InputSystemCursor.Create(shape);
+            return cursor;
+        }
+    }
 
     internal PageViewportPlatformView()
     {
@@ -233,7 +246,7 @@ internal sealed class PageViewportPlatformView : Microsoft.UI.Xaml.Controls.Cont
             float x = (float)(Math.Round(r.X) - bound.Left), y = (float)(Math.Round(r.Y) - bound.Top);
             float w = (float)Math.Round(r.Width), h = (float)Math.Round(r.Height);
             DrawShadow(session, x, y, w, h);
-            session.FillRectangle(x, y, w, h, Colors_White);
+            session.FillRectangle(x, y, w, h, White);
 
             session.Transform = Matrix3x2.CreateScale((float)layout.Scale) * Matrix3x2.CreateTranslation(x, y);
             try
@@ -253,13 +266,13 @@ internal sealed class PageViewportPlatformView : Microsoft.UI.Xaml.Controls.Cont
         }
     }
 
-    private static readonly Color Colors_White = Color.FromArgb(255, 255, 255, 255);
+    private static readonly Color White = Color.FromArgb(255, 255, 255, 255);
 
     // A soft shadow a little below the sheet, light enough to read as a sheet lying on the desk and not a card floating over it.
     private void DrawShadow(CanvasDrawingSession session, float x, float y, float w, float h)
     {
         using var list = new CanvasCommandList(session);
-        using (var s = list.CreateDrawingSession()) s.FillRectangle(0, 0, w, h, Colors_White);
+        using (var s = list.CreateDrawingSession()) s.FillRectangle(0, 0, w, h, White);
         bool dark = ActualTheme == ElementTheme.Dark;
         using var shadow = new ShadowEffect { Source = list, BlurAmount = 6, ShadowColor = Color.FromArgb((byte)(dark ? 110 : 64), 0, 0, 0) };
         session.DrawImage(shadow, x, y + 2);
@@ -336,7 +349,7 @@ internal sealed class PageViewportPlatformView : Microsoft.UI.Xaml.Controls.Cont
         var now = DateTime.UtcNow;
         bool again = (now - _lastPress).TotalMilliseconds < 500 && Math.Abs(x - _lastPressAt.X) < 5 && Math.Abs(y - _lastPressAt.Y) < 5;
         _clicks = again ? Math.Min(3, _clicks + 1) : 1;
-        (_lastPress, _lastPressAt) = (now, new Windows_Point(x, y));
+        (_lastPress, _lastPressAt) = (now, new WindowPoint(x, y));
 
         bool shift = InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Shift).HasFlag(global::Windows.UI.Core.CoreVirtualKeyStates.Down);
         // A finger pans the page (the scroll viewer's job); a mouse or pen selects.
@@ -362,7 +375,9 @@ internal sealed class PageViewportPlatformView : Microsoft.UI.Xaml.Controls.Cont
             PointerCursor.IBeam => InputSystemCursorShape.IBeam,
             _ => InputSystemCursorShape.Arrow,
         };
-        ProtectedCursor = InputSystemCursor.Create(shape);
+        if (shape == _cursorShape) return;
+        _cursorShape = shape;
+        ProtectedCursor = CursorFor(shape);
     }
 
     private void OnPointerReleased(object sender, PointerRoutedEventArgs e)

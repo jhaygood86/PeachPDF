@@ -15,6 +15,7 @@ internal sealed class ThumbnailRenderer : IThumbnailRenderer
         try
         {
             var (width, height) = document.PageSizes[pageIndex];
+            if (width <= 0 || height <= 0 || pixelWidth <= 0) return null;
             Win2dRenderContext context;
             lock (_gate) context = _context ??= Win2dRenderContext.CreateSoftware();
 
