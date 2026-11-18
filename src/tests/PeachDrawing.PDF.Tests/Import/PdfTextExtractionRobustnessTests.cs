@@ -122,6 +122,28 @@ namespace PeachDrawing.PDF.Tests.Import
             Assert.Equal("", PdfPageSource.Open(pdf).GetText(0).Text);
         }
 
+        private static double ColumnGap(string cidFontExtras)
+        {
+            var cidFont = $"<< /Type /Font /Subtype /CIDFontType2 /BaseFont /MS-Mincho {cidFontExtras} /CIDSystemInfo << /Registry (Adobe) /Ordering (Japan1) /Supplement 2 >> >>";
+            var pdf = TestPdf.Build("BT /F1 10 Tf 100 90 Td <30423044> Tj ET", resources: "/Font << /F1 5 0 R >>", width: 200, height: 100,
+                extraObjects: [CjkType0("/UniJIS-UCS2-V"), cidFont]);
+            var text = PdfPageSource.Open(pdf).GetText(0);
+            return text.GetBounds(text.Text.Length - 1, 1).Single().Y - text.GetBounds(0, 1).Single().Y;
+        }
+
+        [Fact]
+        public void VerticalMetrics_FromDw2AndW2_ChangeTheSpacingDownTheColumn()
+        {
+            double normal = ColumnGap("");
+            double tightDefault = ColumnGap("/DW2 [880 -500]");
+            double tightForOneCid = ColumnGap("/W2 [843 [-500 500 880]]");     // CID 843 is the first character
+
+            Assert.Equal(10, normal, 1);
+            Assert.Equal(5, tightDefault, 1);
+            Assert.Equal(5, tightForOneCid, 1);
+            Assert.Equal(5, ColumnGap("/W2 [843 843 -500 500 880]"), 1);
+        }
+
         [Fact]
         public void VerticalText_ReadsDownTheColumnInOrder()
         {

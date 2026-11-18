@@ -10,7 +10,12 @@ using PeachDrawing.PDF.Engine;
 namespace PeachDrawing.PDF.Import;
 
 /// <summary>One shown character code of a string, resolved against its font.</summary>
-internal readonly record struct PdfShownGlyph(int Code, int GlyphIndex, double Width, string Text, bool IsWordSpace);
+internal readonly record struct PdfShownGlyph(int Code, int GlyphIndex, double Width, string Text, bool IsWordSpace,
+    double VerticalAdvance = -1, double OriginX = double.NaN, double OriginY = 0.88)
+{
+    /// <summary>The x of the vertical origin, in em: the file's own, or half the width (the default position vector).</summary>
+    public double VerticalOriginX => double.IsNaN(OriginX) ? Width / 2 : OriginX;
+}
 
 /// <summary>
 /// A font of an imported document, reduced to what showing text needs: how a string splits into character codes, which
@@ -56,6 +61,36 @@ internal sealed class PdfImportedFont
     bool _substitute;
     PdfCMap? _cmap;
     PdfCidUnicode? _cidUnicode;
+    (double Vy, double W1) _dw2 = (0.88, -1.0);
+    Dictionary<int, (double W1, double Vx, double Vy)>? _vertical;
+
+    /// <summary>Reads <c>/DW2</c> (the default vertical origin y and displacement) and <c>/W2</c> (per-CID overrides: <c>c [w1 vx vy ...]</c> or <c>cfirst clast w1 vx vy</c>), in em.</summary>
+    void ReadVerticalMetrics(PdfSourceDocument doc, PdfDictionary cidFont)
+    {
+        if (doc.ArrayOf(cidFont, "DW2") is { Elements.Count: >= 2 } dw2) _dw2 = (doc.NumberOf(dw2.Elements[0]) / 1000.0, doc.NumberOf(dw2.Elements[1]) / 1000.0);
+        if (doc.ArrayOf(cidFont, "W2") is not { } w) return;
+        _vertical = [];
+        int i = 0;
+        while (i < w.Elements.Count)
+        {
+            int first = doc.IntOf(w.Elements[i]);
+            if (i + 1 >= w.Elements.Count) break;
+            if (doc.Resolve(w.Elements[i + 1]) is PdfArray list)
+            {
+                for (int k = 0; k + 2 < list.Elements.Count; k += 3)
+                    _vertical[first + k / 3] = (doc.NumberOf(list.Elements[k]) / 1000.0, doc.NumberOf(list.Elements[k + 1]) / 1000.0, doc.NumberOf(list.Elements[k + 2]) / 1000.0);
+                i += 2;
+            }
+            else if (i + 4 < w.Elements.Count)
+            {
+                int last = doc.IntOf(w.Elements[i + 1]);
+                var metrics = (doc.NumberOf(w.Elements[i + 2]) / 1000.0, doc.NumberOf(w.Elements[i + 3]) / 1000.0, doc.NumberOf(w.Elements[i + 4]) / 1000.0);
+                for (int c = first; c <= last && c - first < 70000; c++) _vertical[c] = metrics;
+                i += 5;
+            }
+            else break;
+        }
+    }
 
     /// <summary>Whether the font writes vertically (its CMap's writing mode is 1).</summary>
     public bool Vertical => _cmap?.Vertical ?? false;
@@ -177,12 +212,18 @@ internal sealed class PdfImportedFont
             double dw = doc.NumberOf(cidFont!.GetRaw("DW"), 1000) / 1000.0;
             font = new PdfImportedFont(true, family, context, toUnicode, dw, null, _ => null, probe) { _cmap = cmap, _cidUnicode = cidUnicode };
             ReadCidWidths(doc, cidFont!, font._widths);
+            font.ReadVerticalMetrics(doc, cidFont!);
         }
         else
         {
             double missing = descriptor is null ? 0 : doc.NumberOf(descriptor.GetRaw("MissingWidth")) / 1000.0;
             if (textOnly && probe?.Typeface is null && missing <= 0) missing = 0.5;     // no stand-in to measure with: half an em, the usual average
-            font = new PdfImportedFont(false, family, context, toUnicode, missing, null, BuildSimpleEncoding(doc, fontDict), probe);
+            var encoding = BuildSimpleEncoding(doc, fontDict);
+            bool symbol = PdfFontSubstitution.StripSubsetTag(baseName).StartsWith("Symbol", StringComparison.OrdinalIgnoreCase) && fontDict.GetRaw("Encoding") is null;
+            Func<int, string?> text = symbol ? (code => PdfFontSubstitution.SymbolText(code) ?? encoding(code)) : encoding;
+            // A Courier font with no widths of its own has the standard 14's fixed 600 units.
+            if (doc.ArrayOf(fontDict, "Widths") is null && missing <= 0 && PdfFontSubstitution.FixedAdvanceOf(baseName) is { } fixedAdvance) missing = fixedAdvance;
+            font = new PdfImportedFont(false, family, context, toUnicode, missing, null, text, probe);
             int first = doc.IntOf(fontDict.GetRaw("FirstChar"));
             if (doc.ArrayOf(fontDict, "Widths") is { } w)
                 for (int i = 0; i < w.Elements.Count; i++) font._widths[first + i] = doc.NumberOf(w.Elements[i]) / 1000.0;
@@ -293,6 +334,7 @@ internal sealed class PdfImportedFont
             };
             if (cff is { IsCid: true }) font._cidToGlyph = cff.GlyphOfCid();
             ReadCidWidths(doc, cidFont!, font._widths);
+            font.ReadVerticalMetrics(doc, cidFont!);
         }
         else
         {
@@ -372,17 +414,19 @@ internal sealed class PdfImportedFont
                     : c.Length == 1 && code is >= 0x20 and <= 0x7E ? ((char)code).ToString() : null;    // the legacy CMaps keep ASCII as one byte
                 bool wordSpace = c.Length == 1 && code == 32;
                 double width = _widths.TryGetValue(cid, out var w) ? w : _defaultWidth;
+                double w1 = _dw2.W1, vx = double.NaN, vy = _dw2.Vy;
+                if (_vertical is not null && _vertical.TryGetValue(cid, out var vm)) (w1, vx, vy) = vm;
                 if (_substitute)
                 {
                     // No program of its own: the glyph is the substitute's glyph for the character the code stands for.
                     int substituteGid = 0;
                     if (_probe?.Typeface is { } face && !string.IsNullOrEmpty(shownText) && Rune.TryGetRuneAt(shownText, 0, out var r) && face.TryMapRune(r, out var m)) substituteGid = m;
-                    yield return new PdfShownGlyph(code, substituteGid, width, shownText ?? "", wordSpace);
+                    yield return new PdfShownGlyph(code, substituteGid, width, shownText ?? "", wordSpace, w1, vx, vy);
                     continue;
                 }
                 int gid = _cidToGlyph is not null ? (_cidToGlyph.TryGetValue(cid, out var mapped) ? mapped : 0) : cid;
                 if (_cidToGid is not null && cid * 2 + 1 < _cidToGid.Length) gid = (_cidToGid[cid * 2] << 8) | _cidToGid[cid * 2 + 1];
-                yield return new PdfShownGlyph(code, gid, width, shownText ?? "", wordSpace);
+                yield return new PdfShownGlyph(code, gid, width, shownText ?? "", wordSpace, w1, vx, vy);
             }
             yield break;
         }

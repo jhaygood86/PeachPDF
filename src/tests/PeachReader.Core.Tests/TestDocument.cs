@@ -28,7 +28,7 @@ internal static class TestDocument
 
     private static int PageObject(int page) => 4 + 2 * page;
 
-    public static byte[] Build(IReadOnlyList<TestPage> pages, IReadOnlyList<TestOutline>? outline = null, string? title = null)
+    public static byte[] Build(IReadOnlyList<TestPage> pages, IReadOnlyList<TestOutline>? outline = null, string? title = null, string catalogExtras = "")
     {
         var sb = new StringBuilder("%PDF-1.4\n");
         var offsets = new SortedDictionary<int, int>();
@@ -65,7 +65,7 @@ internal static class TestDocument
             }
         }
 
-        Obj(1, "<< /Type /Catalog /Pages 2 0 R" + (outline is { Count: > 0 } ? $" /Outlines {outlineRoot} 0 R" : "") + " >>");
+        Obj(1, "<< /Type /Catalog /Pages 2 0 R" + (outline is { Count: > 0 } ? $" /Outlines {outlineRoot} 0 R" : "") + " " + catalogExtras + " >>");
         Obj(2, "<< /Type /Pages /Kids [" + string.Join(" ", pages.Select((_, i) => $"{PageObject(i)} 0 R")) + $"] /Count {pages.Count} >>");
         Obj(3, "<< /Type /Font /Subtype /TrueType /BaseFont /Arial /Encoding /WinAnsiEncoding /FirstChar 32 /LastChar 255 /Widths ["
             + string.Join(" ", Enumerable.Repeat("500", 224)) + "] >>");

@@ -169,6 +169,33 @@ public partial class MainPage : ContentPage
         }
     }
 
+    private TaskCompletionSource<string?>? _passwordAnswer;
+
+    /// <summary>Asks for a password in an overlay whose entry masks what is typed; null when cancelled.</summary>
+    private Task<string?> AskPasswordAsync(string message)
+    {
+        _passwordAnswer?.TrySetResult(null);
+        var answer = _passwordAnswer = new TaskCompletionSource<string?>();
+        PasswordMessage.Text = message;
+        PasswordEntry.Text = "";
+        PasswordOverlay.IsVisible = true;
+        PasswordEntry.Focus();
+        return answer.Task;
+    }
+
+    private void FinishPassword(string? value)
+    {
+        PasswordOverlay.IsVisible = false;
+        string? typed = value;
+        PasswordEntry.Text = "";
+        _passwordAnswer?.TrySetResult(typed);
+        _passwordAnswer = null;
+    }
+
+    private void OnPasswordOk(object? sender, EventArgs e) => FinishPassword(PasswordEntry.Text);
+
+    private void OnPasswordCancel(object? sender, EventArgs e) => FinishPassword(null);
+
     private async Task OpenBytesAsync(byte[] bytes, string? fileName, string? path)
     {
         string? password = null;
@@ -182,9 +209,8 @@ public partial class MainPage : ContentPage
             }
             catch (PdfPasswordException ex)
             {
-                password = await DisplayPromptAsync("Password required",
-                    ex.PasswordWasGiven ? "That password did not open the document. Try again:" : "This document is protected. Enter its password:",
-                    "Open", "Cancel", keyboard: Keyboard.Text);
+                password = await AskPasswordAsync(ex.PasswordWasGiven
+                    ? "That password did not open the document. Try again:" : "This document is protected. Enter its password:");
                 if (string.IsNullOrEmpty(password)) return;
             }
             catch (Exception ex) when (ex is not PdfPasswordException)
@@ -234,7 +260,7 @@ public partial class MainPage : ContentPage
         _outlineRowFor.Clear();
         RebuildOutline();
         _pageRows.Clear();
-        for (int i = 0; i < document.PageCount; i++) _pageRows.Add(new PageRow(i, document.PageSizes[i].Width, document.PageSizes[i].Height));
+        for (int i = 0; i < document.PageCount; i++) _pageRows.Add(new PageRow(i, document.PageSizes[i].Width, document.PageSizes[i].Height, document.LabelOf(i)));
         _bookmarks = _storage.Load(document.Key);
         RefreshBookmarks();
 
@@ -331,7 +357,7 @@ public partial class MainPage : ContentPage
 
     private void OnCurrentPageChanged(int page)
     {
-        PageEntry.Text = (page + 1).ToString();
+        PageEntry.Text = _document?.LabelOf(page) ?? (page + 1).ToString();
         foreach (var row in _pageRows) row.IsCurrent = row.Index == page;
         var current = OutlineTree.CurrentFor(_outlineRoots, page);
         foreach (var row in _outlineRows) row.IsCurrent = ReferenceEquals(row.Node, current);
@@ -442,7 +468,7 @@ public partial class MainPage : ContentPage
     private void RefreshBookmarks()
     {
         _bookmarkRows.Clear();
-        foreach (var bookmark in _bookmarks.Items) _bookmarkRows.Add(new BookmarkRow(bookmark));
+        foreach (var bookmark in _bookmarks.Items) _bookmarkRows.Add(new BookmarkRow(bookmark, i => _document?.LabelOf(i) ?? (i + 1).ToString()));
     }
 
     private void SaveBookmarks(ReaderDocument document)
@@ -496,8 +522,9 @@ public partial class MainPage : ContentPage
     private void OnPageEntryCompleted(object? sender, EventArgs e)
     {
         if (_controller is not { } c) return;
-        if (int.TryParse(PageEntry.Text, out int number)) c.GoTo(new ReaderLocation(Math.Clamp(number - 1, 0, c.Document.PageCount - 1)));
-        else PageEntry.Text = (c.CurrentPage + 1).ToString();
+        int target = c.Document.PageOf(PageEntry.Text ?? "");
+        if (target >= 0) c.GoTo(new ReaderLocation(target));
+        else PageEntry.Text = c.Document.LabelOf(c.CurrentPage);
         UpdateNavigationButtons();
     }
 

@@ -13,6 +13,7 @@ internal sealed class PdfType3Font
 {
     readonly Dictionary<int, string> _names = [];
     readonly Dictionary<int, double> _widths = [];
+    readonly Dictionary<int, string> _toUnicode = [];
     readonly PdfDictionary _charProcs;
     readonly PdfSourceDocument _doc;
 
@@ -51,6 +52,11 @@ internal sealed class PdfType3Font
                 else if (r is PdfName name) font._names[code++] = name.Value.TrimStart('/');
             }
         }
+        if (doc.Resolve(fontDict.GetRaw("ToUnicode")) is PdfDictionary { Stream: not null } toUnicode)
+        {
+            try { PdfImportedFont.ParseToUnicode(doc.DecodeStream(toUnicode).Data, font._toUnicode); }
+            catch (Exception e) when (e is InvalidOperationException or ArgumentException or IndexOutOfRangeException) { font._toUnicode.Clear(); }
+        }
         int first = doc.IntOf(fontDict.GetRaw("FirstChar"));
         if (doc.ArrayOf(fontDict, "Widths") is { } widths)
             for (int i = 0; i < widths.Elements.Count; i++) font._widths[first + i] = doc.NumberOf(widths.Elements[i]);
@@ -58,7 +64,7 @@ internal sealed class PdfType3Font
     }
 
     /// <summary>One shown code: its advance in text space (per unit of font size) and its glyph stream, if it has one.</summary>
-    public readonly record struct Glyph(int Code, double Width, PdfDictionary? Procedure, bool IsWordSpace);
+    public readonly record struct Glyph(int Code, double Width, PdfDictionary? Procedure, bool IsWordSpace, string Text = "");
 
     /// <summary>Splits a shown string (one byte per char) into glyphs.</summary>
     public IEnumerable<Glyph> Decode(string shown)
@@ -69,7 +75,9 @@ internal sealed class PdfType3Font
             PdfDictionary? proc = _names.TryGetValue(code, out var name) ? _doc.Resolve(_charProcs.GetRaw(name)) as PdfDictionary : null;
             // A width is in glyph space; the font matrix's horizontal scale carries it to text space.
             double width = _widths.TryGetValue(code, out var w) ? w * FontMatrix.M11 : 0;
-            yield return new Glyph(code, width, proc, code == 32);
+            // The text of a code: the font's ToUnicode map, then the name the encoding gives its glyph.
+            string text = _toUnicode.TryGetValue(code, out var t) ? t : _names.TryGetValue(code, out var n) && PdfGlyphNames.ToText(n) is { } fromName ? fromName : "";
+            yield return new Glyph(code, width, proc, code == 32, text);
         }
     }
 }

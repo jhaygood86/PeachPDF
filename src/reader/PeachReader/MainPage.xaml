@@ -205,5 +205,22 @@
             <Picker x:Name="ZoomPicker" Grid.Column="5" WidthRequest="120" SelectedIndexChanged="OnZoomPicked">
             </Picker>
         </Grid>
+
+        <!-- password prompt: the stock prompt dialog cannot mask what is typed -->
+        <Grid x:Name="PasswordOverlay" Grid.RowSpan="4" IsVisible="False" BackgroundColor="#80000000">
+            <Border WidthRequest="340" HorizontalOptions="Center" VerticalOptions="Center" Padding="20" StrokeThickness="1"
+                    Stroke="{AppThemeBinding Light=#C8C8C8, Dark=#555555}"
+                    BackgroundColor="{AppThemeBinding Light=#FFFFFF, Dark=#303030}">
+                <VerticalStackLayout Spacing="10">
+                    <Label Text="Password required" FontAttributes="Bold" FontSize="18" />
+                    <Label x:Name="PasswordMessage" Text="" />
+                    <Entry x:Name="PasswordEntry" IsPassword="True" Placeholder="Password" Completed="OnPasswordOk" />
+                    <HorizontalStackLayout Spacing="8" HorizontalOptions="End">
+                        <Button Text="Cancel" Clicked="OnPasswordCancel" />
+                        <Button Text="Open" Clicked="OnPasswordOk" />
+                    </HorizontalStackLayout>
+                </VerticalStackLayout>
+            </Border>
+        </Grid>
     </Grid>
 </ContentPage>

@@ -90,7 +90,7 @@ internal sealed class PdfContentInterpreter
     public bool MarkVariableText { get; init; }
 
     // One entry per open BMC/BDC: whether it is variable text, and the tagging scope (a structure element's content, an artifact) it opened.
-    readonly Stack<(bool Variable, IDisposable? Scope)> _markedContent = new();
+    readonly Stack<(bool Variable, IDisposable? Scope, bool Hidden)> _markedContent = new();
 
     /// <summary>
     /// Where to record the structure of the content being drawn, or null to draw it untagged. With it set, a marked-content sequence the source
@@ -108,7 +108,7 @@ internal sealed class PdfContentInterpreter
     public Matrix3x2 TextBase { get; init; } = Matrix3x2.Identity;
 
     static readonly HashSet<string> TextOnlyOperators =
-        ["q", "Q", "cm", "BT", "ET", "Tc", "Tw", "Tz", "TL", "Ts", "Tr", "Tf", "Td", "TD", "T*", "Tm", "Tj", "'", "\"", "TJ", "Do"];
+        ["q", "Q", "cm", "BT", "ET", "Tc", "Tw", "Tz", "TL", "Ts", "Tr", "Tf", "Td", "TD", "T*", "Tm", "Tj", "'", "\"", "TJ", "Do", "BMC", "BDC", "EMC"];
 
     /// <summary>The parent-tree key of the stream being interpreted (the page's, or a form's <c>/StructParents</c>), or -1.</summary>
     public int StructParents { get; set; } = -1;
@@ -192,7 +192,7 @@ internal sealed class PdfContentInterpreter
                 if (t.Text == "BI")
                 {
                     operands.Clear();
-                    if (ReadInlineImage(lx, resources) is { } inline) { if (TextSink is null) DrawImage(inline, resources); }
+                    if (ReadInlineImage(lx, resources) is { } inline) { if (TextSink is null && !Hidden) DrawImage(inline, resources); }
                     else _unsupported.Add("BI (malformed)");
                     continue;
                 }
@@ -411,13 +411,22 @@ internal sealed class PdfContentInterpreter
                 {
                     bool variable = MarkVariableText && o.Count > 0 && _doc.NameOf(o[0]) == "/Tx";
                     var scope = o.Count > 0 && _doc.NameOf(o[0]) == "/Artifact" ? OpenTag("/Artifact", o, res) : null;
-                    _markedContent.Push((variable, scope));
+                    _markedContent.Push((variable, scope, false));
                     if (variable) _canvas.BeginVariableText();
                     break;
                 }
             case "BDC":
-                _markedContent.Push((false, o.Count > 0 && _doc.NameOf(o[0]) is { } tag ? OpenTag(tag, o, res) : null));
-                break;
+                {
+                    bool hiddenLayer = false;
+                    if (o.Count >= 2 && _doc.NameOf(o[0]) == "/OC")
+                    {
+                        var layer = o[1] is PdfName layerName && res is not null && _doc.DictOf(res, "Properties") is { } table ? table.GetRaw(layerName.Value.TrimStart('/')) : o[1];
+                        hiddenLayer = !_doc.OptionalContent.IsVisible(layer);
+                    }
+                    if (hiddenLayer) _hiddenSpans++;
+                    _markedContent.Push((false, o.Count > 0 && _doc.NameOf(o[0]) is { } tag ? OpenTag(tag, o, res) : null, hiddenLayer));
+                    break;
+                }
             case "EMC":
                 if (_markedContent.Count > 0) CloseMarked(_markedContent.Pop());
                 break;
@@ -460,8 +469,13 @@ internal sealed class PdfContentInterpreter
         pushes.Clear();
     }
 
-    void CloseMarked((bool Variable, IDisposable? Scope) span)
+    /// <summary>Whether a marked-content span of an optional-content group that is off is open: nothing is drawn or read inside it.</summary>
+    bool Hidden => _hiddenSpans > 0;
+    int _hiddenSpans;
+
+    void CloseMarked((bool Variable, IDisposable? Scope, bool Hidden) span)
     {
+        if (span.Hidden) _hiddenSpans--;
         if (span.Variable) _canvas.EndVariableText();
         if (span.Scope is not null)
         {
@@ -564,6 +578,18 @@ internal sealed class PdfContentInterpreter
             if (part is double adjust) { x -= adjust / 1000.0 * st.FontSize; continue; }
             foreach (var g in font.Decode((string)part))
             {
+                if (TextSink is not null && !Hidden && g.Text.Length > 0)
+                {
+                    // Reading text: the glyph's own text, where its advance puts it.
+                    var toPage = Matrix3x2.CreateScale((float)st.HorizontalScale, st.FontSize < 0 ? 1f : -1f) * _tm * Cur.Ctm * TextBase;
+                    var up = Vector2.TransformNormal(new Vector2(0, -(float)Math.Abs(st.FontSize)), toPage);
+                    double width = g.Width * st.FontSize;
+                    var start = Vector2.Transform(new Vector2((float)x, (float)-st.Rise), toPage);
+                    var end = Vector2.Transform(new Vector2((float)(x + width), (float)-st.Rise), toPage);
+                    double spacing = st.CharSpacing + (g.IsWordSpace ? st.WordSpacing : 0);
+                    var pen = Vector2.Transform(new Vector2((float)(x + width + spacing), (float)-st.Rise), toPage);
+                    TextSink(new PdfTextGlyph(g.Text, start, end, up, (pen - end).Length()));
+                }
                 if (TextSink is null && st.RenderMode != 3 && g.Procedure is { Stream: not null } proc && _formDepth < 16)
                 {
                     // glyph space -> text space (font matrix) -> sized and placed in the line -> scaled horizontally -> the text matrix
@@ -619,6 +645,12 @@ internal sealed class PdfContentInterpreter
                 x += g.Width * st.FontSize + st.CharSpacing + (g.IsWordSpace ? st.WordSpacing : 0);
             }
         }
+        if (Hidden)
+        {
+            // A layer that is off: the pen still moves, but nothing is drawn or read.
+            _tm = Matrix3x2.CreateTranslation((float)(x * st.HorizontalScale), 0) * _tm;
+            return;
+        }
         if (read is not null)
         {
             // Reading text: report each glyph where it would have been drawn, in the space of TextBase, and draw nothing.
@@ -673,13 +705,16 @@ internal sealed class PdfContentInterpreter
             foreach (var g in st.TextFont!.Decode((string)part))
             {
                 double w0 = g.Width * st.FontSize;
-                double advance = Math.Abs(st.FontSize) + st.CharSpacing + (g.IsWordSpace ? st.WordSpacing : 0);
-                glyphs.Add(new GlyphPlacement(g.GlyphIndex, -w0 / 2, y + 0.88 * Math.Abs(st.FontSize) - st.Rise, g.Text));
-                tops.Add((g.Text, st.Rise, y, w0, Math.Abs(st.FontSize)));
+                double em = Math.Abs(st.FontSize);
+                double drop = -g.VerticalAdvance * em;           // how far the pen moves down (w1 is negative in the file's terms)
+                double advance = drop + st.CharSpacing + (g.IsWordSpace ? st.WordSpacing : 0);
+                glyphs.Add(new GlyphPlacement(g.GlyphIndex, -g.VerticalOriginX * st.FontSize, y + g.OriginY * em - st.Rise, g.Text));
+                tops.Add((g.Text, st.Rise, y, w0, drop));
                 y += advance;
             }
         }
-        if (read is not null)
+        if (Hidden) { }
+        else if (read is not null)
         {
             var toPage = Matrix3x2.CreateScale((float)st.HorizontalScale, (float)flip) * _tm * Cur.Ctm * TextBase;
             // Vertical text reads downward: the line direction is down the page and glyph tops point to the right.
@@ -1123,6 +1158,7 @@ internal sealed class PdfContentInterpreter
     /// <summary>The <c>sh</c> operator: paints a shading over the whole current clip.</summary>
     void PaintShading(List<PdfItem> o, PdfDictionary? res)
     {
+        if (Hidden) return;
         BeginUntagged();
         string name = _doc.NameOf(o[0])!.TrimStart('/');
         var shadings = res is null ? null : _doc.DictOf(res, "Shading");
@@ -1152,9 +1188,11 @@ internal sealed class PdfContentInterpreter
         var path = _path;
         _path = null;
         if (path is null) { _pendingClip = null; return; }
-        if (fill || stroke) BeginUntagged();
+        bool hidden = Hidden;
+        if ((fill || stroke) && !hidden) BeginUntagged();
         if (close) path.CloseFigure();
         path.FillMode = mode;
+        if (hidden) { fill = stroke = false; }
         if (fill)
         {
             if (Cur.FillPattern is { } fillPattern && _doc.IntOf(fillPattern.GetRaw("PatternType")) == 2 && _doc.DictOf(fillPattern, "Shading") is { } meshShading
@@ -1224,6 +1262,7 @@ internal sealed class PdfContentInterpreter
         string name = _doc.NameOf(o[0])!.TrimStart('/');
         var xobjects = res is null ? null : _doc.DictOf(res, "XObject");
         if (xobjects is null || _doc.Resolve(xobjects.GetRaw(name)) is not PdfDictionary x) { _unsupported.Add("Do (missing XObject)"); return; }
+        if (Hidden || (x.GetRaw("OC") is { } layer && !_doc.OptionalContent.IsVisible(layer))) return;
         string? subtype = _doc.NameOf(x.GetRaw("Subtype"));
         if (subtype == "/Image") { if (TextSink is null) { BeginUntagged(); DrawImage(x, res); } return; }
         if (subtype != "/Form") { _unsupported.Add("Do " + subtype); return; }

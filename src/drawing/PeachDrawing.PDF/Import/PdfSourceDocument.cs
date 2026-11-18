@@ -48,6 +48,11 @@ internal sealed class PdfSourceDocument
     /// <summary>The merged trailer dictionary (newest entries win).</summary>
     public PdfDictionary Trailer { get; }
 
+    PdfOptionalContent? _optionalContent;
+
+    /// <summary>The layers of the document and which of them are shown.</summary>
+    public PdfOptionalContent OptionalContent => _optionalContent ??= new PdfOptionalContent(this);
+
     /// <summary>The pages in document order.</summary>
     public IReadOnlyList<PdfDictionary> Pages { get; private set; } = [];
 

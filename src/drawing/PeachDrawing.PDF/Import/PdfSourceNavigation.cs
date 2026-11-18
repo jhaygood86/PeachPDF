@@ -154,6 +154,66 @@ internal sealed class PdfSourceNavigation(PdfSourceDocument doc)
         }
     }
 
+    // ------------------------------------------------------------------ page labels
+
+    /// <summary>The label of every page (<c>/PageLabels</c>: a number tree of ranges, each with a numbering style, a prefix and a start), or the page number when the file has none.</summary>
+    public IReadOnlyList<string> PageLabels()
+    {
+        int count = doc.Pages.Count;
+        var ranges = new SortedDictionary<int, PdfDictionary>();
+        if (Catalog is { } catalog && doc.DictOf(catalog, "PageLabels") is { } tree) WalkNumberTree(tree, ranges, 0);
+        var labels = new string[count];
+        PdfDictionary? current = null;
+        int rangeStart = 0;
+        using var next = ranges.GetEnumerator();
+        bool more = next.MoveNext();
+        for (int i = 0; i < count; i++)
+        {
+            while (more && next.Current.Key <= i) { rangeStart = next.Current.Key; current = next.Current.Value; more = next.MoveNext(); }
+            if (current is null) { labels[i] = (i + 1).ToString(System.Globalization.CultureInfo.InvariantCulture); continue; }
+            int number = Math.Max(0, doc.NumberOf(current.GetRaw("St"), 1) is var st && st >= 0 ? (int)st : 1) + (i - rangeStart);
+            string prefix = TextValue(current.GetRaw("P")) ?? "";
+            labels[i] = prefix + doc.NameOf(current.GetRaw("S")) switch
+            {
+                "/D" => number.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                "/R" => Roman(number, upper: true),
+                "/r" => Roman(number, upper: false),
+                "/A" => Letters(number, upper: true),
+                "/a" => Letters(number, upper: false),
+                _ => "",
+            };
+        }
+        return labels;
+    }
+
+    void WalkNumberTree(PdfDictionary node, SortedDictionary<int, PdfDictionary> into, int depth)
+    {
+        if (depth > MaxDepth) return;
+        if (doc.ArrayOf(node, "Nums") is { } pairs)
+            for (int i = 0; i + 1 < pairs.Elements.Count; i += 2)
+                if (doc.Resolve(pairs.Elements[i + 1]) is PdfDictionary range && doc.IntOf(pairs.Elements[i]) is >= 0 and var key) into[key] = range;
+        if (doc.ArrayOf(node, "Kids") is { } kids)
+            foreach (var kid in kids.Elements)
+                if (doc.Resolve(kid) is PdfDictionary child) WalkNumberTree(child, into, depth + 1);
+    }
+
+    static string Roman(int n, bool upper)
+    {
+        if (n <= 0 || n >= 4000) return n.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        var sb = new StringBuilder();
+        foreach (var (value, text) in new[] { (1000, "m"), (900, "cm"), (500, "d"), (400, "cd"), (100, "c"), (90, "xc"), (50, "l"), (40, "xl"), (10, "x"), (9, "ix"), (5, "v"), (4, "iv"), (1, "i") })
+            while (n >= value) { sb.Append(text); n -= value; }
+        return upper ? sb.ToString().ToUpperInvariant() : sb.ToString();
+    }
+
+    /// <summary>A, B ... Z, AA, BB ... ZZ, AAA ... (ISO 32000-1 12.4.2: the letter repeats as the number passes 26).</summary>
+    static string Letters(int n, bool upper)
+    {
+        if (n <= 0) return "";
+        char letter = (char)((upper ? 'A' : 'a') + (n - 1) % 26);
+        return new string(letter, (n - 1) / 26 + 1);
+    }
+
     // ------------------------------------------------------------------ links
 
     /// <summary>The link annotations of a page that open a web address or lead to another place in the file.</summary>

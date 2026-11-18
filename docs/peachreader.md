@@ -91,7 +91,7 @@ dotnet build src/reader/PeachReader/PeachReader.csproj -f net11.0-android -p:Run
   CJK text in the predefined character sets is drawn with an installed CJK family when its font is not embedded, so a machine with no CJK font shows gaps. What a page could not show, or had to stand in for, is
   listed when you click the message in the status bar.
 - Files encrypted with RC4 are not opened.
-- Form fields are not interactive, and optional-content layers and page labels are not shown.
+- Form fields are not interactive. Layers the file turns off are hidden, and pages show their labels ("iv", "A-3") where the file defines them; the page box accepts a label or a number.
 - Only links to a place in the document and to web, mail and telephone addresses are followed.
 - Windows and Android have a view so far; a page tile is painted on the graphics thread, so the first look at a page at a new zoom can pause a
   frame.

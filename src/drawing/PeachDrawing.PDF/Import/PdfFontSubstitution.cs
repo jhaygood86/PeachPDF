@@ -80,7 +80,8 @@ internal static class PdfFontSubstitution
         }
         else if (key.StartsWith("symbol"))
         {
-            candidates.AddRange(["Symbol", "Noto Sans Symbols", "DejaVu Sans"]);
+            // The Symbol font itself keys its glyphs by private-use codes, so a font with the real Greek letters comes first.
+            candidates.AddRange(["Cambria Math", "Segoe UI Symbol", "DejaVu Sans", "Noto Sans", "Arial", "Symbol"]);
             generic = "sans-serif";
         }
         else if (key.StartsWith("zapfdingbats"))
@@ -100,6 +101,35 @@ internal static class PdfFontSubstitution
 
         return (family, (bold ? PaintFontStyle.Bold : PaintFontStyle.Regular) | (italic ? PaintFontStyle.Italic : PaintFontStyle.Regular), bold ? 700 : 400);
     }
+
+    /// <summary>
+    /// The text of a code in the built-in encoding of the standard Symbol font (Greek letters, the arithmetic signs of the first column), which
+    /// a file may use with no encoding or ToUnicode map of its own; null for a code this table does not cover.
+    /// </summary>
+    internal static string? SymbolText(int code)
+    {
+        const string Upper = "ΑΒΧΔΕΦΓΗΙϑΚΛΜΝΟΠΘΡΣΤΥςΩΞΨΖ";       // 0x41 A .. 0x5A Z
+        const string Lower = "αβχδεφγηιϕκλμνοπθρστυϖωξψζ";       // 0x61 a .. 0x7A z
+        if (code is >= 0x41 and <= 0x5A) return Upper[code - 0x41].ToString();
+        if (code is >= 0x61 and <= 0x7A) return Lower[code - 0x61].ToString();
+        return code switch
+        {
+            0x20 => " ",
+            0x21 => "!", 0x23 => "#", 0x25 => "%", 0x26 => "&", 0x28 => "(", 0x29 => ")", 0x2B => "+", 0x2C => ",", 0x2E => ".", 0x2F => "/",
+            >= 0x30 and <= 0x39 => ((char)code).ToString(),
+            0x3A => ":", 0x3B => ";", 0x3C => "<", 0x3D => "=", 0x3E => ">", 0x3F => "?",
+            0x22 => "∀", 0x24 => "∃", 0x27 => "∋", 0x2A => "∗", 0x2D => "−", 0x40 => "≅",
+            0x5B => "[", 0x5D => "]", 0x5C => "∴", 0x5E => "⊥", 0x5F => "_", 0x7B => "{", 0x7C => "|", 0x7D => "}", 0x7E => "∼",
+            0xB1 => "±", 0xB4 => "×", 0xB8 => "÷", 0xB9 => "≠", 0xBA => "≡", 0xBB => "≈", 0xA3 => "≤", 0xB3 => "≥", 0xA5 => "∞",
+            0xB6 => "∂", 0xD1 => "∇", 0xD5 => "∏", 0xE5 => "∑", 0xF2 => "∫", 0xD6 => "√", 0xB7 => "•",
+            0xAE => "→", 0xAC => "←", 0xAD => "↑", 0xAF => "↓", 0xAB => "↔", 0xDE => "⇒", 0xDC => "⇐", 0xDB => "⇔",
+            0xCE => "∈", 0xCF => "∉", 0xC7 => "∩", 0xC8 => "∪", 0xCC => "⊂", 0xC9 => "⊃", 0xCD => "⊆", 0xC5 => "⊕", 0xC4 => "⊗", 0xC6 => "∅",
+            _ => null,
+        };
+    }
+
+    /// <summary>The advance, in em, of every code of a Courier font, which the standard 14 fix at 600 units; null for another family.</summary>
+    internal static double? FixedAdvanceOf(string baseName) => Key(StripSubsetTag(baseName)).StartsWith("courier") ? 0.6 : null;
 
     /// <summary>A name without its <c>ABCDEF+</c> subset tag.</summary>
     internal static string StripSubsetTag(string name)

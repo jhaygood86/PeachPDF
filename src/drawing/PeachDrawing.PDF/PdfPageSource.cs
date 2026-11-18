@@ -179,6 +179,13 @@ public sealed class PdfPageSource
         lock (_sync) return _navigation.NamedDestinations();
     }
 
+    /// <summary>The label a viewer shows for each page ("iv", "A-3", "12"): the file's page-label ranges applied to every page, or the page number where the file gives none.</summary>
+    /// <returns>one label per page, in page order</returns>
+    public IReadOnlyList<string> GetPageLabels()
+    {
+        lock (_sync) return _navigation.PageLabels();
+    }
+
     /// <summary>The title, author and the other document information of the file.</summary>
     /// <returns>the information the file gives</returns>
     public PdfSourceMetadata GetMetadata()

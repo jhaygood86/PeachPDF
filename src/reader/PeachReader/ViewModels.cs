@@ -96,9 +96,11 @@ public sealed class PageRow : RowBase
     /// <param name="index">the zero-based page number</param>
     /// <param name="widthPoints">the page's width in points</param>
     /// <param name="heightPoints">the page's height in points</param>
-    public PageRow(int index, double widthPoints, double heightPoints)
+    /// <param name="label">the page's label, or null for its number</param>
+    public PageRow(int index, double widthPoints, double heightPoints, string? label = null)
     {
         Index = index;
+        Number = label ?? (index + 1).ToString();
         AspectHeight = Math.Clamp(120 * heightPoints / Math.Max(1, widthPoints), 20, 600);
     }
 
@@ -106,7 +108,7 @@ public sealed class PageRow : RowBase
     public int Index { get; }
 
     /// <summary>The page number as the reader counts it.</summary>
-    public string Number => (Index + 1).ToString();
+    public string Number { get; }
 
     /// <summary>The height of the thumbnail's frame for a 120 wide thumbnail, so the list does not jump as thumbnails arrive.</summary>
     public double AspectHeight { get; }
@@ -141,7 +143,7 @@ public sealed class PageRow : RowBase
 }
 
 /// <summary>One of the reader's bookmarks in the list.</summary>
-public sealed class BookmarkRow(UserBookmark bookmark)
+public sealed class BookmarkRow(UserBookmark bookmark, Func<int, string>? pageLabel = null)
 {
     /// <summary>The bookmark.</summary>
     public UserBookmark Bookmark { get; } = bookmark;
@@ -150,7 +152,7 @@ public sealed class BookmarkRow(UserBookmark bookmark)
     public string Label => Bookmark.Label;
 
     /// <summary>Where it points, as text.</summary>
-    public string Where => "Page " + (Bookmark.PageIndex + 1);
+    public string Where => "Page " + (pageLabel?.Invoke(Bookmark.PageIndex) ?? (Bookmark.PageIndex + 1).ToString());
 }
 
 /// <summary>Chooses how the sidebar's one list draws a row, by what kind of row it is.</summary>

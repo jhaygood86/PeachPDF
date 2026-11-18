@@ -15,6 +15,7 @@ public sealed class ReaderDocument
     private readonly Dictionary<int, PdfPageText> _text = [];
     private readonly Queue<int> _textOrder = new();
     private IReadOnlyList<OutlineNode>? _outline;
+    private IReadOnlyList<string>? _labels;
     private IReadOnlyDictionary<string, PdfSourceDestination>? _named;
 
     private ReaderDocument(PdfPageSource source, string key, string title)
@@ -62,6 +63,31 @@ public sealed class ReaderDocument
 
     /// <summary>The size of each page in points as it is shown, after rotation.</summary>
     public IReadOnlyList<(double Width, double Height)> PageSizes { get; }
+
+    /// <summary>The label of each page ("iv", "A-3", "12"), which is the page number when the file gives no labels.</summary>
+    public IReadOnlyList<string> PageLabels
+    {
+        get
+        {
+            lock (_gate) return _labels ??= Source.GetPageLabels();
+        }
+    }
+
+    /// <summary>The label of a page.</summary>
+    /// <param name="pageIndex">the zero-based page number</param>
+    public string LabelOf(int pageIndex) => pageIndex >= 0 && pageIndex < PageCount ? PageLabels[pageIndex] : (pageIndex + 1).ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+    /// <summary>The page a typed number or label stands for: a label first (so "iv" and "A-3" work, and "3" is the page labelled 3), then a plain page number.</summary>
+    /// <param name="text">what the person typed</param>
+    /// <returns>the zero-based page, or -1 when it matches nothing</returns>
+    public int PageOf(string text)
+    {
+        text = text.Trim();
+        if (text.Length == 0) return -1;
+        var labels = PageLabels;
+        for (int i = 0; i < labels.Count; i++) if (string.Equals(labels[i], text, StringComparison.OrdinalIgnoreCase)) return i;
+        return int.TryParse(text, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out int number) && number >= 1 && number <= PageCount ? number - 1 : -1;
+    }
 
     /// <summary>The table of contents as a tree; empty when the file has none.</summary>
     public IReadOnlyList<OutlineNode> Outline
