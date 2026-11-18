@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The platform-free half of PeachReader: everything a PDF reader decides that is not drawing or windowing - the outline as a tree, where
+    pages sit in the scrolled content, what a click on a link means, back/forward history, the user's bookmarks, text selection and
+    find-in-document. It reads through PeachDrawing.PDF's public API only and has no UI, MAUI or backend reference, so every platform head
+    shares it and its tests run anywhere. Not packed: it ships inside the app.
+  -->
+  <PropertyGroup>
+    <RootNamespace>PeachReader.Core</RootNamespace>
+    <AssemblyName>PeachReader.Core</AssemblyName>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <WarningsAsErrors>$(WarningsAsErrors);CS1591</WarningsAsErrors>
+    <IsTrimmable>true</IsTrimmable>
+    <EnableTrimAnalyzer>true</EnableTrimAnalyzer>
+    <IsAotCompatible>true</IsAotCompatible>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\drawing\PeachDrawing.PDF\PeachDrawing.PDF.csproj" />
+    <ProjectReference Include="..\..\drawing\PeachDrawing.Core\PeachDrawing.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="PeachReader.Core.Tests" />
+  </ItemGroup>
+
+</Project>

@@ -42,5 +42,7 @@
   <Project Path="tests/PeachBrackets.Tests/PeachBrackets.Tests.csproj" />
   <Project Path="tests/PeachBrackets.WptRunner.Tests/PeachBrackets.WptRunner.Tests.csproj" />
   <Project Path="tests/PeachBrackets.Engine.Tests/PeachBrackets.Engine.Tests.csproj" />
+  <Project Path="reader/PeachReader.Core/PeachReader.Core.csproj" />
+  <Project Path="tests/PeachReader.Core.Tests/PeachReader.Core.Tests.csproj" />
   <Project Path="PeachPDF/PeachPDF.csproj" />
 </Solution>
