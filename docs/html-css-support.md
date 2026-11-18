@@ -2740,6 +2740,28 @@ h3 { bookmark-state: closed; }
 
 Accepted values: `open`, `closed`.
 
+### `-peachpdf-pdf-page-label` (PDF page labels)
+
+A PDF viewer shows each page's *label* in its page box and thumbnails ("iv", "A-3"), separately from the numbers a margin box prints. `-peachpdf-pdf-page-label` is an `@page` descriptor that sets the label of the pages the rule matches. It is PeachPDF's own extension (no W3C spec), following the same naming convention as the other `-peachpdf-pdf-*` properties.
+
+```css
+@page { -peachpdf-pdf-page-label: counter(page, lower-roman); }                       /* i, ii, iii */
+@page body { -peachpdf-pdf-page-label: counter(page); counter-reset: page 1; }       /* 1, 2, 3 */
+@page appendix { -peachpdf-pdf-page-label: "App-" counter(page, upper-alpha); }        /* App-A, App-B */
+```
+
+| | |
+|---|---|
+| Value | `auto` \| `<content-list>` \| `<counter-style>` |
+| Initial | `auto` |
+| Applies to | `@page` rules, including `:first`, `:left`, `:right`, `:blank` and named pages |
+
+- The value is a `content` list: strings and `counter(page[, <style>])`. `[ "<prefix>" ]* counter(page, <style>)` with `decimal`, `lower-roman`, `upper-roman`, `lower-alpha`/`lower-latin` or `upper-alpha`/`upper-latin` is written as a numbering style with a prefix, so a run of pages is a single range in the PDF. A bare counter style (`lower-roman`) is shorthand for `counter(page, lower-roman)`.
+- Anything else is written as the page's whole label text: text around the counter (`"Page " counter(page) " of " counter(pages)`), a counter style PDF has no name for (`decimal-leading-zero`, an `@counter-style`), or letters past `Z` (PDF repeats the letter, `AA`, `BB`; CSS counts, `AA`, `AB`, so only the first 26 can be written as a style).
+- The number is the [page counter](#margin-boxes), so `counter-reset`, `counter-set` and `counter-increment` in `@page` restart or step it in the labels too, and a new range starts wherever the counter does not follow on.
+- `auto` pages are labeled with their number in decimal. A document where every page is `auto` writes no labels, and the viewer numbers the pages itself.
+- When one document is added to another (`AddPdfPages`, the declarative `Append`), its labels start at its own first page in the file.
+
 ### `-peachpdf-bookmark-target` (bookmark link target)
 
 By default a bookmark links to the element that generated it. `-peachpdf-bookmark-target` overrides that — this is PeachPDF's own extension (not part of css-content-3, which defines no such property); it follows the same naming convention as [`-peachpdf-pdf-tag-type`](#-peachpdf-pdf-tag-type-tagged-pdf-structure-type) for a PDF-output feature with no real spec-track name.

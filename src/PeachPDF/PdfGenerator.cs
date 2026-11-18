@@ -835,12 +835,26 @@ namespace PeachPDF
             // with no headings simply collects zero bookmarks above and adds no outline.
             document.Composer.AddBookmarks(annotations.Bookmarks.Select(b => ToBookmark(b, pageBase)));
 
+            // Labels the document's own @page rules asked for (-peachpdf-pdf-page-label), moved to where this document's pages sit in the file.
+            if (annotations.PageLabels.Count > 0)
+                document.Composer.AddPageLabels(annotations.PageLabels.Select(l => new PdfPageLabelRange(pageBase + l.PageIndex, ToLabelStyle(l.Style), l.Prefix.Length == 0 ? null : l.Prefix, l.Start)));
+
             // A declarative section's own page label starts at the first page it drew.
             if (_sectionPageLabels.TryGetValue(htmlDocument, out var sectionLabel) && htmlDocument.Pages.Count > 0)
                 document.Composer.AddPageLabels([new PdfPageLabelRange(pageBase, sectionLabel.Style, sectionLabel.Prefix, sectionLabel.StartNumber)]);
         }
 
         #region Private/Protected methods
+
+        private static PdfPageLabelStyle ToLabelStyle(PeachBrackets.Annotations.PageLabelStyle style) => style switch
+        {
+            PeachBrackets.Annotations.PageLabelStyle.Decimal => PdfPageLabelStyle.Decimal,
+            PeachBrackets.Annotations.PageLabelStyle.RomanUpper => PdfPageLabelStyle.RomanUpper,
+            PeachBrackets.Annotations.PageLabelStyle.RomanLower => PdfPageLabelStyle.RomanLower,
+            PeachBrackets.Annotations.PageLabelStyle.LettersUpper => PdfPageLabelStyle.LettersUpper,
+            PeachBrackets.Annotations.PageLabelStyle.LettersLower => PdfPageLabelStyle.LettersLower,
+            _ => PdfPageLabelStyle.None,
+        };
 
         /// <summary>
         /// Fixes the document's format and information from <paramref name="config"/> and the first generated section (see the comments in

@@ -1937,6 +1937,9 @@ namespace PeachBrackets.Html
         /// </summary>
         internal int[]? PageCounterValues { get; private set; }
 
+        /// <summary>The PDF page label ranges the pages' <c>-peachpdf-pdf-page-label</c> ask for, built with <see cref="PageCounterValues"/>; empty when none do.</summary>
+        internal IReadOnlyList<PeachBrackets.Annotations.PageLabelRange> PageLabelRanges { get; private set; } = [];
+
         /// <summary>
         /// The <c>page</c> counter's value on the page at <paramref name="pageIndex"/> (zero-based): what <c>counter(page)</c> shows there, the
         /// pages before this document in its file included.
@@ -1954,6 +1957,8 @@ namespace PeachBrackets.Html
         private int[] BuildPageCounterValues(FragmentTree tree)
         {
             var values = new int[tree.Fragmentainers.Count];
+            var styles = new StyleDeclaration?[values.Length];
+            var pageYs = new double[values.Length];
             var current = PageNumberOffset;
             for (var i = 0; i < values.Length; i++)
             {
@@ -1962,6 +1967,8 @@ namespace PeachBrackets.Html
                 var geom = PageGeometry.ResolveForMaterializedPage(fragmentainer.SlotIndex, pageNumber) ?? fragmentainer.Geometry;
                 var activeName = PageRuleResolver.ActiveNameAtPageEnd(_namedPageElements, geom.Top, geom.BandHeight);
                 var style = PageRuleResolver.SelectApplicablePageStyle(PageRules, pageNumber, activeName, IsReservedBlankSlot(fragmentainer.SlotIndex));
+                styles[i] = style;
+                pageYs[i] = geom.Top;
 
                 var reset = CounterListGrammar.TryGetValue(style?.CounterReset, Keywords.Page, 0, out var resetTo);
                 var explicitIncrement = CounterListGrammar.TryGetValue(style?.CounterIncrement, Keywords.Page, 1, out var increment);
@@ -1981,6 +1988,7 @@ namespace PeachBrackets.Html
                 values[i] = current;
             }
 
+            PageLabelRanges = PageLabelResolver.Resolve(styles, values, TotalPagesOverride ?? values.Length, pageYs, this);
             return values;
         }
 
@@ -2923,6 +2931,7 @@ namespace PeachBrackets.Html
             if (tree.Fragmentainers.Count == 0 || PageRules.Count == 0)
             {
                 PageCounterValues = null;
+                PageLabelRanges = [];
                 return tree;
             }
 

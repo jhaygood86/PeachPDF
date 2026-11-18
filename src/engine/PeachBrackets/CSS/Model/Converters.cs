@@ -387,6 +387,8 @@ namespace PeachBrackets.Css
         public static readonly IValueConverter BookmarkLevelConverter = PositiveIntegerConverter.OrNone();
         public static readonly IValueConverter BookmarkStateConverter = Map.BookmarkStates.ToConverter();
         public static readonly IValueConverter BookmarkLabelConverter = ContentListItemConverter.Many();
+        /// <summary><c>auto | &lt;content-list&gt; | &lt;counter-style&gt;</c>: the PDF page label an <c>@page</c> rule gives its pages (Prince's <c>auto | content</c>, plus a bare counter style as shorthand for <c>counter(page, &lt;style&gt;)</c>).</summary>
+        public static readonly IValueConverter PdfPageLabelConverter = ContentListItemConverter.Many().Or(IdentifierConverter).OrAuto();
 
         // Prince's own grammar for its bookmark-target extension (self | url() | attr()) - not a real
         // css-content-3 property, see -peachpdf-bookmark-target's css-properties.json entry.

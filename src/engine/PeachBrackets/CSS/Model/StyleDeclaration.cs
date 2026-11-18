@@ -1816,6 +1816,17 @@ namespace PeachBrackets.Css
             set => SetPropertyValue(PropertyNames.Bleed, value);
         }
 
+        /// <summary>The <c>-peachpdf-pdf-page-label</c> this rule set (or Prince's <c>-prince-pdf-page-label</c> spelling of it), or an empty string.</summary>
+        public string PdfPageLabel
+        {
+            get
+            {
+                var own = GetPropertyValue(PropertyNames.PdfPageLabel);
+                return string.IsNullOrEmpty(own) ? GetPropertyValue(PropertyNames.PrincePdfPageLabel) : own;
+            }
+            set => SetPropertyValue(PropertyNames.PdfPageLabel, value);
+        }
+
         public string Marks
         {
             get => GetPropertyValue(PropertyNames.Marks);

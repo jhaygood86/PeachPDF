@@ -121,7 +121,7 @@ namespace PeachBrackets.Html.Annotations
             var formFields = CollectFormFields(container, ppp, fragmentainers, slotToPage, accessibilityTree);
 
             var annotations = AnnotationPropertyCollector.Collect(container, ppp, fragmentainers, slotToPage);
-            return new DocumentAnnotations { Links = links, Bookmarks = bookmarks, FormFields = formFields, Annotations = annotations };
+            return new DocumentAnnotations { Links = links, Bookmarks = bookmarks, FormFields = formFields, Annotations = annotations, PageLabels = container.PageLabelRanges };
         }
 
         /// <summary>

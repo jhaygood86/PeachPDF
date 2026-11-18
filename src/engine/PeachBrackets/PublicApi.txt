@@ -228,6 +228,7 @@ PeachBrackets.Annotations.DocumentAnnotations : sealed class
   property IReadOnlyList<Bookmark> Bookmarks { get; init; }
   property IReadOnlyList<PageAnnotation> Annotations { get; init; }
   property IReadOnlyList<PageFormField> FormFields { get; init; }
+  property IReadOnlyList<PageLabelRange> PageLabels { get; init; }
   property IReadOnlyList<PageLink> Links { get; init; }
 PeachBrackets.Annotations.FormFieldAppearance : sealed class
   method Double TextFontSizePt(Size sizePt, Boolean autoFontSize, Boolean isPlaceholder)
@@ -312,6 +313,19 @@ PeachBrackets.Annotations.PageFormField : sealed class
   property Rect Bounds { get; init; }
   property Size ContentSize { get; init; }
   property String AccessibleName { get; init; }
+PeachBrackets.Annotations.PageLabelRange : sealed class
+  ctor()
+  property Int32 PageIndex { get; init; }
+  property Int32 Start { get; init; }
+  property PageLabelStyle Style { get; init; }
+  property String Prefix { get; init; }
+PeachBrackets.Annotations.PageLabelStyle : enum Int32
+  Decimal = 1
+  LettersLower = 5
+  LettersUpper = 4
+  None = 0
+  RomanLower = 3
+  RomanUpper = 2
 PeachBrackets.Annotations.PageLink : sealed class
   ctor()
   property Int32 PageIndex { get; init; }
