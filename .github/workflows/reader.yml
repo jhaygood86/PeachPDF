@@ -1,0 +1,57 @@
+name: Reader
+
+# PeachReader, the MAUI PDF reader, needs the MAUI workloads, so the main test workflow does not build it (its platform-free core and tests run there,
+# in the `small` leg). This workflow builds the app for each platform head that exists. It is not part of the required `test-gate`.
+
+on:
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'src/reader/**'
+      - 'src/drawing/PeachDrawing.PDF/**'
+      - 'src/drawing/PeachDrawing.Win2D/**'
+      - 'src/drawing/PeachDrawing.Core/**'
+      - 'src/Directory.Packages.props'
+      - '.github/workflows/reader.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: reader-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: pwsh
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up .NET
+      uses: ./.github/actions/setup-dotnet
+
+    - name: Install the MAUI workload
+      run: dotnet workload install maui-windows
+
+    - name: Build the app for Windows
+      run: dotnet build src/reader/PeachReader/PeachReader.csproj -f net11.0-windows10.0.19041.0 --configuration Release -p:TreatWarningsAsErrors=true
+
+    # The app opens a file named in PEACHREADER_OPEN; a crash writes crash.log in the app's local data folder, so an exit code and that file say what happened.
+    - name: Open a document and check that the app stays up
+      run: |
+        $pdf = Join-Path $env:RUNNER_TEMP 'smoke.pdf'
+        dotnet run --project src/PeachPDF.Cli -f net11.0 --configuration Release -- (Resolve-Path 'docs/index.html') -o $pdf
+        $env:PEACHREADER_OPEN = $pdf
+        $exe = 'src/reader/PeachReader/bin/Release/net11.0-windows10.0.19041.0/win-x64/PeachReader.exe'
+        $process = Start-Process -FilePath $exe -PassThru
+        Start-Sleep -Seconds 20
+        if ($process.HasExited) { throw "PeachReader exited with $($process.ExitCode)" }
+        $log = Join-Path $env:LOCALAPPDATA 'PeachReader/crash.log'
+        if (Test-Path $log) { Get-Content $log; throw 'PeachReader wrote a crash log' }
+        Stop-Process -Id $process.Id

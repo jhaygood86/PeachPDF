@@ -1,0 +1,209 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:views="clr-namespace:PeachReader.Views"
+             xmlns:local="clr-namespace:PeachReader"
+             x:Class="PeachReader.MainPage"
+             Title="PeachReader"
+             BackgroundColor="{AppThemeBinding Light=#F6F6F6, Dark=#242424}">
+
+    <ContentPage.Resources>
+        <DataTemplate x:Key="OutlineTemplate" x:DataType="local:OutlineRow">
+            <Grid ColumnDefinitions="22,*" Padding="{Binding Indent}" MinimumHeightRequest="32">
+                <Label Grid.Column="0" Text="{Binding Chevron}" VerticalOptions="Center" HorizontalTextAlignment="Center">
+                    <Label.GestureRecognizers>
+                        <TapGestureRecognizer Tapped="OnChevronTapped" />
+                    </Label.GestureRecognizers>
+                </Label>
+                <Label Grid.Column="1" Text="{Binding Title}" VerticalOptions="Center" LineBreakMode="TailTruncation"
+                       FontAttributes="{Binding FontWeightValue}" />
+            </Grid>
+        </DataTemplate>
+        <DataTemplate x:Key="PageTemplate" x:DataType="local:PageRow">
+            <Grid ColumnDefinitions="Auto,*" Padding="12,6" ColumnSpacing="12">
+                <Border Grid.Column="0" WidthRequest="120" HeightRequest="{Binding AspectHeight}" BackgroundColor="White" StrokeThickness="1"
+                        Stroke="{AppThemeBinding Light=#C8C8C8, Dark=#555555}">
+                    <Image Source="{Binding Thumbnail}" Aspect="AspectFit" />
+                </Border>
+                <VerticalStackLayout Grid.Column="1" VerticalOptions="Center" Spacing="2">
+                    <Label Text="{Binding Number}" FontSize="14" />
+                    <Label Text="{Binding Badge}" IsVisible="{Binding HasBadge}" FontSize="12" TextColor="DarkOrange" />
+                </VerticalStackLayout>
+            </Grid>
+        </DataTemplate>
+        <DataTemplate x:Key="BookmarkTemplate" x:DataType="local:BookmarkRow">
+            <Grid ColumnDefinitions="*,Auto" Padding="12,6">
+                <VerticalStackLayout Grid.Column="0">
+                    <Label Text="{Binding Label}" LineBreakMode="TailTruncation" />
+                    <Label Text="{Binding Where}" FontSize="12" TextColor="Gray" />
+                </VerticalStackLayout>
+                <Button Grid.Column="1" Text="x" Clicked="OnRemoveBookmarkClicked" WidthRequest="36" HeightRequest="36" Padding="0" />
+            </Grid>
+        </DataTemplate>
+        <local:SideTemplateSelector x:Key="SideTemplates" Outline="{StaticResource OutlineTemplate}" Page="{StaticResource PageTemplate}"
+                                    Bookmark="{StaticResource BookmarkTemplate}" />
+    </ContentPage.Resources>
+
+    <ContentPage.MenuBarItems>
+        <MenuBarItem Text="File">
+            <MenuFlyoutItem Text="Open..." Clicked="OnOpenClicked">
+                <MenuFlyoutItem.KeyboardAccelerators>
+                    <KeyboardAccelerator Modifiers="Ctrl" Key="O" />
+                </MenuFlyoutItem.KeyboardAccelerators>
+            </MenuFlyoutItem>
+        </MenuBarItem>
+        <MenuBarItem Text="Edit">
+            <MenuFlyoutItem Text="Copy" Clicked="OnCopyClicked">
+                <MenuFlyoutItem.KeyboardAccelerators>
+                    <KeyboardAccelerator Modifiers="Ctrl" Key="C" />
+                </MenuFlyoutItem.KeyboardAccelerators>
+            </MenuFlyoutItem>
+            <MenuFlyoutItem Text="Select All" Clicked="OnSelectAllClicked">
+                <MenuFlyoutItem.KeyboardAccelerators>
+                    <KeyboardAccelerator Modifiers="Ctrl" Key="A" />
+                </MenuFlyoutItem.KeyboardAccelerators>
+            </MenuFlyoutItem>
+            <MenuFlyoutItem Text="Find..." Clicked="OnFindClicked">
+                <MenuFlyoutItem.KeyboardAccelerators>
+                    <KeyboardAccelerator Modifiers="Ctrl" Key="F" />
+                </MenuFlyoutItem.KeyboardAccelerators>
+            </MenuFlyoutItem>
+            <MenuFlyoutItem Text="Find Next" Clicked="OnFindNextClicked">
+                <MenuFlyoutItem.KeyboardAccelerators>
+                    <KeyboardAccelerator Key="F3" />
+                </MenuFlyoutItem.KeyboardAccelerators>
+            </MenuFlyoutItem>
+            <MenuFlyoutItem Text="Find Previous" Clicked="OnFindPreviousClicked">
+                <MenuFlyoutItem.KeyboardAccelerators>
+                    <KeyboardAccelerator Modifiers="Shift" Key="F3" />
+                </MenuFlyoutItem.KeyboardAccelerators>
+            </MenuFlyoutItem>
+        </MenuBarItem>
+        <MenuBarItem Text="View">
+            <MenuFlyoutItem Text="Sidebar" Clicked="OnToggleSidebarClicked">
+                <MenuFlyoutItem.KeyboardAccelerators>
+                    <KeyboardAccelerator Key="F9" />
+                </MenuFlyoutItem.KeyboardAccelerators>
+            </MenuFlyoutItem>
+            <MenuFlyoutItem Text="Zoom In" Clicked="OnZoomInClicked">
+                <MenuFlyoutItem.KeyboardAccelerators>
+                    <KeyboardAccelerator Modifiers="Ctrl" Key="Add" />
+                </MenuFlyoutItem.KeyboardAccelerators>
+            </MenuFlyoutItem>
+            <MenuFlyoutItem Text="Zoom Out" Clicked="OnZoomOutClicked">
+                <MenuFlyoutItem.KeyboardAccelerators>
+                    <KeyboardAccelerator Modifiers="Ctrl" Key="Subtract" />
+                </MenuFlyoutItem.KeyboardAccelerators>
+            </MenuFlyoutItem>
+            <MenuFlyoutItem Text="Fit Width" Clicked="OnFitWidthClicked">
+                <MenuFlyoutItem.KeyboardAccelerators>
+                    <KeyboardAccelerator Modifiers="Ctrl" Key="Number0" />
+                </MenuFlyoutItem.KeyboardAccelerators>
+            </MenuFlyoutItem>
+            <MenuFlyoutItem Text="Fit Page" Clicked="OnFitPageClicked">
+                <MenuFlyoutItem.KeyboardAccelerators>
+                    <KeyboardAccelerator Modifiers="Ctrl" Key="Number9" />
+                </MenuFlyoutItem.KeyboardAccelerators>
+            </MenuFlyoutItem>
+        </MenuBarItem>
+        <MenuBarItem Text="Go">
+            <MenuFlyoutItem Text="Back" Clicked="OnBackClicked">
+                <MenuFlyoutItem.KeyboardAccelerators>
+                    <KeyboardAccelerator Modifiers="Alt" Key="Left" />
+                </MenuFlyoutItem.KeyboardAccelerators>
+            </MenuFlyoutItem>
+            <MenuFlyoutItem Text="Forward" Clicked="OnForwardClicked">
+                <MenuFlyoutItem.KeyboardAccelerators>
+                    <KeyboardAccelerator Modifiers="Alt" Key="Right" />
+                </MenuFlyoutItem.KeyboardAccelerators>
+            </MenuFlyoutItem>
+            <MenuFlyoutItem Text="Add or Remove Bookmark" Clicked="OnToggleBookmarkClicked">
+                <MenuFlyoutItem.KeyboardAccelerators>
+                    <KeyboardAccelerator Modifiers="Ctrl" Key="D" />
+                </MenuFlyoutItem.KeyboardAccelerators>
+            </MenuFlyoutItem>
+        </MenuBarItem>
+    </ContentPage.MenuBarItems>
+
+    <Grid RowDefinitions="Auto,Auto,*,Auto">
+
+        <!-- header bar -->
+        <Grid Grid.Row="0" ColumnDefinitions="Auto,Auto,Auto,*,Auto,Auto,Auto,Auto" Padding="8,6" ColumnSpacing="4"
+              BackgroundColor="{AppThemeBinding Light=#FFFFFF, Dark=#303030}">
+            <Button x:Name="SidebarButton" Grid.Column="0" Text="☰" Clicked="OnToggleSidebarClicked" ToolTipProperties.Text="Sidebar (F9)" WidthRequest="44" />
+            <Button x:Name="BackButton" Grid.Column="1" Text="◀" Clicked="OnBackClicked" IsEnabled="False" ToolTipProperties.Text="Back (Alt+Left)" WidthRequest="44" />
+            <Button x:Name="ForwardButton" Grid.Column="2" Text="▶" Clicked="OnForwardClicked" IsEnabled="False" ToolTipProperties.Text="Forward (Alt+Right)" WidthRequest="44" />
+            <Label x:Name="TitleLabel" Grid.Column="3" Text="PeachReader" VerticalOptions="Center" LineBreakMode="TailTruncation" FontAttributes="Bold" Margin="8,0" />
+            <Button x:Name="FindButton" Grid.Column="4" Text="🔍" Clicked="OnFindClicked" ToolTipProperties.Text="Find (Ctrl+F)" WidthRequest="44" />
+            <Button x:Name="ZoomOutButton" Grid.Column="5" Text="−" Clicked="OnZoomOutClicked" ToolTipProperties.Text="Zoom out (Ctrl+-)" WidthRequest="44" />
+            <Label x:Name="ZoomLabel" Grid.Column="6" Text="" VerticalOptions="Center" HorizontalTextAlignment="Center" WidthRequest="52" />
+            <Button x:Name="ZoomInButton" Grid.Column="7" Text="+" Clicked="OnZoomInClicked" ToolTipProperties.Text="Zoom in (Ctrl++)" WidthRequest="44" />
+        </Grid>
+
+        <!-- find bar -->
+        <Grid x:Name="FindBar" Grid.Row="1" IsVisible="False" ColumnDefinitions="*,Auto,Auto,Auto,Auto,Auto,Auto" Padding="8,4" ColumnSpacing="6"
+              BackgroundColor="{AppThemeBinding Light=#EDEDED, Dark=#2C2C2C}">
+            <Entry x:Name="FindEntry" Grid.Column="0" Placeholder="Find in document" Completed="OnFindEntryCompleted" TextChanged="OnFindTextChanged" />
+            <Label x:Name="FindCountLabel" Grid.Column="1" VerticalOptions="Center" Text="" MinimumWidthRequest="70" HorizontalTextAlignment="Center" />
+            <Button Grid.Column="2" Text="▲" Clicked="OnFindPreviousClicked" WidthRequest="40" ToolTipProperties.Text="Previous (Shift+F3)" />
+            <Button Grid.Column="3" Text="▼" Clicked="OnFindNextClicked" WidthRequest="40" ToolTipProperties.Text="Next (F3)" />
+            <HorizontalStackLayout Grid.Column="4" VerticalOptions="Center">
+                <CheckBox x:Name="MatchCaseBox" CheckedChanged="OnFindOptionsChanged" />
+                <Label Text="Match case" VerticalOptions="Center" />
+            </HorizontalStackLayout>
+            <HorizontalStackLayout Grid.Column="5" VerticalOptions="Center">
+                <CheckBox x:Name="WholeWordBox" CheckedChanged="OnFindOptionsChanged" />
+                <Label Text="Whole word" VerticalOptions="Center" />
+            </HorizontalStackLayout>
+            <Button Grid.Column="6" Text="Done" Clicked="OnFindDoneClicked" />
+        </Grid>
+
+        <!-- sidebar and pages -->
+        <Grid Grid.Row="2" ColumnDefinitions="Auto,*">
+
+            <Grid x:Name="Sidebar" Grid.Column="0" WidthRequest="280" RowDefinitions="Auto,*,Auto"
+                  BackgroundColor="{AppThemeBinding Light=#FAFAFA, Dark=#2A2A2A}">
+                <Grid Grid.Row="0" ColumnDefinitions="*,*,*" Padding="6" ColumnSpacing="4">
+                    <Button x:Name="ContentsTab" Grid.Column="0" Text="Contents" Clicked="OnTabClicked" CommandParameter="contents" />
+                    <Button x:Name="PagesTab" Grid.Column="1" Text="Pages" Clicked="OnTabClicked" CommandParameter="pages" />
+                    <Button x:Name="BookmarksTab" Grid.Column="2" Text="Marks" Clicked="OnTabClicked" CommandParameter="bookmarks" />
+                </Grid>
+
+                <!-- One list for all three tabs: a list that is hidden when its items arrive has no repeater yet on WinUI, so the tabs swap this one's source. -->
+                <CollectionView x:Name="SideList" Grid.Row="1" SelectionMode="Single" SelectionChanged="OnSideSelected"
+                                ItemTemplate="{StaticResource SideTemplates}" />
+
+                <Button x:Name="AddBookmarkButton" Grid.Row="2" Text="+ Add bookmark here" Clicked="OnToggleBookmarkClicked" Margin="8" IsVisible="False" />
+            </Grid>
+
+            <Grid Grid.Column="1">
+                <views:PageViewport x:Name="Viewport" />
+
+                <!-- shown until a document is open -->
+                <VerticalStackLayout x:Name="EmptyState" HorizontalOptions="Center" VerticalOptions="Center" Spacing="14" Padding="24">
+                    <Label Text="🍑" FontSize="56" HorizontalOptions="Center" />
+                    <Label Text="Open a PDF to start reading" FontSize="20" HorizontalOptions="Center" />
+                    <Button Text="Open..." Clicked="OnOpenClicked" HorizontalOptions="Center" WidthRequest="160" />
+                    <Label x:Name="RecentHeading" Text="Recent" FontAttributes="Bold" Margin="0,12,0,0" IsVisible="False" />
+                    <VerticalStackLayout x:Name="RecentList" Spacing="4" />
+                </VerticalStackLayout>
+            </Grid>
+        </Grid>
+
+        <!-- status bar -->
+        <Grid Grid.Row="3" ColumnDefinitions="Auto,Auto,Auto,Auto,*,Auto" Padding="8,4" ColumnSpacing="6"
+              BackgroundColor="{AppThemeBinding Light=#FFFFFF, Dark=#303030}">
+            <Button x:Name="PreviousPageButton" Grid.Column="0" Text="◀" Clicked="OnPreviousPageClicked" WidthRequest="40" ToolTipProperties.Text="Previous page" />
+            <Entry x:Name="PageEntry" Grid.Column="1" WidthRequest="56" HorizontalTextAlignment="Center" Keyboard="Numeric" Completed="OnPageEntryCompleted" />
+            <Label x:Name="PageCountLabel" Grid.Column="2" Text="/ 0" VerticalOptions="Center" />
+            <Button x:Name="NextPageButton" Grid.Column="3" Text="▶" Clicked="OnNextPageClicked" WidthRequest="40" ToolTipProperties.Text="Next page" />
+            <Label x:Name="StatusLabel" Grid.Column="4" Text="" VerticalOptions="Center" HorizontalTextAlignment="End" LineBreakMode="TailTruncation" TextColor="Gray" Margin="8,0">
+                <Label.GestureRecognizers>
+                    <TapGestureRecognizer Tapped="OnStatusTapped" />
+                </Label.GestureRecognizers>
+            </Label>
+            <Picker x:Name="ZoomPicker" Grid.Column="5" WidthRequest="120" SelectedIndexChanged="OnZoomPicked">
+            </Picker>
+        </Grid>
+    </Grid>
+</ContentPage>

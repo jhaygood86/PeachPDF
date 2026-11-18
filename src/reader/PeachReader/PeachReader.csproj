@@ -1,0 +1,41 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+	<!--
+	  PeachReader, the PDF reader app: a .NET MAUI single project. Pages are read by PeachDrawing.PDF (through PeachReader.Core) and drawn with the
+	  native backend of each platform: Win2D on Windows (now), CoreGraphics on iOS and Mac Catalyst and Skia on Android (to come). Needs the
+	  maui workloads, so it is not in PeachPDF.slnx; build the project itself.
+	-->
+	<PropertyGroup>
+		<TargetFrameworks>net11.0-windows10.0.19041.0</TargetFrameworks>
+		<OutputType>Exe</OutputType>
+		<RootNamespace>PeachReader</RootNamespace>
+		<AssemblyName>PeachReader</AssemblyName>
+		<UseMaui>true</UseMaui>
+		<SingleProject>true</SingleProject>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<IsPackable>false</IsPackable>
+		<ApplicationTitle>PeachReader</ApplicationTitle>
+		<ApplicationId>net.peachpdf.reader</ApplicationId>
+		<ApplicationDisplayVersion>1.0</ApplicationDisplayVersion>
+		<ApplicationVersion>1</ApplicationVersion>
+		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.17763.0</SupportedOSPlatformVersion>
+		<WindowsPackageType>None</WindowsPackageType>
+		<TargetPlatformMinVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.17763.0</TargetPlatformMinVersion>
+		<Win2DWarnNoPlatform>false</Win2DWarnNoPlatform>
+		<MauiEnableXamlCBindingWithSourceCompilation>true</MauiEnableXamlCBindingWithSourceCompilation>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<!-- The repo manages package versions centrally; this one takes the version of the installed MAUI workload. -->
+		<PackageReference Include="Microsoft.Maui.Controls" VersionOverride="$(MauiVersion)" />
+		<ProjectReference Include="..\PeachReader.Core\PeachReader.Core.csproj" />
+		<ProjectReference Include="..\..\drawing\PeachDrawing.PDF\PeachDrawing.PDF.csproj" />
+		<ProjectReference Include="..\..\drawing\PeachDrawing.Core\PeachDrawing.Core.csproj" />
+	</ItemGroup>
+
+	<ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">
+		<ProjectReference Include="..\..\drawing\PeachDrawing.Win2D\PeachDrawing.Win2D.csproj" />
+		<PackageReference Include="Microsoft.Graphics.Win2D" />
+	</ItemGroup>
+
+</Project>

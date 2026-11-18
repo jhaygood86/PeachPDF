@@ -152,6 +152,11 @@ public sealed class PageLayoutModel
     /// <returns>the zero-based page number, or 0 with no pages</returns>
     public int CurrentPage(double scrollY) => _pages.Length == 0 ? 0 : NearestPage(scrollY + ViewportHeight / 2);
 
+    /// <summary>The page under a vertical position, or the closest one when the position is in a gap, a margin or past either end.</summary>
+    /// <param name="y">a position from the top of the content, in pixels</param>
+    /// <returns>the zero-based page number, or 0 with no pages</returns>
+    public int NearestPageTo(double y) => _pages.Length == 0 ? 0 : NearestPage(y);
+
     private int NearestPage(double y)
     {
         int at = PageAt(y);
@@ -167,15 +172,26 @@ public sealed class PageLayoutModel
         return best;
     }
 
-    /// <summary>The scroll position that shows a place at the top of the view, a little below the top so it is not touching the edge.</summary>
+    /// <summary>The scroll position that shows a place at the top of the view, one margin below the edge so it is not touching it; <see cref="LocationAt"/> is its inverse.</summary>
     /// <param name="location">the place to show</param>
     /// <returns>the scroll position in pixels, within the content</returns>
     public double ScrollFor(ReaderLocation location)
     {
         if (_pages.Length == 0) return 0;
         int page = Math.Clamp(location.PageIndex, 0, _pages.Length - 1);
-        double y = _tops[page] + Math.Max(0, location.TopPoints) * Scale - (location.TopPoints > 0 || page == 0 ? Margin : Gap);
+        double y = _tops[page] + Math.Max(0, location.TopPoints) * Scale - Margin;
         return Math.Clamp(y, 0, Math.Max(0, ContentHeight - ViewportHeight));
+    }
+
+    /// <summary>The place at the top of a view scrolled to a position (one margin below its edge): the inverse of <see cref="ScrollFor"/>.</summary>
+    /// <param name="scrollY">the scroll position in pixels</param>
+    /// <returns>the page there and how far below its top, never above it</returns>
+    public ReaderLocation LocationAt(double scrollY)
+    {
+        if (_pages.Length == 0) return default;
+        double y = scrollY + Margin;
+        int page = NearestPage(y);
+        return new ReaderLocation(page, Math.Max(0, (y - _tops[page]) / Scale));
     }
 
     /// <summary>Where a pixel of the content is on the page under it.</summary>

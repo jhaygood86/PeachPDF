@@ -121,10 +121,36 @@ public class PageLayoutModelTests
         var second = layout.PageRect(1);
 
         Assert.Equal(0, layout.ScrollFor(new ReaderLocation(0)));
-        Assert.Equal(second.Y - 12, layout.ScrollFor(new ReaderLocation(1)), 6);
+        Assert.Equal(second.Y - 16, layout.ScrollFor(new ReaderLocation(1)), 6);
         Assert.Equal(second.Y + 100 * layout.Scale - 16, layout.ScrollFor(new ReaderLocation(1, 100)), 6);
         Assert.Equal(layout.ContentHeight - 800, layout.ScrollFor(new ReaderLocation(2, 600)), 6);     // clamped to the end
         Assert.Equal(layout.ScrollFor(new ReaderLocation(2)), layout.ScrollFor(new ReaderLocation(99)));   // a page past the end is the last page
+    }
+
+    [Fact]
+    public void LocationAt_IsTheInverseOfScrollFor()
+    {
+        var layout = Layout(height: 800);
+
+        foreach (var place in new[] { new ReaderLocation(0), new ReaderLocation(1), new ReaderLocation(1, 100), new ReaderLocation(2, 33.5) })
+        {
+            var back = layout.LocationAt(layout.ScrollFor(place));
+            Assert.Equal(place.PageIndex, back.PageIndex);
+            Assert.Equal(place.TopPoints, back.TopPoints, 6);
+        }
+
+        Assert.Equal(default, new PageLayoutModel([], 100, 100).LocationAt(50));
+    }
+
+    [Fact]
+    public void NearestPageTo_ClampsToThePagesThereAre()
+    {
+        var layout = Layout();
+
+        Assert.Equal(0, layout.NearestPageTo(-500));
+        Assert.Equal(2, layout.NearestPageTo(layout.ContentHeight + 500));
+        Assert.Equal(1, layout.NearestPageTo(layout.PageRect(1).Y + 3));
+        Assert.Equal(0, new PageLayoutModel([], 100, 100).NearestPageTo(5));
     }
 
     [Fact]
