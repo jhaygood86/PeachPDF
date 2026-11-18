@@ -106,6 +106,8 @@ kind, so a font is never measured by one engine and drawn by the other.
 
 `Win2dRenderContext.TextPositionSteps` (1 to 64, default 64) is how many steps of a pixel a run's position is kept at before its coverage is made. A run is drawn from a mask made for where it falls within a pixel, so text that moves a little every frame needs a new mask, and a new bitmap on the device, for each position it passes through; with 4 steps there are four to make, at the cost of drawing text up to an eighth of a pixel from where it belongs. `HtmlView` sets 4 while it plays animations. It has no effect in DirectWrite mode.
 
+Text addressed by glyph index (`DrawGlyphs`, which is what a PDF page's text is) takes the same path as a string: its letters' masks come from the same cache, placed where the run puts each glyph, so PDF text is hinted and, under `Auto` on screen with ClearType on, drawn with color stripes. The one difference: a run with a synthetic bold or italic, or in a DirectWrite font, is filled as outlines.
+
 `Grayscale` and `Lcd` draw a run as `Outline` when it is rotated or skewed, or in a color font, and a run too large to rasterize over a host's session. `Auto` also draws text above 48 device pixels per em as `Outline`, where hinting and the weight correction mean nothing and a mask costs far more.
 
 **What LCD text needs.** Blending each color channel with its own coverage needs the pixels behind the text. There are two ways to get them.
