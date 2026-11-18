@@ -42,7 +42,7 @@ public sealed class ReaderDocument
         var source = PdfPageSource.Open(bytes, password);
         string title = source.GetMetadata().Title is { Length: > 0 } t && !string.IsNullOrWhiteSpace(t)
             ? t.Trim()
-            : !string.IsNullOrWhiteSpace(fileName) ? Path.GetFileNameWithoutExtension(fileName) : "Untitled";
+            : !string.IsNullOrWhiteSpace(fileName) ? TitleFromFileName(fileName) : "Untitled";
         return new ReaderDocument(source, BookmarkStorage.KeyOf(bytes), title);
     }
 
@@ -54,6 +54,14 @@ public sealed class ReaderDocument
 
     /// <summary>Identifies the document by its contents, for keeping its bookmarks; see <see cref="BookmarkStorage.KeyOf"/>.</summary>
     public string Key { get; }
+
+    /// <summary>A file's name without its folder and extension, whichever separator the path uses (a path from another system is read as it was written).</summary>
+    private static string TitleFromFileName(string fileName)
+    {
+        var name = fileName[(fileName.LastIndexOfAny(['/', (char)92]) + 1)..];
+        var title = Path.GetFileNameWithoutExtension(name);
+        return title.Length > 0 ? title : name;
+    }
 
     /// <summary>The title in the file, or the file's name without its extension.</summary>
     public string Title { get; }

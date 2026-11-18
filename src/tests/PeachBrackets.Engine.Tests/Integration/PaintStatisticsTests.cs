@@ -90,8 +90,13 @@ namespace PeachBrackets.Engine.Tests.Integration
                 System.Environment.SetEnvironmentVariable("PEACH_PAINT_STATS_FILE", null);
             }
 
-            Assert.Contains("PEACH_PAINT_STATS(note) to the file", await System.IO.File.ReadAllTextAsync(file, TestContext.Current.CancellationToken));
-            System.IO.File.Delete(file);
+            // Tests in other collections paint while the switch is on, and append to the same file: read it without taking it from them.
+            string text;
+            using (var stream = new System.IO.FileStream(file, System.IO.FileMode.Open, System.IO.FileAccess.Read, System.IO.FileShare.ReadWrite | System.IO.FileShare.Delete))
+            using (var reader = new System.IO.StreamReader(stream))
+                text = await reader.ReadToEndAsync(TestContext.Current.CancellationToken);
+            Assert.Contains("PEACH_PAINT_STATS(note) to the file", text);
+            try { System.IO.File.Delete(file); } catch (System.IO.IOException) { }
         }
     }
 }

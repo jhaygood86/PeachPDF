@@ -55,8 +55,15 @@ namespace PeachBrackets.Html.Paint
             Debug.WriteLine(line);
             if (Environment.GetEnvironmentVariable("PEACH_PAINT_STATS_FILE") is { Length: > 0 } file)
             {
-                lock (typeof(PaintStatistics))
-                    System.IO.File.AppendAllText(file, line + Environment.NewLine);
+                // A diagnostic never fails the paint it is describing: a file another process (or a reader of it) holds open just loses the line.
+                try
+                {
+                    lock (typeof(PaintStatistics))
+                        System.IO.File.AppendAllText(file, line + Environment.NewLine);
+                }
+                catch (System.IO.IOException)
+                {
+                }
             }
         }
     }
