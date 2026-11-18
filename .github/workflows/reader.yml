@@ -38,7 +38,7 @@ jobs:
       uses: ./.github/actions/setup-dotnet
 
     - name: Install the MAUI workload
-      run: dotnet workload install maui-windows
+      run: dotnet workload install maui-windows maui-android
 
     - name: Build the app for Windows
       run: dotnet build src/reader/PeachReader/PeachReader.csproj -f net11.0-windows10.0.19041.0 --configuration Release -p:TreatWarningsAsErrors=true
@@ -67,7 +67,7 @@ jobs:
       uses: ./.github/actions/setup-dotnet
 
     - name: Install the Android workload
-      run: dotnet workload install android
+      run: dotnet workload install maui-android
 
     # net11.0-android compiles against the Android SDK platform for API 37; the SDK's own target installs it.
     - name: Install the Android SDK platform

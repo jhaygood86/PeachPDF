@@ -41,8 +41,8 @@ jobs:
     - name: Setup .NET
       uses: ./.github/actions/setup-dotnet
 
-    - name: Install the macos and ios workloads
-      run: dotnet workload install macos ios
+    - name: Install the macos, ios and maccatalyst workloads
+      run: dotnet workload install macos ios maccatalyst
 
     - name: Build the package for macOS and iOS
       run: dotnet build src/views/PeachBrackets.Apple/PeachBrackets.Apple.csproj --configuration Release -p:ValidateXcodeVersion=false
