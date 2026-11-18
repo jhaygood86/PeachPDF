@@ -139,6 +139,27 @@ public class ViewportControllerTests
     }
 
     [Fact]
+    public void ExtendSelectionTo_MovesTheFreeEndOfAWordSelectionAnywhereOnThePages()
+    {
+        var c = Controller();
+        var (x, y) = At(c, 0, 14, 23);
+        c.PointerDown(x, y, clickCount: 2);
+        c.PointerUp(x, y);
+        Assert.Equal("Introduction", c.CopySelection());
+
+        var (ex, ey) = At(c, 0, 87, 23);
+        c.ExtendSelectionTo(ex, ey);
+        Assert.StartsWith("Introduction to", c.CopySelection());
+
+        c.ExtendSelectionTo(c.Layout.ContentWidth - 2, c.Layout.PageRect(1).Y + 40);      // on the desk beside page 2
+        Assert.Contains("Methods", c.CopySelection());
+
+        c.Selection.Clear();
+        c.ExtendSelectionTo(ex, ey);                                                      // nothing selected: nothing to extend
+        Assert.False(c.Selection.HasSelection);
+    }
+
+    [Fact]
     public void AClickOnPlainPaper_ClearsTheSelection()
     {
         var c = Controller();

@@ -6,7 +6,8 @@
 	  maui workloads, so it is not in PeachPDF.slnx; build the project itself.
 	-->
 	<PropertyGroup>
-		<TargetFrameworks>net11.0-windows10.0.19041.0</TargetFrameworks>
+		<TargetFrameworks>net11.0-android</TargetFrameworks>
+		<TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('windows'))">$(TargetFrameworks);net11.0-windows10.0.19041.0</TargetFrameworks>
 		<OutputType>Exe</OutputType>
 		<RootNamespace>PeachReader</RootNamespace>
 		<AssemblyName>PeachReader</AssemblyName>
@@ -19,6 +20,7 @@
 		<ApplicationDisplayVersion>1.0</ApplicationDisplayVersion>
 		<ApplicationVersion>1</ApplicationVersion>
 		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.17763.0</SupportedOSPlatformVersion>
+		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">24.0</SupportedOSPlatformVersion>
 		<WindowsPackageType>None</WindowsPackageType>
 		<TargetPlatformMinVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.17763.0</TargetPlatformMinVersion>
 		<Win2DWarnNoPlatform>false</Win2DWarnNoPlatform>
@@ -31,6 +33,12 @@
 		<ProjectReference Include="..\PeachReader.Core\PeachReader.Core.csproj" />
 		<ProjectReference Include="..\..\drawing\PeachDrawing.PDF\PeachDrawing.PDF.csproj" />
 		<ProjectReference Include="..\..\drawing\PeachDrawing.Core\PeachDrawing.Core.csproj" />
+	</ItemGroup>
+
+	<!-- Android draws with Skia on the GPU through SkiaSharp's own GL view (the same one PeachBrackets.Android uses), not the MAUI wrapper. -->
+	<ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">
+		<ProjectReference Include="..\..\drawing\PeachDrawing.Skia\PeachDrawing.Skia.csproj" />
+		<PackageReference Include="SkiaSharp.Views" />
 	</ItemGroup>
 
 	<ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">

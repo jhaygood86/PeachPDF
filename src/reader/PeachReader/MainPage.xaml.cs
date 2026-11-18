@@ -45,11 +45,14 @@ public partial class MainPage : ContentPage
 #endif
             await StartUpAsync();
         };
+        IncomingDocument.Offered += () => MainThread.BeginInvokeOnMainThread(async () => await OpenIncomingAsync());
         SizeChanged += (_, _) =>
         {
-            if (_startedUp || Width <= 0) return;
+            if (Width <= 0) return;
+            ApplyLayoutMode();
+            if (_startedUp) return;
             _startedUp = true;
-            Sidebar.IsVisible = Width >= 720;         // a narrow window starts with the pages and the sidebar one tap away
+            Sidebar.IsVisible = !_narrow;             // a narrow window starts with the pages and the sidebar one tap away
         };
     }
 
@@ -76,6 +79,29 @@ public partial class MainPage : ContentPage
         }
     }
 
+    // ------------------------------------------------------------------ layout
+
+    private bool _narrow;
+
+    /// <summary>
+    /// In a window as narrow as a phone the sidebar would leave no room for the pages, so it is laid over them instead of beside them, and goes
+    /// away again when something in it is chosen.
+    /// </summary>
+    private void ApplyLayoutMode()
+    {
+        bool narrow = Width < 720;
+        if (narrow == _narrow && Sidebar.ZIndex == (narrow ? 10 : 0)) return;
+        _narrow = narrow;
+        Grid.SetColumn(Sidebar, narrow ? 1 : 0);
+        Sidebar.ZIndex = narrow ? 10 : 0;
+        Sidebar.HorizontalOptions = narrow ? LayoutOptions.Start : LayoutOptions.Fill;
+    }
+
+    private void HideSidebarWhenNarrow()
+    {
+        if (_narrow) Sidebar.IsVisible = false;
+    }
+
     // ------------------------------------------------------------------ opening
 
     private async Task StartUpAsync()
@@ -83,6 +109,12 @@ public partial class MainPage : ContentPage
         string? path = Environment.GetEnvironmentVariable("PEACHREADER_OPEN");
         path ??= Environment.GetCommandLineArgs().Skip(1).FirstOrDefault(a => a.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase));
         if (!string.IsNullOrWhiteSpace(path) && File.Exists(path)) await OpenPathAsync(path);
+        await OpenIncomingAsync();
+    }
+
+    private async Task OpenIncomingAsync()
+    {
+        if (IncomingDocument.Take() is { } incoming) await OpenBytesAsync(incoming.Bytes, incoming.Name, null);
     }
 
     private async void OnOpenClicked(object? sender, EventArgs e)
@@ -335,6 +367,7 @@ public partial class MainPage : ContentPage
     {
         if (e.CurrentSelection.FirstOrDefault() is not { } item) return;
         SideList.SelectedItem = null;
+        HideSidebarWhenNarrow();
         switch (item)
         {
             case OutlineRow row:
@@ -482,6 +515,8 @@ public partial class MainPage : ContentPage
         {
 #if WINDOWS
             WinUI.CrashLog.Write("copy failed: " + ex);
+#else
+            _ = ex;
 #endif
         }
     }

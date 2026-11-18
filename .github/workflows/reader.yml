@@ -1,7 +1,7 @@
 name: Reader
 
 # PeachReader, the MAUI PDF reader, needs the MAUI workloads, so the main test workflow does not build it (its platform-free core and tests run there,
-# in the `small` leg). This workflow builds the app for each platform head that exists. It is not part of the required `test-gate`.
+# in the `small` leg). This workflow builds the app for each platform head that exists (Windows and Android). It is not part of the required `test-gate`.
 
 on:
   pull_request:
@@ -10,6 +10,7 @@ on:
       - 'src/reader/**'
       - 'src/drawing/PeachDrawing.PDF/**'
       - 'src/drawing/PeachDrawing.Win2D/**'
+      - 'src/drawing/PeachDrawing.Skia/**'
       - 'src/drawing/PeachDrawing.Core/**'
       - 'src/Directory.Packages.props'
       - '.github/workflows/reader.yml'
@@ -55,3 +56,22 @@ jobs:
         $log = Join-Path $env:LOCALAPPDATA 'PeachReader/crash.log'
         if (Test-Path $log) { Get-Content $log; throw 'PeachReader wrote a crash log' }
         Stop-Process -Id $process.Id
+
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up .NET
+      uses: ./.github/actions/setup-dotnet
+
+    - name: Install the Android workload
+      run: dotnet workload install android
+
+    # net11.0-android compiles against the Android SDK platform for API 37; the SDK's own target installs it.
+    - name: Install the Android SDK platform
+      run: dotnet build src/reader/PeachReader/PeachReader.csproj -f net11.0-android -t:InstallAndroidDependencies -p:AcceptAndroidSDKLicenses=true "-p:AndroidSdkDirectory=$env:ANDROID_HOME"
+
+    - name: Build the app for Android
+      run: dotnet build src/reader/PeachReader/PeachReader.csproj -f net11.0-android --configuration Release -p:TreatWarningsAsErrors=true

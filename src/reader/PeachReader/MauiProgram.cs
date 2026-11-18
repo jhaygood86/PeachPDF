@@ -13,6 +13,9 @@ public static class MauiProgram
 #if WINDOWS
             handlers.AddHandler<Views.PageViewport, WinUI.PageViewportHandler>();
             Thumbnails.Renderer = new WinUI.ThumbnailRenderer();
+#elif ANDROID
+            handlers.AddHandler<Views.PageViewport, Droid.PageViewportHandler>();
+            Thumbnails.Renderer = new Droid.ThumbnailRenderer();
 #endif
         });
         return builder.Build();

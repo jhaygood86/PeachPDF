@@ -330,6 +330,21 @@ public sealed class ViewportController
         }
     }
 
+    /// <summary>
+    /// Moves the free end of the selection to the character nearest a place, wherever the place is: what a finger does after a long press has
+    /// selected a word and it keeps moving.
+    /// </summary>
+    /// <param name="x">the position from the left of the content, in pixels</param>
+    /// <param name="y">the position from the top of the content, in pixels</param>
+    public void ExtendSelectionTo(double x, double y)
+    {
+        if (_layout.PageCount == 0 || !Selection.HasSelection) return;
+        int page = _layout.PageAt(y) is var at and >= 0 ? at : _layout.NearestPageTo(y);
+        var r = _layout.PageRect(page);
+        int caret = Document.GetText(page).HitTest(new PaintPoint((x - r.X) / _layout.Scale, (y - r.Y) / _layout.Scale), nearest: true);
+        if (caret >= 0) Selection.Extend(page, caret);
+    }
+
     /// <summary>The pointer left the view or was cancelled.</summary>
     public void PointerCancel()
     {
