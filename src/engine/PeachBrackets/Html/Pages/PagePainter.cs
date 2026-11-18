@@ -325,7 +325,7 @@ namespace PeachBrackets.Html.Pages
                     mR,
                     mB,
                     applicableMargins,
-                    pageNumber + _container.PageNumberOffset,
+                    _container.PageCounterFor(pageNumber - 1),
                     _container.TotalPagesOverride ?? totalPages,
                     pageY,
                     _container.NamedStrings,

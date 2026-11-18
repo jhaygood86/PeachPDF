@@ -284,7 +284,7 @@ namespace PeachBrackets.Html.Dom
                     var pageIndex = PageAnchorResolver.ResolvePixelYToPage(
                         container, map.SlotToPage, map.MaxMappedSlot, map.FallbackPageCount, targetRect.Top);
                     // Numbered like counter(page): a document that is one part of a larger one counts on from the part before it.
-                    sb.Append(CssCounterEngine.FormatCounterValue(pageIndex + 1 + container.PageNumberOffset, style, cssBox));
+                    sb.Append(CssCounterEngine.FormatCounterValue(container.PageCounterFor(pageIndex), style, cssBox));
                 }
                 else
                 {
@@ -441,7 +441,7 @@ namespace PeachBrackets.Html.Dom
         /// text for <see cref="CssCounterEngine.FormatCounterValue(int, string, CssBox?)"/>: a name, or a
         /// <c>symbols()</c> function's source text. <c>decimal</c> when absent or anything else.
         /// </summary>
-        private static string CounterStyleArgument(Token[] arguments, int index)
+        internal static string CounterStyleArgument(Token[] arguments, int index)
         {
             if (arguments.Length <= index) return Keywords.Decimal;
 
@@ -484,7 +484,7 @@ namespace PeachBrackets.Html.Dom
             {
                 if (counterName.Data.Equals("page", StringComparison.OrdinalIgnoreCase))
                 {
-                    sb.Append(CssCounterEngine.FormatCounterValue(pageContext.Page + counterBox.HtmlContainer.PageNumberOffset, style, counterBox));
+                    sb.Append(CssCounterEngine.FormatCounterValue(counterBox.HtmlContainer.RunningElementPageCounter, style, counterBox));
                     return;
                 }
 

@@ -1927,6 +1927,63 @@ namespace PeachBrackets.Html
         /// </remarks>
         internal (int Page, int Pages)? RunningElementPageContext { get; set; }
 
+        /// <summary>The <c>page</c> counter's value on the page <see cref="RunningElementPageContext"/> names, which a running element's <c>counter(page)</c> shows.</summary>
+        internal int RunningElementPageCounter { get; set; }
+
+        /// <summary>
+        /// The value of the <c>page</c> counter on each page, indexed by fragmentainer, or null when the document has no <c>@page</c> rule
+        /// (every page then counts one more than the one before, from <see cref="PageNumberOffset"/>). Built once pagination is known
+        /// (<see cref="LayoutMarginBoxes"/>), because the <c>@page</c> rule a page matches depends on its position and name.
+        /// </summary>
+        internal int[]? PageCounterValues { get; private set; }
+
+        /// <summary>
+        /// The <c>page</c> counter's value on the page at <paramref name="pageIndex"/> (zero-based): what <c>counter(page)</c> shows there, the
+        /// pages before this document in its file included.
+        /// </summary>
+        internal int PageCounterFor(int pageIndex) =>
+            PageCounterValues is { } values && pageIndex >= 0 && pageIndex < values.Length ? values[pageIndex] : pageIndex + 1 + PageNumberOffset;
+
+        /// <summary>
+        /// css-page-3 section 6.1: <c>page</c> is a real counter, one more on every page unless <c>@page</c> says otherwise. A page whose
+        /// matching rules <c>counter-reset: page N</c> shows N (the idiom for restarting the numbering, as in every paged-media engine, so the
+        /// implicit increment does not also apply to it); an explicit <c>counter-increment: page K</c> replaces the implicit one-more; and
+        /// <c>counter-set: page N</c> is applied last. The first page is the offset plus one, so a document that is one part of a larger file
+        /// counts on from the part before it. Which rules a page matches is decided by its position and name, never by this counter.
+        /// </summary>
+        private int[] BuildPageCounterValues(FragmentTree tree)
+        {
+            var values = new int[tree.Fragmentainers.Count];
+            var current = PageNumberOffset;
+            for (var i = 0; i < values.Length; i++)
+            {
+                var fragmentainer = tree.Fragmentainers[i];
+                var pageNumber = i + 1;
+                var geom = PageGeometry.ResolveForMaterializedPage(fragmentainer.SlotIndex, pageNumber) ?? fragmentainer.Geometry;
+                var activeName = PageRuleResolver.ActiveNameAtPageEnd(_namedPageElements, geom.Top, geom.BandHeight);
+                var style = PageRuleResolver.SelectApplicablePageStyle(PageRules, pageNumber, activeName, IsReservedBlankSlot(fragmentainer.SlotIndex));
+
+                var reset = CounterListGrammar.TryGetValue(style?.CounterReset, Keywords.Page, 0, out var resetTo);
+                var explicitIncrement = CounterListGrammar.TryGetValue(style?.CounterIncrement, Keywords.Page, 1, out var increment);
+                var set = CounterListGrammar.TryGetValue(style?.CounterSet, Keywords.Page, 0, out var setTo);
+
+                if (reset)
+                {
+                    current = resetTo;
+                    if (explicitIncrement) current += increment;
+                }
+                else
+                {
+                    current += explicitIncrement ? increment : 1;
+                }
+
+                if (set) current = setTo;
+                values[i] = current;
+            }
+
+            return values;
+        }
+
         /// <summary>Pages that precede this document in the file it is part of; added to the page number a counter displays (see <c>HtmlDocumentOptions.PageNumberOffset</c>).</summary>
         internal int PageNumberOffset { get; set; }
 
@@ -2864,7 +2921,12 @@ namespace PeachBrackets.Html
             // correct (see its own HasVerticalMarginOverrides/HasHorizontalMarginOverrides/
             // HasSizeOverrides guard).
             if (tree.Fragmentainers.Count == 0 || PageRules.Count == 0)
+            {
+                PageCounterValues = null;
                 return tree;
+            }
+
+            PageCounterValues = BuildPageCounterValues(tree);
 
             var ppp = RenderContext?.LayoutUnitsPerPoint ?? 1.0;
             var sheetSizePt = new Size(PageSheetWidth / ppp, PageSheetHeight / ppp);
@@ -2934,6 +2996,7 @@ namespace PeachBrackets.Html
                         async ValueTask LayoutRunning(Rect rect)
                         {
                             RunningElementPageContext = (pageNumber, totalPages);
+                            RunningElementPageCounter = PageCounterFor(pageNumber - 1);
                             try
                             {
                                 await RunningElementLayout.LayoutRunningElementFor(g, runningBox, rect, this);
