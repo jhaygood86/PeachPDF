@@ -159,7 +159,7 @@ jobs:
     - name: Build small test projects
       if: matrix.suite == 'small'
       run: |
-        foreach ($p in 'PeachPDF.Cli.Tests', 'PeachDrawing.Core.Tests', 'PeachDrawing.Tests', 'PeachDrawing.PDF.Tests', 'PeachDrawing.Svg.Tests', 'PeachDrawing.Skia.Tests', 'PeachBrackets.Avalonia.Tests', 'PeachBrackets.Tests', 'PeachBrackets.WptRunner.Tests', 'PeachPDF.SourceGenerators.Tests', 'PeachDrawing.Text.Brotli.Tests') {
+        foreach ($p in 'PeachPDF.Cli.Tests', 'PeachDrawing.Core.Tests', 'PeachDrawing.Tests', 'PeachDrawing.PDF.Tests', 'PeachDrawing.Svg.Tests', 'PeachDrawing.Skia.Tests', 'PeachBrackets.Avalonia.Tests', 'PeachBrackets.Tests', 'PeachBrackets.WptRunner.Tests', 'PeachPDF.SourceGenerators.Tests', 'PeachDrawing.Text.Brotli.Tests', 'PeachReader.Core.Tests') {
           dotnet build "src/tests/$p/$p.csproj" --configuration Release
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         }
@@ -249,6 +249,11 @@ jobs:
     - name: Test managed Brotli
       if: matrix.suite == 'small'
       run: dotnet test --project ${{ github.workspace }}/src/tests/PeachDrawing.Text.Brotli.Tests/PeachDrawing.Text.Brotli.Tests.csproj --no-build --configuration Release --report-trx --report-trx-filename brotli-test-results.trx --coverlet --coverlet-output-format cobertura --coverlet-exclude-by-file "**/PeachPdfProductInfo.g.cs" --coverlet-exclude-by-file "**/PeachPDF.Cli/Program.cs" --coverlet-file-prefix brotli-test-results --results-directory coverage
+
+    # The platform-free logic of the PeachReader app (outline tree, page layout, links, history, bookmarks, selection, search), read through PeachDrawing.PDF.
+    - name: Test PeachReader core
+      if: matrix.suite == 'small'
+      run: dotnet test --project ${{ github.workspace }}/src/tests/PeachReader.Core.Tests/PeachReader.Core.Tests.csproj --no-build --configuration Release --report-trx --report-trx-filename reader-core-test-results.trx --coverlet --coverlet-output-format cobertura --coverlet-exclude-by-file "**/PeachPdfProductInfo.g.cs" --coverlet-exclude-by-file "**/PeachPDF.Cli/Program.cs" --coverlet-file-prefix reader-core-test-results --results-directory coverage
 
     # ---- artifacts --------------------------------------------------------------------------
 

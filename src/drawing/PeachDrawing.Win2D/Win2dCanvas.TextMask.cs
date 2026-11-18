@@ -2,6 +2,7 @@ using Microsoft.Graphics.Canvas;
 using PeachDrawing.Core;
 using PeachDrawing.Text.Shaping;
 using System;
+using System.Collections.Generic;
 using System.Numerics;
 using Windows.Graphics.DirectX;
 
@@ -72,6 +73,70 @@ public sealed partial class Win2dCanvas
         if (typeface.HasBitmapGlyphs || typeface.HasSvgGlyphs || typeface.HasColorGlyphs)
             return false;
 
+        if (!TryPlanMask(font, out var plan))
+            return false;
+
+        // Shaped, hinted and rasterized once for a run at this place on the pixel grid; drawn again (as a view does for the strip it scrolls into
+        // sight) it comes from the cache. The part of a run outside what can be seen is cut off.
+        var maskStarted = Win2dPaintStatistics.Start();
+        var mask = _context.TextMasks.Get(_context, str, font, letterSpacing, _ppp, plan.ScaleX, plan.ScaleY,
+            (point.X * plan.ScaleX) + plan.TranslateX, (point.Y * plan.ScaleY) + plan.TranslateY, palette, features, plan.Lcd ? 3 : 1, plan.Limit,
+            out var maskKey, out var whole);
+        Win2dPaintStatistics.Stop(Win2dPaintStatistics.Counter.TextMask, maskStarted);
+        if (mask is not { } run)
+            return false;
+
+        if (run.Width == 0)
+            return true;
+
+        DrawPlanned(plan, run, color, maskKey, whole);
+        return true;
+    }
+
+    /// <summary>
+    /// Draws glyphs addressed by index (what a PDF's text is) as one hinted, corrected coverage mask, the way <see cref="TryDrawMasked"/> draws a string:
+    /// each glyph's mask comes from the cache of letters, placed where the run puts it, so a page of PDF text costs what a page of HTML text does. False,
+    /// with nothing drawn, when the run cannot be drawn that way (see <see cref="TryPlanMask"/>) and the caller fills its outlines.
+    /// </summary>
+    private bool TryDrawMaskedGlyphs(IReadOnlyList<GlyphPlacement> glyphs, Font font, PaintColor color)
+    {
+        // A DirectWrite font has no typeface of its own here (only an outline match), and Windows rasterizes its text itself.
+        if (font.Typeface is not { } typeface)
+            return false;
+
+        if (typeface.HasBitmapGlyphs || typeface.HasSvgGlyphs || typeface.HasColorGlyphs || font.SyntheticStyle != PeachDrawing.Text.SyntheticStyle.None)
+            return false;
+
+        if (!TryPlanMask(font, out var plan))
+            return false;
+
+        var maskStarted = Win2dPaintStatistics.Start();
+        var mask = _context.GlyphMasks.TryRasterizeGlyphs(_context, font, glyphs, _ppp, plan.ScaleX, plan.ScaleY, plan.TranslateX, plan.TranslateY,
+            plan.Lcd ? 3 : 1, plan.Limit);
+        Win2dPaintStatistics.Stop(Win2dPaintStatistics.Counter.TextMask, maskStarted);
+        if (mask is not { } run)
+            return false;
+
+        if (run.Width == 0)
+            return true;
+
+        // A run of glyphs is not keyed for the bitmap cache: it is drawn from the cached masks of its letters.
+        DrawPlanned(plan, run, color, default, false);
+        return true;
+    }
+
+    /// <summary>How a run is to be drawn as a mask: the device scale and translation, whether it has a coverage per stripe, and what can be seen.</summary>
+    private readonly record struct MaskPlan(
+        double ScaleX, double ScaleY, double TranslateX, double TranslateY, bool Gpu, bool Lcd, Win2dTextRendering Requested,
+        (int Left, int Top, int Right, int Bottom)? Limit);
+
+    /// <summary>
+    /// Works out how a run in <paramref name="font"/> is drawn as a mask, or false when it cannot be: a rotated or skewed transform has no pixel grid
+    /// to fit to, and <see cref="Win2dTextRendering.Auto"/> leaves large text as vectors.
+    /// </summary>
+    private bool TryPlanMask(Font font, out MaskPlan plan)
+    {
+        plan = default;
         var transform = _session.Transform;
         if (transform.M12 != 0 || transform.M21 != 0 || !(transform.M11 > 0) || !(transform.M22 > 0))
             return false;
@@ -104,28 +169,22 @@ public sealed partial class Win2dCanvas
         else if (_backdrop is { } page)
             limit = (0, 0, (int)page.SizeInPixels.Width, (int)page.SizeInPixels.Height);
 
-        // Shaped, hinted and rasterized once for a run at this place on the pixel grid; drawn again (as a view does for the strip it scrolls into
-        // sight) it comes from the cache. The part of a run outside what can be seen is cut off.
-        var maskStarted = Win2dPaintStatistics.Start();
-        var mask = _context.TextMasks.Get(_context, str, font, letterSpacing, _ppp, scaleX, scaleY,
-            (point.X * scaleX) + (transform.M31 * dpiScale), (point.Y * scaleY) + (transform.M32 * dpiScale), palette, features, lcd ? 3 : 1, limit,
-            out var maskKey, out var whole);
-        Win2dPaintStatistics.Stop(Win2dPaintStatistics.Counter.TextMask, maskStarted);
-        if (mask is not { } run)
-            return false;
+        plan = new MaskPlan(scaleX, scaleY, transform.M31 * dpiScale, transform.M32 * dpiScale, gpu, lcd, requested, limit);
+        return true;
+    }
 
-        if (run.Width == 0)
-            return true;
-
-        if (gpu)
+    /// <summary>Puts a made mask on the screen: queued for the GPU blend, or read back, blended and drawn.</summary>
+    private void DrawPlanned(MaskPlan plan, Win2dTextMask run, PaintColor color, Win2dTextMaskCache.Key key, bool whole)
+    {
+        if (plan.Gpu)
         {
-            var bgr = lcd && (_context.LcdBgrStripes || (requested == Win2dTextRendering.Auto && (_systemBgr ??= Win2dSystemText.BgrStripes)));
-            QueueText(run, color, maskKey, whole, bgr);
-            return true;
+            var bgr = plan.Lcd && (_context.LcdBgrStripes || (plan.Requested == Win2dTextRendering.Auto && (_systemBgr ??= Win2dSystemText.BgrStripes)));
+            QueueText(run, color, key, whole, bgr);
+            return;
         }
 
         FlushText();
-        return DrawMask(run, color, lcd, requested);
+        DrawMask(run, color, plan.Lcd, plan.Requested);
     }
 
     private bool DrawMask(Win2dTextMask run, PaintColor color, bool lcd, Win2dTextRendering requested)

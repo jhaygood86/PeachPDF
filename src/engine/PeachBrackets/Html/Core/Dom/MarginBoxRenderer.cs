@@ -652,9 +652,10 @@ namespace PeachBrackets.Html.Dom
                             .ToArray();
                         if (args.Length > 0 && args[0] is { Type: TokenType.Hash or TokenType.AtKeyword or TokenType.Ident } nameToken)
                         {
-                            sb.Append(nameToken.Data.Equals("pages", StringComparison.OrdinalIgnoreCase)
-                                ? totalPages.ToString()
-                                : pageNumber.ToString());
+                            // counter(page, <style>) and counter(pages, <style>): the style names a predefined or @counter-style list; none means decimal.
+                            var value = nameToken.Data.Equals("pages", StringComparison.OrdinalIgnoreCase) ? totalPages : pageNumber;
+                            var style = args.Length > 1 ? CssContentEngine.CounterStyleArgument(args.Where(t => t.Type != TokenType.Comma).ToArray(), 1) : Keywords.Decimal;
+                            sb.Append(CssCounterEngine.FormatCounterValue(value, style, htmlContainer.CounterStyles));
                         }
                         break;
                     }

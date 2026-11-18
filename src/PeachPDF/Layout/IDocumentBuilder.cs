@@ -73,6 +73,15 @@ namespace PeachPDF.Layout
         void Prepend(PdfOperation operation, PdfCopyMode? mode = null);
 
         /// <summary>
+        /// Labels pages the way a PDF viewer shows them in its page box ("iv", "A-3"), by page position: a range starts at its
+        /// <see cref="PdfPageLabelRange.StartPageIndex"/> (counted from this document's first page, the pages of added PDFs included) and runs
+        /// to the next range. Use <see cref="IPageDescriptor.PageLabel"/> instead to label a section whatever pages come before it. A range
+        /// here replaces one a section set at the same page.
+        /// </summary>
+        /// <param name="ranges">the ranges; a start beyond the last page of the document is an error when the document is built</param>
+        void PageLabels(System.Collections.Generic.IEnumerable<PdfPageLabelRange> ranges);
+
+        /// <summary>
         /// Numbers the pages this document generates as one run with the pages of the added PDFs: <c>counter(page)</c> in a footer continues after the
         /// PDFs that come before it, and <c>counter(pages)</c> reports the total of all of them. Without this call the generated pages number from 1
         /// and count only themselves.

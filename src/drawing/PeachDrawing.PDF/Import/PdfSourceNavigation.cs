@@ -154,6 +154,97 @@ internal sealed class PdfSourceNavigation(PdfSourceDocument doc)
         }
     }
 
+    // ------------------------------------------------------------------ page labels
+
+    /// <summary>The label of every page (<c>/PageLabels</c>: a number tree of ranges, each with a numbering style, a prefix and a start), or the page number when the file has none.</summary>
+    public IReadOnlyList<string> PageLabels()
+    {
+        var values = PageLabelValues();
+        var labels = new string[values.Count];
+        for (int i = 0; i < labels.Length; i++)
+        {
+            var (style, prefix, number) = values[i];
+            labels[i] = prefix + style switch
+            {
+                PdfPageLabelStyle.Decimal => number.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                PdfPageLabelStyle.RomanUpper => Roman(number, upper: true),
+                PdfPageLabelStyle.RomanLower => Roman(number, upper: false),
+                PdfPageLabelStyle.LettersUpper => Letters(number, upper: true),
+                PdfPageLabelStyle.LettersLower => Letters(number, upper: false),
+                _ => "",
+            };
+        }
+        return labels;
+    }
+
+    /// <summary>Whether the file has a page-label range of its own.</summary>
+    public bool HasPageLabels() => Catalog is { } catalog && doc.DictOf(catalog, "PageLabels") is { } tree && PageLabelRanges(tree).Count > 0;
+
+    SortedDictionary<int, PdfDictionary> PageLabelRanges(PdfDictionary tree)
+    {
+        var ranges = new SortedDictionary<int, PdfDictionary>();
+        WalkNumberTree(tree, ranges, 0);
+        return ranges;
+    }
+
+    /// <summary>What each page's label is made of - its numbering style, prefix and number - which is what a writer needs to carry the labels into another file.</summary>
+    public IReadOnlyList<(PdfPageLabelStyle Style, string Prefix, int Number)> PageLabelValues()
+    {
+        int count = doc.Pages.Count;
+        var ranges = Catalog is { } catalog && doc.DictOf(catalog, "PageLabels") is { } tree ? PageLabelRanges(tree) : [];
+        var values = new (PdfPageLabelStyle, string, int)[count];
+        PdfDictionary? current = null;
+        int rangeStart = 0;
+        using var next = ranges.GetEnumerator();
+        bool more = next.MoveNext();
+        for (int i = 0; i < count; i++)
+        {
+            while (more && next.Current.Key <= i) { rangeStart = next.Current.Key; current = next.Current.Value; more = next.MoveNext(); }
+            if (current is null) { values[i] = (PdfPageLabelStyle.Decimal, "", i + 1); continue; }
+            double start = doc.NumberOf(current.GetRaw("St"), 1);
+            int number = (start >= 0 ? (int)start : 1) + (i - rangeStart);
+            var style = doc.NameOf(current.GetRaw("S")) switch
+            {
+                "/D" => PdfPageLabelStyle.Decimal,
+                "/R" => PdfPageLabelStyle.RomanUpper,
+                "/r" => PdfPageLabelStyle.RomanLower,
+                "/A" => PdfPageLabelStyle.LettersUpper,
+                "/a" => PdfPageLabelStyle.LettersLower,
+                _ => PdfPageLabelStyle.None,
+            };
+            values[i] = (style, TextValue(current.GetRaw("P")) ?? "", number);
+        }
+        return values;
+    }
+
+    void WalkNumberTree(PdfDictionary node, SortedDictionary<int, PdfDictionary> into, int depth)
+    {
+        if (depth > MaxDepth) return;
+        if (doc.ArrayOf(node, "Nums") is { } pairs)
+            for (int i = 0; i + 1 < pairs.Elements.Count; i += 2)
+                if (doc.Resolve(pairs.Elements[i + 1]) is PdfDictionary range && doc.IntOf(pairs.Elements[i]) is >= 0 and var key) into[key] = range;
+        if (doc.ArrayOf(node, "Kids") is { } kids)
+            foreach (var kid in kids.Elements)
+                if (doc.Resolve(kid) is PdfDictionary child) WalkNumberTree(child, into, depth + 1);
+    }
+
+    static string Roman(int n, bool upper)
+    {
+        if (n <= 0 || n >= 4000) return n.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        var sb = new StringBuilder();
+        foreach (var (value, text) in new[] { (1000, "m"), (900, "cm"), (500, "d"), (400, "cd"), (100, "c"), (90, "xc"), (50, "l"), (40, "xl"), (10, "x"), (9, "ix"), (5, "v"), (4, "iv"), (1, "i") })
+            while (n >= value) { sb.Append(text); n -= value; }
+        return upper ? sb.ToString().ToUpperInvariant() : sb.ToString();
+    }
+
+    /// <summary>A, B ... Z, AA, BB ... ZZ, AAA ... (ISO 32000-1 12.4.2: the letter repeats as the number passes 26).</summary>
+    static string Letters(int n, bool upper)
+    {
+        if (n <= 0) return "";
+        char letter = (char)((upper ? 'A' : 'a') + (n - 1) % 26);
+        return new string(letter, (n - 1) / 26 + 1);
+    }
+
     // ------------------------------------------------------------------ links
 
     /// <summary>The link annotations of a page that open a web address or lead to another place in the file.</summary>

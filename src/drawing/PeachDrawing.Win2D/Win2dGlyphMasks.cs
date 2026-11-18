@@ -157,6 +157,117 @@ internal sealed class Win2dGlyphMaskCache
         return new Win2dTextMask(samples, left, top, width, height, subPixels);
     }
 
+    /// <summary>
+    /// The mask of a run of glyphs addressed by index (their origins in layout units, scaled by <paramref name="deviceScaleX"/> and
+    /// <paramref name="deviceScaleY"/> and moved by <paramref name="translateX"/>, <paramref name="translateY"/> device pixels), in device pixels
+    /// and cut to <paramref name="limit"/> when one is given; empty when none of it can be seen, and null when the run cannot be made from letters
+    /// (an oversized run, which the caller fills as outlines).
+    /// </summary>
+    internal Win2dTextMask? TryRasterizeGlyphs(Win2dRenderContext context, Font font, IReadOnlyList<GlyphPlacement> glyphs, double layoutUnitsPerPoint,
+        double deviceScaleX, double deviceScaleY, double translateX, double translateY, int subPixels, (int Left, int Top, int Right, int Bottom)? limit)
+    {
+        if (!Enabled || font.SyntheticStyle != SyntheticStyle.None || font.Typeface is not { } typeface || glyphs.Count == 0)
+            return null;
+
+        var metrics = typeface.Metrics;
+        var unitsPerEm = metrics.UnitsPerEm;
+        if (unitsPerEm == 0)
+            return null;
+
+        var pixelsPerEmX = font.Size * layoutUnitsPerPoint * deviceScaleX;
+        var pixelsPerEmY = font.Size * layoutUnitsPerPoint * deviceScaleY;
+        var above = pixelsPerEmY * metrics.CellAscent / unitsPerEm * 1.25 + 3;
+        var below = pixelsPerEmY * metrics.CellDescent / unitsPerEm * 1.25 + 3;
+        var reachLeft = pixelsPerEmX * 0.5 + 3;
+        var reachRight = pixelsPerEmX * 1.6 + 4;
+
+        // Where each glyph's origin falls on the device grid, and the box all of them can reach.
+        var xs = new double[glyphs.Count];
+        var ys = new double[glyphs.Count];
+        double minX = double.MaxValue, maxX = double.MinValue, minY = double.MaxValue, maxY = double.MinValue;
+        for (var i = 0; i < glyphs.Count; i++)
+        {
+            xs[i] = translateX + (glyphs[i].X * deviceScaleX);
+            ys[i] = translateY + (glyphs[i].Y * deviceScaleY);
+            if (double.IsNaN(xs[i]) || double.IsNaN(ys[i]) || double.IsInfinity(xs[i]) || double.IsInfinity(ys[i]))
+                return null;
+            minX = Math.Min(minX, xs[i]);
+            maxX = Math.Max(maxX, xs[i]);
+            minY = Math.Min(minY, ys[i]);
+            maxY = Math.Max(maxY, ys[i]);
+        }
+
+        var left = (int)Math.Floor(minX - reachLeft);
+        var right = (int)Math.Ceiling(maxX + reachRight);
+        var top = (int)Math.Floor(minY - above);
+        var bottom = (int)Math.Ceiling(maxY + below);
+        if (limit is { } visible)
+        {
+            left = Math.Max(left, visible.Left);
+            top = Math.Max(top, visible.Top);
+            right = Math.Min(right, visible.Right);
+            bottom = Math.Min(bottom, visible.Bottom);
+        }
+
+        var width = right - left;
+        var height = bottom - top;
+        if (width <= 0 || height <= 0)
+            return new Win2dTextMask([], left, top, 0, 0, subPixels);
+
+        if ((long)width * height * subPixels > MaxSamples)
+            return null;
+
+        var raster = context.MaskContext;
+        var samples = new byte[width * subPixels * height];
+        var stride = width * subPixels;
+        for (var i = 0; i < glyphs.Count; i++)
+        {
+            var x = xs[i] - left;
+            var y = ys[i] - top;
+            var ix = (int)Math.Floor(x);
+            var iy = (int)Math.Floor(y);
+            var phaseX = (int)Math.Round((x - ix) * PhaseSteps);
+
+            // See TryRasterize: the baseline is quantized downward so the letters land on the row the whole run would have put them on.
+            var phaseY = (int)Math.Floor(((y - iy) * PhaseSteps) + 1e-6);
+            if (phaseX == PhaseSteps)
+            {
+                phaseX = 0;
+                ix++;
+            }
+
+            var entry = Glyph(context, font, typeface, glyphs[i].GlyphIndex, layoutUnitsPerPoint, deviceScaleX, deviceScaleY, subPixels, phaseX, phaseY, raster);
+            if (entry.Width == 0)
+                continue;
+
+            var destX = ix + entry.OffsetX;
+            var destY = iy + entry.OffsetY;
+            for (var row = 0; row < entry.Height; row++)
+            {
+                var dy = destY + row;
+                if ((uint)dy >= (uint)height)
+                    continue;
+
+                for (var col = 0; col < entry.Width; col++)
+                {
+                    var dx = destX + col;
+                    if ((uint)dx >= (uint)width)
+                        continue;
+
+                    var from = ((row * entry.Width) + col) * subPixels;
+                    var to = (dy * stride) + (dx * subPixels);
+                    for (var s = 0; s < subPixels; s++)
+                    {
+                        var sum = samples[to + s] + entry.Samples[from + s];
+                        samples[to + s] = (byte)(sum > 255 ? 255 : sum);
+                    }
+                }
+            }
+        }
+
+        return new Win2dTextMask(samples, left, top, width, height, subPixels);
+    }
+
     private Entry Glyph(Win2dRenderContext context, Font font, Typeface typeface, int glyph, double ppp, double scaleX, double scaleY, int subPixels,
         int phaseX, int phaseY, PeachDrawing.RasterRenderContext raster)
     {

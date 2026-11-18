@@ -79,8 +79,7 @@ namespace PeachDrawing.PDF.Tests.Import
 
         [Theory]
         [InlineData("/Subtype /Type3", "font /Type3")]
-        [InlineData("/Subtype /Type1 /FontDescriptor 6 0 R", "no embedded TrueType, OpenType, CFF or Type 1 program")]
-        [InlineData("/Subtype /Type0 /Encoding /UniJIS-UCS2-H", "Type0 encoding /UniJIS-UCS2-H")]
+        [InlineData("/Subtype /Type0 /Encoding /NoSuchCMap-H", "Type0 encoding /NoSuchCMap-H")]
         [InlineData("/Subtype /Type0 /Encoding /Identity-H", "Type0 without descendant")]
         public void FontsThatCannotBeDrawn_SayWhy(string entries, string expected)
         {
@@ -88,6 +87,18 @@ namespace PeachDrawing.PDF.Tests.Import
 
             Assert.Null(load);
             Assert.Equal(expected, why);
+        }
+
+        [Fact]
+        public void FontWithNoEmbeddedProgram_IsDrawnWithAnInstalledFamilyAndSaysWhich()
+        {
+            var load = Load("<< /Type /Font /Subtype /Type1 /BaseFont /NoSuchFontAnywhere /FontDescriptor 6 0 R >>", out var why,
+                "<< /Type /FontDescriptor /FontName /NoSuchFontAnywhere /Flags 34 >>");
+
+            Assert.NotNull(load);
+            Assert.Null(why);
+            Assert.StartsWith("NoSuchFontAnywhere -> ", load!.Substitution);
+            Assert.NotNull(load.GetFont(12));
         }
 
         [Fact]

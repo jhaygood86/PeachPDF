@@ -80,6 +80,19 @@ namespace PeachPDF.Layout
 
         public void UseContinuousPageNumbers() => ContinuousPageNumbers = true;
 
+        /// <summary>The page label ranges set by position, in the order set.</summary>
+        public List<PdfPageLabelRange> PageLabelRanges { get; } = [];
+
+        public void PageLabels(IEnumerable<PdfPageLabelRange> ranges)
+        {
+            ArgumentNullException.ThrowIfNull(ranges);
+            foreach (var range in ranges)
+            {
+                ArgumentNullException.ThrowIfNull(range);
+                PageLabelRanges.Add(range);
+            }
+        }
+
         private void Add(PdfOperation operation, PdfCopyMode? mode, bool prepend)
         {
             var section = new Section { Pdf = operation, Mode = mode };

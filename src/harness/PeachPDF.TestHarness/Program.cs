@@ -3,6 +3,7 @@ using PeachPDF.Rendering;
 using PeachDrawing.Core;
 using PeachPDF;
 using PeachPDF.Layout;
+using PdfPageLabelStyle = PeachDrawing.PDF.PdfPageLabelStyle;
 using PeachDrawing.PDF.Engine;
 using ScottPlot;
 using System.Diagnostics;
@@ -16732,6 +16733,34 @@ await SaveShowcaseAsync("document_mode_quirks", "Selectors & Cascade", "Document
     "`width: 120` is 120px and `color: c0392b` is a color. The next showcase is the same HTML with a DOCTYPE.",
     documentModeBody, new PdfGenerateConfig { PageSize = PageSize.A5 });
 
+const string pageCounterLabelsHtml =
+    """
+    <!DOCTYPE html>
+    <html><head><style>
+      @page { size: 320pt 180pt; margin: 30pt 24pt 40pt;
+              -peachpdf-pdf-page-label: counter(page, lower-roman);
+              @bottom-center { content: "printed " counter(page, lower-roman); font-size: 9pt; color: #555; } }
+      @page body { counter-reset: page 1; -peachpdf-pdf-page-label: counter(page);
+                   @bottom-center { content: "printed " counter(page); font-size: 9pt; color: #555; } }
+      @page appendix { counter-reset: page 1; -peachpdf-pdf-page-label: "App-" counter(page, upper-alpha);
+                   @bottom-center { content: "printed App-" counter(page, upper-alpha); font-size: 9pt; color: #555; } }
+      body { margin: 0; font-family: Arial, sans-serif; }
+      section { height: 100pt; break-before: page; }
+      section:first-child { break-before: auto; }
+      .body { page: body; } .appendix { page: appendix; }
+      h1 { font-size: 15pt; margin: 0 0 6pt; }
+    </style></head><body>
+      <section><h1>Preface</h1><p>The margin box prints i; the PDF's page label, in a viewer's page box, is i too.</p></section>
+      <section><h1>Contents</h1><p>Counter style lower-roman: ii.</p></section>
+      <section class="body"><h1>Chapter 1</h1><p>counter-reset: page 1 restarts the printed number and the viewer's label at 1.</p></section>
+      <section class="appendix"><h1>Appendix</h1><p>A prefix and upper-alpha: the label reads App-A.</p></section>
+    </body></html>
+    """;
+
+await SaveShowcaseAsync("page_counter_and_labels", "Paged Media", "Page Counter, Styles and PDF Page Labels",
+    "`counter-reset` on an `@page` restarts the page counter, `counter(page, lower-roman)` prints it in a counter style, and `-peachpdf-pdf-page-label` writes the same numbering into the PDF's page labels, so a viewer's page box and thumbnails read i, ii, 1 and App-A as the margins do.",
+    pageCounterLabelsHtml, new PdfGenerateConfig { PageSize = PageSize.A5 });
+
 await SaveShowcaseAsync("document_mode_standards", "Selectors & Cascade", "Document modes: with a DOCTYPE (standards)",
     "The same HTML with `<!DOCTYPE html>`: the standards. The paragraph keeps its top margin, the table inherits the italic, " +
     "the size and the color of the `div` around it, and the rules that rely on quirks (`.Note`, `width: 120`, `color: c0392b`) " +
@@ -16793,6 +16822,67 @@ await SaveDeclarativeShowcaseAsync("barcodes", "Document Building", "Barcodes",
             });
         }));
     })));
+
+const string pageLabelsSource =
+    """"
+    // The viewer's page box and thumbnails show "i, ii" for the front matter, "1, 2, 3" for the body and "A-1" for the appendix.
+    var document = await generator.CreateDocument(doc =>
+    {
+        doc.Page(page =>
+        {
+            page.Size(300, 160).Margin(20);
+            page.PageLabel(PdfPageLabelStyle.RomanLower);
+            page.Content(c => c.Text("Front matter: the viewer labels this page i."));
+        });
+        doc.Page(page =>
+        {
+            page.Size(300, 160).Margin(20);
+            page.PageLabel(PdfPageLabelStyle.Decimal);
+            page.Content(c => c.Text("Body: the viewer labels this page 1 and the next 2."));
+        });
+        doc.Page(page =>
+        {
+            page.Size(300, 160).Margin(20);
+            page.Content(c => c.Text("Still the body: label 2."));
+        });
+        doc.Page(page =>
+        {
+            page.Size(300, 160).Margin(20);
+            page.PageLabel(PdfPageLabelStyle.Decimal, prefix: "A-");
+            page.Content(c => c.Text("Appendix: the viewer labels this page A-1."));
+        });
+    });
+    """";
+
+await SaveDeclarativeShowcaseAsync("page_labels", "Document Building", "PDF Page Labels",
+    "A section's PageLabel puts roman numerals, a restart and a prefix in the PDF's page labels: a viewer's page box and thumbnails read i, 1, 2 and A-1 where the pages' positions are 1 to 4. Open the PDF in a viewer to see them; the pages say what to expect.",
+    pageLabelsSource,
+    async gen => await gen.CreateDocument(doc =>
+    {
+        doc.Page(page =>
+        {
+            page.Size(300, 160).Margin(20);
+            page.PageLabel(PdfPageLabelStyle.RomanLower);
+            page.Content(c => c.Text("Front matter: the viewer labels this page i."));
+        });
+        doc.Page(page =>
+        {
+            page.Size(300, 160).Margin(20);
+            page.PageLabel(PdfPageLabelStyle.Decimal);
+            page.Content(c => c.Text("Body: the viewer labels this page 1 and the next 2."));
+        });
+        doc.Page(page =>
+        {
+            page.Size(300, 160).Margin(20);
+            page.Content(c => c.Text("Still the body: label 2."));
+        });
+        doc.Page(page =>
+        {
+            page.Size(300, 160).Margin(20);
+            page.PageLabel(PdfPageLabelStyle.Decimal, prefix: "A-");
+            page.Content(c => c.Text("Appendix: the viewer labels this page A-1."));
+        });
+    }));
 
 const string documentAppendPdfSource =
     """"

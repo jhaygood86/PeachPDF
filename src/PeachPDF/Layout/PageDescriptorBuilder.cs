@@ -1,3 +1,4 @@
+using PeachDrawing.PDF;
 using PeachDrawing.Core;
 using PeachBrackets.Css;
 using PeachBrackets.Building;
@@ -119,6 +120,15 @@ namespace PeachPDF.Layout
         {
             ArgumentNullException.ThrowIfNull(handler);
             _headerHandler = handler;
+            return this;
+        }
+
+        /// <summary>The page label this section asked for, as a range starting at page 0 (the generator moves it to the section's first page), or null.</summary>
+        internal PdfPageLabelRange? PageLabelRequest { get; private set; }
+
+        public IPageDescriptor PageLabel(PdfPageLabelStyle style, string? prefix = null, int startNumber = 1)
+        {
+            PageLabelRequest = new PdfPageLabelRange(0, style, prefix, startNumber);
             return this;
         }
 

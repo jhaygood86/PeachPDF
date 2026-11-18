@@ -12,7 +12,7 @@ restoring its graphics state when the canvas is disposed.
 dotnet add package PeachDrawing.CoreGraphics
 ```
 
-**Status:** pre-1.0, versioned in lockstep with PeachPDF (the same number for every release); until 1.0 the API may change between releases. Targets `net10.0-macos` and `net10.0-ios`
+**Status:** pre-1.0, versioned in lockstep with PeachPDF (the same number for every release); until 1.0 the API may change between releases. Targets `net10.0-macos`, `net10.0-ios` and `net10.0-maccatalyst`
 (and `net11.0-...` under the .NET 11 SDK) and uses the .NET macOS and iOS bindings; building needs a Mac with the `macos` and `ios` workloads.
 
 ## Quick start: draw into a view's CGContext

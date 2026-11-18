@@ -1885,14 +1885,25 @@ Margin boxes are sub-rules of `@page` that place text inside the page margins (o
 | Value | Example | Notes |
 |-------|---------|-------|
 | String literal | `content: "Header text"` | Rendered as-is |
-| `counter(page)` | `content: counter(page)` | Current 1-based page number |
-| `counter(pages)` | `content: counter(pages)` | Total page count |
+| `counter(page)` | `content: counter(page)` | The `page` counter: the page number, 1 on the first page, or whatever the `@page` counter rules below make it. A second argument gives a counter style: `counter(page, lower-roman)`, `upper-alpha`, `decimal-leading-zero`, or an `@counter-style` name |
+| `counter(pages)` | `content: counter(pages)` | Total page count; takes a counter style the same way (`counter(pages, upper-roman)`) |
 | `string(name)` | `content: string(chapter)` | Named string captured via `string-set`; see below |
 | `element(name)` | `content: element(chapter-title)` | The current `position: running(chapter-title)` element, laid out for real and shown complete with its own formatting and descendant elements — not just captured text (contrast with `string()` above). See [Running elements](#running-elements-position-running--element). Not combinable with text/counter/string/image content in the same declaration |
 | Mixed | `content: "Page " counter(page) " of " counter(pages)` | Concatenated |
 | `url(...)` | `content: url("logo.svg")` | An image (raster or SVG, incl. `data:` URIs) — useful for a logo in a running header. Rendered at natural size, aligned within the box by the box's `text-align`/`vertical-align` (same as text content: the default follows the box's position — e.g. `@top-right` end-aligned, `@top-center` centered — and an explicit `text-align`/`vertical-align` applies), clipped to the box. Not combinable with text/counter/string content in the same declaration |
 | Gradient function | `content: linear-gradient(to right, red, blue)` | `linear-gradient()`/`radial-gradient()`/`conic-gradient()` (and their `repeating-` forms), filling the box |
 | `none` | `content: none` | Suppresses the box (useful in `:first` to hide the header on the cover page) |
+
+**The `page` counter.** [css-page-3 §6.1](https://www.w3.org/TR/css-page-3/#page-based-counters): `page` is a real counter, one more on every page, and `@page` rules can change it with `counter-reset`, `counter-set` and `counter-increment` (all three apply to the pages whose `@page` rules match, by position, page name and `:first`/`:left`/`:right`/`:blank`):
+
+| Rule | The page it matches shows |
+|------|------|
+| `@page :first { counter-reset: page 5 }` | 5, and the pages after it 6, 7... (a page that resets shows the reset value, so `counter-reset: page 1` restarts the numbering at 1) |
+| `@page :first { counter-set: page 10 }` | 10, then 11, 12... |
+| `@page { counter-increment: page 2 }` | 2, 4, 6... (an explicit increment replaces the implicit one-more) |
+| `@page body { counter-reset: page 1 }` | 1 on every page of the named page `body` - a rule matches every page it selects, so use it where one page, or `:first`, matches |
+
+`counter(page)` in a margin box, in a running element (`content: element()`) and the other places `page` is read follow the same sequence. A document that is one part of a larger file (the declarative API's continuous page numbers) starts the sequence after the part before it. Which `@page` rule a page matches never depends on this counter: `:left` and `:right` are the page's physical position in the spread, as [css-page-3 §4.2.1](https://www.w3.org/TR/css-page-3/#left-right-first) defines them, so restarting the numbering at an even number does not make the first page a left page. `target-counter(<link>, page)` still numbers by position and does not see these rules.
 
 **Supported style properties in margin boxes:**
 
@@ -2728,6 +2739,28 @@ h3 { bookmark-state: closed; }
 ```
 
 Accepted values: `open`, `closed`.
+
+### `-peachpdf-pdf-page-label` (PDF page labels)
+
+A PDF viewer shows each page's *label* in its page box and thumbnails ("iv", "A-3"), separately from the numbers a margin box prints. `-peachpdf-pdf-page-label` is an `@page` descriptor that sets the label of the pages the rule matches. It is PeachPDF's own extension (no W3C spec), following the same naming convention as the other `-peachpdf-pdf-*` properties.
+
+```css
+@page { -peachpdf-pdf-page-label: counter(page, lower-roman); }                       /* i, ii, iii */
+@page body { -peachpdf-pdf-page-label: counter(page); counter-reset: page 1; }       /* 1, 2, 3 */
+@page appendix { -peachpdf-pdf-page-label: "App-" counter(page, upper-alpha); }        /* App-A, App-B */
+```
+
+| | |
+|---|---|
+| Value | `auto` \| `<content-list>` \| `<counter-style>` |
+| Initial | `auto` |
+| Applies to | `@page` rules, including `:first`, `:left`, `:right`, `:blank` and named pages |
+
+- The value is a `content` list: strings and `counter(page[, <style>])`. `[ "<prefix>" ]* counter(page, <style>)` with `decimal`, `lower-roman`, `upper-roman`, `lower-alpha`/`lower-latin` or `upper-alpha`/`upper-latin` is written as a numbering style with a prefix, so a run of pages is a single range in the PDF. A bare counter style (`lower-roman`) is shorthand for `counter(page, lower-roman)`.
+- Anything else is written as the page's whole label text: text around the counter (`"Page " counter(page) " of " counter(pages)`), a counter style PDF has no name for (`decimal-leading-zero`, an `@counter-style`), or letters past `Z` (PDF repeats the letter, `AA`, `BB`; CSS counts, `AA`, `AB`, so only the first 26 can be written as a style).
+- The number is the [page counter](#margin-boxes), so `counter-reset`, `counter-set` and `counter-increment` in `@page` restart or step it in the labels too, and a new range starts wherever the counter does not follow on.
+- `auto` pages are labeled with their number in decimal. A document where every page is `auto` writes no labels, and the viewer numbers the pages itself.
+- When one document is added to another (`AddPdfPages`, the declarative `Append`), its labels start at its own first page in the file.
 
 ### `-peachpdf-bookmark-target` (bookmark link target)
 

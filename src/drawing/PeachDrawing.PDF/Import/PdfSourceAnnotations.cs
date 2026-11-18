@@ -28,6 +28,7 @@ internal sealed class PdfSourceAnnotations(PdfSourceDocument doc)
             if (subtype is null or "Link" or "Popup" or "Widget") continue;
             int flags = doc.IntOf(annot.GetRaw("F"));
             if ((flags & (2 | 32)) != 0) continue;                                      // hidden, or not for viewing
+            if (annot.GetRaw("OC") is { } layer && !doc.OptionalContent.IsVisible(layer)) continue;     // on a layer that is off
             if (doc.ArrayOf(annot, "Rect") is not { Elements.Count: >= 4 } rect || PdfAppearance.Normal(doc, annot) is not { } form) continue;
 
             double x0 = doc.NumberOf(rect.Elements[0]), y0 = doc.NumberOf(rect.Elements[1]), x1 = doc.NumberOf(rect.Elements[2]), y1 = doc.NumberOf(rect.Elements[3]);

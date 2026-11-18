@@ -56,6 +56,10 @@
           url: /peachbrackets-apple.html
         - title: PeachBrackets.Avalonia
           url: /peachbrackets-avalonia.html
+    - title: Applications
+      children:
+        - title: PeachReader
+          url: /peachreader.html
     - title: Project
       children:
         - title: Architecture

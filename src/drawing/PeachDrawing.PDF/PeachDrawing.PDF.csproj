@@ -40,6 +40,8 @@
 	<ItemGroup>
 		<None Remove="Engine\Resources\ColorProfiles\sRGB2014.icc" />
 		<EmbeddedResource Include="Engine\Resources\ColorProfiles\sRGB2014.icc" />
+		<!-- The predefined CJK CMaps and the CID-to-Unicode tables, compiled from Adobe's CMap resources by tests/PeachDrawing.PDF.Tests/Import/CMapResourceGenerator.cs. -->
+		<EmbeddedResource Include="Import\CMaps\PdfCMaps.bin" LogicalName="PeachDrawing.PDF.CMaps.bin" />
 	</ItemGroup>
 	<ItemGroup>
 		<InternalsVisibleTo Include="PeachDrawing.PDF.Tests" />

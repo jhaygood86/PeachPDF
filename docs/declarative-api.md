@@ -28,6 +28,7 @@ using PeachPDF.Layout;
 - [Lists](#lists)
 - [Headers, footers, and page numbers](#headers-footers-and-page-numbers)
   - [Sectioned page numbers](#sectioned-page-numbers)
+  - [PDF page labels](#pdf-page-labels)
 - [Merging documents](#merging-documents)
 - [Adding existing PDFs](#adding-existing-pdfs)
 - [Known limitations](#known-limitations)
@@ -507,6 +508,35 @@ page.Footer(footer => footer.Text(t =>
 ```
 
 `BeginPageNumberOfSection(id)`/`EndPageNumberOfSection(id)` are decorators, like `Bookmark` - they tag whatever container they're chained onto (rather than placing content of their own), so chain one before that container's own terminal content and it can go anywhere in a page's normal content flow (not just `Header`/`Footer`). `PageNumberWithinSection(id)`/`TotalPagesWithinSection(id)` then resolve against the physical pages that pair of tagged containers land on, the same way `CurrentPageNumber()`/`TotalPages()` do - only inside `Header`/`Footer` content, and continuously renumbered per document page. The current-page-within-section number is deliberately unclamped outside the section itself: it climbs by exactly one per document page throughout the whole document, so it reads non-positive before the section starts and past the total after it ends - a footer that only wants to show it inside the section's own pages should condition on that itself. An id with no matching `BeginPageNumberOfSection` call (a typo, or a forgotten call) resolves to `1` rather than throwing, the same fallback an unresolved `target-counter()` reference already uses.
+
+### PDF page labels
+
+A PDF viewer shows each page's *label* in its page box and thumbnails ("iv", "A-3") instead of its position. Labels are stored in the file, separately from
+the numbers a footer prints. `PageLabel(style, prefix, startNumber)` on a page descriptor starts a label range at that section's first page:
+
+```csharp
+doc.Page(page =>
+{
+    page.PageLabel(PdfPageLabelStyle.RomanLower);                      // i, ii, iii ...
+    page.Content(c => c.Text("Front matter"));
+});
+doc.Page(page =>
+{
+    page.PageLabel(PdfPageLabelStyle.Decimal);                         // 1, 2, 3 ...
+    page.Content(c => c.Text("Body"));
+});
+doc.Page(page =>
+{
+    page.PageLabel(PdfPageLabelStyle.Decimal, prefix: "A-");           // A-1, A-2 ...
+    page.Content(c => c.Text("Appendix"));
+});
+```
+
+A label runs on over every later page until another section sets one, so a section that should go back to plain numbering sets `Decimal` itself. A
+section that paginates over several pages labels each in turn. Pages of an added PDF (`Append`, `Prepend`) carry the labels the PDF had. To label by
+position instead, `doc.PageLabels([new PdfPageLabelRange(startPageIndex, style, prefix, startNumber)])` takes ranges counted from the document's first page,
+added PDFs included, and replaces a section's own range at the same page; a start past the last page throws when the document is built. A document
+that asks for no labels writes none.
 
 ## Merging documents
 

@@ -26,9 +26,12 @@ namespace PeachBrackets.Html.Dom
         /// Per <see href="https://www.w3.org/TR/css-counter-styles-3/">CSS Counter Styles Level 3 §2</see>,
         /// an unknown or invalid style falls back to <c>decimal</c> rather than rendering nothing.
         /// </summary>
-        public static string FormatCounterValue(int number, string style, CssBox? context)
+        public static string FormatCounterValue(int number, string style, CssBox? context) =>
+            FormatCounterValue(number, style, context?.HtmlContainer?.CounterStyles);
+
+        /// <summary>The same, for a caller that has the document's <c>@counter-style</c> registry but no box (a page margin box).</summary>
+        public static string FormatCounterValue(int number, string style, CounterStyleRegistry? registry)
         {
-            var registry = context?.HtmlContainer?.CounterStyles;
             var custom = CounterStyleRegistry.Find(style, registry);
 
             return custom is not null

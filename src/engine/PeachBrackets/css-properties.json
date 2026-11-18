@@ -6552,6 +6552,22 @@
       "cssDataType": "unsupported"
     },
     {
+      "name": "-peachpdf-pdf-page-label",
+      "comment": "PeachPDF PDF-output extension, modelled on Prince's -prince-pdf-page-label (no W3C spec): an @page descriptor, auto | <content-list> | <counter-style>. What the PDF's page label is for the pages the rule matches, e.g. counter(page, lower-roman) writes /S /r. Read from the page's style by PagePageLabels (not stored on CssBox), so the entry is CSS-OM only. A bare counter style (lower-roman) is shorthand for counter(page, lower-roman).",
+      "inherited": false,
+      "cssom": {"converter": "Converters.PdfPageLabelConverter", "className": "PdfPageLabelProperty"},
+      "initialValue": "auto",
+      "cssDataType": "unsupported"
+    },
+    {
+      "name": "-prince-pdf-page-label",
+      "comment": "Hidden, undocumented compat alias for Prince's own -prince-pdf-page-label spelling - identical grammar and behaviour to -peachpdf-pdf-page-label. Not documented in docs/.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.PdfPageLabelConverter", "className": "PrincePdfPageLabelProperty"},
+      "initialValue": "auto",
+      "cssDataType": "unsupported"
+    },
+    {
       "name": "text-anchor",
       "comment": "CSS-OM only: the render layer does not read this property (no html or svg binding), so this entry exists to generate its CSS-OM class and carry its inheritance.",
       "inherited": true,

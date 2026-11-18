@@ -216,6 +216,47 @@ namespace PeachBrackets.Annotations
         public StructureNode? Source { get; init; }
     }
 
+    /// <summary>How the number of a page label is written (ISO 32000-1 12.4.2), in a <see cref="PageLabelRange"/>.</summary>
+    public enum PageLabelStyle
+    {
+        /// <summary>No number: the label is its prefix alone.</summary>
+        None,
+
+        /// <summary>Decimal Arabic numerals: 1, 2, 3.</summary>
+        Decimal,
+
+        /// <summary>Uppercase roman numerals: I, II, III.</summary>
+        RomanUpper,
+
+        /// <summary>Lowercase roman numerals: i, ii, iii.</summary>
+        RomanLower,
+
+        /// <summary>Uppercase letters, A to Z.</summary>
+        LettersUpper,
+
+        /// <summary>Lowercase letters, a to z.</summary>
+        LettersLower,
+    }
+
+    /// <summary>
+    /// A run of pages that a viewer labels alike ("i, ii, iii", "A-1, A-2"), from the <c>-peachpdf-pdf-page-label</c> an <c>@page</c> rule gives its
+    /// pages. A range starts at <see cref="PageIndex"/> and lasts until the next one.
+    /// </summary>
+    public sealed class PageLabelRange
+    {
+        /// <summary>The zero-based index of the first page of the range.</summary>
+        public required int PageIndex { get; init; }
+
+        /// <summary>How the page number is written.</summary>
+        public required PageLabelStyle Style { get; init; }
+
+        /// <summary>The text before the number (the whole label when <see cref="Style"/> is <see cref="PageLabelStyle.None"/>); may be empty.</summary>
+        public required string Prefix { get; init; }
+
+        /// <summary>The number of the range's first page, 1 or more.</summary>
+        public required int Start { get; init; }
+    }
+
     /// <summary>
     /// What a reader of a paged rendering can click or navigate: the hyperlinks of each page and the document's outline.
     /// </summary>
@@ -232,5 +273,8 @@ namespace PeachBrackets.Annotations
 
         /// <summary>The annotations authors asked for with <c>-peachpdf-pdf-annotation-type</c>, in document order.</summary>
         public IReadOnlyList<PageAnnotation> Annotations { get; init; } = [];
+
+        /// <summary>The page label ranges the document's <c>@page</c> rules ask for with <c>-peachpdf-pdf-page-label</c>; empty when none do.</summary>
+        public IReadOnlyList<PageLabelRange> PageLabels { get; init; } = [];
     }
 }

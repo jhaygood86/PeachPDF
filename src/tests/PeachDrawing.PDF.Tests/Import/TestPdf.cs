@@ -16,7 +16,7 @@ namespace PeachDrawing.PDF.Tests.Import
         /// A PDF whose page 1 has <paramref name="content"/>; <paramref name="extraObjects"/> become objects 5, 6, 7...
         /// (<paramref name="pageExtras"/> and <paramref name="resources"/> may refer to them).
         /// </summary>
-        public static byte[] Build(string content, string resources = "", string pageExtras = "", int width = 100, int height = 100, params string[] extraObjects)
+        public static byte[] Build(string content, string resources = "", string pageExtras = "", int width = 100, int height = 100, string catalogExtras = "", params string[] extraObjects)
         {
             var sb = new StringBuilder("%PDF-1.4\n");
             var offsets = new List<int>();
@@ -26,10 +26,33 @@ namespace PeachDrawing.PDF.Tests.Import
                 sb.Append(offsets.Count).Append(" 0 obj\n").Append(body).Append("\nendobj\n");
             }
 
-            Obj("<< /Type /Catalog /Pages 2 0 R >>");
+            Obj($"<< /Type /Catalog /Pages 2 0 R {catalogExtras} >>");
             Obj("<< /Type /Pages /Kids [3 0 R] /Count 1 >>");
             Obj($"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {width} {height}] /Contents 4 0 R /Resources << {resources} >> {pageExtras} >>");
             Obj(Stream("", content));
+            foreach (var o in extraObjects) Obj(o);
+
+            var xref = sb.Length;
+            sb.Append("xref\n0 ").Append(offsets.Count + 1).Append("\n0000000000 65535 f \n");
+            foreach (var o in offsets) sb.Append(o.ToString("D10")).Append(" 00000 n \n");
+            sb.Append("trailer\n<< /Size ").Append(offsets.Count + 1).Append(" /Root 1 0 R >>\nstartxref\n").Append(xref).Append("\n%%EOF\n");
+            return Encoding.Latin1.GetBytes(sb.ToString());
+        }
+
+        /// <summary>A PDF of <paramref name="pages"/> empty pages (objects 3 to 2+pages); <paramref name="catalogExtras"/> go in the catalog and <paramref name="extraObjects"/> follow as the next objects.</summary>
+        public static byte[] BuildPages(int pages, string catalogExtras = "", params string[] extraObjects)
+        {
+            var sb = new StringBuilder("%PDF-1.4\n");
+            var offsets = new List<int>();
+            void Obj(string body)
+            {
+                offsets.Add(sb.Length);
+                sb.Append(offsets.Count).Append(" 0 obj\n").Append(body).Append("\nendobj\n");
+            }
+
+            Obj($"<< /Type /Catalog /Pages 2 0 R {catalogExtras} >>");
+            Obj($"<< /Type /Pages /Kids [{string.Join(" ", Enumerable.Range(0, pages).Select(i => $"{3 + i} 0 R"))}] /Count {pages} >>");
+            for (int i = 0; i < pages; i++) Obj("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 100 100] >>");
             foreach (var o in extraObjects) Obj(o);
 
             var xref = sb.Length;

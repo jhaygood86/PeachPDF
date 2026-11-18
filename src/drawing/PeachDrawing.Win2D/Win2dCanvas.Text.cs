@@ -142,6 +142,9 @@ public sealed partial class Win2dCanvas
         if (unitsPerEm == 0)
             return;
 
+        if (_context.TextRendering != Win2dTextRendering.Outline && TryDrawMaskedGlyphs(glyphs, font, color))
+            return;
+
         FlushText();
         var scale = font.Size / unitsPerEm * _ppp;
         using var run = new GlyphRun(this);

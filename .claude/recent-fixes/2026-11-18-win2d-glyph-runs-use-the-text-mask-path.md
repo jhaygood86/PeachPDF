@@ -1,0 +1,6 @@
+# Win2D: glyph runs (PDF text) use the hinted / ClearType mask path
+
+`Win2dCanvas.DrawGlyphs` (glyphs by index, which is how the PDF importer draws every run) always filled outline geometry, so PeachReader's PDF text had no hinting and no ClearType while HTML text (`DrawString`) did. It now takes the same path: `TryPlanMask` (the shared decision: transform, Auto size limit, GPU vs read-back, LCD) and `Win2dGlyphMaskCache.TryRasterizeGlyphs`, which composes the per-glyph masks of the existing letter cache at each placement, cut to what can be seen. Not keyed into the GPU bitmap cache (`cacheable: false`): a run of glyphs is made from cached letters each time.
+- Falls back to outlines for synthetic bold/italic, color/bitmap/SVG glyphs, a rotated or skewed transform, large Auto text, and DirectWrite fonts (their `Typeface` is null; an earlier version crashed `FontAndContextTests.DirectWrite_draws_glyphs_by_index...` on that).
+- Checked: `GlyphRunTextTests` (the glyph run's pixels match the same text drawn as a string to within 3% of ink, LCD fringes present, grayscale none), and the running reader - about half the ink pixels of black body text have color stripes (a screen grab of the 3440x1440 display, analyzed with PIL), where outline fill gives none.
+- Not done: the Skia and CoreGraphics backends have the same `DrawGlyphs` shape and still fill outlines.
