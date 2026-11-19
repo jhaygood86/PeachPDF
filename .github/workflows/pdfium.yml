@@ -75,3 +75,65 @@ jobs:
         name: pdfium-results
         path: pdfium-results
         if-no-files-found: ignore
+
+  # The pdf.js regression PDFs (test/pdfs), every page of each, against PDFium's own rendering of them (pypdfium2, pinned in
+  # oracle/requirements.txt). The renderings are cached by the PDFs' commit, the script and the pinned PDFium, so only the first run pays for them.
+  pdfjs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: ./.github/actions/setup-dotnet
+
+    - name: Install fonts
+      run: sudo apt-get update && sudo apt-get install -y fontconfig fonts-liberation fonts-dejavu-core
+
+    - name: Setup Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+
+    - name: Install the oracle's Python packages
+      run: python -m pip install -r src/harness/PeachDrawing.PDF.PdfiumRunner/oracle/requirements.txt
+
+    - name: Cache the pdf.js PDFs
+      uses: actions/cache@v4
+      with:
+        path: ~/.peachdrawing-pdfium/pdfjs
+        key: pdfjs-${{ hashFiles('src/harness/PeachDrawing.PDF.PdfiumRunner/pdfjs/PDFJS_COMMIT') }}
+
+    - name: Cache PDFium's renderings of them
+      uses: actions/cache@v4
+      with:
+        path: pdfjs-oracle
+        key: pdfjs-oracle-${{ hashFiles('src/harness/PeachDrawing.PDF.PdfiumRunner/pdfjs/PDFJS_COMMIT', 'src/harness/PeachDrawing.PDF.PdfiumRunner/oracle/**') }}
+
+    - name: Build the runner
+      run: dotnet build src/harness/PeachDrawing.PDF.PdfiumRunner/PeachDrawing.PDF.PdfiumRunner.csproj --configuration Release --framework net10.0
+
+    - name: Fetch the pdf.js PDFs
+      run: dotnet src/harness/PeachDrawing.PDF.PdfiumRunner/bin/Release/net10.0/PeachDrawing.PDF.PdfiumRunner.dll fetch --kind pdfjs
+
+    - name: Render every page with PDFium
+      run: dotnet src/harness/PeachDrawing.PDF.PdfiumRunner/bin/Release/net10.0/PeachDrawing.PDF.PdfiumRunner.dll oracle --corpus "$HOME/.peachdrawing-pdfium/pdfjs/$((Get-Content src/harness/PeachDrawing.PDF.PdfiumRunner/pdfjs/PDFJS_COMMIT -Raw).Trim())" --out pdfjs-oracle --python python
+
+    - name: Run the pdf.js PDFs against the floor
+      run: |
+        $commit = (Get-Content src/harness/PeachDrawing.PDF.PdfiumRunner/pdfjs/PDFJS_COMMIT -Raw).Trim()
+        dotnet src/harness/PeachDrawing.PDF.PdfiumRunner/bin/Release/net10.0/PeachDrawing.PDF.PdfiumRunner.dll run `
+          --kind pdfjs `
+          --corpus "$HOME/.peachdrawing-pdfium/pdfjs/$commit" `
+          --oracle pdfjs-oracle `
+          --floors src/harness/PeachDrawing.PDF.PdfiumRunner/pdfium/pdfium-floors.json `
+          --out pdfjs-results
+
+    - name: Upload the results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: pdfjs-results
+        path: pdfjs-results
+        if-no-files-found: ignore

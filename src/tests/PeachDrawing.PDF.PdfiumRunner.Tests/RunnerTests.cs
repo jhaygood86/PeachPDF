@@ -108,6 +108,61 @@ public sealed class RunnerTests : IDisposable
         Assert.EndsWith("a_expected.pdf.0.png", test.ExpectedPages[0], StringComparison.Ordinal);
     }
 
+    private string PdfJsPdfs => Path.Combine(_root, "test", "pdfs");
+
+    [Fact]
+    public void DiscoverPdfJs_PairsEachPdfWithTheOraclePagesCountedFromZeroWithoutAGap()
+    {
+        Directory.CreateDirectory(PdfJsPdfs);
+        var oracle = Path.Combine(_root, "oracle");
+        Directory.CreateDirectory(oracle);
+        foreach (var name in new[] { "multi.v2", "gap", "none" })
+            File.WriteAllBytes(Path.Combine(PdfJsPdfs, name + ".pdf"), PdfTemplate.Expand(WriteTemplate()));
+        File.WriteAllText(Path.Combine(PdfJsPdfs, "ignored.link"), "https://example.test/x.pdf");
+        File.WriteAllBytes(Path.Combine(PdfJsPdfs, "toobig.pdf"), new byte[5000]);
+        foreach (var file in new[] { "multi.v2.0.png", "multi.v2.1.png", "gap.0.png", "gap.2.png", "orphan.0.png" })
+            File.WriteAllBytes(Path.Combine(oracle, file), SolidPng(20, 20, 255, 0, 0));
+
+        var tests = Corpus.DiscoverPdfJs(_root, oracle, maxBytes: 4000).ToDictionary(t => t.Id);
+
+        Assert.Equal(["pdfjs/gap", "pdfjs/multi.v2", "pdfjs/none"], tests.Keys.Order(StringComparer.Ordinal));      // .link, the oversize file and the orphan PNG are not tests
+        Assert.Equal(2, tests["pdfjs/multi.v2"].ExpectedPages.Count);
+        Assert.Single(tests["pdfjs/gap"].ExpectedPages);                                                              // page 2 follows a gap: not counted
+        Assert.Empty(tests["pdfjs/none"].ExpectedPages);
+    }
+
+    private string WriteTemplate()
+    {
+        var path = Path.Combine(_root, "template-" + Guid.NewGuid().ToString("N") + ".in");
+        File.WriteAllText(path, Template("1 0 0").ReplaceLineEndings("\r\n"), Encoding.Latin1);
+        return path;
+    }
+
+    [Fact]
+    public void Evaluate_PdfJsKind_DrawsThePageIntoTheOraclesRoundedUpBitmap_AndSkipsAPdfWithNoReference()
+    {
+        Directory.CreateDirectory(PdfJsPdfs);
+        var oracle = Path.Combine(_root, "oracle");
+        Directory.CreateDirectory(oracle);
+        File.WriteAllBytes(Path.Combine(PdfJsPdfs, "red.pdf"), PdfTemplate.Expand(WriteTemplate()));          // a 20x20 point page
+        File.WriteAllBytes(Path.Combine(PdfJsPdfs, "unrendered.pdf"), PdfTemplate.Expand(WriteTemplate()));
+        File.WriteAllBytes(Path.Combine(oracle, "red.0.png"), SolidPng(21, 21, 255, 0, 0));                  // PDFium rounded 20.4 up to 21
+
+        var results = Corpus.DiscoverPdfJs(_root, oracle).ToDictionary(t => t.Id, new Evaluator(new Tolerance(), kind: CorpusKind.PdfJs).Evaluate);
+
+        Assert.Equal(Outcome.Pass, results["pdfjs/red"].Outcome);
+        Assert.Equal(Outcome.Skipped, results["pdfjs/unrendered"].Outcome);
+        Assert.Equal("no reference rendering", results["pdfjs/unrendered"].Reason);
+    }
+
+    [Fact]
+    public void DiscoverPdfJs_WithNoOracleDirectory_Throws()
+    {
+        Directory.CreateDirectory(PdfJsPdfs);
+
+        Assert.Throws<DirectoryNotFoundException>(() => Corpus.DiscoverPdfJs(_root, Path.Combine(_root, "missing")));
+    }
+
     [Fact]
     public void Discover_WithNoPixelDirectory_Throws() =>
         Assert.Throws<DirectoryNotFoundException>(() => Corpus.Discover(Path.Combine(_root, "missing")));

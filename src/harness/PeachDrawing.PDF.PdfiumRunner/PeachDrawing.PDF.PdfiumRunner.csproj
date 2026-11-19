@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <!--
-    Renders PDFium's own pixel-test PDFs through PeachDrawing.PDF's import path (PdfPageSource) onto a PeachDrawing raster canvas and compares
+    Renders PDFium's own pixel-test PDFs, and the pdf.js regression PDFs (against PDFium's own rendering of them), through PeachDrawing.PDF's import path (PdfPageSource) onto a PeachDrawing raster canvas and compares
     each page with the PNG PDFium's test suite checked in for it. The corpus is fetched at the commit pinned in pdfium/PDFIUM_COMMIT, never vendored.
   -->
   <PropertyGroup>
@@ -24,6 +24,15 @@
 
   <ItemGroup>
     <None Include="pdfium\PDFIUM_COMMIT" Link="PDFIUM_COMMIT">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="pdfjs\PDFJS_COMMIT" Link="PDFJS_COMMIT">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="oracle/render_pdfium.py" Link="oracle/render_pdfium.py">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="oracle/requirements.txt" Link="oracle/requirements.txt">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>

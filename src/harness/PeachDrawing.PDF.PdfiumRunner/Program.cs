@@ -14,9 +14,15 @@ namespace PeachDrawing.PDF.PdfiumRunner
         private const string Usage = """
             PeachDrawing.PDF vs PDFium pixel-test runner
 
-              fetch [--cache <dir>]
-                  Downloads PDFium's testing/resources at the pinned commit (pdfium/PDFIUM_COMMIT) into <cache>/pdfium/<commit>/ (default ~/.peachdrawing-pdfium).
+              fetch [--kind pdfium|pdfjs] [--cache <dir>]
+                  Downloads a corpus at its pinned commit into <cache>/<kind>/<commit>/ (default ~/.peachdrawing-pdfium):
+                  pdfium: PDFium's testing/resources (pdfium/PDFIUM_COMMIT), with the reference images its tests carry;
+                  pdfjs: the PDFs of pdf.js's test/pdfs (pdfjs/PDFJS_COMMIT), which have none.
+              oracle --corpus <pdf.js dir> --out <dir> [--python <exe>] [--max-pages <n>] [--max-bytes <n>]
+                  Renders every page of every PDF in the pdf.js corpus with PDFium (pypdfium2, see oracle/requirements.txt) into <dir>, which
+                  'run --kind pdfjs --oracle <dir>' compares against. An interrupted run resumes; --max-pages caps pages per file (default all).
               run --corpus <dir> [options]
+                  --kind pdfium|pdfjs  which corpus (default pdfium); pdfjs also needs --oracle <dir>
                   --filter <text>      only tests whose id contains <text>
                   --test <id>          one test (for example pixel/bug_1012369), implies --dump
                   --sample <n>         every nth test in id order
@@ -44,6 +50,7 @@ namespace PeachDrawing.PDF.PdfiumRunner
                 return args[0] switch
                 {
                     "fetch" => await FetchAsync(options),
+                    "oracle" => await OracleAsync(options),
                     "run" => await RunAsync(options),
                     _ => Fail($"unknown command '{args[0]}'"),
                 };
@@ -85,14 +92,22 @@ namespace PeachDrawing.PDF.PdfiumRunner
             return result;
         }
 
-        private static string PinnedCommit() =>
-            File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "PDFIUM_COMMIT")).Trim();
+        private static CorpusKind KindOf(Dictionary<string, string> o) => o.GetValueOrDefault("kind") switch
+        {
+            null or "pdfium" => CorpusKind.Pdfium,
+            "pdfjs" => CorpusKind.PdfJs,
+            var other => throw new ArgumentException($"unknown corpus kind '{other}' (pdfium or pdfjs)."),
+        };
+
+        private static string PinnedCommit(CorpusKind kind = CorpusKind.Pdfium) =>
+            File.ReadAllText(Path.Combine(AppContext.BaseDirectory, kind == CorpusKind.PdfJs ? "PDFJS_COMMIT" : "PDFIUM_COMMIT")).Trim();
 
         private static async Task<int> FetchAsync(Dictionary<string, string> o)
         {
-            var commit = PinnedCommit();
+            var kind = KindOf(o);
+            var commit = PinnedCommit(kind);
             var cache = o.GetValueOrDefault("cache") ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".peachdrawing-pdfium");
-            var dest = Path.Combine(cache, "pdfium", commit);
+            var dest = Path.Combine(cache, kind == CorpusKind.PdfJs ? "pdfjs" : "pdfium", commit);
             if (File.Exists(Path.Combine(dest, ".complete")))
             {
                 Console.WriteLine(dest);
@@ -104,9 +119,10 @@ namespace PeachDrawing.PDF.PdfiumRunner
                 Directory.Delete(partial, recursive: true);
             Directory.CreateDirectory(partial);
 
-            const string wanted = "testing/resources/";
-            using var http = new HttpClient { Timeout = TimeSpan.FromMinutes(15) };
-            await using var download = await http.GetStreamAsync($"https://codeload.github.com/chromium/pdfium/tar.gz/{commit}");
+            var repository = kind == CorpusKind.PdfJs ? "mozilla/pdf.js" : "chromium/pdfium";
+            var wanted = kind == CorpusKind.PdfJs ? "test/pdfs/" : "testing/resources/";
+            using var http = new HttpClient { Timeout = TimeSpan.FromMinutes(30) };
+            await using var download = await http.GetStreamAsync($"https://codeload.github.com/{repository}/tar.gz/{commit}");
             await using var gzip = new GZipStream(download, CompressionMode.Decompress);
             using var tar = new TarReader(gzip);
 
@@ -119,6 +135,10 @@ namespace PeachDrawing.PDF.PdfiumRunner
                 var slash = entry.Name.IndexOf('/');
                 var relative = slash < 0 ? entry.Name : entry.Name[(slash + 1)..];
                 if (!relative.StartsWith(wanted, StringComparison.Ordinal) || entry.DataStream is null)
+                    continue;
+
+                // pdf.js's test/pdfs also holds .link files naming PDFs to download from elsewhere, and other files; only the PDFs themselves are wanted.
+                if (kind == CorpusKind.PdfJs && !relative.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase))
                     continue;
 
                 var target = Path.GetFullPath(Path.Combine(root, relative));
@@ -137,10 +157,37 @@ namespace PeachDrawing.PDF.PdfiumRunner
             return 0;
         }
 
+        private static async Task<int> OracleAsync(Dictionary<string, string> o)
+        {
+            var corpus = o.GetValueOrDefault("corpus") ?? throw new ArgumentException("--corpus <pdf.js dir> is required (run 'fetch --kind pdfjs' first).");
+            var output = o.GetValueOrDefault("out") ?? throw new ArgumentException("--out <dir> is required.");
+            var pdfs = Path.Combine(corpus, "test", "pdfs");
+            if (!Directory.Exists(pdfs))
+                throw new DirectoryNotFoundException($"{pdfs} does not exist.");
+            var script = Path.Combine(AppContext.BaseDirectory, "oracle", "render_pdfium.py");
+            if (!File.Exists(script))
+                throw new FileNotFoundException("The oracle script was not copied next to the runner.", script);
+
+            // -I: an isolated interpreter, so nothing in the corpus folder or the working directory can shadow a module the script imports.
+            var info = new ProcessStartInfo(o.GetValueOrDefault("python") ?? "python3") { UseShellExecute = false };
+            foreach (var argument in new[] { "-I", script, pdfs, output, "--max-bytes", o.GetValueOrDefault("max-bytes") ?? Corpus.DefaultMaxBytes.ToString(CultureInfo.InvariantCulture) })
+                info.ArgumentList.Add(argument);
+            if (o.GetValueOrDefault("max-pages") is { } maxPages)
+            {
+                info.ArgumentList.Add("--max-pages");
+                info.ArgumentList.Add(maxPages);
+            }
+
+            using var process = Process.Start(info) ?? throw new InvalidOperationException("Could not start Python.");
+            await process.WaitForExitAsync();
+            return process.ExitCode;
+        }
+
         private static async Task<int> RunAsync(Dictionary<string, string> o)
         {
             var corpus = o.GetValueOrDefault("corpus") ?? throw new ArgumentException("--corpus <dir> is required (run 'fetch' first).");
-            var commit = PinnedCommit();
+            var kind = KindOf(o);
+            var commit = PinnedCommit(kind);
             var parallel = int.Parse(o.GetValueOrDefault("parallel") ?? Environment.ProcessorCount.ToString(CultureInfo.InvariantCulture), CultureInfo.InvariantCulture);
             var timeout = TimeSpan.FromSeconds(int.Parse(o.GetValueOrDefault("timeout") ?? "60", CultureInfo.InvariantCulture));
             var stride = int.Parse(o.GetValueOrDefault("sample") ?? "1", CultureInfo.InvariantCulture);
@@ -152,7 +199,10 @@ namespace PeachDrawing.PDF.PdfiumRunner
                 int.Parse(o.GetValueOrDefault("threshold") ?? "48", CultureInfo.InvariantCulture),
                 double.Parse(o.GetValueOrDefault("max-diff") ?? "0.02", CultureInfo.InvariantCulture));
 
-            var tests = Corpus.Discover(corpus)
+            var discovered = kind == CorpusKind.PdfJs
+                ? Corpus.DiscoverPdfJs(corpus, o.GetValueOrDefault("oracle") ?? throw new ArgumentException("--oracle <dir> is required for --kind pdfjs (run 'oracle' first)."))
+                : Corpus.Discover(corpus);
+            var tests = discovered
                 .Where(t => single is null || t.Id == single)
                 .Where(t => filter is null || t.Id.Contains(filter, StringComparison.Ordinal))
                 .Where((_, i) => i % stride == 0)
@@ -160,7 +210,7 @@ namespace PeachDrawing.PDF.PdfiumRunner
             if (single is not null && tests.Count == 0)
                 throw new ArgumentException("No such test.");
 
-            var evaluator = new Evaluator(tolerance, dump);
+            var evaluator = new Evaluator(tolerance, dump, kind);
             var results = new ConcurrentDictionary<string, TestResult>();
             var clock = Stopwatch.StartNew();
             await Parallel.ForEachAsync(tests, new ParallelOptions { MaxDegreeOfParallelism = parallel }, async (test, _) =>
@@ -168,7 +218,7 @@ namespace PeachDrawing.PDF.PdfiumRunner
                 results[test.Id] = await EvaluateWithTimeoutAsync(evaluator, test, timeout);
             });
 
-            var result = GroupResult.From(commit, Corpus.Group, results);
+            var result = GroupResult.From(commit, Corpus.GroupOf(kind), results);
             Console.WriteLine($"{result.Group,-8} total {result.Total,5}  pass {result.PassCount,5}  fail {result.Fail.Count,5}  blank {result.Blank.Count,4}  skipped {result.Skipped.Count,4}  rate {result.Rate}  ({clock.Elapsed.TotalSeconds:0.0}s)");
             if (single is not null)
             {

@@ -70,6 +70,18 @@ dotnet run --project harness/PeachDrawing.PDF.PdfiumRunner -f net10.0 -- run --c
 
 `--out <dir>` writes the passing, blank, failing and skipped tests (with the reason for each failure) as JSON. The gate is a **floor** in `pdfium/pdfium-floors.json`: the PDFium workflow runs on pull requests that touch the drawing packages and fails when fewer tests pass than the floor. The pass rate is not expected to be 100%; the point is that it never falls and that a change which makes more tests pass raises the floor in the same pull request (`run --floors <file> --update-floors`, which never lowers it). A disagreement is a lead, not a verdict: PDFium is not right about everything, so confirm with a second renderer before treating it as a defect here.
 
+### The pdf.js regression PDFs
+
+The same runner also takes the PDFs of [pdf.js](https://github.com/mozilla/pdf.js)'s `test/pdfs` (an Apache-2.0 repository; files over 3 MB, and the `.link` entries that name PDFs to download from elsewhere, are left out). They are real documents that broke a PDF reader once, so they cover what the hand-written PDFium cases do not: producers, fonts and structures as they occur in the wild. They carry no reference images, so PDFium is the reference: `oracle` renders **every page** of every PDF with PDFium through [pypdfium2](https://pypi.org/project/pypdfium2/) (the version is pinned in `oracle/requirements.txt`, so the references do not drift) into a folder, and `run --kind pdfjs` compares each page with it, at the size PDFium rounded the page up to.
+
+```bash
+dotnet run --project harness/PeachDrawing.PDF.PdfiumRunner -f net10.0 -- fetch --kind pdfjs
+dotnet run --project harness/PeachDrawing.PDF.PdfiumRunner -f net10.0 -- oracle --corpus ~/.peachdrawing-pdfium/pdfjs/<commit> --out pdfjs-oracle
+dotnet run --project harness/PeachDrawing.PDF.PdfiumRunner -f net10.0 -- run --kind pdfjs --corpus ~/.peachdrawing-pdfium/pdfjs/<commit> --oracle pdfjs-oracle --filter issue
+```
+
+The oracle resumes where an interrupted run stopped; `--max-pages` caps the pages rendered per file when a quick pass is wanted. A PDF PDFium cannot open, or a page it cannot render, has no reference and is counted as skipped. The pass rate is lower than the PDFium cases' because real pages are mostly text, and a standard font PDFium draws from its own fonts differs from a system font by a few percent of pixels whatever the importer does; the floor (group `pdfjs` in the same `pdfium/pdfium-floors.json`) is what stops it from falling, and the failures that are not font differences are the useful ones to read.
+
 ## The showcase harness
 
 `src/harness/PeachPDF.TestHarness` is a small runnable app that renders a gallery of feature showcases. It serves two purposes: it generates the PDFs behind the [Feature Showcase](showcase.html) on the documentation site, and it's a place to *visually* exercise a new capability. CI builds it on every source change so a break is caught before release day, not on it.
