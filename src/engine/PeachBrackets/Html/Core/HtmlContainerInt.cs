@@ -2388,6 +2388,11 @@ namespace PeachBrackets.Html
                     var provisionalTree = _emitter?.Finish() ?? new FragmentTree([]);
                     var (slotToPage, maxMappedSlot) = PageAnchorResolver.BuildSlotToPageMap(provisionalTree.Fragmentainers);
                     TargetPageMap = (slotToPage, maxMappedSlot, provisionalTree.Fragmentainers.Count);
+                    // css-page-3 6.1: target-counter(_, page) reads the same page counter counter(page) does, which
+                    // @page counter-reset/-set/-increment shape, so the sequence is rebuilt from this pass's pagination.
+                    PageCounterValues = PageRules.Count == 0 || provisionalTree.Fragmentainers.Count == 0
+                        ? null
+                        : BuildPageCounterValues(provisionalTree);
                     ResolveTargetPageContent(Root);
                     var currentSignature = TargetPageContentSignature(Root);
 

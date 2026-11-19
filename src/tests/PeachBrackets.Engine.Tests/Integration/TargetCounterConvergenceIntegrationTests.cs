@@ -69,6 +69,29 @@ namespace PeachBrackets.Engine.Tests.Integration
             Assert.True(leader.Width > 0);
         }
 
+        [Theory]
+        [InlineData("counter-reset: page 10", "11")]
+        [InlineData("counter-set: page 30", "31")]
+        [InlineData("counter-increment: page 4", "5")]
+        public async Task TargetCounterPage_FollowsThePageCounterRulesOfAtPage(string declaration, string expected)
+        {
+            var html = Wrap($$"""
+                <style>
+                    @page :first { {{declaration}} }
+                    #tocnum::after { content: target-counter(attr(href), page); }
+                    #ch2 { break-before: page; }
+                </style>
+                <div><a id="tocnum" href="#ch2">Chapter Two</a></div>
+                <div id="ch2">Chapter Two content.</div>
+                """);
+
+            var (root, container) = await BuildAndLayout(html);
+
+            Assert.True(container.FragmentTree!.Fragmentainers.Count > 1);
+            var afterBox = FindById(root, "tocnum")!.Boxes.Single(b => b.IsAfterPseudoElement);
+            Assert.Equal(expected, afterBox.Words.Single().Text);
+        }
+
         private static string Wrap(string body) =>
             $"<!DOCTYPE html><html><head></head><body>{body}</body></html>";
 
