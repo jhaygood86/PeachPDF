@@ -41,6 +41,20 @@ internal sealed record RgbaImage(int Width, int Height, byte[] Pixels)
         return true;
     }
 
+    /// <summary>The pixels that stand out from a white page: some channel is more than <paramref name="threshold"/> below white. A tint is not ink.</summary>
+    public int InkPixels(int threshold)
+    {
+        int count = 0;
+        var p = Pixels;
+        for (var i = 0; i < p.Length; i += 4)
+        {
+            if (p[i] < 255 - threshold || p[i + 1] < 255 - threshold || p[i + 2] < 255 - threshold)
+                count++;
+        }
+
+        return count;
+    }
+
     /// <summary>
     /// How far this image is from <paramref name="other"/>: the pixels whose largest R, G or B difference exceeds <paramref name="threshold"/>, and
     /// the mean of the per-pixel differences. Null when the sizes differ.

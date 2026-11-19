@@ -67,6 +67,17 @@ internal static class PdfAppearance
         return interpreter.Unsupported;
     }
 
+    /// <summary>Runs a synthesized appearance, whose content is already in page space, under the page's transform.</summary>
+    static IReadOnlyCollection<string> DrawSynthesized(PdfSourceDocument doc, PdfAppearanceSynthesizer.Result made, Canvas canvas, Matrix3x2 pageToCanvas,
+        Rect region, PdfDictionary? pageResources)
+    {
+        var interpreter = new PdfContentInterpreter(doc, canvas, region);
+        canvas.PushTransform(pageToCanvas);
+        try { interpreter.Run(made.Content, made.Resources ?? pageResources); }
+        finally { interpreter.Finish(); canvas.PopTransform(); }
+        return interpreter.Unsupported;
+    }
+
     /// <summary>
     /// Draws the visible annotations of a page (those with a normal appearance), after its content. Links and popups have nothing to draw;
     /// form field widgets are drawn only when <paramref name="includeWidgets"/> is set.
@@ -86,7 +97,15 @@ internal static class PdfAppearance
             if (subtype == "/Widget" && !includeWidgets && PdfSourceForms.KindOf(doc, annot) is not null) continue;
             int flags = doc.IntOf(annot.GetRaw("F"));
             if ((flags & (2 | 32)) != 0) continue;                         // hidden, or not for viewing
-            if (doc.ArrayOf(annot, "Rect") is not { Elements.Count: >= 4 } r || Normal(doc, annot) is not { } form) continue;
+            if (doc.ArrayOf(annot, "Rect") is not { Elements.Count: >= 4 } r) continue;
+            if (Normal(doc, annot) is not { } form)
+            {
+                // No appearance of its own: a viewer makes one (a highlight from its quads, a field from its value).
+                if (PdfAppearanceSynthesizer.Create(doc, annot, resources, canvas.RenderContext) is { } made)
+                    foreach (var why in DrawSynthesized(doc, made, canvas, pageToCanvas, region, resources))
+                        unsupported.Add(why);
+                continue;
+            }
 
             foreach (var why in Draw(doc, form, canvas, pageToCanvas, region, doc.NumberOf(r.Elements[0]), doc.NumberOf(r.Elements[1]),
                          doc.NumberOf(r.Elements[2]), doc.NumberOf(r.Elements[3]), resources, variableText: false, tags))

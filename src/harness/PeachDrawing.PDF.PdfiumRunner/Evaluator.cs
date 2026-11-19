@@ -66,7 +66,10 @@ internal sealed class Evaluator(Tolerance tolerance, string? dumpDirectory = nul
             var fraction = d.Differing / (double)Math.Max(1, actual.Width * actual.Height);
             if (fraction > tolerance.MaxDifferingFraction)
                 return new TestResult(Outcome.Fail, $"page {page}: {fraction:P2} of pixels differ (mean {d.MeanDifference:0.0}){Unsupported(unsupported)}");
-            if (actual.IsBlank() && !expected.IsBlank())
+            // A page can sit inside the pixel tolerance and still have lost what PDFium drew (a check mark on a small page), so a page with
+            // under a quarter of PDFium's ink is blank, not a pass.
+            int expectedInk = expected.InkPixels(tolerance.Threshold);
+            if (expectedInk > 0 && actual.InkPixels(tolerance.Threshold) * 4 < expectedInk)
             {
                 blank = true;
                 blankWhy = Unsupported(unsupported);
@@ -84,6 +87,17 @@ internal sealed class Evaluator(Tolerance tolerance, string? dumpDirectory = nul
         using var canvas = new RasterRenderContext().CreateCanvas(width, height);
         canvas.DrawRectangle(canvas.GetSolidBrush(PaintColor.FromArgb(255, 255, 255, 255)), 0, 0, width, height);
         var unsupported = source.Paint(page, canvas, PdfAnnotationPaint.All);
+
+        // pdfium_test runs with a form-fill environment whose highlight color (0xFFE4DD, alpha 100, BGR) tints every field but push buttons and
+        // signatures; the expected images carry it, so the same tint is drawn here rather than counted as a difference.
+        var highlight = canvas.GetSolidBrush(PaintColor.FromArgb(100, 221, 228, 255));
+        foreach (var field in source.GetFormFields(page, 1))
+        {
+            if (field.Kind is PdfFormFieldKind.PushButton or PdfFormFieldKind.Signature)
+                continue;
+            canvas.DrawRectangle(highlight, field.Bounds.X, field.Bounds.Y, field.Bounds.Width, field.Bounds.Height);
+        }
+
         var buffer = canvas.ToPixelBuffer();
         return (new RgbaImage(buffer.Width, buffer.Height, buffer.PremultipliedRgba.ToArray()), unsupported);
     }

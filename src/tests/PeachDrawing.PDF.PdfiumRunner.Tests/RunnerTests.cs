@@ -145,6 +145,33 @@ public sealed class RunnerTests : IDisposable
     }
 
     [Fact]
+    public void Evaluate_APageWithAFractionOfPdfiumsInk_IsBlank_EvenInsideTheTolerance()
+    {
+        // 30 of 400 pixels are black in the expectation; the page itself draws only a pale tint, so nothing like the ink is there.
+        var pixels = new byte[20 * 20 * 4];
+        Array.Fill(pixels, (byte)255);
+        for (var i = 0; i < 30; i++)
+            (pixels[i * 4], pixels[i * 4 + 1], pixels[i * 4 + 2]) = (0, 0, 0);
+        Write("tint", Template("0.95 0.95 1"), new RgbaImage(20, 20, pixels).ToPng());
+
+        var result = new Evaluator(new Tolerance(Threshold: 48, MaxDifferingFraction: 0.5)).Evaluate(Corpus.Discover(_root).Single());
+
+        Assert.Equal(Outcome.Blank, result.Outcome);
+    }
+
+    [Fact]
+    public void InkPixels_CountsOnlyWhatStandsOutFromWhite()
+    {
+        var pixels = new byte[4 * 4];
+        Array.Fill(pixels, (byte)255);
+        (pixels[0], pixels[1], pixels[2]) = (0, 0, 0);                  // black
+        (pixels[4], pixels[5], pixels[6]) = (242, 244, 255);            // a form-field tint
+        (pixels[8], pixels[9], pixels[10]) = (200, 255, 255);           // 55 below white in one channel
+
+        Assert.Equal(2, new RgbaImage(2, 2, pixels).InkPixels(48));
+    }
+
+    [Fact]
     public void Evaluate_AnUnreadableDocument_IsAFailureNotACrash()
     {
         File.WriteAllText(Path.Combine(Pixel, "broken.pdf"), "not a pdf");
