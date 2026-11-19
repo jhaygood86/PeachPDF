@@ -18,9 +18,9 @@ namespace PeachDrawing.PDF.PdfiumRunner
                   Downloads a corpus at its pinned commit into <cache>/<kind>/<commit>/ (default ~/.peachdrawing-pdfium):
                   pdfium: PDFium's testing/resources (pdfium/PDFIUM_COMMIT), with the reference images its tests carry;
                   pdfjs: the PDFs of pdf.js's test/pdfs (pdfjs/PDFJS_COMMIT), which have none.
-              oracle --corpus <pdf.js dir> --out <dir> [--python <exe>] [--max-pages <n>] [--max-bytes <n>]
+              oracle --corpus <pdf.js dir> --out <dir> [--python <exe>] [--max-pages <n>] [--max-bytes <n>] [--timeout <seconds>] [--jobs <n>]
                   Renders every page of every PDF in the pdf.js corpus with PDFium (pypdfium2, see oracle/requirements.txt) into <dir>, which
-                  'run --kind pdfjs --oracle <dir>' compares against. An interrupted run resumes; --max-pages caps pages per file (default all).
+                  'run --kind pdfjs --oracle <dir>' compares against. An interrupted run resumes; --max-pages caps pages per file (default all); a file that takes longer than --timeout seconds (default 60) is killed and recorded as an error.
               run --corpus <dir> [options]
                   --kind pdfium|pdfjs  which corpus (default pdfium); pdfjs also needs --oracle <dir>
                   --filter <text>      only tests whose id contains <text>
@@ -172,10 +172,12 @@ namespace PeachDrawing.PDF.PdfiumRunner
             var info = new ProcessStartInfo(o.GetValueOrDefault("python") ?? "python3") { UseShellExecute = false };
             foreach (var argument in new[] { "-I", script, pdfs, output, "--max-bytes", o.GetValueOrDefault("max-bytes") ?? Corpus.DefaultMaxBytes.ToString(CultureInfo.InvariantCulture) })
                 info.ArgumentList.Add(argument);
-            if (o.GetValueOrDefault("max-pages") is { } maxPages)
+            foreach (var option in new[] { "max-pages", "timeout", "jobs" })
             {
-                info.ArgumentList.Add("--max-pages");
-                info.ArgumentList.Add(maxPages);
+                if (o.GetValueOrDefault(option) is not { } value)
+                    continue;
+                info.ArgumentList.Add("--" + option);
+                info.ArgumentList.Add(value);
             }
 
             using var process = Process.Start(info) ?? throw new InvalidOperationException("Could not start Python.");

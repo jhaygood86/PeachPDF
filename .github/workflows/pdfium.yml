@@ -80,7 +80,7 @@ jobs:
   # oracle/requirements.txt). The renderings are cached by the PDFs' commit, the script and the pinned PDFium, so only the first run pays for them.
   pdfjs:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 45
     steps:
     - name: Checkout
       uses: actions/checkout@v4
@@ -105,11 +105,14 @@ jobs:
         path: ~/.peachdrawing-pdfium/pdfjs
         key: pdfjs-${{ hashFiles('src/harness/PeachDrawing.PDF.PdfiumRunner/pdfjs/PDFJS_COMMIT') }}
 
-    - name: Cache PDFium's renderings of them
-      uses: actions/cache@v4
+    # Restored by prefix and saved under the run id, so a render that ran out of time still leaves its finished files for the next run to resume from
+    # (a cache entry cannot be overwritten, so one fixed key would keep the first, possibly partial, result forever).
+    - name: Restore PDFium's renderings of them
+      uses: actions/cache/restore@v4
       with:
         path: pdfjs-oracle
-        key: pdfjs-oracle-${{ hashFiles('src/harness/PeachDrawing.PDF.PdfiumRunner/pdfjs/PDFJS_COMMIT', 'src/harness/PeachDrawing.PDF.PdfiumRunner/oracle/**') }}
+        key: pdfjs-oracle-${{ hashFiles('src/harness/PeachDrawing.PDF.PdfiumRunner/pdfjs/PDFJS_COMMIT', 'src/harness/PeachDrawing.PDF.PdfiumRunner/oracle/**') }}-${{ github.run_id }}
+        restore-keys: pdfjs-oracle-${{ hashFiles('src/harness/PeachDrawing.PDF.PdfiumRunner/pdfjs/PDFJS_COMMIT', 'src/harness/PeachDrawing.PDF.PdfiumRunner/oracle/**') }}-
 
     - name: Build the runner
       run: dotnet build src/harness/PeachDrawing.PDF.PdfiumRunner/PeachDrawing.PDF.PdfiumRunner.csproj --configuration Release --framework net10.0
@@ -117,8 +120,17 @@ jobs:
     - name: Fetch the pdf.js PDFs
       run: dotnet src/harness/PeachDrawing.PDF.PdfiumRunner/bin/Release/net10.0/PeachDrawing.PDF.PdfiumRunner.dll fetch --kind pdfjs
 
+    # A file that takes PDFium longer than a minute (tiling patterns with tiny steps) is given up on and recorded as an error, so one file cannot hold the step.
     - name: Render every page with PDFium
-      run: dotnet src/harness/PeachDrawing.PDF.PdfiumRunner/bin/Release/net10.0/PeachDrawing.PDF.PdfiumRunner.dll oracle --corpus "$HOME/.peachdrawing-pdfium/pdfjs/$((Get-Content src/harness/PeachDrawing.PDF.PdfiumRunner/pdfjs/PDFJS_COMMIT -Raw).Trim())" --out pdfjs-oracle --python python
+      timeout-minutes: 25
+      run: dotnet src/harness/PeachDrawing.PDF.PdfiumRunner/bin/Release/net10.0/PeachDrawing.PDF.PdfiumRunner.dll oracle --corpus "$HOME/.peachdrawing-pdfium/pdfjs/$((Get-Content src/harness/PeachDrawing.PDF.PdfiumRunner/pdfjs/PDFJS_COMMIT -Raw).Trim())" --out pdfjs-oracle --python python --timeout 60
+
+    - name: Save PDFium's renderings of them
+      if: always()
+      uses: actions/cache/save@v4
+      with:
+        path: pdfjs-oracle
+        key: pdfjs-oracle-${{ hashFiles('src/harness/PeachDrawing.PDF.PdfiumRunner/pdfjs/PDFJS_COMMIT', 'src/harness/PeachDrawing.PDF.PdfiumRunner/oracle/**') }}-${{ github.run_id }}
 
     - name: Run the pdf.js PDFs against the floor
       run: |
