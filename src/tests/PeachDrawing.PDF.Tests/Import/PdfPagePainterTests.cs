@@ -247,6 +247,91 @@ namespace PeachDrawing.PDF.Tests.Import
             Assert.InRange(Px(pdf, 75, 50).A, 0, 8);
         }
 
+        private static string Shading(int type, string coords, string extend) =>
+            $"<< /ShadingType {type} /ColorSpace /DeviceRGB /Coords [{coords}] /Function {RedToBlue} /Extend [{extend}] >>";
+
+        private static byte[] ShPdf(string shading, string content = "/S0 sh") => Pdf(content, resources: $"/Shading << /S0 {shading} >>");
+
+        private static byte[] ShadingPatternPdf(string shading) =>
+            Pdf("/Pattern cs /P0 scn 0 0 100 100 re f", resources: "/Pattern << /P0 5 0 R >>", extraObjects: $"<< /PatternType 2 /Shading {shading} >>");
+
+        [Fact]
+        public void ShOperator_ReadsTheShadingInTheCurrentUserSpace_NotThePageSpace()
+        {
+            // The shading is written in a 0..25 space and the cm doubles it: the band covers x = 0..50 of the page. (The sh operator has no
+            // pattern matrix: its space is the one the cm built, PDF 8.7.4.2.)
+            var pdf = ShPdf(Shading(2, "0 0 25 0", "false false"), "2 0 0 2 0 0 cm /S0 sh");
+
+            AssertNear((250, 0, 5, 255), Px(pdf, 2, 50), 14);
+            AssertNear((5, 0, 250, 255), Px(pdf, 48, 50), 14);
+            Assert.InRange(Px(pdf, 60, 50).A, 0, 8);
+        }
+
+        [Theory]
+        [InlineData("false false", false, false)]
+        [InlineData("true false", true, false)]
+        [InlineData("false true", false, true)]
+        [InlineData("true true", true, true)]
+        public void AxialShading_PaintsBeyondEachEndOnlyWhereItExtends(string extend, bool before, bool after)
+        {
+            var pdf = ShPdf(Shading(2, "30 0 70 0", extend));
+
+            Assert.Equal(before, Px(pdf, 10, 50).A > 200);
+            AssertNear((128, 0, 128, 255), Px(pdf, 50, 50), 20);                 // between the ends it always paints
+            Assert.Equal(after, Px(pdf, 90, 50).A > 200);
+        }
+
+        [Fact]
+        public void AxialShadingPattern_WithoutExtend_FillsOnlyTheBand()
+        {
+            var pdf = ShadingPatternPdf(Shading(2, "30 0 70 0", "false false"));
+
+            Assert.InRange(Px(pdf, 10, 50).A, 0, 8);
+            AssertNear((250, 0, 5, 255), Px(pdf, 32, 50), 14);
+            Assert.InRange(Px(pdf, 90, 50).A, 0, 8);
+        }
+
+        [Fact]
+        public void AxialShading_WithoutExtend_StaysPerpendicularUnderAnUnevenScale()
+        {
+            // The band's edges are right angles in shading space: a 2x1 stretch keeps them vertical for a horizontal axis.
+            var pdf = ShPdf(Shading(2, "0 0 20 0", "false false"), "2 0 0 1 0 0 cm /S0 sh");
+
+            AssertNear((250, 0, 5, 255), Px(pdf, 2, 10), 14);
+            AssertNear((250, 0, 5, 255), Px(pdf, 2, 90), 14);
+            Assert.InRange(Px(pdf, 44, 10).A, 0, 8);                                // the band is 0..40 wide: x = 44 is past it, top and bottom
+            Assert.InRange(Px(pdf, 60, 50).A, 0, 8);
+        }
+
+        [Fact]
+        public void RadialShading_WithoutExtend_FillsTheCircleOnly()
+        {
+            var pdf = ShPdf(Shading(3, "50 50 0 50 50 30", "false false"));
+
+            AssertNear((128, 0, 128, 255), Px(pdf, 50, 50 - 15), 40);
+            Assert.True(Px(pdf, 50 + 25, 50).A > 200);
+            Assert.InRange(Px(pdf, 50 + 40, 50).A, 0, 8);
+            Assert.InRange(Px(pdf, 5, 5).A, 0, 8);
+        }
+
+        [Fact]
+        public void RadialShading_ExtendedPastItsOuterCircle_PaintsTheEndColor()
+        {
+            var pdf = ShPdf(Shading(3, "50 50 0 50 50 30", "true true"));
+
+            AssertNear((5, 0, 250, 255), Px(pdf, 95, 50), 14);
+        }
+
+        [Fact]
+        public void RadialShading_ExtendedPastASmallerInnerCircle_StopsAtTheConeApex()
+        {
+            // Circles shrink toward the start (r 10 -> 30): extending it paints the cone down to its apex but not past the outer circle.
+            var pdf = ShPdf(Shading(3, "20 50 10 60 50 30", "true false"));
+
+            Assert.True(Px(pdf, 8, 50).A > 200);                 // inside the cone before the start circle
+            Assert.InRange(Px(pdf, 95, 50).A, 0, 8);             // beyond the outer circle
+        }
+
         [Fact]
         public void StitchingFunction_SwitchesSubfunctionAtItsBound()
         {

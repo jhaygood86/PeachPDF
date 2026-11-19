@@ -39,6 +39,7 @@ internal sealed class Evaluator(Tolerance tolerance, string? dumpDirectory = nul
         }
 
         var blank = false;
+        var blankWhy = "";
         for (var page = 0; page < test.ExpectedPages.Count; page++)
         {
             var expected = RgbaImage.FromPng(File.ReadAllBytes(test.ExpectedPages[page]));
@@ -48,9 +49,10 @@ internal sealed class Evaluator(Tolerance tolerance, string? dumpDirectory = nul
                 return new TestResult(Outcome.Fail, $"page {page}: the document has {source.PageCount} pages");
 
             RgbaImage actual;
+            IReadOnlyCollection<string> unsupported;
             try
             {
-                actual = Render(source, page);
+                (actual, unsupported) = Render(source, page);
             }
             catch (Exception e)
             {
@@ -63,24 +65,27 @@ internal sealed class Evaluator(Tolerance tolerance, string? dumpDirectory = nul
 
             var fraction = d.Differing / (double)Math.Max(1, actual.Width * actual.Height);
             if (fraction > tolerance.MaxDifferingFraction)
-                return new TestResult(Outcome.Fail, $"page {page}: {fraction:P2} of pixels differ (mean {d.MeanDifference:0.0})");
+                return new TestResult(Outcome.Fail, $"page {page}: {fraction:P2} of pixels differ (mean {d.MeanDifference:0.0}){Unsupported(unsupported)}");
             if (actual.IsBlank() && !expected.IsBlank())
+            {
                 blank = true;
+                blankWhy = Unsupported(unsupported);
+            }
         }
 
-        return blank ? new TestResult(Outcome.Blank, "nothing was painted") : new TestResult(Outcome.Pass);
+        return blank ? new TestResult(Outcome.Blank, "nothing was painted" + blankWhy) : new TestResult(Outcome.Pass);
     }
 
     /// <summary>One pixel per point, as <c>pdfium_test</c> at its default scale: the size is the page's size in points, truncated.</summary>
-    internal static RgbaImage Render(PdfPageSource source, int page)
+    internal static (RgbaImage Image, IReadOnlyCollection<string> Unsupported) Render(PdfPageSource source, int page)
     {
         var (w, h) = source.GetPageSize(page);
         int width = Math.Max(1, (int)w), height = Math.Max(1, (int)h);
         using var canvas = new RasterRenderContext().CreateCanvas(width, height);
         canvas.DrawRectangle(canvas.GetSolidBrush(PaintColor.FromArgb(255, 255, 255, 255)), 0, 0, width, height);
-        source.Paint(page, canvas, PdfAnnotationPaint.All);
+        var unsupported = source.Paint(page, canvas, PdfAnnotationPaint.All);
         var buffer = canvas.ToPixelBuffer();
-        return new RgbaImage(buffer.Width, buffer.Height, buffer.PremultipliedRgba.ToArray());
+        return (new RgbaImage(buffer.Width, buffer.Height, buffer.PremultipliedRgba.ToArray()), unsupported);
     }
 
     private void Dump(CorpusTest test, int page, RgbaImage expected, RgbaImage actual)
@@ -92,6 +97,10 @@ internal sealed class Evaluator(Tolerance tolerance, string? dumpDirectory = nul
         File.WriteAllBytes($"{stem}.{page}.peach.png", actual.ToPng());
         File.WriteAllBytes($"{stem}.{page}.pdfium.png", expected.ToPng());
     }
+
+    /// <summary>The features the importer reported it could not draw, so failures can be grouped by cause.</summary>
+    private static string Unsupported(IReadOnlyCollection<string> unsupported) =>
+        unsupported.Count == 0 ? "" : "; unsupported: " + string.Join(", ", unsupported.Order(StringComparer.Ordinal));
 
     private static string Short(Exception e)
     {

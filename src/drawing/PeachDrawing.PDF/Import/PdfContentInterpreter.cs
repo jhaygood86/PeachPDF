@@ -1124,25 +1124,54 @@ internal sealed class PdfContentInterpreter
         Cur.ColorLocked = true;
     }
 
-    /// <summary>A brush for a shading whose space is <paramref name="shadingToBase"/> away from the stream's default space.</summary>
-    Brush? ShadingBrush(PdfDictionary shading, Matrix3x2 shadingToBase, double alpha, PdfDictionary? res)
+    /// <summary>Where the shading behind the last brush <see cref="ShadingBrush"/> made paints, when its /Extend limits it; null when unlimited.</summary>
+    IReadOnlyList<PaintPoint>? _shadingRegion;
+
+    /// <summary>The region of <see cref="_shadingRegion"/> as a path, or null when the last brush has none. Reading it clears it.</summary>
+    GraphicsPath? TakeShadingRegion()
     {
-        if (!Matrix3x2.Invert(Cur.Ctm, out var inverse)) return null;
-        var toCurrent = shadingToBase * _streamBase * inverse;
-        var brush = PdfShadingBrushFactory.CreateBrush(_doc, shading, res, toCurrent, alpha, _canvas.RenderContext, out var why);
+        var points = _shadingRegion;
+        _shadingRegion = null;
+        if (points is not { Count: >= 3 }) return null;
+        var path = _canvas.GetGraphicsPath();
+        path.Start(points[0].X, points[0].Y);
+        for (int i = 1; i < points.Count; i++) path.LineTo(points[i].X, points[i].Y);
+        path.CloseFigure();
+        return path;
+    }
+
+    /// <summary>
+    /// The matrix from a shading's space to the canvas' current space. A pattern's shading is in the pattern's space, which sits on the
+    /// stream's base space whatever the current transform is; the <c>sh</c> operator paints in the current user space itself (PDF 8.7.4.2),
+    /// so there it is just <paramref name="shadingToBase"/>.
+    /// </summary>
+    bool ShadingToCurrent(Matrix3x2 shadingToBase, bool inUserSpace, out Matrix3x2 toCurrent)
+    {
+        toCurrent = shadingToBase;
+        if (inUserSpace) return true;
+        if (!Matrix3x2.Invert(Cur.Ctm, out var inverse)) return false;
+        toCurrent = shadingToBase * _streamBase * inverse;
+        return true;
+    }
+
+    /// <summary>A brush for a shading whose space is <paramref name="shadingToBase"/> away from the stream's default space.</summary>
+    Brush? ShadingBrush(PdfDictionary shading, Matrix3x2 shadingToBase, double alpha, PdfDictionary? res, bool inUserSpace = false)
+    {
+        if (!ShadingToCurrent(shadingToBase, inUserSpace, out var toCurrent)) return null;
+        var brush = PdfShadingBrushFactory.CreateBrush(_doc, shading, res, toCurrent, alpha, _canvas.RenderContext, out var why, out var region);
         if (brush is null) _unsupported.Add(why!);
+        _shadingRegion = brush is null ? null : region;
         return brush;
     }
 
     /// <summary>Draws a mesh shading as an image of the mesh under the transform that carries shading space onto the canvas.</summary>
-    void DrawMesh(PdfDictionary shading, Matrix3x2 shadingToBase, double alpha, PdfDictionary? res)
+    void DrawMesh(PdfDictionary shading, Matrix3x2 shadingToBase, double alpha, PdfDictionary? res, bool inUserSpace = false)
     {
         // A function-based shading's /Matrix carries its domain onto the space the pattern or sh operator names.
         if (_doc.IntOf(shading.GetRaw("ShadingType")) == 1 && _doc.ArrayOf(shading, "Matrix") is { Elements.Count: >= 6 } fm)
             shadingToBase = new Matrix3x2((float)_doc.NumberOf(fm.Elements[0]), (float)_doc.NumberOf(fm.Elements[1]), (float)_doc.NumberOf(fm.Elements[2]),
                 (float)_doc.NumberOf(fm.Elements[3]), (float)_doc.NumberOf(fm.Elements[4]), (float)_doc.NumberOf(fm.Elements[5])) * shadingToBase;
-        if (!Matrix3x2.Invert(Cur.Ctm, out var inverse)) return;
-        var toCurrent = shadingToBase * _streamBase * inverse;
+        if (!ShadingToCurrent(shadingToBase, inUserSpace, out var toCurrent)) return;
         var toCanvas = toCurrent * _canvas.CurrentTransform;
         double scale = Math.Sqrt(Math.Abs(toCanvas.M11 * toCanvas.M22 - toCanvas.M12 * toCanvas.M21));
         var bitmap = PdfMeshShading.Render(_doc, shading, res, scale, alpha, out var why);
@@ -1167,9 +1196,13 @@ internal sealed class PdfContentInterpreter
         string name = _doc.NameOf(o[0])!.TrimStart('/');
         var shadings = res is null ? null : _doc.DictOf(res, "Shading");
         if (shadings is null || _doc.Resolve(shadings.GetRaw(name)) is not PdfDictionary shading) { _unsupported.Add("sh (missing shading)"); return; }
-        if (PdfMeshShading.IsMesh(_doc.IntOf(shading.GetRaw("ShadingType")))) { DrawMesh(shading, Matrix3x2.Identity, Cur.FillAlpha, res); return; }
-        var brush = ShadingBrush(shading, Matrix3x2.Identity, Cur.FillAlpha, res);
-        if (brush is not null) _canvas.DrawRectangle(brush, -1e5, -1e5, 2e5, 2e5);
+        if (PdfMeshShading.IsMesh(_doc.IntOf(shading.GetRaw("ShadingType")))) { DrawMesh(shading, Matrix3x2.Identity, Cur.FillAlpha, res, inUserSpace: true); return; }
+        var brush = ShadingBrush(shading, Matrix3x2.Identity, Cur.FillAlpha, res, inUserSpace: true);
+        if (brush is null) return;
+        var region = TakeShadingRegion();
+        if (region is not null) _canvas.PushClip(region);
+        try { _canvas.DrawRectangle(brush, -1e5, -1e5, 2e5, 2e5); }
+        finally { if (region is not null) _canvas.PopClip(); }
     }
 
     /// <summary>The pen the current stroke color, line width, caps, joins and dash describe; null when the color cannot be made.</summary>
@@ -1213,8 +1246,12 @@ internal sealed class PdfContentInterpreter
             }
             else
             {
+                _shadingRegion = null;
                 var brush = BrushFor(fill: true, res);
-                if (brush is not null) _canvas.DrawPath(brush, path);
+                var region = brush is null ? null : TakeShadingRegion();
+                if (region is not null) _canvas.PushClip(region);
+                try { if (brush is not null) _canvas.DrawPath(brush, path); }
+                finally { if (region is not null) _canvas.PopClip(); }
             }
         }
         if (stroke)
