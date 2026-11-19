@@ -330,6 +330,31 @@ namespace PeachDrawing.PDF.Tests.Import
             Assert.InRange(matted.A, 120, 135);
         }
 
+        private static byte[] LuminosityMaskedSquare(string transfer)
+        {
+            // A blue square painted through a luminosity mask whose group is white over the left half and black over the rest.
+            var group = TestPdf.Stream("/Type /XObject /Subtype /Form /BBox [0 0 100 100] /Group << /S /Transparency /CS /DeviceGray >>", "1 g 0 0 50 100 re f");
+            var state = $"<< /SMask << /S /Luminosity /G 6 0 R {transfer} >> >>";
+            var inverse = "<< /FunctionType 2 /Domain [0 1] /C0 [1] /C1 [0] /N 1 >>";
+            return Pdf("/GS0 gs 0 0 1 rg 0 0 100 100 re f", resources: "/ExtGState << /GS0 5 0 R >>", extraObjects: state + "|||" + group + "|||" + inverse);
+        }
+
+        [Fact]
+        public void SoftMaskTransfer_IsAppliedToTheMasksValue()
+        {
+            var plain = LuminosityMaskedSquare("");
+            var inverted = LuminosityMaskedSquare("/TR 7 0 R");
+
+            Assert.True(Px(plain, 25, 50).A > 240);                      // white mask: painted
+            Assert.InRange(Px(plain, 75, 50).A, 0, 8);                   // black mask: hidden
+            Assert.InRange(Px(inverted, 25, 50).A, 0, 8);                // the inverting transfer swaps them
+            Assert.True(Px(inverted, 75, 50).A > 240);
+        }
+
+        [Fact]
+        public void SoftMaskTransfer_IdentityChangesNothing() =>
+            Assert.True(Px(LuminosityMaskedSquare("/TR /Identity"), 25, 50).A > 240);
+
         [Fact]
         public void SoftMaskMatte_OfTheWrongLength_IsNotApplied() =>
             Assert.InRange(Px(MattedImage("/Matte [0 0.2]"), 50, 50).R, 45, 55);

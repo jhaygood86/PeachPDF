@@ -11,6 +11,39 @@ namespace PeachDrawing.PDF.Tests.Import
         private static PdfCMap Parse(string text, Func<string, PdfCMap?>? parent = null) =>
             PdfCMap.Parse(Encoding.ASCII.GetBytes(text), "Test", parent ?? (_ => null));
 
+        [Theory]
+        [InlineData(0L)]
+        [InlineData(1L)]
+        [InlineData(-1L)]
+        [InlineData(1073741823L)]
+        [InlineData(-1073741824L)]
+        [InlineData(0x7FFFFFFFL)]                 // the largest 32-bit code, as a difference: its zigzag form needs 33 bits
+        [InlineData(-0x80000000L)]
+        [InlineData(0xFFFFFFFFL)]
+        public void Zigzag_RoundTripsDifferencesOfThirtyTwoBitCodes(long value)
+        {
+            // A predefined CMap over four-byte codes stores the difference of neighboring codes this way; reading it through an int threw an
+            // OverflowException that took down every file using such a CMap.
+            var writer = new PdfCMapBinary.Writer();
+            writer.Zigzag(value);
+
+            Assert.Equal(value, new PdfCMapBinary.Reader(writer.ToArray()).Zigzag());
+        }
+
+        [Fact]
+        public void ACMapOverFourByteCodes_SurvivesItsBinaryForm()
+        {
+            // The codespace and a range of the UTF-32 CMaps reach 0xFFFFFFFF, which does not fit the int a count is read as.
+            var map = new PdfCMap("Wide");
+            map.AddSpace(4, 0x00000000, 0xFFFFFFFF);
+            map.AddRange(4, 0x00010000, 0xFFFFFFFE, 7);
+
+            var decoded = PdfCMapBinary.DecodeMap("Wide", PdfCMapBinary.EncodeMap(map), _ => null);
+
+            Assert.Equal(7, decoded.Lookup(0x00010000, 4));
+            Assert.Equal(7 + 0xFF00, decoded.Lookup(0x0001FF00, 4));
+        }
+
         [Fact]
         public void AnEmbeddedCMap_IsReadFromItsText()
         {

@@ -133,7 +133,9 @@ internal sealed class Evaluator(Tolerance tolerance, string? dumpDirectory = nul
 
     private static string Short(Exception e)
     {
-        var text = $"{e.GetType().Name}: {e.Message}".ReplaceLineEndings(" ");
-        return text.Length > 140 ? text[..140] : text;
+        // PEACHDRAWING_RUNNER_STACKS=1 puts the top of the stack in the reason, for finding where a failure is thrown from.
+        var trace = Environment.GetEnvironmentVariable("PEACHDRAWING_RUNNER_STACKS") == "1" ? " at " + string.Join(" <- ", (e.StackTrace ?? "").Split('\n').Take(6).Select(l => l.Trim().Split(" in ")[0])) : "";
+        var text = $"{e.GetType().Name}: {e.Message}{trace}".ReplaceLineEndings(" ");
+        return text.Length > 140 && trace.Length == 0 ? text[..140] : text;
     }
 }

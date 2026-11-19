@@ -204,7 +204,10 @@ internal static class PdfCMapBinary
 
         internal byte Byte() => _at < data.Length ? data[_at++] : throw new InvalidDataException("The CMap data ends early.");
 
-        internal int Varint()
+        internal int Varint() => checked((int)Varint64());
+
+        /// <summary>A variable-length integer of up to 35 bits: a count or a length fits an int, but a zigzag-coded difference of 32-bit codes does not.</summary>
+        internal long Varint64()
         {
             long v = 0;
             int shift = 0;
@@ -217,12 +220,12 @@ internal static class PdfCMapBinary
                 if (shift > 35) throw new InvalidDataException("A number in the CMap data is too long.");
             }
 
-            return checked((int)v);
+            return v;
         }
 
         internal long Zigzag()
         {
-            long v = Varint();
+            long v = Varint64();
             return (v >> 1) ^ -(v & 1);
         }
 
@@ -277,7 +280,7 @@ internal static class PdfCMapBinary
         for (int n = reader.Varint(); n > 0; n--)
         {
             int length = reader.Byte();
-            map.AddSpace(length, (uint)reader.Varint(), (uint)reader.Varint());
+            map.AddSpace(length, (uint)reader.Varint64(), (uint)reader.Varint64());
         }
 
         for (int length = 1; length <= 4; length++)
@@ -286,7 +289,7 @@ internal static class PdfCMapBinary
             for (int n = reader.Varint(); n > 0; n--)
             {
                 long low = nextLow + reader.Zigzag();
-                long span = reader.Varint();
+                long span = reader.Varint64();
                 long cid = expectedCid + reader.Zigzag();
                 map.AddRange(length, (uint)low, (uint)(low + span), (int)cid);
                 nextLow = low + span + 1;

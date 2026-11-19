@@ -968,10 +968,52 @@ internal sealed class PdfContentInterpreter
         _canvas.PushTransform(undo);
         try
         {
-            if (luminosity) _canvas.DrawImageMasked(group.ContentImage, maskTile.Value.Image, region);
-            else _canvas.DrawImageAlphaMasked(group.ContentImage, maskTile.Value.Image, region);
+            var maskImage = ApplyMaskTransfer(maskDict, maskTile.Value.Image, luminosity) ?? maskTile.Value.Image;
+            if (luminosity) _canvas.DrawImageMasked(group.ContentImage, maskImage, region);
+            else _canvas.DrawImageAlphaMasked(group.ContentImage, maskImage, region);
         }
         finally { _canvas.PopTransform(); }
+    }
+
+    /// <summary>
+    /// A soft mask's <c>/TR</c> (PDF 11.6.5.2): a function the mask's value (its luminosity, or its alpha) is passed through, clamped to 0..1 on
+    /// the way out. It is applied as a 256-entry table to the mask tile's pixels, giving a new mask image; null when the mask has no transfer
+    /// function (or <c>/Identity</c>), or the tile cannot be read back, in which case the mask is used as drawn.
+    /// </summary>
+    Image? ApplyMaskTransfer(PdfDictionary maskDict, Image mask, bool luminosity)
+    {
+        if (!maskDict.ContainsKeyRaw("TR") || _doc.NameOf(maskDict.GetRaw("TR")) == "/Identity") return null;
+        if (PdfFunction.Load(_doc, maskDict.GetRaw("TR")) is not { } function || mask.GetPixels() is not { } pixels) return null;
+
+        var table = new byte[256];
+        for (int i = 0; i < 256; i++)
+        {
+            var output = function.Evaluate(i / 255.0);
+            table[i] = (byte)Math.Round(Math.Clamp(output.Length > 0 && !double.IsNaN(output[0]) ? output[0] : i / 255.0, 0, 1) * 255);
+        }
+
+        int w = pixels.Width, h = pixels.Height;
+        var source = pixels.PremultipliedRgba.Span;
+        var rgba = new byte[w * h * 4];
+        for (int i = 0; i < w * h; i++)
+        {
+            int o = i * 4;
+            byte a = source[o + 3];
+            if (luminosity)
+            {
+                // The tile is opaque (the backdrop was painted over all of it); its luminosity is the mask value.
+                double l = (0.3 * source[o] + 0.59 * source[o + 1] + 0.11 * source[o + 2]) / 255.0;
+                byte v = table[(int)Math.Round(Math.Clamp(l, 0, 1) * 255)];
+                (rgba[o], rgba[o + 1], rgba[o + 2], rgba[o + 3]) = (v, v, v, 255);
+            }
+            else
+            {
+                (rgba[o], rgba[o + 1], rgba[o + 2], rgba[o + 3]) = (0, 0, 0, table[a]);
+            }
+        }
+
+        try { return _canvas.RenderContext.ImageFromStream(new MemoryStream(PdfImageXObject.EncodePng(rgba, w, h))); }
+        catch (Exception) { return null; }
     }
 
     /// <summary>Applies a <c>/BM</c> entry (a name, or an array of names of which the first known one is used) to what is painted next.</summary>
