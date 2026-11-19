@@ -249,5 +249,21 @@ namespace PeachDrawing.PDF.Tests.Import
 
             Assert.True(both.Blue > 100 && both.Red > 20, "the glyph is clipped to and outlined");
         }
+
+        [Fact]
+        public async Task NegativeSizeWithNegativeTz_UnderAFlippedCtm_DrawsTheSameInkAsAPlainRun()
+        {
+            // How a report writer lays text out in a top-left coordinate system: a flipped CTM, -100 Tz and a negative size. The shapes are scaled
+            // by Tfs * Th (positive), so the ink is exactly the plain run's; mirrored shapes would sit left of the pen and reverse the glyphs.
+            var (doc, res, hex) = await OpenAsync();
+            var pair = hex + hex;
+
+            var plain = Run(doc, res, $"BT /F0 40 Tf 100 30 Td <{pair}> Tj ET");
+            var flipped = Run(doc, res, $"q 1 0 0 -1 0 60 cm -100 Tz BT /F0 -40 Tf 100 30 Td <{pair}> Tj ET Q");
+
+            Assert.Empty(flipped.Unsupported);
+            Assert.Equal(plain.Box, flipped.Box);
+            Assert.Equal(plain.Pixels, flipped.Pixels);
+        }
     }
 }

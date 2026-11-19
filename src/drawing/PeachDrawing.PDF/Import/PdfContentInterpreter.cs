@@ -635,12 +635,16 @@ internal sealed class PdfContentInterpreter
             ShowVertical(parts, st, font, glyphs, read);
             return;
         }
+        // PDF 9.4.4: a glyph is scaled by Tfs * Th across and Tfs up, while the pen advances by (w * Tfs + Tc + Tw) * Th. A negative size
+        // (usually paired with -100 Tz, under a flipped CTM) moves the pen with the sign of Th alone, but the shapes take the sign of
+        // Tfs * Th, so positions here carry the sign of Tfs and the run's x scale is multiplied by it (the product is the pen's own).
+        double sign = st.FontSize < 0 ? -1 : 1;
         foreach (var part in parts)
         {
             if (part is double adjust) { x -= adjust / 1000.0 * st.FontSize; continue; }
             foreach (var g in st.TextFont.Decode((string)part))
             {
-                glyphs.Add(new GlyphPlacement(g.GlyphIndex, x, -st.Rise, g.Text));
+                glyphs.Add(new GlyphPlacement(g.GlyphIndex, x * sign, -sign * st.Rise, g.Text));
                 read?.Add((g.Text, x, g.Width * st.FontSize, st.CharSpacing + (g.IsWordSpace ? st.WordSpacing : 0)));
                 x += g.Width * st.FontSize + st.CharSpacing + (g.IsWordSpace ? st.WordSpacing : 0);
             }
@@ -669,7 +673,7 @@ internal sealed class PdfContentInterpreter
         {
             // Glyphs are laid out upright in canvas space (y down); the flip puts them upright in PDF user space (y up), and
             // the horizontal scale and text matrix place the run.
-            var run = Matrix3x2.CreateScale((float)st.HorizontalScale, st.FontSize < 0 ? 1f : -1f) * _tm;
+            var run = Matrix3x2.CreateScale((float)(st.HorizontalScale * sign), st.FontSize < 0 ? 1f : -1f) * _tm;
             // Render modes (PDF 9.3.6): 0 fill, 1 stroke, 2 both, 3 neither, 4-7 the same four and then add the glyphs to the clip.
             int mode = st.RenderMode;
             bool fill = mode is 0 or 2 or 4 or 6;

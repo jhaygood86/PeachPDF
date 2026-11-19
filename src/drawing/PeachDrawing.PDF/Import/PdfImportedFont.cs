@@ -187,7 +187,7 @@ internal sealed class PdfImportedFont
         var cidUnicode = composite ? CidUnicodeOf(doc, cidFont) : null;
         if (composite && toUnicode.Count == 0 && cidUnicode is null) { why = "Type0 font that is not embedded and has no ToUnicode map"; return null; }
 
-        int flags = descriptor is null ? 0 : doc.IntOf(descriptor.GetRaw("Flags"));
+        int flags = descriptor is null ? 0 : doc.IntOf(descriptor!.GetRaw("Flags"));
         var (family, style, weight) = PdfFontSubstitution.Choose(baseName, flags,
             descriptor is null ? 0 : doc.NumberOf(descriptor.GetRaw("FontWeight")), context.IsFontExists);
         if (composite && PdfFontSubstitution.CjkFamilies(OrderingOf(doc, cidFont), baseName) is { } cjk)
@@ -343,7 +343,10 @@ internal sealed class PdfImportedFont
             Func<int, string?> text = code => enc(code);
             font = new PdfImportedFont(false, family, context, toUnicode, doc.NumberOf(descriptor!.GetRaw("MissingWidth")) / 1000.0, null, text, probe);
             // A font with a custom built-in encoding and no /Encoding of its own is read by that encoding, not by Latin-1.
-            font._preferBuiltIn = cff is { BuiltInEncoding.Count: > 0 } && fontDict.GetRaw("Encoding") is null;
+            font._preferBuiltIn = fontDict.GetRaw("Encoding") is null
+                && (cff is { BuiltInEncoding.Count: > 0 }
+                    // A symbolic TrueType font with no /Encoding is read by its own cmap, code for code (PDF 9.6.5.4), not by the text a code stands for.
+                    || (cff is null && fileSubtype is null && (doc.IntOf(descriptor!.GetRaw("Flags")) & 4) != 0));
             int first = doc.IntOf(fontDict.GetRaw("FirstChar"));
             if (doc.ArrayOf(fontDict, "Widths") is { } w)
                 for (int i = 0; i < w.Elements.Count; i++) font._widths[first + i] = doc.NumberOf(w.Elements[i]) / 1000.0;
