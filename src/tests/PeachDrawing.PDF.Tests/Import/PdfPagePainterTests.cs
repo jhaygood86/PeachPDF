@@ -309,6 +309,31 @@ namespace PeachDrawing.PDF.Tests.Import
             AssertNear((5, 0, 250, 255), Px(pdf, 75, 75), 60);           // bottom right: the blue end
         }
 
+        private static byte[] MattedImage(string matte)
+        {
+            // One red-ish pixel (100,0,0) under a soft mask of 128 (alpha about one half).
+            var image = TestPdf.Stream("/Type /XObject /Subtype /Image /Width 1 /Height 1 /BitsPerComponent 8 /ColorSpace /DeviceRGB /SMask 6 0 R", TestPdf.Binary([100, 0, 0]));
+            var mask = TestPdf.Stream($"/Type /XObject /Subtype /Image /Width 1 /Height 1 /BitsPerComponent 8 /ColorSpace /DeviceGray {matte}", TestPdf.Binary([128]));
+            return Pdf("100 0 0 100 0 0 cm /Im0 Do", resources: "/XObject << /Im0 5 0 R >>", extraObjects: image + "|||" + mask);
+        }
+
+        [Fact]
+        public void SoftMaskMatte_UndoesTheBlendWithTheMatteColor()
+        {
+            // With a black matte the stored 100 was already scaled by alpha, so the real color is about 199 and, premultiplied again, 100 stays 100.
+            // Without the matte step it would be a color of 100 under half alpha, premultiplied to about 50.
+            var matted = Px(MattedImage("/Matte [0 0 0]"), 50, 50);
+            var plain = Px(MattedImage(""), 50, 50);
+
+            Assert.InRange(matted.R, 90, 110);
+            Assert.InRange(plain.R, 45, 55);
+            Assert.InRange(matted.A, 120, 135);
+        }
+
+        [Fact]
+        public void SoftMaskMatte_OfTheWrongLength_IsNotApplied() =>
+            Assert.InRange(Px(MattedImage("/Matte [0 0.2]"), 50, 50).R, 45, 55);
+
         [Fact]
         public void ImageMask_FinerThanItsImage_KeepsTheMasksDetail()
         {

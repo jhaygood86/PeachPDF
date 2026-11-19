@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.IO.Compression;
 using PeachDrawing.Core;
 using PeachDrawing.PDF.Engine;
@@ -213,6 +214,16 @@ internal static class PdfImageXObject
             (rgba, width, height) = (scaled, targetW, targetH);
         }
 
+        // /Matte (PDF 11.6.5.3): the image's colors were blended with this color in proportion to the mask, so each is brought back out of the
+        // blend (c = m + (c' - m) / alpha) before the mask becomes the alpha channel. It is in the image's color space: three numbers are read
+        // as RGB and one as gray; any other count, which cannot be tied to the image's space here, is not applied.
+        double[]? matte = null;
+        if (soft && doc.ArrayOf(mask, "Matte") is { Elements.Count: 1 or 3 } m)
+        {
+            var values = m.Elements.Select(e => Math.Clamp(doc.NumberOf(e), 0, 1)).ToArray();
+            matte = values.Length == 1 ? [values[0], values[0], values[0]] : values;
+        }
+
         for (int y = 0; y < height; y++)
         {
             int my = Math.Min(mh - 1, y * mh / height);
@@ -225,6 +236,9 @@ internal static class PdfImageXObject
                 if (!soft) a = 1 - a;
                 if (invert) a = 1 - a;
                 int o = (y * width + x) * 4 + 3;
+                if (matte is not null && a > 0)
+                    for (int c = 0; c < 3; c++)
+                        rgba[o - 3 + c] = (byte)Math.Round(Math.Clamp(matte[c] + (rgba[o - 3 + c] / 255.0 - matte[c]) / Math.Min(a, 1), 0, 1) * 255);
                 rgba[o] = (byte)Math.Round(Math.Clamp(a, 0, 1) * rgba[o]);
             }
         }
