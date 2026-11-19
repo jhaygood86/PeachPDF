@@ -594,9 +594,29 @@ internal sealed class PdfSourceDocument
     List<PdfDictionary> CollectPages()
     {
         var pages = new List<PdfDictionary>();
-        var root = Resolve(Trailer.GetRaw("Root")) as PdfDictionary ?? throw new InvalidDataException("The PDF has no document catalog.");
-        var top = Resolve(root.GetRaw("Pages")) as PdfDictionary ?? throw new InvalidDataException("The PDF has no page tree.");
+        // A damaged file may have lost its catalog or its page tree while the page objects survive: once a repair has been tried they are found by
+        // scanning the objects, as a viewer does, rather than the file being refused.
+        if (Resolve(Trailer.GetRaw("Root")) is not PdfDictionary root)
+            return _rebuilt && ScanForPages() is { Count: > 0 } found ? found : throw new InvalidDataException("The PDF has no document catalog.");
+        if (Resolve(root.GetRaw("Pages")) is not PdfDictionary top)
+            return _rebuilt && ScanForPages() is { Count: > 0 } found ? found : throw new InvalidDataException("The PDF has no page tree.");
         Walk(top, pages, [with(ReferenceEqualityComparer.Instance)], 0);
+        return pages;
+    }
+
+    /// <summary>The page objects (<c>/Type /Page</c>) of the file in object-number order, for a file whose page tree cannot be walked.</summary>
+    List<PdfDictionary> ScanForPages()
+    {
+        var pages = new List<PdfDictionary>();
+        foreach (var number in _xref.Keys.Order())
+        {
+            PdfItem item;
+            try { item = LoadObject(number); }
+            catch (Exception e) when (e is InvalidDataException or InvalidOperationException or ArgumentException or IndexOutOfRangeException) { continue; }
+            if (item is PdfDictionary dictionary && NameOf(dictionary.GetRaw("Type")) == "/Page")
+                pages.Add(dictionary);
+        }
+
         return pages;
     }
 

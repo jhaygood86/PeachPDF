@@ -40,23 +40,28 @@ if ($files.Count -eq 0) {
     throw "No .md files found in '$ApiDocsPath'."
 }
 
-$names = $files | ForEach-Object { [System.IO.Path]::GetFileName($_) }
+# The generated files' names, for an exact-match lookup.
+$names = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
+foreach ($file in $files) { [void]$names.Add([System.IO.Path]::GetFileName($file)) }
+
+# One pattern for every internal link, `](NAME.md #fragment 'title')`, rather than one per known file: a package has hundreds of pages, so a
+# pattern per page per file made this script quadratic (minutes for the larger packages). NAME may contain parentheses and commas (method
+# signatures) but never whitespace, `#` or a quote, so it is matched whole and then looked up; one that is not a generated file (an
+# external link, say) is left exactly as it was.
+$internalLink = [System.Text.RegularExpressions.Regex]::new("\]\(([^\s#']+?\.md)(#[^\s')]*)?(\s+'[^']*')?\)", [System.Text.RegularExpressions.RegexOptions]::CultureInvariant)
+$internalEvaluator = [System.Text.RegularExpressions.MatchEvaluator]{
+    param($m)
+    $target = $m.Groups[1].Value
+    if (-not $names.Contains($target)) { return $m.Value }
+    "]($($target.Substring(0, $target.Length - 3)).html$($m.Groups[2].Value)$($m.Groups[3].Value))"
+}
 
 $modifiedCount = 0
 foreach ($filePath in $files) {
     $content = [System.IO.File]::ReadAllText($filePath)
     $original = $content
 
-    foreach ($name in $names) {
-        $htmlName = $name.Substring(0, $name.Length - 3) + '.html'
-        $escaped = [System.Text.RegularExpressions.Regex]::Escape($name)
-        # Matches ](KNOWNFILE.md  optional #fragment  optional ' title' )
-        $pattern = "\]\($escaped(#[^\s')]*)?(\s+'[^']*')?\)"
-        $content = [System.Text.RegularExpressions.Regex]::Replace($content, $pattern, {
-            param($m)
-            "]($htmlName$($m.Groups[1].Value)$($m.Groups[2].Value))"
-        })
-    }
+    $content = $internalLink.Replace($content, $internalEvaluator)
 
     # A link into another package's pages comes from the links file DefaultDocumentation read (src/ApiReferenceLinks.props), which
     # names its pages as .md; the site serves them as .html. Root-relative, so no known-file list is needed to recognise one.

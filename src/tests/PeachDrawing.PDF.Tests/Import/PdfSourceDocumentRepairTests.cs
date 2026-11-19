@@ -53,6 +53,23 @@ namespace PeachDrawing.PDF.Tests.Import
             Assert.Equal("0 0 1 rg", Content(PdfSourceDocument.Open(Bytes(pdf))));
         }
 
+        [Theory]
+        [InlineData("<< /Type /Catalog >>")]                                        // a catalog with no page tree
+        [InlineData("<< /Type /Catalog /Pages 9 0 R >>")]                           // one naming a page tree that is not there
+        public void ACatalogWithoutAUsablePageTree_FindsThePageObjectsByScanning(string catalog)
+        {
+            var text = $"%PDF-1.4\n1 0 obj\n{catalog}\nendobj\n"
+                + "2 0 obj\n<< /Type /Page /MediaBox [0 0 50 50] /Contents 3 0 R >>\nendobj\n"
+                + "3 0 obj\n<< /Length 9 >>\nstream\n0 0 1 rg \nendstream\nendobj\n"
+                + "4 0 obj\n<< /Type /Page /MediaBox [0 0 60 60] >>\nendobj\n"
+                + "trailer\n<< /Root 1 0 R /Size 5 >>\n";
+
+            var doc = PdfSourceDocument.Open(Bytes(text));
+
+            Assert.Equal(2, doc.Pages.Count);
+            Assert.Equal("0 0 1 rg", Content(doc));
+        }
+
         [Fact]
         public void NoStartxrefAtAll_IsRebuiltFromTheObjectsAndTheTrailer()
         {

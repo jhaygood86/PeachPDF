@@ -119,6 +119,18 @@ namespace PeachDrawing.PDF.Tests.Import
             Is(At(pdf, 75, 25, out _), 0, 0, 255);
         }
 
+        [Fact]
+        public void Jpx_WithAnIndexedColorSpace_ReadsItsComponentsAsPaletteIndices()
+        {
+            // The codestream's first component is 0 over the blue half and 255 over the red half; with an Indexed /ColorSpace those are indices
+            // (read at the depth the decoded levels show, here 1 bit: 0 and 1), not colors, and the file's own colors are not used.
+            var pdf = Page("/Filter /JPXDecode /BitsPerComponent 8 /ColorSpace [/Indexed /DeviceRGB 1 <00FF00FFFF00>]", Jpx);
+
+            Is(At(pdf, 25, 25, out var unsupported), 255, 255, 0);           // the red half: index 1
+            Assert.Empty(unsupported);
+            Is(At(pdf, 75, 25, out _), 0, 255, 0);                           // the blue half: index 0
+        }
+
         [Theory]
         [InlineData("/Filter /CCITTFaxDecode /DecodeParms << /K -1 /Columns 16 /Rows 8 >> /ColorSpace /DeviceGray /BitsPerComponent 1", "image: CCITTFaxDecode image")]
         [InlineData("/Filter /JBIG2Decode /ColorSpace /DeviceGray /BitsPerComponent 1", "image: JBIG2Decode image")]

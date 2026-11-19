@@ -34,7 +34,25 @@ internal static class SfntRepair
             tables.Add(new Table(tag, font.AsSpan((int)offset, (int)length).ToArray()));
             have.Add(tag);
         }
-        if (have.Contains("name") && have.Contains("OS/2") && have.Contains("post") && have.Contains("cmap")) return font;
+        // A subset written by macOS (Quartz) keeps only a Macintosh (1,0) cmap, and some producers write high-byte (format 2) tables for every platform;
+        // the font loader reads neither. Their codes are the glyph lookups of a symbolic TrueType font, so they are carried over at U+F000 + code in a
+        // Windows subtable.
+        bool recoded = false;
+        int cmapAt = tables.FindIndex(t => t.Tag == "cmap");
+        if (cmapAt >= 0 && ReadUnusableCmap(tables[cmapAt].Data) is { } macCodes)
+        {
+            tables[cmapAt] = new Table("cmap", BuildCmap(macCodes));
+            recoded = true;
+        }
+        // Quartz keeps a name table with only the PostScript name on the Macintosh platform; the loader wants a Windows family and full name.
+        int nameAt = tables.FindIndex(t => t.Tag == "name");
+        if (nameAt >= 0 && !HasWindowsFamilyName(tables[nameAt].Data))
+        {
+            tables.RemoveAt(nameAt);
+            have.Remove("name");
+            recoded = true;
+        }
+        if (!recoded && have.Contains("name") && have.Contains("OS/2") && have.Contains("post") && have.Contains("cmap")) return font;
 
         int unitsPerEm = 1000;
         short ascender = 800, descender = -200, lineGap = 0;
@@ -54,6 +72,83 @@ internal static class SfntRepair
         if (!have.Contains("post")) tables.Add(new Table("post", BuildPost(unitsPerEm)));
         tables.Sort((a, b) => string.CompareOrdinal(a.Tag, b.Tag));
         return Write(font.AsSpan(0, 4), tables);
+    }
+
+    /// <summary>
+    /// The codes of a <c>cmap</c> that has no subtable the font loader can use (a Unicode-platform or Windows format 4 or 12 one) as U+F000 +
+    /// code to glyph, read from the one-byte tables it does have: format 0 or 6 (a Macintosh subset such as Quartz writes) or the single-byte
+    /// part of format 2 (the high-byte mapping some producers write for every platform). Null when the table already has a usable subtable, or
+    /// none of those formats.
+    /// </summary>
+    static Dictionary<int, int>? ReadUnusableCmap(byte[] cmap)
+    {
+        if (cmap.Length < 4) return null;
+        int count = BinaryPrimitives.ReadUInt16BigEndian(cmap.AsSpan(2));
+        if (4 + count * 8 > cmap.Length) return null;
+        (int Priority, int Offset)? best = null;
+        for (int i = 0; i < count; i++)
+        {
+            int rec = 4 + i * 8;
+            int platform = BinaryPrimitives.ReadUInt16BigEndian(cmap.AsSpan(rec)), encoding = BinaryPrimitives.ReadUInt16BigEndian(cmap.AsSpan(rec + 2));
+            uint offset = BinaryPrimitives.ReadUInt32BigEndian(cmap.AsSpan(rec + 4));
+            if (offset > cmap.Length - 6) continue;
+            int format = BinaryPrimitives.ReadUInt16BigEndian(cmap.AsSpan((int)offset));
+            if ((platform == 0 || (platform == 3 && encoding is 0 or 1 or 10)) && format is 4 or 12) return null;
+            if (format is not (0 or 2 or 6)) continue;
+            int priority = platform switch { 3 => 3, 0 => 2, _ => 1 };
+            if (best is null || priority > best.Value.Priority) best = (priority, (int)offset);
+        }
+
+        if (best is null) return null;
+        var sub = cmap.AsSpan(best.Value.Offset);
+        int chosen = BinaryPrimitives.ReadUInt16BigEndian(sub);
+        var map = new Dictionary<int, int>();
+        if (chosen == 0 && sub.Length >= 262)
+        {
+            for (int code = 0; code < 256; code++) if (sub[6 + code] != 0) map[0xF000 + code] = sub[6 + code];
+        }
+        else if (chosen == 6 && sub.Length >= 10)
+        {
+            int first = BinaryPrimitives.ReadUInt16BigEndian(sub[6..]), entries = BinaryPrimitives.ReadUInt16BigEndian(sub[8..]);
+            for (int i = 0; i < entries && 10 + i * 2 + 2 <= sub.Length && first + i < 256; i++)
+            {
+                int glyph = BinaryPrimitives.ReadUInt16BigEndian(sub[(10 + i * 2)..]);
+                if (glyph != 0) map[0xF000 + first + i] = glyph;
+            }
+        }
+        else if (chosen == 2 && sub.Length >= 524)
+        {
+            // Sub-header 0 serves the codes whose key is 0 (the single-byte ones): its range, delta and offset (counted from the offset field).
+            int first = BinaryPrimitives.ReadUInt16BigEndian(sub[518..]), entries = BinaryPrimitives.ReadUInt16BigEndian(sub[520..]);
+            int delta = BinaryPrimitives.ReadInt16BigEndian(sub[522..]), rangeOffset = BinaryPrimitives.ReadUInt16BigEndian(sub[524..]);
+            for (int code = first; code < first + entries && code < 256; code++)
+            {
+                if (BinaryPrimitives.ReadUInt16BigEndian(sub[(6 + code * 2)..]) != 0) continue;       // a lead byte of a two-byte code
+                int at = 524 + rangeOffset + 2 * (code - first);
+                if (at + 2 > sub.Length) break;
+                int glyph = BinaryPrimitives.ReadUInt16BigEndian(sub[at..]);
+                if (glyph != 0) map[0xF000 + code] = (glyph + delta) & 0xFFFF;
+            }
+        }
+        else return null;
+        return map.Count == 0 ? null : map;
+    }
+
+    /// <summary>Whether a <c>name</c> table carries both a family (1) and a full (4) name on the Windows platform.</summary>
+    static bool HasWindowsFamilyName(byte[] name)
+    {
+        if (name.Length < 6) return false;
+        int count = BinaryPrimitives.ReadUInt16BigEndian(name.AsSpan(2));
+        bool family = false, full = false;
+        for (int i = 0; i < count && 6 + i * 12 + 12 <= name.Length; i++)
+        {
+            int rec = 6 + i * 12;
+            if (BinaryPrimitives.ReadUInt16BigEndian(name.AsSpan(rec)) != 3) continue;
+            int id = BinaryPrimitives.ReadUInt16BigEndian(name.AsSpan(rec + 6));
+            family |= id == 1;
+            full |= id == 4;
+        }
+        return family && full;
     }
 
     /// <summary>A format 4 cmap that maps nothing: a subset used through glyph indexes needs the table to exist, not to map.</summary>

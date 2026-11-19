@@ -135,6 +135,39 @@ namespace PeachDrawing.PDF.Tests.Import
             Assert.Contains("Do /Foo", Draw("/F0 Do", "/XObject << /F0 5 0 R >>", "<< /Type /XObject /Subtype /Foo >>").Unsupported);
         }
 
+        /// <summary>A page that shows form 5, which shows form 6, and so on <paramref name="depth"/> forms deep; the last paints red.</summary>
+        private static Page NestedForms(int depth)
+        {
+            var forms = new string[depth];
+            for (int i = 0; i < depth; i++)
+            {
+                bool last = i == depth - 1;
+                forms[i] = TestPdf.Stream(
+                    last ? "/Type /XObject /Subtype /Form /BBox [0 0 100 100]" : $"/Type /XObject /Subtype /Form /BBox [0 0 100 100] /Resources << /XObject << /F0 {6 + i} 0 R >> >>",
+                    last ? "1 0 0 rg 0 0 100 100 re f" : "/F0 Do");
+            }
+
+            return Draw("/F0 Do", "/XObject << /F0 5 0 R >>", forms);
+        }
+
+        [Fact]
+        public void FormXObjects_NestedAsDeepAsPdfiumAllows_StillPaint()
+        {
+            var page = NestedForms(35);
+
+            Assert.DoesNotContain("Do (form nesting)", page.Unsupported);
+            Red(page, 50, 50);
+        }
+
+        [Fact]
+        public void FormXObjects_NestedPastTheLimit_AreReportedNotDrawn()
+        {
+            var page = NestedForms(60);
+
+            Assert.Contains("Do (form nesting)", page.Unsupported);
+            Empty(page, 50, 50);
+        }
+
         [Fact]
         public void FormXObject_WithoutItsOwnResources_UsesThePagesOwn()
         {

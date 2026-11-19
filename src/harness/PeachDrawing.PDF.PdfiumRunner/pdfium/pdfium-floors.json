@@ -1,0 +1,8 @@
+{
+  "formatVersion": 1,
+  "pdfiumCommit": "a84323421e94f484faca52dd9d027934eba42ab8",
+  "floors": {
+    "pdfjs": 736,
+    "pixel": 160
+  }
+}

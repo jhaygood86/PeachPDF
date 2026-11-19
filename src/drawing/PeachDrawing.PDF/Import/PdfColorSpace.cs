@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Collections.Generic;
 using PeachDrawing.Core;
 using PeachDrawing.PDF.Engine;
@@ -48,6 +49,18 @@ internal sealed class PdfColorSpace
 
     /// <summary>The colour a space starts with (ISO 32000-1, 8.6.5).</summary>
     public double[] Initial { get; }
+
+    /// <summary>
+    /// The range each component's stored value spans, as (min, max) pairs: how an image sample or an Indexed palette byte is read when no
+    /// <c>/Decode</c> says otherwise (PDF 8.9.5.2). Null for 0..1 in every component; a Lab space spans 0..100 and its own a and b ranges.
+    /// </summary>
+    public double[]? DefaultDecode { get; private init; }
+
+    /// <summary>Where component <paramref name="i"/> starts when its stored value is at the bottom of its range.</summary>
+    public double DecodeMin(int i) => DefaultDecode is { } d && d.Length >= i * 2 + 2 ? d[i * 2] : 0;
+
+    /// <summary>Where component <paramref name="i"/> ends when its stored value is at the top of its range.</summary>
+    public double DecodeMax(int i) => DefaultDecode is { } d && d.Length >= i * 2 + 2 ? d[i * 2 + 1] : 1;
 
     static byte Byte(double v) => (byte)Math.Round(Math.Clamp(v, 0, 1) * 255);
 
@@ -105,6 +118,8 @@ internal sealed class PdfColorSpace
                 };
             case "/Lab":
                 return Lab(doc, arr);
+            case "/Separation" or "/DeviceN" when arr.Elements.Count >= 4:
+                return Tint(doc, arr, resources, depth);
             case "/Indexed" or "/I" when arr.Elements.Count >= 4:
                 return Indexed(doc, arr, resources, depth);
             default:
@@ -159,6 +174,63 @@ internal sealed class PdfColorSpace
         return space;
     }
 
+    /// <summary>
+    /// A Separation (<c>[/Separation name alternate tint]</c>) or DeviceN (<c>[/DeviceN [names] alternate tint]</c>) space (PDF 8.6.6.4 and
+    /// 8.6.6.5): the colorants' amounts go through the tint transform function into the alternate space, which gives the color shown. A colorant
+    /// named <c>/None</c> (or every one of a DeviceN) marks nothing, so such a color is transparent. Colors that repeat (an image has few of
+    /// them) are not worked out again.
+    /// </summary>
+    static PdfColorSpace? Tint(PdfSourceDocument doc, PdfArray arr, PdfDictionary? resources, int depth)
+    {
+        bool deviceN = doc.NameOf(arr.Elements[0]) is "/DeviceN";
+        int count = 1;
+        bool none;
+        if (deviceN)
+        {
+            if (doc.Resolve(arr.Elements[1]) is not PdfArray { Elements.Count: > 0 } names) return null;
+            count = names.Elements.Count;
+            none = names.Elements.All(n => doc.NameOf(n) == "/None");
+        }
+        else none = doc.NameOf(arr.Elements[1]) == "/None";
+
+        var alternate = Resolve(doc, arr.Elements[2], resources, depth + 1);
+        if (alternate is null || alternate.IsPattern || PdfFunction.Load(doc, arr.Elements[3]) is not { } function) return null;
+
+        var cache = new System.Collections.Concurrent.ConcurrentDictionary<long, PaintColor>();
+        PaintColor Convert(double[] c, double a)
+        {
+            if (none) return PaintColor.FromArgb(0, 0, 0, 0);
+            var input = new double[count];
+            for (int i = 0; i < count; i++) input[i] = i < c.Length ? Math.Clamp(c[i], 0, 1) : 0;
+
+            // Up to four colorants at eight bits each are keyed together; the alpha is applied after, so one table serves every opacity.
+            long key = -1;
+            if (count <= 4)
+            {
+                key = 0;
+                foreach (var v in input) key = (key << 8) | (long)Math.Round(v * 255);
+            }
+
+            PaintColor color;
+            if (key >= 0 && cache.TryGetValue(key, out var known)) color = known;
+            else
+            {
+                var output = function.Evaluate(input);
+                var comps = new double[alternate.Components];
+                for (int i = 0; i < comps.Length; i++) comps[i] = i < output.Length ? output[i] : 0;
+                color = alternate.ToColor(comps, 1);
+                if (key >= 0 && cache.Count < 65536) cache[key] = color;
+            }
+
+            var (r, g, b) = color.ToRgb();
+            return PaintColor.FromArgb(Alpha(a) * color.A / 255, r, g, b);
+        }
+
+        var initial = new double[count];
+        Array.Fill(initial, 1.0);
+        return new PdfColorSpace(deviceN ? "DeviceN" : "Separation", count, Convert, initial);
+    }
+
     static PdfColorSpace? Indexed(PdfSourceDocument doc, PdfArray arr, PdfDictionary? resources, int depth)
     {
         var baseSpace = Resolve(doc, arr.Elements[1], resources, depth + 1);
@@ -178,7 +250,8 @@ internal sealed class PdfColorSpace
             for (int i = 0; i < n; i++)
             {
                 int pos = idx * n + i;
-                comps[i] = pos < table.Length ? table[pos] / 255.0 : 0;
+                double stored = pos < table.Length ? table[pos] / 255.0 : 0;
+                comps[i] = baseSpace.DecodeMin(i) + stored * (baseSpace.DecodeMax(i) - baseSpace.DecodeMin(i));
             }
             return baseSpace.ToColor(comps, a);
         }, [0]);
@@ -208,6 +281,9 @@ internal sealed class PdfColorSpace
             double b = d65 ? 0.0557 * x - 0.2040 * y + 1.0570 * z : 0.0720 * x - 0.2290 * y + 1.4057 * z;
             static double Gamma(double v) => v <= 0.0031308 ? 12.92 * v : 1.055 * Math.Pow(v, 1 / 2.4) - 0.055;
             return PaintColor.FromArgb(Alpha(a), Byte(Gamma(r)), Byte(Gamma(g)), Byte(Gamma(b)));
-        }, [0, 0, 0]);
+        }, [0, 0, 0])
+        {
+            DefaultDecode = [0, 100, range[0], range[1], range[2], range[3]],
+        };
     }
 }

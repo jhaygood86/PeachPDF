@@ -64,6 +64,9 @@ internal sealed class PdfContentInterpreter
     GraphicsPath? _path;
     double _curX, _curY, _startX, _startY;
     FillMode? _pendingClip;
+    /// <summary>How deeply forms, patterns, glyph procedures and soft masks may nest in one another: PDFium's own limit, which a file written to probe it (35 forms deep) reaches. A cycle ends here too.</summary>
+    const int MaxFormDepth = 40;
+
     int _formDepth;
     Matrix3x2 _streamBase = Matrix3x2.Identity;
     Matrix3x2 _tm = Matrix3x2.Identity, _tlm = Matrix3x2.Identity;
@@ -174,14 +177,14 @@ internal sealed class PdfContentInterpreter
     State Cur => _stack[^1];
 
     /// <summary>Interprets <paramref name="content"/> with <paramref name="resources"/> as the resource dictionary in effect.</summary>
-    public void Run(byte[] content, PdfDictionary? resources)
+    public void Run(byte[] content, PdfDictionary? resources, bool keepPatternSpace = false)
     {
         var lx = new PdfLexer(content);
         var operands = new List<PdfItem>();
         int baseDepth = _stack.Count;
         // A pattern's space is the default space of the stream that uses it: here, the current transform at the stream's start.
         var savedBase = _streamBase;
-        _streamBase = Cur.Ctm;
+        if (!keepPatternSpace) _streamBase = Cur.Ctm;
         int baseMarks = _markedContent.Count;
         while (true)
         {
@@ -590,7 +593,7 @@ internal sealed class PdfContentInterpreter
                     var pen = Vector2.Transform(new Vector2((float)(x + width + spacing), (float)-st.Rise), toPage);
                     TextSink(new PdfTextGlyph(g.Text, start, end, up, (pen - end).Length()));
                 }
-                if (TextSink is null && st.RenderMode != 3 && g.Procedure is { Stream: not null } proc && _formDepth < 16)
+                if (TextSink is null && st.RenderMode != 3 && g.Procedure is { Stream: not null } proc && _formDepth < MaxFormDepth)
                 {
                     // glyph space -> text space (font matrix) -> sized and placed in the line -> scaled horizontally -> the text matrix
                     var matrix = font.FontMatrix * Matrix3x2.CreateScale((float)st.FontSize) * Matrix3x2.CreateTranslation((float)x, (float)st.Rise)
@@ -602,7 +605,8 @@ internal sealed class PdfContentInterpreter
                     {
                         Transform(matrix);
                         _path = null;
-                        Run(_doc.DecodeStream(proc).Data, font.Resources ?? res);
+                        // A glyph painted with a pattern takes it from the stream that showed the text, not from the glyph's own space.
+                        Run(_doc.DecodeStream(proc).Data, font.Resources ?? res, keepPatternSpace: st.FillPattern is not null);
                     }
                     finally
                     {
@@ -635,12 +639,16 @@ internal sealed class PdfContentInterpreter
             ShowVertical(parts, st, font, glyphs, read);
             return;
         }
+        // PDF 9.4.4: a glyph is scaled by Tfs * Th across and Tfs up, while the pen advances by (w * Tfs + Tc + Tw) * Th. A negative size
+        // (usually paired with -100 Tz, under a flipped CTM) moves the pen with the sign of Th alone, but the shapes take the sign of
+        // Tfs * Th, so positions here carry the sign of Tfs and the run's x scale is multiplied by it (the product is the pen's own).
+        double sign = st.FontSize < 0 ? -1 : 1;
         foreach (var part in parts)
         {
             if (part is double adjust) { x -= adjust / 1000.0 * st.FontSize; continue; }
             foreach (var g in st.TextFont.Decode((string)part))
             {
-                glyphs.Add(new GlyphPlacement(g.GlyphIndex, x, -st.Rise, g.Text));
+                glyphs.Add(new GlyphPlacement(g.GlyphIndex, x * sign, -sign * st.Rise, g.Text));
                 read?.Add((g.Text, x, g.Width * st.FontSize, st.CharSpacing + (g.IsWordSpace ? st.WordSpacing : 0)));
                 x += g.Width * st.FontSize + st.CharSpacing + (g.IsWordSpace ? st.WordSpacing : 0);
             }
@@ -669,7 +677,7 @@ internal sealed class PdfContentInterpreter
         {
             // Glyphs are laid out upright in canvas space (y down); the flip puts them upright in PDF user space (y up), and
             // the horizontal scale and text matrix place the run.
-            var run = Matrix3x2.CreateScale((float)st.HorizontalScale, st.FontSize < 0 ? 1f : -1f) * _tm;
+            var run = Matrix3x2.CreateScale((float)(st.HorizontalScale * sign), st.FontSize < 0 ? 1f : -1f) * _tm;
             // Render modes (PDF 9.3.6): 0 fill, 1 stroke, 2 both, 3 neither, 4-7 the same four and then add the glyphs to the clip.
             int mode = st.RenderMode;
             bool fill = mode is 0 or 2 or 4 or 6;
@@ -947,7 +955,7 @@ internal sealed class PdfContentInterpreter
 
         mg.PushTransform(group.Accumulated);
         var sub = new PdfContentInterpreter(_doc, mg, region) { _formDepth = _formDepth + 1 };
-        if (sub._formDepth < 16 && _doc.DictOf(maskDict, "G") is { } form)
+        if (sub._formDepth < MaxFormDepth && _doc.DictOf(maskDict, "G") is { } form)
             sub.DrawForm(form, group.Resources);
         else _unsupported.Add("gs SMask (nesting)");
         sub.Finish();
@@ -960,10 +968,52 @@ internal sealed class PdfContentInterpreter
         _canvas.PushTransform(undo);
         try
         {
-            if (luminosity) _canvas.DrawImageMasked(group.ContentImage, maskTile.Value.Image, region);
-            else _canvas.DrawImageAlphaMasked(group.ContentImage, maskTile.Value.Image, region);
+            var maskImage = ApplyMaskTransfer(maskDict, maskTile.Value.Image, luminosity) ?? maskTile.Value.Image;
+            if (luminosity) _canvas.DrawImageMasked(group.ContentImage, maskImage, region);
+            else _canvas.DrawImageAlphaMasked(group.ContentImage, maskImage, region);
         }
         finally { _canvas.PopTransform(); }
+    }
+
+    /// <summary>
+    /// A soft mask's <c>/TR</c> (PDF 11.6.5.2): a function the mask's value (its luminosity, or its alpha) is passed through, clamped to 0..1 on
+    /// the way out. It is applied as a 256-entry table to the mask tile's pixels, giving a new mask image; null when the mask has no transfer
+    /// function (or <c>/Identity</c>), or the tile cannot be read back, in which case the mask is used as drawn.
+    /// </summary>
+    Image? ApplyMaskTransfer(PdfDictionary maskDict, Image mask, bool luminosity)
+    {
+        if (!maskDict.ContainsKeyRaw("TR") || _doc.NameOf(maskDict.GetRaw("TR")) == "/Identity") return null;
+        if (PdfFunction.Load(_doc, maskDict.GetRaw("TR")) is not { } function || mask.GetPixels() is not { } pixels) return null;
+
+        var table = new byte[256];
+        for (int i = 0; i < 256; i++)
+        {
+            var output = function.Evaluate(i / 255.0);
+            table[i] = (byte)Math.Round(Math.Clamp(output.Length > 0 && !double.IsNaN(output[0]) ? output[0] : i / 255.0, 0, 1) * 255);
+        }
+
+        int w = pixels.Width, h = pixels.Height;
+        var source = pixels.PremultipliedRgba.Span;
+        var rgba = new byte[w * h * 4];
+        for (int i = 0; i < w * h; i++)
+        {
+            int o = i * 4;
+            byte a = source[o + 3];
+            if (luminosity)
+            {
+                // The tile is opaque (the backdrop was painted over all of it); its luminosity is the mask value.
+                double l = (0.3 * source[o] + 0.59 * source[o + 1] + 0.11 * source[o + 2]) / 255.0;
+                byte v = table[(int)Math.Round(Math.Clamp(l, 0, 1) * 255)];
+                (rgba[o], rgba[o + 1], rgba[o + 2], rgba[o + 3]) = (v, v, v, 255);
+            }
+            else
+            {
+                (rgba[o], rgba[o + 1], rgba[o + 2], rgba[o + 3]) = (0, 0, 0, table[a]);
+            }
+        }
+
+        try { return _canvas.RenderContext.ImageFromStream(new MemoryStream(PdfImageXObject.EncodePng(rgba, w, h))); }
+        catch (Exception) { return null; }
     }
 
     /// <summary>Applies a <c>/BM</c> entry (a name, or an array of names of which the first known one is used) to what is painted next.</summary>
@@ -1039,7 +1089,7 @@ internal sealed class PdfContentInterpreter
         if (_doc.ArrayOf(pattern, "Matrix") is { Elements.Count: >= 6 } m)
             matrix = new Matrix3x2((float)_doc.NumberOf(m.Elements[0]), (float)_doc.NumberOf(m.Elements[1]), (float)_doc.NumberOf(m.Elements[2]),
                 (float)_doc.NumberOf(m.Elements[3]), (float)_doc.NumberOf(m.Elements[4]), (float)_doc.NumberOf(m.Elements[5]));
-        if (type == 1) return TilingBrush(pattern, matrix, fill ? st.FillPatternColor : st.StrokePatternColor, res);
+        if (type == 1) return TilingBrush(pattern, matrix, fill ? st.FillPatternColor : st.StrokePatternColor, res, fill ? st.FillAlpha : st.StrokeAlpha);
         if (_doc.DictOf(pattern, "Shading") is not { } shading) { _unsupported.Add("pattern without shading"); return null; }
         if (PdfMeshShading.IsMesh(_doc.IntOf(shading.GetRaw("ShadingType")))) { if (!fill) _unsupported.Add("stroke with a mesh shading"); return null; }
         return ShadingBrush(shading, matrix, fill ? st.FillAlpha : st.StrokeAlpha, res);
@@ -1061,14 +1111,14 @@ internal sealed class PdfContentInterpreter
     /// however many cells show it - and the brush repeats it under the transform that carries pattern space onto the current space. A
     /// cell's content is clipped to the cell, so a pattern whose bounding box is larger than its steps does not overlap itself.
     /// </summary>
-    Brush? TilingBrush(PdfDictionary pattern, Matrix3x2 patternMatrix, PaintColor? uncolouredColor, PdfDictionary? res)
+    Brush? TilingBrush(PdfDictionary pattern, Matrix3x2 patternMatrix, PaintColor? uncolouredColor, PdfDictionary? res, double alpha = 1)
     {
         if (pattern.Stream is null) { _unsupported.Add("pattern without content"); return null; }
         if (_doc.ArrayOf(pattern, "BBox") is not { Elements.Count: >= 4 } bb) { _unsupported.Add("pattern without a bounding box"); return null; }
         double bx0 = Math.Min(_doc.NumberOf(bb.Elements[0]), _doc.NumberOf(bb.Elements[2])), by0 = Math.Min(_doc.NumberOf(bb.Elements[1]), _doc.NumberOf(bb.Elements[3]));
         double bx1 = Math.Max(_doc.NumberOf(bb.Elements[0]), _doc.NumberOf(bb.Elements[2])), by1 = Math.Max(_doc.NumberOf(bb.Elements[1]), _doc.NumberOf(bb.Elements[3]));
         double cellW = Math.Abs(_doc.NumberOf(pattern.GetRaw("XStep"))), cellH = Math.Abs(_doc.NumberOf(pattern.GetRaw("YStep")));
-        if (!(cellW > 0) || !(cellH > 0) || !(bx1 > bx0) || !(by1 > by0) || _formDepth >= 16) { _unsupported.Add("pattern cell"); return null; }
+        if (!(cellW > 0) || !(cellH > 0) || !(bx1 > bx0) || !(by1 > by0) || _formDepth >= MaxFormDepth) { _unsupported.Add("pattern cell"); return null; }
         bool uncoloured = _doc.IntOf(pattern.GetRaw("PaintType")) == 2;
         if (uncoloured && uncolouredColor is null) { _unsupported.Add("uncoloured pattern without a colour"); return null; }
         if (!Matrix3x2.Invert(Cur.Ctm, out var inverse)) return null;
@@ -1080,7 +1130,10 @@ internal sealed class PdfContentInterpreter
         int oversample = (int)Math.Clamp(Math.Ceiling(scale * 2), 1, 16);
         while (cellW * oversample > 4096 || cellH * oversample > 4096) oversample = Math.Max(1, oversample / 2);
 
-        var key = (pattern, uncoloured ? uncolouredColor!.Value.ToRgb().GetHashCode() ^ uncolouredColor.Value.A : 0, oversample);
+        // The cell's content starts out painting at the alpha that was in force where the pattern is used, as PDFium does: a cell that sets its own
+        // /ca overrides it, one that does not is as faint as the fill. The cell is drawn once per alpha.
+        int alphaKey = (int)Math.Round(Math.Clamp(alpha, 0, 1) * 255) << 24;
+        var key = (pattern, (uncoloured ? uncolouredColor!.Value.ToRgb().GetHashCode() ^ uncolouredColor.Value.A : 0) ^ alphaKey, oversample);
         if (!_tiles.TryGetValue(key, out var image))
         {
             int w = (int)Math.Max(1, Math.Ceiling(cellW * oversample)), h = (int)Math.Max(1, Math.Ceiling(cellH * oversample));
@@ -1093,6 +1146,7 @@ internal sealed class PdfContentInterpreter
             clip.Start(bx0, by0); clip.LineTo(Math.Min(bx1, bx0 + cellW), by0); clip.LineTo(Math.Min(bx1, bx0 + cellW), Math.Min(by1, by0 + cellH)); clip.LineTo(bx0, Math.Min(by1, by0 + cellH)); clip.CloseFigure();
             g.PushClip(clip);
             var sub = new PdfContentInterpreter(_doc, g, new Rect(0, 0, w, h)) { _formDepth = _formDepth + 1 };
+            sub.Cur.FillAlpha = sub.Cur.StrokeAlpha = alpha;
             if (uncoloured) sub.UseFixedColor(uncolouredColor!.Value);
             sub.Run(_doc.DecodeStream(pattern).Data, _doc.DictOf(pattern, "Resources") ?? res);
             sub.Finish();
@@ -1120,25 +1174,54 @@ internal sealed class PdfContentInterpreter
         Cur.ColorLocked = true;
     }
 
-    /// <summary>A brush for a shading whose space is <paramref name="shadingToBase"/> away from the stream's default space.</summary>
-    Brush? ShadingBrush(PdfDictionary shading, Matrix3x2 shadingToBase, double alpha, PdfDictionary? res)
+    /// <summary>Where the shading behind the last brush <see cref="ShadingBrush"/> made paints, when its /Extend limits it; null when unlimited.</summary>
+    IReadOnlyList<PaintPoint>? _shadingRegion;
+
+    /// <summary>The region of <see cref="_shadingRegion"/> as a path, or null when the last brush has none. Reading it clears it.</summary>
+    GraphicsPath? TakeShadingRegion()
     {
-        if (!Matrix3x2.Invert(Cur.Ctm, out var inverse)) return null;
-        var toCurrent = shadingToBase * _streamBase * inverse;
-        var brush = PdfShadingBrushFactory.CreateBrush(_doc, shading, res, toCurrent, alpha, _canvas.RenderContext, out var why);
+        var points = _shadingRegion;
+        _shadingRegion = null;
+        if (points is not { Count: >= 3 }) return null;
+        var path = _canvas.GetGraphicsPath();
+        path.Start(points[0].X, points[0].Y);
+        for (int i = 1; i < points.Count; i++) path.LineTo(points[i].X, points[i].Y);
+        path.CloseFigure();
+        return path;
+    }
+
+    /// <summary>
+    /// The matrix from a shading's space to the canvas' current space. A pattern's shading is in the pattern's space, which sits on the
+    /// stream's base space whatever the current transform is; the <c>sh</c> operator paints in the current user space itself (PDF 8.7.4.2),
+    /// so there it is just <paramref name="shadingToBase"/>.
+    /// </summary>
+    bool ShadingToCurrent(Matrix3x2 shadingToBase, bool inUserSpace, out Matrix3x2 toCurrent)
+    {
+        toCurrent = shadingToBase;
+        if (inUserSpace) return true;
+        if (!Matrix3x2.Invert(Cur.Ctm, out var inverse)) return false;
+        toCurrent = shadingToBase * _streamBase * inverse;
+        return true;
+    }
+
+    /// <summary>A brush for a shading whose space is <paramref name="shadingToBase"/> away from the stream's default space.</summary>
+    Brush? ShadingBrush(PdfDictionary shading, Matrix3x2 shadingToBase, double alpha, PdfDictionary? res, bool inUserSpace = false)
+    {
+        if (!ShadingToCurrent(shadingToBase, inUserSpace, out var toCurrent)) return null;
+        var brush = PdfShadingBrushFactory.CreateBrush(_doc, shading, res, toCurrent, alpha, _canvas.RenderContext, out var why, out var region);
         if (brush is null) _unsupported.Add(why!);
+        _shadingRegion = brush is null ? null : region;
         return brush;
     }
 
     /// <summary>Draws a mesh shading as an image of the mesh under the transform that carries shading space onto the canvas.</summary>
-    void DrawMesh(PdfDictionary shading, Matrix3x2 shadingToBase, double alpha, PdfDictionary? res)
+    void DrawMesh(PdfDictionary shading, Matrix3x2 shadingToBase, double alpha, PdfDictionary? res, bool inUserSpace = false)
     {
         // A function-based shading's /Matrix carries its domain onto the space the pattern or sh operator names.
         if (_doc.IntOf(shading.GetRaw("ShadingType")) == 1 && _doc.ArrayOf(shading, "Matrix") is { Elements.Count: >= 6 } fm)
             shadingToBase = new Matrix3x2((float)_doc.NumberOf(fm.Elements[0]), (float)_doc.NumberOf(fm.Elements[1]), (float)_doc.NumberOf(fm.Elements[2]),
                 (float)_doc.NumberOf(fm.Elements[3]), (float)_doc.NumberOf(fm.Elements[4]), (float)_doc.NumberOf(fm.Elements[5])) * shadingToBase;
-        if (!Matrix3x2.Invert(Cur.Ctm, out var inverse)) return;
-        var toCurrent = shadingToBase * _streamBase * inverse;
+        if (!ShadingToCurrent(shadingToBase, inUserSpace, out var toCurrent)) return;
         var toCanvas = toCurrent * _canvas.CurrentTransform;
         double scale = Math.Sqrt(Math.Abs(toCanvas.M11 * toCanvas.M22 - toCanvas.M12 * toCanvas.M21));
         var bitmap = PdfMeshShading.Render(_doc, shading, res, scale, alpha, out var why);
@@ -1163,9 +1246,13 @@ internal sealed class PdfContentInterpreter
         string name = _doc.NameOf(o[0])!.TrimStart('/');
         var shadings = res is null ? null : _doc.DictOf(res, "Shading");
         if (shadings is null || _doc.Resolve(shadings.GetRaw(name)) is not PdfDictionary shading) { _unsupported.Add("sh (missing shading)"); return; }
-        if (PdfMeshShading.IsMesh(_doc.IntOf(shading.GetRaw("ShadingType")))) { DrawMesh(shading, Matrix3x2.Identity, Cur.FillAlpha, res); return; }
-        var brush = ShadingBrush(shading, Matrix3x2.Identity, Cur.FillAlpha, res);
-        if (brush is not null) _canvas.DrawRectangle(brush, -1e5, -1e5, 2e5, 2e5);
+        if (PdfMeshShading.IsMesh(_doc.IntOf(shading.GetRaw("ShadingType")))) { DrawMesh(shading, Matrix3x2.Identity, Cur.FillAlpha, res, inUserSpace: true); return; }
+        var brush = ShadingBrush(shading, Matrix3x2.Identity, Cur.FillAlpha, res, inUserSpace: true);
+        if (brush is null) return;
+        var region = TakeShadingRegion();
+        if (region is not null) _canvas.PushClip(region);
+        try { _canvas.DrawRectangle(brush, -1e5, -1e5, 2e5, 2e5); }
+        finally { if (region is not null) _canvas.PopClip(); }
     }
 
     /// <summary>The pen the current stroke color, line width, caps, joins and dash describe; null when the color cannot be made.</summary>
@@ -1209,8 +1296,16 @@ internal sealed class PdfContentInterpreter
             }
             else
             {
+                _shadingRegion = null;
                 var brush = BrushFor(fill: true, res);
-                if (brush is not null) _canvas.DrawPath(brush, path);
+                var region = brush is null ? null : TakeShadingRegion();
+                if (region is not null) _canvas.PushClip(region);
+                try
+                {
+                    if (brush is not null && !TryFillThinAsHairline(path))
+                        _canvas.DrawPath(brush, path);
+                }
+                finally { if (region is not null) _canvas.PopClip(); }
             }
         }
         if (stroke)
@@ -1224,6 +1319,45 @@ internal sealed class PdfContentInterpreter
             Cur.Pushes.Add(new(Push.Clip, _canvas));
         }
         _pendingClip = null;
+    }
+
+    /// <summary>
+    /// A fill whose shape has no area to speak of (a line, or a sliver narrower than a quarter of a pixel) paints nothing by the letter of
+    /// the specification, and a viewer draws it as a one pixel line in the fill color anyway, so that a path an author meant to be seen is
+    /// not lost to rounding. Only on a canvas of pixels and for a plain color: a PDF canvas keeps the file's own paths, and a pattern has no
+    /// single color to draw the line in. Returns true when it drew the line.
+    /// </summary>
+    bool TryFillThinAsHairline(GraphicsPath path)
+    {
+        if (_canvas.RenderContext is PdfRenderContext || Cur.FillSpace.IsPattern || Cur.FillPattern is not null) return false;
+        var toDevice = _canvas.CurrentTransform;
+        double pixel = Math.Sqrt(Math.Abs((double)toDevice.M11 * toDevice.M22 - (double)toDevice.M12 * toDevice.M21));
+        if (!(pixel > 0)) return false;
+
+        double area = 0, perimeter = 0;
+        var contours = path.Flatten(0.25 / pixel);
+        if (contours.Count == 0) return false;
+        foreach (var contour in contours)
+        {
+            var points = contour.Points;
+            double twice = 0;
+            for (int i = 0; i < points.Count; i++)
+            {
+                var a = points[i];
+                var b = points[(i + 1) % points.Count];
+                twice += a.X * b.Y - b.X * a.Y;
+                perimeter += Math.Sqrt((b.X - a.X) * (b.X - a.X) + (b.Y - a.Y) * (b.Y - a.Y));
+            }
+
+            area += Math.Abs(twice) / 2;
+        }
+
+        // The mean width of the shape (twice its area over its perimeter) against a quarter of a pixel; a point has no perimeter and no line.
+        if (!(perimeter > 0) || 2 * area / perimeter * pixel >= 0.25) return false;
+        var pen = _canvas.GetPen(Cur.FillSpace.ToColor(Cur.Fill, Cur.FillAlpha));
+        pen.Width = 1 / pixel;
+        _canvas.DrawPath(pen, path);
+        return true;
     }
 
     // ---------------------------------------------------------------- XObjects
@@ -1246,6 +1380,8 @@ internal sealed class PdfContentInterpreter
         // An image is drawn with its pixels showing unless it asks to be smoothed (/Interpolate, PDF 8.9.5.3).
         image.Interpolate = _doc.Resolve(x.GetRaw("Interpolate") ?? x.GetRaw("I")) is PdfBoolean { Value: true };
 
+        if (stencil && Cur.FillPattern is not null && TryPaintStencilWithPattern(image, res)) return;
+
         // The unit square has the image's top edge at y = 1; the canvas draws an image upright in y-down space, so flip into it.
         _canvas.PushTransform(new Matrix3x2(1, 0, 0, -1, 0, 1));
         try
@@ -1257,6 +1393,57 @@ internal sealed class PdfContentInterpreter
         finally { _canvas.PopTransform(); }
     }
 
+    const int MaxStencilPatternPixels = 1 << 20;
+
+    /// <summary>
+    /// Paints an image mask in a pattern rather than a color (PDF 8.9.6.2): the pixels the mask paints become a clip in the unit square, and the
+    /// pattern fills the square through it. Rows are drawn a hair taller than a pixel so that neighboring runs do not show a seam where the clip
+    /// is anti-aliased. Returns false (the mask is drawn in the pattern's plain color, as before) for a mask over a million pixels, whose runs
+    /// would make a path too large to be worth it, or an image that cannot be read back.
+    /// </summary>
+    bool TryPaintStencilWithPattern(Image image, PdfDictionary? res)
+    {
+        if (image.Width * image.Height > MaxStencilPatternPixels || image.GetPixels() is not { } pixels) return false;
+        int w = pixels.Width, h = pixels.Height;
+        var rgba = pixels.PremultipliedRgba.Span;
+        var clip = _canvas.GetGraphicsPath();
+        bool any = false;
+        const double Overlap = 0.02;
+        for (int y = 0; y < h; y++)
+        {
+            double top = 1 - (y + 1 + Overlap) / h, bottom = 1 - (y - Overlap) / h;
+            for (int x = 0; x < w;)
+            {
+                if (rgba[(y * w + x) * 4 + 3] == 0) { x++; continue; }
+                int start = x;
+                while (x < w && rgba[(y * w + x) * 4 + 3] != 0) x++;
+                double left = start / (double)w, right = x / (double)w;
+                clip.Start(left, bottom);
+                clip.LineTo(right, bottom);
+                clip.LineTo(right, top);
+                clip.LineTo(left, top);
+                clip.CloseFigure();
+                any = true;
+            }
+        }
+
+        if (!any) return true;
+        _shadingRegion = null;
+        var brush = BrushFor(fill: true, res);
+        if (brush is null) return false;
+        var region = TakeShadingRegion();
+        _canvas.PushClip(clip);
+        if (region is not null) _canvas.PushClip(region);
+        try { _canvas.DrawRectangle(brush, 0, 0, 1, 1); }
+        finally
+        {
+            if (region is not null) _canvas.PopClip();
+            _canvas.PopClip();
+        }
+
+        return true;
+    }
+
     void DoXObject(List<PdfItem> o, PdfDictionary? res)
     {
         string name = _doc.NameOf(o[0])!.TrimStart('/');
@@ -1266,7 +1453,7 @@ internal sealed class PdfContentInterpreter
         string? subtype = _doc.NameOf(x.GetRaw("Subtype"));
         if (subtype == "/Image") { if (TextSink is null) { BeginUntagged(); DrawImage(x, res); } return; }
         if (subtype != "/Form") { _unsupported.Add("Do " + subtype); return; }
-        if (_formDepth >= 16) { _unsupported.Add("Do (form nesting)"); return; }
+        if (_formDepth >= MaxFormDepth) { _unsupported.Add("Do (form nesting)"); return; }
         if (TextSink is null && (Cur.FillAlpha < 1 || Cur.Blend != PaintBlendMode.Normal) && _region is not null && _doc.DictOf(x, "Group") is { } group && _doc.NameOf(group.GetRaw("S")) == "/Transparency")
         {
             DrawTransparencyGroup(x, res);

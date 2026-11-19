@@ -53,6 +53,28 @@ namespace PeachDrawing.PDF.Tests.Import
         }
 
         [Fact]
+        public void FilledLine_HasNoArea_ButIsDrawnAsAOnePixelLineInTheFillColor()
+        {
+            // Filling a path that is only a line paints nothing by the letter of the specification; a viewer shows it as a hairline.
+            var pdf = Pdf("0 0 1 rg 10 50 m 90 50 l f");
+
+            var hit = Enumerable.Range(48, 4).Select(y => Px(pdf, 50, y)).Any(p => p.B > 100 && p.A > 100 && p.R < 60);
+            Assert.True(hit, "a blue pixel lies on the line (a pixel-wide line on a pixel boundary is two half-covered rows)");
+            Assert.Equal(0, Px(pdf, 50, 40).A);                          // and only on the line
+        }
+
+        [Fact]
+        public void FilledSliverNarrowerThanAQuarterPixel_IsDrawnAsAHairline_AWiderRuleIsNot()
+        {
+            var sliver = Pdf("1 0 0 rg 10 30 80 0.01 re f");
+            var rule = Pdf("1 0 0 rg 10 30 80 0.5 re f");
+
+            Assert.True(Enumerable.Range(68, 4).Select(y => Px(sliver, 50, y)).Any(p => p.R > 100 && p.A > 100), "the sliver shows as a line");
+            var weight = Enumerable.Range(68, 4).Max(y => Px(rule, 50, y).A);
+            Assert.InRange(weight, 100, 200);                            // a half-unit rule is an ordinary fill: half covered, not a full pixel
+        }
+
+        [Fact]
         public void ClipRestrictsLaterPaint_AndQRestoresIt()
         {
             var pdf = Pdf("q 0 0 20 20 re W n 0 0 1 rg 0 0 100 100 re f Q 0 1 0 rg 60 60 20 20 re f");
@@ -245,6 +267,187 @@ namespace PeachDrawing.PDF.Tests.Import
 
             AssertNear((250, 0, 5, 255), Px(pdf, 2, 50), 14);
             Assert.InRange(Px(pdf, 75, 50).A, 0, 8);
+        }
+
+        private static string Shading(int type, string coords, string extend) =>
+            $"<< /ShadingType {type} /ColorSpace /DeviceRGB /Coords [{coords}] /Function {RedToBlue} /Extend [{extend}] >>";
+
+        private static byte[] ShPdf(string shading, string content = "/S0 sh") => Pdf(content, resources: $"/Shading << /S0 {shading} >>");
+
+        private static byte[] ShadingPatternPdf(string shading) =>
+            Pdf("/Pattern cs /P0 scn 0 0 100 100 re f", resources: "/Pattern << /P0 5 0 R >>", extraObjects: $"<< /PatternType 2 /Shading {shading} >>");
+
+        private static byte[] TilingAtHalfAlpha(string cellContent) => Pdf("/GS0 gs /Pattern cs /P0 scn 0 0 100 100 re f",
+            resources: "/ExtGState << /GS0 << /ca 0.5 >> >> /Pattern << /P0 5 0 R >>",
+            extraObjects: $"<< /PatternType 1 /PaintType 1 /TilingType 1 /BBox [0 0 100 100] /XStep 100 /YStep 100 /Resources << /ExtGState << /G1 << /ca 1 >> >> >> /Length {cellContent.Length} >>\nstream\n{cellContent}\nendstream");
+
+        [Fact]
+        public void TilingPattern_PaintedAtHalfAlpha_StartsItsCellAtThatAlpha()
+        {
+            // A cell that sets no alpha of its own is as faint as the fill (PDFium's reading of 11.6.7).
+            Assert.InRange(Px(TilingAtHalfAlpha("1 0 0 rg 0 0 100 100 re f"), 50, 50).A, 120, 136);
+        }
+
+        [Fact]
+        public void TilingPattern_WhoseCellSetsItsOwnAlpha_KeepsIt()
+        {
+            Assert.True(Px(TilingAtHalfAlpha("/G1 gs 1 0 0 rg 0 0 100 100 re f"), 50, 50).A > 250);
+        }
+
+        [Fact]
+        public void StencilMask_PaintedWithAPattern_TakesTheColorsOfThePattern()
+        {
+            // A 2x2 stencil paints its top-left and bottom-right pixels (sample 0 paints); the pattern is a red-to-blue gradient across the page,
+            // so the left pixel comes out red and the right one blue, and the unpainted pixels stay clear. Painted in a plain color it was black.
+            var mask = TestPdf.Stream("/Type /XObject /Subtype /Image /Width 2 /Height 2 /ImageMask true /BitsPerComponent 1", TestPdf.Binary([0x40, 0x80]));
+            var pattern = $"<< /PatternType 2 /Shading {AxialShading()} >>";
+            var pdf = Pdf("/Pattern cs /P0 scn 100 0 0 100 0 0 cm /Im0 Do", resources: "/Pattern << /P0 5 0 R >> /XObject << /Im0 6 0 R >>", extraObjects: pattern + "|||" + mask);
+
+            AssertNear((250, 0, 5, 255), Px(pdf, 25, 25), 60);           // top left: the red end
+            Assert.InRange(Px(pdf, 75, 25).A, 0, 8);
+            Assert.InRange(Px(pdf, 25, 75).A, 0, 8);
+            AssertNear((5, 0, 250, 255), Px(pdf, 75, 75), 60);           // bottom right: the blue end
+        }
+
+        private static byte[] MattedImage(string matte)
+        {
+            // One red-ish pixel (100,0,0) under a soft mask of 128 (alpha about one half).
+            var image = TestPdf.Stream("/Type /XObject /Subtype /Image /Width 1 /Height 1 /BitsPerComponent 8 /ColorSpace /DeviceRGB /SMask 6 0 R", TestPdf.Binary([100, 0, 0]));
+            var mask = TestPdf.Stream($"/Type /XObject /Subtype /Image /Width 1 /Height 1 /BitsPerComponent 8 /ColorSpace /DeviceGray {matte}", TestPdf.Binary([128]));
+            return Pdf("100 0 0 100 0 0 cm /Im0 Do", resources: "/XObject << /Im0 5 0 R >>", extraObjects: image + "|||" + mask);
+        }
+
+        [Fact]
+        public void SoftMaskMatte_UndoesTheBlendWithTheMatteColor()
+        {
+            // With a black matte the stored 100 was already scaled by alpha, so the real color is about 199 and, premultiplied again, 100 stays 100.
+            // Without the matte step it would be a color of 100 under half alpha, premultiplied to about 50.
+            var matted = Px(MattedImage("/Matte [0 0 0]"), 50, 50);
+            var plain = Px(MattedImage(""), 50, 50);
+
+            Assert.InRange(matted.R, 90, 110);
+            Assert.InRange(plain.R, 45, 55);
+            Assert.InRange(matted.A, 120, 135);
+        }
+
+        private static byte[] LuminosityMaskedSquare(string transfer)
+        {
+            // A blue square painted through a luminosity mask whose group is white over the left half and black over the rest.
+            var group = TestPdf.Stream("/Type /XObject /Subtype /Form /BBox [0 0 100 100] /Group << /S /Transparency /CS /DeviceGray >>", "1 g 0 0 50 100 re f");
+            var state = $"<< /SMask << /S /Luminosity /G 6 0 R {transfer} >> >>";
+            var inverse = "<< /FunctionType 2 /Domain [0 1] /C0 [1] /C1 [0] /N 1 >>";
+            return Pdf("/GS0 gs 0 0 1 rg 0 0 100 100 re f", resources: "/ExtGState << /GS0 5 0 R >>", extraObjects: state + "|||" + group + "|||" + inverse);
+        }
+
+        [Fact]
+        public void SoftMaskTransfer_IsAppliedToTheMasksValue()
+        {
+            var plain = LuminosityMaskedSquare("");
+            var inverted = LuminosityMaskedSquare("/TR 7 0 R");
+
+            Assert.True(Px(plain, 25, 50).A > 240);                      // white mask: painted
+            Assert.InRange(Px(plain, 75, 50).A, 0, 8);                   // black mask: hidden
+            Assert.InRange(Px(inverted, 25, 50).A, 0, 8);                // the inverting transfer swaps them
+            Assert.True(Px(inverted, 75, 50).A > 240);
+        }
+
+        [Fact]
+        public void SoftMaskTransfer_IdentityChangesNothing() =>
+            Assert.True(Px(LuminosityMaskedSquare("/TR /Identity"), 25, 50).A > 240);
+
+        [Fact]
+        public void SoftMaskMatte_OfTheWrongLength_IsNotApplied() =>
+            Assert.InRange(Px(MattedImage("/Matte [0 0.2]"), 50, 50).R, 45, 55);
+
+        [Fact]
+        public void ImageMask_FinerThanItsImage_KeepsTheMasksDetail()
+        {
+            // A 1x1 red image under a 4x1 stencil whose samples are 0 1 0 1 (1 = masked out): the picture has its edges where the mask does.
+            var image = TestPdf.Stream("/Type /XObject /Subtype /Image /Width 1 /Height 1 /BitsPerComponent 8 /ColorSpace /DeviceRGB /Mask 6 0 R", TestPdf.Binary([0xFF, 0, 0]));
+            var mask = TestPdf.Stream("/Type /XObject /Subtype /Image /Width 4 /Height 1 /ImageMask true /BitsPerComponent 1", TestPdf.Binary([0x50]));
+            var pdf = Pdf("100 0 0 100 0 0 cm /Im0 Do", resources: "/XObject << /Im0 5 0 R >>", extraObjects: image + "|||" + mask);
+
+            Assert.True(Px(pdf, 10, 50).A > 250);
+            Assert.InRange(Px(pdf, 35, 50).A, 0, 8);
+            Assert.True(Px(pdf, 60, 50).A > 250);
+            Assert.InRange(Px(pdf, 85, 50).A, 0, 8);
+        }
+
+        [Fact]
+        public void ShOperator_ReadsTheShadingInTheCurrentUserSpace_NotThePageSpace()
+        {
+            // The shading is written in a 0..25 space and the cm doubles it: the band covers x = 0..50 of the page. (The sh operator has no
+            // pattern matrix: its space is the one the cm built, PDF 8.7.4.2.)
+            var pdf = ShPdf(Shading(2, "0 0 25 0", "false false"), "2 0 0 2 0 0 cm /S0 sh");
+
+            AssertNear((250, 0, 5, 255), Px(pdf, 2, 50), 14);
+            AssertNear((5, 0, 250, 255), Px(pdf, 48, 50), 14);
+            Assert.InRange(Px(pdf, 60, 50).A, 0, 8);
+        }
+
+        [Theory]
+        [InlineData("false false", false, false)]
+        [InlineData("true false", true, false)]
+        [InlineData("false true", false, true)]
+        [InlineData("true true", true, true)]
+        public void AxialShading_PaintsBeyondEachEndOnlyWhereItExtends(string extend, bool before, bool after)
+        {
+            var pdf = ShPdf(Shading(2, "30 0 70 0", extend));
+
+            Assert.Equal(before, Px(pdf, 10, 50).A > 200);
+            AssertNear((128, 0, 128, 255), Px(pdf, 50, 50), 20);                 // between the ends it always paints
+            Assert.Equal(after, Px(pdf, 90, 50).A > 200);
+        }
+
+        [Fact]
+        public void AxialShadingPattern_WithoutExtend_FillsOnlyTheBand()
+        {
+            var pdf = ShadingPatternPdf(Shading(2, "30 0 70 0", "false false"));
+
+            Assert.InRange(Px(pdf, 10, 50).A, 0, 8);
+            AssertNear((250, 0, 5, 255), Px(pdf, 32, 50), 14);
+            Assert.InRange(Px(pdf, 90, 50).A, 0, 8);
+        }
+
+        [Fact]
+        public void AxialShading_WithoutExtend_StaysPerpendicularUnderAnUnevenScale()
+        {
+            // The band's edges are right angles in shading space: a 2x1 stretch keeps them vertical for a horizontal axis.
+            var pdf = ShPdf(Shading(2, "0 0 20 0", "false false"), "2 0 0 1 0 0 cm /S0 sh");
+
+            AssertNear((250, 0, 5, 255), Px(pdf, 2, 10), 14);
+            AssertNear((250, 0, 5, 255), Px(pdf, 2, 90), 14);
+            Assert.InRange(Px(pdf, 44, 10).A, 0, 8);                                // the band is 0..40 wide: x = 44 is past it, top and bottom
+            Assert.InRange(Px(pdf, 60, 50).A, 0, 8);
+        }
+
+        [Fact]
+        public void RadialShading_WithoutExtend_FillsTheCircleOnly()
+        {
+            var pdf = ShPdf(Shading(3, "50 50 0 50 50 30", "false false"));
+
+            AssertNear((128, 0, 128, 255), Px(pdf, 50, 50 - 15), 40);
+            Assert.True(Px(pdf, 50 + 25, 50).A > 200);
+            Assert.InRange(Px(pdf, 50 + 40, 50).A, 0, 8);
+            Assert.InRange(Px(pdf, 5, 5).A, 0, 8);
+        }
+
+        [Fact]
+        public void RadialShading_ExtendedPastItsOuterCircle_PaintsTheEndColor()
+        {
+            var pdf = ShPdf(Shading(3, "50 50 0 50 50 30", "true true"));
+
+            AssertNear((5, 0, 250, 255), Px(pdf, 95, 50), 14);
+        }
+
+        [Fact]
+        public void RadialShading_ExtendedPastASmallerInnerCircle_StopsAtTheConeApex()
+        {
+            // Circles shrink toward the start (r 10 -> 30): extending it paints the cone down to its apex but not past the outer circle.
+            var pdf = ShPdf(Shading(3, "20 50 10 60 50 30", "true false"));
+
+            Assert.True(Px(pdf, 8, 50).A > 200);                 // inside the cone before the start circle
+            Assert.InRange(Px(pdf, 95, 50).A, 0, 8);             // beyond the outer circle
         }
 
         [Fact]

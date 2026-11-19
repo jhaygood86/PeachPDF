@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.IO.Compression;
 using PeachDrawing.Core;
 using PeachDrawing.PDF.Engine;
@@ -40,7 +41,7 @@ internal static class PdfImageXObject
         if (decoded.ImageFilter == "JPXDecode")
         {
             if (stencil) { why = "JPX stencil mask"; return null; }
-            return FromJpx(doc, image, context, decoded.Data, out why);
+            return FromJpx(doc, image, resources, context, decoded.Data, out why);
         }
         bool bilevel = decoded.ImageFilter is "CCITTFaxDecode" or "JBIG2Decode";
         if (bilevel)
@@ -127,8 +128,8 @@ internal static class PdfImageXObject
             {
                 rgba[i * 4] = converted[i * 3]; rgba[i * 4 + 1] = converted[i * 3 + 1]; rgba[i * 4 + 2] = converted[i * 3 + 2]; rgba[i * 4 + 3] = 255;
             }
-            if (doc.Resolve(image.GetRaw("SMask")) is PdfDictionary bulkSoft) ApplyAlpha(doc, bulkSoft, rgba, width, height, soft: true);
-            else if (doc.Resolve(image.GetRaw("Mask")) is PdfDictionary bulkMask) ApplyAlpha(doc, bulkMask, rgba, width, height, soft: false);
+            if (doc.Resolve(image.GetRaw("SMask")) is PdfDictionary bulkSoft) (rgba, width, height) = ApplyAlpha(doc, bulkSoft, rgba, width, height, soft: true);
+            else if (doc.Resolve(image.GetRaw("Mask")) is PdfDictionary bulkMask) (rgba, width, height) = ApplyAlpha(doc, bulkMask, rgba, width, height, soft: false);
             return FromPixels(context, rgba, width, height, out why);
         }
 
@@ -142,8 +143,8 @@ internal static class PdfImageXObject
                     int bitPos = (x * comps + c) * bpc;
                     int v = ReadSample(data, rowStart, bitPos, bpc);
                     raw[c] = v;
-                    double d0 = decode is not null && decode.Length >= c * 2 + 2 ? decode[c * 2] : 0;
-                    double d1 = decode is not null && decode.Length >= c * 2 + 2 ? decode[c * 2 + 1] : (indexed ? max : 1);
+                    double d0 = decode is not null && decode.Length >= c * 2 + 2 ? decode[c * 2] : space.DecodeMin(c);
+                    double d1 = decode is not null && decode.Length >= c * 2 + 2 ? decode[c * 2 + 1] : (indexed ? max : space.DecodeMax(c));
                     samples[c] = indexed ? d0 + v * (d1 - d0) / max : d0 + v / max * (d1 - d0);
                 }
                 var color = space.ToColor(samples, 1);
@@ -159,8 +160,8 @@ internal static class PdfImageXObject
             }
         }
 
-        if (doc.Resolve(image.GetRaw("SMask")) is PdfDictionary smask) ApplyAlpha(doc, smask, rgba, width, height, soft: true);
-        else if (doc.Resolve(image.GetRaw("Mask")) is PdfDictionary stencilMask) ApplyAlpha(doc, stencilMask, rgba, width, height, soft: false);
+        if (doc.Resolve(image.GetRaw("SMask")) is PdfDictionary smask) (rgba, width, height) = ApplyAlpha(doc, smask, rgba, width, height, soft: true);
+        else if (doc.Resolve(image.GetRaw("Mask")) is PdfDictionary stencilMask) (rgba, width, height) = ApplyAlpha(doc, stencilMask, rgba, width, height, soft: false);
 
         return FromPixels(context, rgba, width, height, out why);
     }
@@ -180,22 +181,49 @@ internal static class PdfImageXObject
     }
 
     /// <summary>Sets the alpha of <paramref name="rgba"/> from a soft-mask image or a stencil mask, sampling the mask nearest-neighbour onto the image grid.</summary>
-    static void ApplyAlpha(PdfSourceDocument doc, PdfDictionary mask, byte[] rgba, int width, int height, bool soft)
+    static (byte[] Rgba, int Width, int Height) ApplyAlpha(PdfSourceDocument doc, PdfDictionary mask, byte[] rgba, int width, int height, bool soft)
     {
         int mw = doc.IntOf(mask.GetRaw("Width")), mh = doc.IntOf(mask.GetRaw("Height"));
         var decoded = doc.DecodeStream(mask);
         bool bilevel = decoded.ImageFilter is "CCITTFaxDecode" or "JBIG2Decode";
         if (mw > 0 && mh > 0 && bilevel)
         {
-            if (DecodeBilevel(doc, decoded, mw, mh) is not { } bits) return;
+            if (DecodeBilevel(doc, decoded, mw, mh) is not { } bits) return (rgba, width, height);
             decoded = decoded with { Data = bits, ImageFilter = null };
         }
-        if (mw <= 0 || mh <= 0 || decoded.ImageFilter is not null) return;
+        if (mw <= 0 || mh <= 0 || decoded.ImageFilter is not null) return (rgba, width, height);
         int bpc = soft && !bilevel ? doc.IntOf(mask.GetRaw("BitsPerComponent")) : 1;
-        if (bpc is not (1 or 2 or 4 or 8 or 16)) return;
+        if (bpc is not (1 or 2 or 4 or 8 or 16)) return (rgba, width, height);
         bool invert = doc.Resolve(mask.GetRaw("Decode")) is PdfArray { Elements.Count: >= 2 } d && doc.NumberOf(d.Elements[0]) > doc.NumberOf(d.Elements[1]);
         int rowBytes = (mw * bpc + 7) / 8;
         double max = (1 << Math.Min(bpc, 16)) - 1;
+
+        // A mask finer than its image keeps its detail: the image's pixels are repeated onto the mask's grid first, as the mask is the one that
+        // decides the picture's edges (a 3x3 image under a 64x64 stencil is a 64x64 picture). A mask coarser than the image is sampled down.
+        int targetW = Math.Max(width, mw), targetH = Math.Max(height, mh);
+        if ((targetW != width || targetH != height) && (long)targetW * targetH <= 16L * 1024 * 1024)
+        {
+            var scaled = new byte[targetW * targetH * 4];
+            for (int y = 0; y < targetH; y++)
+            {
+                int sy = y * height / targetH;
+                for (int x = 0; x < targetW; x++)
+                    Buffer.BlockCopy(rgba, (sy * width + x * width / targetW) * 4, scaled, (y * targetW + x) * 4, 4);
+            }
+
+            (rgba, width, height) = (scaled, targetW, targetH);
+        }
+
+        // /Matte (PDF 11.6.5.3): the image's colors were blended with this color in proportion to the mask, so each is brought back out of the
+        // blend (c = m + (c' - m) / alpha) before the mask becomes the alpha channel. It is in the image's color space: three numbers are read
+        // as RGB and one as gray; any other count, which cannot be tied to the image's space here, is not applied.
+        double[]? matte = null;
+        if (soft && doc.ArrayOf(mask, "Matte") is { Elements.Count: 1 or 3 } m)
+        {
+            var values = m.Elements.Select(e => Math.Clamp(doc.NumberOf(e), 0, 1)).ToArray();
+            matte = values.Length == 1 ? [values[0], values[0], values[0]] : values;
+        }
+
         for (int y = 0; y < height; y++)
         {
             int my = Math.Min(mh - 1, y * mh / height);
@@ -208,9 +236,14 @@ internal static class PdfImageXObject
                 if (!soft) a = 1 - a;
                 if (invert) a = 1 - a;
                 int o = (y * width + x) * 4 + 3;
+                if (matte is not null && a > 0)
+                    for (int c = 0; c < 3; c++)
+                        rgba[o - 3 + c] = (byte)Math.Round(Math.Clamp(matte[c] + (rgba[o - 3 + c] / 255.0 - matte[c]) / Math.Min(a, 1), 0, 1) * 255);
                 rgba[o] = (byte)Math.Round(Math.Clamp(a, 0, 1) * rgba[o]);
             }
         }
+
+        return (rgba, width, height);
     }
 
     /// <summary>
@@ -270,7 +303,7 @@ internal static class PdfImageXObject
     }
 
     /// <summary>A JPEG 2000 image: decoded to RGBA (the codestream carries its own color), then given the image's soft or stencil mask.</summary>
-    static Image? FromJpx(PdfSourceDocument doc, PdfDictionary image, RenderContext context, byte[] jpx, out string? why)
+    static Image? FromJpx(PdfSourceDocument doc, PdfDictionary image, PdfDictionary? resources, RenderContext context, byte[] jpx, out string? why)
     {
         why = null;
         byte[] rgba;
@@ -295,12 +328,52 @@ internal static class PdfImageXObject
             return null;
         }
 
+        // An Indexed /ColorSpace makes the codestream's single component a palette index (PDF 8.9.5.1), not a gray level. The decoder scaled
+        // the index to 8 bits and the dictionary's /BitsPerComponent does not apply to JPEG 2000 (the codestream carries its own depth), so
+        // the depth is the smallest of 1, 2, 4 and 8 bits whose levels hold every value decoded.
+        if (PdfColorSpace.Resolve(doc, image.GetRaw("ColorSpace"), resources) is { Name: "Indexed" } indexed)
+        {
+            // The file's own palette box (a JP2 can carry one) is not applied: the components are the indices.
+            try
+            {
+                if (PeachImage.Image.TryLoad(new MemoryStream(jpx), out var raw, new PeachImage.Formats.Jpeg2000.Jpeg2000DecoderOptions { IgnoreColorSpace = true, TargetPixelFormat = PeachImage.PixelFormat.Rgba32 }) && raw is not null)
+                {
+                    using (raw)
+                    {
+                        if (raw.Width == width && raw.Height == height) rgba = raw.PixelMemory.Span.ToArray();
+                    }
+                }
+            }
+            catch (Exception)
+            {
+                // The decode that already worked stands.
+            }
+
+            var seen = new HashSet<byte>();
+            for (int i = 0; i < rgba.Length; i += 4) seen.Add(rgba[i]);
+            int bits = 8;
+            foreach (int candidate in new[] { 1, 2, 4 })
+            {
+                double step = 255.0 / ((1 << candidate) - 1);
+                if (System.Linq.Enumerable.All(seen, v => Math.Abs(v - Math.Round(v / step) * step) < 0.6)) { bits = candidate; break; }
+            }
+
+            double unit = 255.0 / ((1 << bits) - 1);
+            var palette = new Dictionary<int, (byte R, byte G, byte B)>();
+            for (int i = 0; i < rgba.Length; i += 4)
+            {
+                int index = (int)Math.Round(rgba[i] / unit);
+                if (!palette.TryGetValue(index, out var color)) palette[index] = color = indexed.ToColor([index], 1).ToRgb();
+                (rgba[i], rgba[i + 1], rgba[i + 2]) = color;
+            }
+        }
+
         // The codestream's own alpha channel counts only when the dictionary asks for it (/SMaskInData).
         if (doc.IntOf(image.GetRaw("SMaskInData")) == 0)
             for (int i = 3; i < rgba.Length; i += 4) rgba[i] = 255;
 
-        if (doc.Resolve(image.GetRaw("SMask")) is PdfDictionary soft) ApplyAlpha(doc, soft, rgba, width, height, soft: true);
-        else if (doc.Resolve(image.GetRaw("Mask")) is PdfDictionary stencilMask) ApplyAlpha(doc, stencilMask, rgba, width, height, soft: false);
+        if (doc.Resolve(image.GetRaw("SMask")) is PdfDictionary soft) (rgba, width, height) = ApplyAlpha(doc, soft, rgba, width, height, soft: true);
+        else if (doc.Resolve(image.GetRaw("Mask")) is PdfDictionary stencilMask) (rgba, width, height) = ApplyAlpha(doc, stencilMask, rgba, width, height, soft: false);
         return FromPixels(context, rgba, width, height, out why);
     }
 
@@ -330,8 +403,8 @@ internal static class PdfImageXObject
             return null;
         }
 
-        if (doc.Resolve(image.GetRaw("SMask")) is PdfDictionary soft) ApplyAlpha(doc, soft, rgba, width, height, soft: true);
-        else if (doc.Resolve(image.GetRaw("Mask")) is PdfDictionary stencilMask) ApplyAlpha(doc, stencilMask, rgba, width, height, soft: false);
+        if (doc.Resolve(image.GetRaw("SMask")) is PdfDictionary soft) (rgba, width, height) = ApplyAlpha(doc, soft, rgba, width, height, soft: true);
+        else if (doc.Resolve(image.GetRaw("Mask")) is PdfDictionary stencilMask) (rgba, width, height) = ApplyAlpha(doc, stencilMask, rgba, width, height, soft: false);
         return FromPixels(context, rgba, width, height, out why);
     }
 
