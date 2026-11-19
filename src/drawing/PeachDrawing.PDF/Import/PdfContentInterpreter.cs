@@ -1046,7 +1046,7 @@ internal sealed class PdfContentInterpreter
         if (_doc.ArrayOf(pattern, "Matrix") is { Elements.Count: >= 6 } m)
             matrix = new Matrix3x2((float)_doc.NumberOf(m.Elements[0]), (float)_doc.NumberOf(m.Elements[1]), (float)_doc.NumberOf(m.Elements[2]),
                 (float)_doc.NumberOf(m.Elements[3]), (float)_doc.NumberOf(m.Elements[4]), (float)_doc.NumberOf(m.Elements[5]));
-        if (type == 1) return TilingBrush(pattern, matrix, fill ? st.FillPatternColor : st.StrokePatternColor, res);
+        if (type == 1) return TilingBrush(pattern, matrix, fill ? st.FillPatternColor : st.StrokePatternColor, res, fill ? st.FillAlpha : st.StrokeAlpha);
         if (_doc.DictOf(pattern, "Shading") is not { } shading) { _unsupported.Add("pattern without shading"); return null; }
         if (PdfMeshShading.IsMesh(_doc.IntOf(shading.GetRaw("ShadingType")))) { if (!fill) _unsupported.Add("stroke with a mesh shading"); return null; }
         return ShadingBrush(shading, matrix, fill ? st.FillAlpha : st.StrokeAlpha, res);
@@ -1068,7 +1068,7 @@ internal sealed class PdfContentInterpreter
     /// however many cells show it - and the brush repeats it under the transform that carries pattern space onto the current space. A
     /// cell's content is clipped to the cell, so a pattern whose bounding box is larger than its steps does not overlap itself.
     /// </summary>
-    Brush? TilingBrush(PdfDictionary pattern, Matrix3x2 patternMatrix, PaintColor? uncolouredColor, PdfDictionary? res)
+    Brush? TilingBrush(PdfDictionary pattern, Matrix3x2 patternMatrix, PaintColor? uncolouredColor, PdfDictionary? res, double alpha = 1)
     {
         if (pattern.Stream is null) { _unsupported.Add("pattern without content"); return null; }
         if (_doc.ArrayOf(pattern, "BBox") is not { Elements.Count: >= 4 } bb) { _unsupported.Add("pattern without a bounding box"); return null; }
@@ -1087,7 +1087,10 @@ internal sealed class PdfContentInterpreter
         int oversample = (int)Math.Clamp(Math.Ceiling(scale * 2), 1, 16);
         while (cellW * oversample > 4096 || cellH * oversample > 4096) oversample = Math.Max(1, oversample / 2);
 
-        var key = (pattern, uncoloured ? uncolouredColor!.Value.ToRgb().GetHashCode() ^ uncolouredColor.Value.A : 0, oversample);
+        // The cell's content starts out painting at the alpha that was in force where the pattern is used, as PDFium does: a cell that sets its own
+        // /ca overrides it, one that does not is as faint as the fill. The cell is drawn once per alpha.
+        int alphaKey = (int)Math.Round(Math.Clamp(alpha, 0, 1) * 255) << 24;
+        var key = (pattern, (uncoloured ? uncolouredColor!.Value.ToRgb().GetHashCode() ^ uncolouredColor.Value.A : 0) ^ alphaKey, oversample);
         if (!_tiles.TryGetValue(key, out var image))
         {
             int w = (int)Math.Max(1, Math.Ceiling(cellW * oversample)), h = (int)Math.Max(1, Math.Ceiling(cellH * oversample));
@@ -1100,6 +1103,7 @@ internal sealed class PdfContentInterpreter
             clip.Start(bx0, by0); clip.LineTo(Math.Min(bx1, bx0 + cellW), by0); clip.LineTo(Math.Min(bx1, bx0 + cellW), Math.Min(by1, by0 + cellH)); clip.LineTo(bx0, Math.Min(by1, by0 + cellH)); clip.CloseFigure();
             g.PushClip(clip);
             var sub = new PdfContentInterpreter(_doc, g, new Rect(0, 0, w, h)) { _formDepth = _formDepth + 1 };
+            sub.Cur.FillAlpha = sub.Cur.StrokeAlpha = alpha;
             if (uncoloured) sub.UseFixedColor(uncolouredColor!.Value);
             sub.Run(_doc.DecodeStream(pattern).Data, _doc.DictOf(pattern, "Resources") ?? res);
             sub.Finish();

@@ -127,8 +127,8 @@ internal static class PdfImageXObject
             {
                 rgba[i * 4] = converted[i * 3]; rgba[i * 4 + 1] = converted[i * 3 + 1]; rgba[i * 4 + 2] = converted[i * 3 + 2]; rgba[i * 4 + 3] = 255;
             }
-            if (doc.Resolve(image.GetRaw("SMask")) is PdfDictionary bulkSoft) ApplyAlpha(doc, bulkSoft, rgba, width, height, soft: true);
-            else if (doc.Resolve(image.GetRaw("Mask")) is PdfDictionary bulkMask) ApplyAlpha(doc, bulkMask, rgba, width, height, soft: false);
+            if (doc.Resolve(image.GetRaw("SMask")) is PdfDictionary bulkSoft) (rgba, width, height) = ApplyAlpha(doc, bulkSoft, rgba, width, height, soft: true);
+            else if (doc.Resolve(image.GetRaw("Mask")) is PdfDictionary bulkMask) (rgba, width, height) = ApplyAlpha(doc, bulkMask, rgba, width, height, soft: false);
             return FromPixels(context, rgba, width, height, out why);
         }
 
@@ -159,8 +159,8 @@ internal static class PdfImageXObject
             }
         }
 
-        if (doc.Resolve(image.GetRaw("SMask")) is PdfDictionary smask) ApplyAlpha(doc, smask, rgba, width, height, soft: true);
-        else if (doc.Resolve(image.GetRaw("Mask")) is PdfDictionary stencilMask) ApplyAlpha(doc, stencilMask, rgba, width, height, soft: false);
+        if (doc.Resolve(image.GetRaw("SMask")) is PdfDictionary smask) (rgba, width, height) = ApplyAlpha(doc, smask, rgba, width, height, soft: true);
+        else if (doc.Resolve(image.GetRaw("Mask")) is PdfDictionary stencilMask) (rgba, width, height) = ApplyAlpha(doc, stencilMask, rgba, width, height, soft: false);
 
         return FromPixels(context, rgba, width, height, out why);
     }
@@ -180,22 +180,39 @@ internal static class PdfImageXObject
     }
 
     /// <summary>Sets the alpha of <paramref name="rgba"/> from a soft-mask image or a stencil mask, sampling the mask nearest-neighbour onto the image grid.</summary>
-    static void ApplyAlpha(PdfSourceDocument doc, PdfDictionary mask, byte[] rgba, int width, int height, bool soft)
+    static (byte[] Rgba, int Width, int Height) ApplyAlpha(PdfSourceDocument doc, PdfDictionary mask, byte[] rgba, int width, int height, bool soft)
     {
         int mw = doc.IntOf(mask.GetRaw("Width")), mh = doc.IntOf(mask.GetRaw("Height"));
         var decoded = doc.DecodeStream(mask);
         bool bilevel = decoded.ImageFilter is "CCITTFaxDecode" or "JBIG2Decode";
         if (mw > 0 && mh > 0 && bilevel)
         {
-            if (DecodeBilevel(doc, decoded, mw, mh) is not { } bits) return;
+            if (DecodeBilevel(doc, decoded, mw, mh) is not { } bits) return (rgba, width, height);
             decoded = decoded with { Data = bits, ImageFilter = null };
         }
-        if (mw <= 0 || mh <= 0 || decoded.ImageFilter is not null) return;
+        if (mw <= 0 || mh <= 0 || decoded.ImageFilter is not null) return (rgba, width, height);
         int bpc = soft && !bilevel ? doc.IntOf(mask.GetRaw("BitsPerComponent")) : 1;
-        if (bpc is not (1 or 2 or 4 or 8 or 16)) return;
+        if (bpc is not (1 or 2 or 4 or 8 or 16)) return (rgba, width, height);
         bool invert = doc.Resolve(mask.GetRaw("Decode")) is PdfArray { Elements.Count: >= 2 } d && doc.NumberOf(d.Elements[0]) > doc.NumberOf(d.Elements[1]);
         int rowBytes = (mw * bpc + 7) / 8;
         double max = (1 << Math.Min(bpc, 16)) - 1;
+
+        // A mask finer than its image keeps its detail: the image's pixels are repeated onto the mask's grid first, as the mask is the one that
+        // decides the picture's edges (a 3x3 image under a 64x64 stencil is a 64x64 picture). A mask coarser than the image is sampled down.
+        int targetW = Math.Max(width, mw), targetH = Math.Max(height, mh);
+        if ((targetW != width || targetH != height) && (long)targetW * targetH <= 16L * 1024 * 1024)
+        {
+            var scaled = new byte[targetW * targetH * 4];
+            for (int y = 0; y < targetH; y++)
+            {
+                int sy = y * height / targetH;
+                for (int x = 0; x < targetW; x++)
+                    Buffer.BlockCopy(rgba, (sy * width + x * width / targetW) * 4, scaled, (y * targetW + x) * 4, 4);
+            }
+
+            (rgba, width, height) = (scaled, targetW, targetH);
+        }
+
         for (int y = 0; y < height; y++)
         {
             int my = Math.Min(mh - 1, y * mh / height);
@@ -211,6 +228,8 @@ internal static class PdfImageXObject
                 rgba[o] = (byte)Math.Round(Math.Clamp(a, 0, 1) * rgba[o]);
             }
         }
+
+        return (rgba, width, height);
     }
 
     /// <summary>
@@ -299,8 +318,8 @@ internal static class PdfImageXObject
         if (doc.IntOf(image.GetRaw("SMaskInData")) == 0)
             for (int i = 3; i < rgba.Length; i += 4) rgba[i] = 255;
 
-        if (doc.Resolve(image.GetRaw("SMask")) is PdfDictionary soft) ApplyAlpha(doc, soft, rgba, width, height, soft: true);
-        else if (doc.Resolve(image.GetRaw("Mask")) is PdfDictionary stencilMask) ApplyAlpha(doc, stencilMask, rgba, width, height, soft: false);
+        if (doc.Resolve(image.GetRaw("SMask")) is PdfDictionary soft) (rgba, width, height) = ApplyAlpha(doc, soft, rgba, width, height, soft: true);
+        else if (doc.Resolve(image.GetRaw("Mask")) is PdfDictionary stencilMask) (rgba, width, height) = ApplyAlpha(doc, stencilMask, rgba, width, height, soft: false);
         return FromPixels(context, rgba, width, height, out why);
     }
 
@@ -330,8 +349,8 @@ internal static class PdfImageXObject
             return null;
         }
 
-        if (doc.Resolve(image.GetRaw("SMask")) is PdfDictionary soft) ApplyAlpha(doc, soft, rgba, width, height, soft: true);
-        else if (doc.Resolve(image.GetRaw("Mask")) is PdfDictionary stencilMask) ApplyAlpha(doc, stencilMask, rgba, width, height, soft: false);
+        if (doc.Resolve(image.GetRaw("SMask")) is PdfDictionary soft) (rgba, width, height) = ApplyAlpha(doc, soft, rgba, width, height, soft: true);
+        else if (doc.Resolve(image.GetRaw("Mask")) is PdfDictionary stencilMask) (rgba, width, height) = ApplyAlpha(doc, stencilMask, rgba, width, height, soft: false);
         return FromPixels(context, rgba, width, height, out why);
     }
 

@@ -255,6 +255,37 @@ namespace PeachDrawing.PDF.Tests.Import
         private static byte[] ShadingPatternPdf(string shading) =>
             Pdf("/Pattern cs /P0 scn 0 0 100 100 re f", resources: "/Pattern << /P0 5 0 R >>", extraObjects: $"<< /PatternType 2 /Shading {shading} >>");
 
+        private static byte[] TilingAtHalfAlpha(string cellContent) => Pdf("/GS0 gs /Pattern cs /P0 scn 0 0 100 100 re f",
+            resources: "/ExtGState << /GS0 << /ca 0.5 >> >> /Pattern << /P0 5 0 R >>",
+            extraObjects: $"<< /PatternType 1 /PaintType 1 /TilingType 1 /BBox [0 0 100 100] /XStep 100 /YStep 100 /Resources << /ExtGState << /G1 << /ca 1 >> >> >> /Length {cellContent.Length} >>\nstream\n{cellContent}\nendstream");
+
+        [Fact]
+        public void TilingPattern_PaintedAtHalfAlpha_StartsItsCellAtThatAlpha()
+        {
+            // A cell that sets no alpha of its own is as faint as the fill (PDFium's reading of 11.6.7).
+            Assert.InRange(Px(TilingAtHalfAlpha("1 0 0 rg 0 0 100 100 re f"), 50, 50).A, 120, 136);
+        }
+
+        [Fact]
+        public void TilingPattern_WhoseCellSetsItsOwnAlpha_KeepsIt()
+        {
+            Assert.True(Px(TilingAtHalfAlpha("/G1 gs 1 0 0 rg 0 0 100 100 re f"), 50, 50).A > 250);
+        }
+
+        [Fact]
+        public void ImageMask_FinerThanItsImage_KeepsTheMasksDetail()
+        {
+            // A 1x1 red image under a 4x1 stencil whose samples are 0 1 0 1 (1 = masked out): the picture has its edges where the mask does.
+            var image = TestPdf.Stream("/Type /XObject /Subtype /Image /Width 1 /Height 1 /BitsPerComponent 8 /ColorSpace /DeviceRGB /Mask 6 0 R", TestPdf.Binary([0xFF, 0, 0]));
+            var mask = TestPdf.Stream("/Type /XObject /Subtype /Image /Width 4 /Height 1 /ImageMask true /BitsPerComponent 1", TestPdf.Binary([0x50]));
+            var pdf = Pdf("100 0 0 100 0 0 cm /Im0 Do", resources: "/XObject << /Im0 5 0 R >>", extraObjects: image + "|||" + mask);
+
+            Assert.True(Px(pdf, 10, 50).A > 250);
+            Assert.InRange(Px(pdf, 35, 50).A, 0, 8);
+            Assert.True(Px(pdf, 60, 50).A > 250);
+            Assert.InRange(Px(pdf, 85, 50).A, 0, 8);
+        }
+
         [Fact]
         public void ShOperator_ReadsTheShadingInTheCurrentUserSpace_NotThePageSpace()
         {
