@@ -114,6 +114,38 @@ namespace PeachDrawing.PDF.Tests.Import
         }
 
         [Fact]
+        public void HighByteFormat2Cmaps_OnUnicodeAndWindowsPlatforms_AreCarriedOverToo()
+        {
+            // Some producers write only a format 2 table (the CJK high-byte mapping), on the Unicode and Windows platforms alike, which the loader
+            // does not read. Sub-header 0 maps codes 65 and 66 (single-byte ones: key 0) to glyphs 5 and 7 through its glyph array.
+            var format2 = new byte[6 + 512 + 8 + 4];
+            BinaryPrimitives.WriteUInt16BigEndian(format2, 2);
+            BinaryPrimitives.WriteUInt16BigEndian(format2.AsSpan(2), (ushort)format2.Length);
+            BinaryPrimitives.WriteUInt16BigEndian(format2.AsSpan(518), 65);          // first code
+            BinaryPrimitives.WriteUInt16BigEndian(format2.AsSpan(520), 2);           // entries
+            BinaryPrimitives.WriteUInt16BigEndian(format2.AsSpan(524), 2);           // offset from this field to the glyph array
+            BinaryPrimitives.WriteUInt16BigEndian(format2.AsSpan(526), 5);
+            BinaryPrimitives.WriteUInt16BigEndian(format2.AsSpan(528), 7);
+            var cmap = new byte[4 + 16 + format2.Length];
+            BinaryPrimitives.WriteUInt16BigEndian(cmap.AsSpan(2), 2);
+            foreach (var (record, platform, encoding) in new[] { (0, 0, 3), (1, 3, 1) })
+            {
+                BinaryPrimitives.WriteUInt16BigEndian(cmap.AsSpan(4 + record * 8), (ushort)platform);
+                BinaryPrimitives.WriteUInt16BigEndian(cmap.AsSpan(6 + record * 8), (ushort)encoding);
+                BinaryPrimitives.WriteUInt32BigEndian(cmap.AsSpan(8 + record * 8), 20);
+            }
+
+            format2.CopyTo(cmap, 20);
+            var font = Sfnt(("cmap", cmap), ("head", Head()), ("hhea", Hhea()), ("name", QuartzName()));
+
+            var repaired = Table(SfntRepair.AddMissingTables(font, "family"), "cmap");
+
+            Assert.Equal(5, Lookup(repaired, 0xF000 + 65));
+            Assert.Equal(7, Lookup(repaired, 0xF000 + 66));
+            Assert.Equal(0, Lookup(repaired, 0xF000 + 67));
+        }
+
+        [Fact]
         public void NameTableWithOnlyAMacPostScriptName_GetsAWindowsFamilyAndFullName()
         {
             var font = Sfnt(("cmap", Cmap(1, 0, U16(6, 12, 0, 33, 1, 5))), ("head", Head()), ("hhea", Hhea()), ("name", QuartzName()));

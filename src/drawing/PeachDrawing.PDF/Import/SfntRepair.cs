@@ -34,11 +34,12 @@ internal static class SfntRepair
             tables.Add(new Table(tag, font.AsSpan((int)offset, (int)length).ToArray()));
             have.Add(tag);
         }
-        // A subset written by macOS (Quartz) keeps only a Macintosh (1,0) cmap, which the font loader does not read: its codes are
-        // the glyph lookups of a symbolic TrueType font, so they are carried over at U+F000 + code in a Windows subtable.
+        // A subset written by macOS (Quartz) keeps only a Macintosh (1,0) cmap, and some producers write high-byte (format 2) tables for every platform;
+        // the font loader reads neither. Their codes are the glyph lookups of a symbolic TrueType font, so they are carried over at U+F000 + code in a
+        // Windows subtable.
         bool recoded = false;
         int cmapAt = tables.FindIndex(t => t.Tag == "cmap");
-        if (cmapAt >= 0 && ReadMacOnlyCmap(tables[cmapAt].Data) is { } macCodes)
+        if (cmapAt >= 0 && ReadUnusableCmap(tables[cmapAt].Data) is { } macCodes)
         {
             tables[cmapAt] = new Table("cmap", BuildCmap(macCodes));
             recoded = true;
@@ -74,32 +75,39 @@ internal static class SfntRepair
     }
 
     /// <summary>
-    /// The codes of a <c>cmap</c> whose only readable subtable is Macintosh platform, encoding 0, format 0 or 6 - with no Unicode
-    /// subtable beside it - as U+F000 + code to glyph; null when the table has a Unicode subtable or no such Macintosh one.
+    /// The codes of a <c>cmap</c> that has no subtable the font loader can use (a Unicode-platform or Windows format 4 or 12 one) as U+F000 +
+    /// code to glyph, read from the one-byte tables it does have: format 0 or 6 (a Macintosh subset such as Quartz writes) or the single-byte
+    /// part of format 2 (the high-byte mapping some producers write for every platform). Null when the table already has a usable subtable, or
+    /// none of those formats.
     /// </summary>
-    static Dictionary<int, int>? ReadMacOnlyCmap(byte[] cmap)
+    static Dictionary<int, int>? ReadUnusableCmap(byte[] cmap)
     {
         if (cmap.Length < 4) return null;
         int count = BinaryPrimitives.ReadUInt16BigEndian(cmap.AsSpan(2));
         if (4 + count * 8 > cmap.Length) return null;
-        int macOffset = -1;
+        (int Priority, int Offset)? best = null;
         for (int i = 0; i < count; i++)
         {
             int rec = 4 + i * 8;
             int platform = BinaryPrimitives.ReadUInt16BigEndian(cmap.AsSpan(rec)), encoding = BinaryPrimitives.ReadUInt16BigEndian(cmap.AsSpan(rec + 2));
             uint offset = BinaryPrimitives.ReadUInt32BigEndian(cmap.AsSpan(rec + 4));
-            if (platform == 0 || (platform == 3 && encoding is 0 or 1 or 10)) return null;
-            if (platform == 1 && encoding == 0 && offset <= cmap.Length - 6) macOffset = (int)offset;
+            if (offset > cmap.Length - 6) continue;
+            int format = BinaryPrimitives.ReadUInt16BigEndian(cmap.AsSpan((int)offset));
+            if ((platform == 0 || (platform == 3 && encoding is 0 or 1 or 10)) && format is 4 or 12) return null;
+            if (format is not (0 or 2 or 6)) continue;
+            int priority = platform switch { 3 => 3, 0 => 2, _ => 1 };
+            if (best is null || priority > best.Value.Priority) best = (priority, (int)offset);
         }
-        if (macOffset < 0) return null;
-        var sub = cmap.AsSpan(macOffset);
-        int format = BinaryPrimitives.ReadUInt16BigEndian(sub);
+
+        if (best is null) return null;
+        var sub = cmap.AsSpan(best.Value.Offset);
+        int chosen = BinaryPrimitives.ReadUInt16BigEndian(sub);
         var map = new Dictionary<int, int>();
-        if (format == 0 && sub.Length >= 262)
+        if (chosen == 0 && sub.Length >= 262)
         {
             for (int code = 0; code < 256; code++) if (sub[6 + code] != 0) map[0xF000 + code] = sub[6 + code];
         }
-        else if (format == 6 && sub.Length >= 10)
+        else if (chosen == 6 && sub.Length >= 10)
         {
             int first = BinaryPrimitives.ReadUInt16BigEndian(sub[6..]), entries = BinaryPrimitives.ReadUInt16BigEndian(sub[8..]);
             for (int i = 0; i < entries && 10 + i * 2 + 2 <= sub.Length && first + i < 256; i++)
@@ -108,8 +116,22 @@ internal static class SfntRepair
                 if (glyph != 0) map[0xF000 + first + i] = glyph;
             }
         }
+        else if (chosen == 2 && sub.Length >= 524)
+        {
+            // Sub-header 0 serves the codes whose key is 0 (the single-byte ones): its range, delta and offset (counted from the offset field).
+            int first = BinaryPrimitives.ReadUInt16BigEndian(sub[518..]), entries = BinaryPrimitives.ReadUInt16BigEndian(sub[520..]);
+            int delta = BinaryPrimitives.ReadInt16BigEndian(sub[522..]), rangeOffset = BinaryPrimitives.ReadUInt16BigEndian(sub[524..]);
+            for (int code = first; code < first + entries && code < 256; code++)
+            {
+                if (BinaryPrimitives.ReadUInt16BigEndian(sub[(6 + code * 2)..]) != 0) continue;       // a lead byte of a two-byte code
+                int at = 524 + rangeOffset + 2 * (code - first);
+                if (at + 2 > sub.Length) break;
+                int glyph = BinaryPrimitives.ReadUInt16BigEndian(sub[at..]);
+                if (glyph != 0) map[0xF000 + code] = (glyph + delta) & 0xFFFF;
+            }
+        }
         else return null;
-        return map;
+        return map.Count == 0 ? null : map;
     }
 
     /// <summary>Whether a <c>name</c> table carries both a family (1) and a full (4) name on the Windows platform.</summary>
