@@ -60,7 +60,7 @@ The gate is a **floor per module** in `wpt/wpt-floors.json`: the [WPT workflow](
 
 The PDF reader in `PeachDrawing.PDF` is checked against PDFium's own test suite. `PeachDrawing.PDF.PdfiumRunner` (under `src/harness/`) takes the pixel-test PDFs of PDFium's `testing/resources/pixel` (hand-written templates, which it expands the way PDFium's own tool does), renders every page through `PdfPageSource` onto a `PeachDrawing` raster canvas at one pixel per point on a white background, and compares it with the PNG PDFium checked in for that page. A page passes when at most 2% of its pixels differ by more than 48 in some channel (`--max-diff` and `--threshold` change this: PDFium's anti-aliasing and hinting never match exactly). A page that paints nothing where PDFium painted something is counted as *blank*, never as a pass.
 
-The corpus is not part of the repository: the runner fetches the commit pinned in `pdfium/PDFIUM_COMMIT` into a cache folder.
+The corpus is not part of the repository: the runner fetches the commit pinned in `pdfium/PDFIUM_COMMIT` into a cache folder. Use `fetch` rather than a `git clone` of PDFium: several of the PDFs are hand-written with byte offsets in them, and a checkout that converts line endings (`core.autocrlf`) breaks them.
 
 ```bash
 dotnet run --project harness/PeachDrawing.PDF.PdfiumRunner -f net10.0 -- fetch

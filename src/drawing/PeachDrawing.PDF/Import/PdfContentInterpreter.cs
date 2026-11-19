@@ -64,6 +64,9 @@ internal sealed class PdfContentInterpreter
     GraphicsPath? _path;
     double _curX, _curY, _startX, _startY;
     FillMode? _pendingClip;
+    /// <summary>How deeply forms, patterns, glyph procedures and soft masks may nest in one another: PDFium's own limit, which a file written to probe it (35 forms deep) reaches. A cycle ends here too.</summary>
+    const int MaxFormDepth = 40;
+
     int _formDepth;
     Matrix3x2 _streamBase = Matrix3x2.Identity;
     Matrix3x2 _tm = Matrix3x2.Identity, _tlm = Matrix3x2.Identity;
@@ -590,7 +593,7 @@ internal sealed class PdfContentInterpreter
                     var pen = Vector2.Transform(new Vector2((float)(x + width + spacing), (float)-st.Rise), toPage);
                     TextSink(new PdfTextGlyph(g.Text, start, end, up, (pen - end).Length()));
                 }
-                if (TextSink is null && st.RenderMode != 3 && g.Procedure is { Stream: not null } proc && _formDepth < 16)
+                if (TextSink is null && st.RenderMode != 3 && g.Procedure is { Stream: not null } proc && _formDepth < MaxFormDepth)
                 {
                     // glyph space -> text space (font matrix) -> sized and placed in the line -> scaled horizontally -> the text matrix
                     var matrix = font.FontMatrix * Matrix3x2.CreateScale((float)st.FontSize) * Matrix3x2.CreateTranslation((float)x, (float)st.Rise)
@@ -951,7 +954,7 @@ internal sealed class PdfContentInterpreter
 
         mg.PushTransform(group.Accumulated);
         var sub = new PdfContentInterpreter(_doc, mg, region) { _formDepth = _formDepth + 1 };
-        if (sub._formDepth < 16 && _doc.DictOf(maskDict, "G") is { } form)
+        if (sub._formDepth < MaxFormDepth && _doc.DictOf(maskDict, "G") is { } form)
             sub.DrawForm(form, group.Resources);
         else _unsupported.Add("gs SMask (nesting)");
         sub.Finish();
@@ -1072,7 +1075,7 @@ internal sealed class PdfContentInterpreter
         double bx0 = Math.Min(_doc.NumberOf(bb.Elements[0]), _doc.NumberOf(bb.Elements[2])), by0 = Math.Min(_doc.NumberOf(bb.Elements[1]), _doc.NumberOf(bb.Elements[3]));
         double bx1 = Math.Max(_doc.NumberOf(bb.Elements[0]), _doc.NumberOf(bb.Elements[2])), by1 = Math.Max(_doc.NumberOf(bb.Elements[1]), _doc.NumberOf(bb.Elements[3]));
         double cellW = Math.Abs(_doc.NumberOf(pattern.GetRaw("XStep"))), cellH = Math.Abs(_doc.NumberOf(pattern.GetRaw("YStep")));
-        if (!(cellW > 0) || !(cellH > 0) || !(bx1 > bx0) || !(by1 > by0) || _formDepth >= 16) { _unsupported.Add("pattern cell"); return null; }
+        if (!(cellW > 0) || !(cellH > 0) || !(bx1 > bx0) || !(by1 > by0) || _formDepth >= MaxFormDepth) { _unsupported.Add("pattern cell"); return null; }
         bool uncoloured = _doc.IntOf(pattern.GetRaw("PaintType")) == 2;
         if (uncoloured && uncolouredColor is null) { _unsupported.Add("uncoloured pattern without a colour"); return null; }
         if (!Matrix3x2.Invert(Cur.Ctm, out var inverse)) return null;
@@ -1307,7 +1310,7 @@ internal sealed class PdfContentInterpreter
         string? subtype = _doc.NameOf(x.GetRaw("Subtype"));
         if (subtype == "/Image") { if (TextSink is null) { BeginUntagged(); DrawImage(x, res); } return; }
         if (subtype != "/Form") { _unsupported.Add("Do " + subtype); return; }
-        if (_formDepth >= 16) { _unsupported.Add("Do (form nesting)"); return; }
+        if (_formDepth >= MaxFormDepth) { _unsupported.Add("Do (form nesting)"); return; }
         if (TextSink is null && (Cur.FillAlpha < 1 || Cur.Blend != PaintBlendMode.Normal) && _region is not null && _doc.DictOf(x, "Group") is { } group && _doc.NameOf(group.GetRaw("S")) == "/Transparency")
         {
             DrawTransparencyGroup(x, res);
