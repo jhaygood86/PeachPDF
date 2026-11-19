@@ -56,6 +56,20 @@ dotnet run --project harness/PeachBrackets.WptRunner -f net10.0 -- run --wpt <ch
 
 The gate is a **floor per module** in `wpt/wpt-floors.json`: the [WPT workflow](https://github.com/jhaygood86/PeachPDF/blob/main/.github/workflows/wpt.yml) runs on pull requests that touch the engine or the drawing packages and fails when a module passes fewer tests than its floor. The pass rate is not expected to be 100%; the point is that it never falls and that a change which makes more tests pass raises its floor in the same pull request (`run --floors <file> --update-floors`, which never lowers a floor). The floors are measured on the CI runner's fonts, so a local run on another platform can differ by a few tests.
 
+## PDFium pixel tests (a CI gate on a pass count)
+
+The PDF reader in `PeachDrawing.PDF` is checked against PDFium's own test suite. `PeachDrawing.PDF.PdfiumRunner` (under `src/harness/`) takes the pixel-test PDFs of PDFium's `testing/resources/pixel` (hand-written templates, which it expands the way PDFium's own tool does), renders every page through `PdfPageSource` onto a `PeachDrawing` raster canvas at one pixel per point on a white background, and compares it with the PNG PDFium checked in for that page. A page passes when at most 2% of its pixels differ by more than 48 in some channel (`--max-diff` and `--threshold` change this: PDFium's anti-aliasing and hinting never match exactly). A page that paints nothing where PDFium painted something is counted as *blank*, never as a pass.
+
+The corpus is not part of the repository: the runner fetches the commit pinned in `pdfium/PDFIUM_COMMIT` into a cache folder.
+
+```bash
+dotnet run --project harness/PeachDrawing.PDF.PdfiumRunner -f net10.0 -- fetch
+dotnet run --project harness/PeachDrawing.PDF.PdfiumRunner -f net10.0 -- run --corpus ~/.peachdrawing-pdfium/pdfium/<commit> --filter bug_
+dotnet run --project harness/PeachDrawing.PDF.PdfiumRunner -f net10.0 -- run --corpus <checkout> --test pixel/bug_1012369   # also writes both renderings as PNGs
+```
+
+`--out <dir>` writes the passing, blank, failing and skipped tests (with the reason for each failure) as JSON. The gate is a **floor** in `pdfium/pdfium-floors.json`: the PDFium workflow runs on pull requests that touch the drawing packages and fails when fewer tests pass than the floor. The pass rate is not expected to be 100%; the point is that it never falls and that a change which makes more tests pass raises the floor in the same pull request (`run --floors <file> --update-floors`, which never lowers it). A disagreement is a lead, not a verdict: PDFium is not right about everything, so confirm with a second renderer before treating it as a defect here.
+
 ## The showcase harness
 
 `src/harness/PeachPDF.TestHarness` is a small runnable app that renders a gallery of feature showcases. It serves two purposes: it generates the PDFs behind the [Feature Showcase](showcase.html) on the documentation site, and it's a place to *visually* exercise a new capability. CI builds it on every source change so a break is caught before release day, not on it.

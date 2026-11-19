@@ -1,0 +1,101 @@
+using PeachDrawing.Core;
+
+namespace PeachDrawing.PDF.PdfiumRunner;
+
+internal enum Outcome { Pass, Fail, Blank, Skipped }
+
+internal sealed record TestResult(Outcome Outcome, string? Reason = null);
+
+/// <summary>How close a page must be to PDFium's to count: a pixel differs when a channel is off by more than <see cref="Threshold"/>, and a page passes when no more than <see cref="MaxDifferingFraction"/> of its pixels differ.</summary>
+internal sealed record Tolerance(int Threshold = 48, double MaxDifferingFraction = 0.02);
+
+/// <summary>Renders each page of a test's PDF as PDFium's test tool does (one pixel per point, white background, annotations and form fields drawn) and compares it with the expectation.</summary>
+internal sealed class Evaluator(Tolerance tolerance, string? dumpDirectory = null)
+{
+    public TestResult Evaluate(CorpusTest test)
+    {
+        byte[] pdf;
+        try
+        {
+            pdf = Corpus.LoadPdf(test);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or KeyNotFoundException or FormatException)
+        {
+            return new TestResult(Outcome.Skipped, "template: " + e.Message);
+        }
+
+        PdfPageSource source;
+        try
+        {
+            source = PdfPageSource.Open(pdf);
+        }
+        catch (PdfPasswordException)
+        {
+            return new TestResult(Outcome.Skipped, "needs a password");
+        }
+        catch (Exception e)
+        {
+            return new TestResult(Outcome.Fail, "error: open: " + Short(e));
+        }
+
+        var blank = false;
+        for (var page = 0; page < test.ExpectedPages.Count; page++)
+        {
+            var expected = RgbaImage.FromPng(File.ReadAllBytes(test.ExpectedPages[page]));
+            if (expected is null)
+                return new TestResult(Outcome.Skipped, $"page {page}: expectation is not a readable PNG");
+            if (page >= source.PageCount)
+                return new TestResult(Outcome.Fail, $"page {page}: the document has {source.PageCount} pages");
+
+            RgbaImage actual;
+            try
+            {
+                actual = Render(source, page);
+            }
+            catch (Exception e)
+            {
+                return new TestResult(Outcome.Fail, $"error: page {page}: {Short(e)}");
+            }
+
+            Dump(test, page, expected, actual);
+            if (actual.Compare(expected, tolerance.Threshold) is not { } d)
+                return new TestResult(Outcome.Fail, $"page {page}: size {actual.Width}x{actual.Height}, expected {expected.Width}x{expected.Height}");
+
+            var fraction = d.Differing / (double)Math.Max(1, actual.Width * actual.Height);
+            if (fraction > tolerance.MaxDifferingFraction)
+                return new TestResult(Outcome.Fail, $"page {page}: {fraction:P2} of pixels differ (mean {d.MeanDifference:0.0})");
+            if (actual.IsBlank() && !expected.IsBlank())
+                blank = true;
+        }
+
+        return blank ? new TestResult(Outcome.Blank, "nothing was painted") : new TestResult(Outcome.Pass);
+    }
+
+    /// <summary>One pixel per point, as <c>pdfium_test</c> at its default scale: the size is the page's size in points, truncated.</summary>
+    internal static RgbaImage Render(PdfPageSource source, int page)
+    {
+        var (w, h) = source.GetPageSize(page);
+        int width = Math.Max(1, (int)w), height = Math.Max(1, (int)h);
+        using var canvas = new RasterRenderContext().CreateCanvas(width, height);
+        canvas.DrawRectangle(canvas.GetSolidBrush(PaintColor.FromArgb(255, 255, 255, 255)), 0, 0, width, height);
+        source.Paint(page, canvas, PdfAnnotationPaint.All);
+        var buffer = canvas.ToPixelBuffer();
+        return new RgbaImage(buffer.Width, buffer.Height, buffer.PremultipliedRgba.ToArray());
+    }
+
+    private void Dump(CorpusTest test, int page, RgbaImage expected, RgbaImage actual)
+    {
+        if (string.IsNullOrEmpty(dumpDirectory))
+            return;
+        var stem = Path.Combine(dumpDirectory, test.Id.Replace('/', Path.DirectorySeparatorChar));
+        Directory.CreateDirectory(Path.GetDirectoryName(stem)!);
+        File.WriteAllBytes($"{stem}.{page}.peach.png", actual.ToPng());
+        File.WriteAllBytes($"{stem}.{page}.pdfium.png", expected.ToPng());
+    }
+
+    private static string Short(Exception e)
+    {
+        var text = $"{e.GetType().Name}: {e.Message}".ReplaceLineEndings(" ");
+        return text.Length > 140 ? text[..140] : text;
+    }
+}

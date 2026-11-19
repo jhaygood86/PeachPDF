@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Renders PDFium's own pixel-test PDFs through PeachDrawing.PDF's import path (PdfPageSource) onto a PeachDrawing raster canvas and compares
+    each page with the PNG PDFium's test suite checked in for it. The corpus is fetched at the commit pinned in pdfium/PDFIUM_COMMIT, never vendored.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Description>Renders PDFium's pixel-test corpus through PeachDrawing.PDF and gates it on a committed pass-count floor.</Description>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Public API only, the way a package consumer uses the reader. -->
+    <ProjectReference Include="..\..\drawing\PeachDrawing.PDF\PeachDrawing.PDF.csproj" />
+    <ProjectReference Include="..\..\drawing\PeachDrawing\PeachDrawing.csproj" />
+    <PackageReference Include="PeachImage" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="PeachDrawing.PDF.PdfiumRunner.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="pdfium\PDFIUM_COMMIT" Link="PDFIUM_COMMIT">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+</Project>
