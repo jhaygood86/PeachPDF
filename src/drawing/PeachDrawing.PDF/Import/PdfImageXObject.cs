@@ -40,7 +40,7 @@ internal static class PdfImageXObject
         if (decoded.ImageFilter == "JPXDecode")
         {
             if (stencil) { why = "JPX stencil mask"; return null; }
-            return FromJpx(doc, image, context, decoded.Data, out why);
+            return FromJpx(doc, image, resources, context, decoded.Data, out why);
         }
         bool bilevel = decoded.ImageFilter is "CCITTFaxDecode" or "JBIG2Decode";
         if (bilevel)
@@ -289,7 +289,7 @@ internal static class PdfImageXObject
     }
 
     /// <summary>A JPEG 2000 image: decoded to RGBA (the codestream carries its own color), then given the image's soft or stencil mask.</summary>
-    static Image? FromJpx(PdfSourceDocument doc, PdfDictionary image, RenderContext context, byte[] jpx, out string? why)
+    static Image? FromJpx(PdfSourceDocument doc, PdfDictionary image, PdfDictionary? resources, RenderContext context, byte[] jpx, out string? why)
     {
         why = null;
         byte[] rgba;
@@ -312,6 +312,46 @@ internal static class PdfImageXObject
         {
             why = "image data could not be decoded";
             return null;
+        }
+
+        // An Indexed /ColorSpace makes the codestream's single component a palette index (PDF 8.9.5.1), not a gray level. The decoder scaled
+        // the index to 8 bits and the dictionary's /BitsPerComponent does not apply to JPEG 2000 (the codestream carries its own depth), so
+        // the depth is the smallest of 1, 2, 4 and 8 bits whose levels hold every value decoded.
+        if (PdfColorSpace.Resolve(doc, image.GetRaw("ColorSpace"), resources) is { Name: "Indexed" } indexed)
+        {
+            // The file's own palette box (a JP2 can carry one) is not applied: the components are the indices.
+            try
+            {
+                if (PeachImage.Image.TryLoad(new MemoryStream(jpx), out var raw, new PeachImage.Formats.Jpeg2000.Jpeg2000DecoderOptions { IgnoreColorSpace = true, TargetPixelFormat = PeachImage.PixelFormat.Rgba32 }) && raw is not null)
+                {
+                    using (raw)
+                    {
+                        if (raw.Width == width && raw.Height == height) rgba = raw.PixelMemory.Span.ToArray();
+                    }
+                }
+            }
+            catch (Exception)
+            {
+                // The decode that already worked stands.
+            }
+
+            var seen = new HashSet<byte>();
+            for (int i = 0; i < rgba.Length; i += 4) seen.Add(rgba[i]);
+            int bits = 8;
+            foreach (int candidate in new[] { 1, 2, 4 })
+            {
+                double step = 255.0 / ((1 << candidate) - 1);
+                if (System.Linq.Enumerable.All(seen, v => Math.Abs(v - Math.Round(v / step) * step) < 0.6)) { bits = candidate; break; }
+            }
+
+            double unit = 255.0 / ((1 << bits) - 1);
+            var palette = new Dictionary<int, (byte R, byte G, byte B)>();
+            for (int i = 0; i < rgba.Length; i += 4)
+            {
+                int index = (int)Math.Round(rgba[i] / unit);
+                if (!palette.TryGetValue(index, out var color)) palette[index] = color = indexed.ToColor([index], 1).ToRgb();
+                (rgba[i], rgba[i + 1], rgba[i + 2]) = color;
+            }
         }
 
         // The codestream's own alpha channel counts only when the dictionary asks for it (/SMaskInData).
