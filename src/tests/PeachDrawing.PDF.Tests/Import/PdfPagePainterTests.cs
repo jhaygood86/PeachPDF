@@ -295,6 +295,21 @@ namespace PeachDrawing.PDF.Tests.Import
         }
 
         [Fact]
+        public void StencilMask_PaintedWithAPattern_TakesTheColorsOfThePattern()
+        {
+            // A 2x2 stencil paints its top-left and bottom-right pixels (sample 0 paints); the pattern is a red-to-blue gradient across the page,
+            // so the left pixel comes out red and the right one blue, and the unpainted pixels stay clear. Painted in a plain color it was black.
+            var mask = TestPdf.Stream("/Type /XObject /Subtype /Image /Width 2 /Height 2 /ImageMask true /BitsPerComponent 1", TestPdf.Binary([0x40, 0x80]));
+            var pattern = $"<< /PatternType 2 /Shading {AxialShading()} >>";
+            var pdf = Pdf("/Pattern cs /P0 scn 100 0 0 100 0 0 cm /Im0 Do", resources: "/Pattern << /P0 5 0 R >> /XObject << /Im0 6 0 R >>", extraObjects: pattern + "|||" + mask);
+
+            AssertNear((250, 0, 5, 255), Px(pdf, 25, 25), 60);           // top left: the red end
+            Assert.InRange(Px(pdf, 75, 25).A, 0, 8);
+            Assert.InRange(Px(pdf, 25, 75).A, 0, 8);
+            AssertNear((5, 0, 250, 255), Px(pdf, 75, 75), 60);           // bottom right: the blue end
+        }
+
+        [Fact]
         public void ImageMask_FinerThanItsImage_KeepsTheMasksDetail()
         {
             // A 1x1 red image under a 4x1 stencil whose samples are 0 1 0 1 (1 = masked out): the picture has its edges where the mask does.

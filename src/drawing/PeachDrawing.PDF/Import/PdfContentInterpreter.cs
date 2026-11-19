@@ -177,14 +177,14 @@ internal sealed class PdfContentInterpreter
     State Cur => _stack[^1];
 
     /// <summary>Interprets <paramref name="content"/> with <paramref name="resources"/> as the resource dictionary in effect.</summary>
-    public void Run(byte[] content, PdfDictionary? resources)
+    public void Run(byte[] content, PdfDictionary? resources, bool keepPatternSpace = false)
     {
         var lx = new PdfLexer(content);
         var operands = new List<PdfItem>();
         int baseDepth = _stack.Count;
         // A pattern's space is the default space of the stream that uses it: here, the current transform at the stream's start.
         var savedBase = _streamBase;
-        _streamBase = Cur.Ctm;
+        if (!keepPatternSpace) _streamBase = Cur.Ctm;
         int baseMarks = _markedContent.Count;
         while (true)
         {
@@ -605,7 +605,8 @@ internal sealed class PdfContentInterpreter
                     {
                         Transform(matrix);
                         _path = null;
-                        Run(_doc.DecodeStream(proc).Data, font.Resources ?? res);
+                        // A glyph painted with a pattern takes it from the stream that showed the text, not from the glyph's own space.
+                        Run(_doc.DecodeStream(proc).Data, font.Resources ?? res, keepPatternSpace: st.FillPattern is not null);
                     }
                     finally
                     {
@@ -1337,6 +1338,8 @@ internal sealed class PdfContentInterpreter
         // An image is drawn with its pixels showing unless it asks to be smoothed (/Interpolate, PDF 8.9.5.3).
         image.Interpolate = _doc.Resolve(x.GetRaw("Interpolate") ?? x.GetRaw("I")) is PdfBoolean { Value: true };
 
+        if (stencil && Cur.FillPattern is not null && TryPaintStencilWithPattern(image, res)) return;
+
         // The unit square has the image's top edge at y = 1; the canvas draws an image upright in y-down space, so flip into it.
         _canvas.PushTransform(new Matrix3x2(1, 0, 0, -1, 0, 1));
         try
@@ -1346,6 +1349,57 @@ internal sealed class PdfContentInterpreter
             else _canvas.DrawImage(image, unit);
         }
         finally { _canvas.PopTransform(); }
+    }
+
+    const int MaxStencilPatternPixels = 1 << 20;
+
+    /// <summary>
+    /// Paints an image mask in a pattern rather than a color (PDF 8.9.6.2): the pixels the mask paints become a clip in the unit square, and the
+    /// pattern fills the square through it. Rows are drawn a hair taller than a pixel so that neighboring runs do not show a seam where the clip
+    /// is anti-aliased. Returns false (the mask is drawn in the pattern's plain color, as before) for a mask over a million pixels, whose runs
+    /// would make a path too large to be worth it, or an image that cannot be read back.
+    /// </summary>
+    bool TryPaintStencilWithPattern(Image image, PdfDictionary? res)
+    {
+        if (image.Width * image.Height > MaxStencilPatternPixels || image.GetPixels() is not { } pixels) return false;
+        int w = pixels.Width, h = pixels.Height;
+        var rgba = pixels.PremultipliedRgba.Span;
+        var clip = _canvas.GetGraphicsPath();
+        bool any = false;
+        const double Overlap = 0.02;
+        for (int y = 0; y < h; y++)
+        {
+            double top = 1 - (y + 1 + Overlap) / h, bottom = 1 - (y - Overlap) / h;
+            for (int x = 0; x < w;)
+            {
+                if (rgba[(y * w + x) * 4 + 3] == 0) { x++; continue; }
+                int start = x;
+                while (x < w && rgba[(y * w + x) * 4 + 3] != 0) x++;
+                double left = start / (double)w, right = x / (double)w;
+                clip.Start(left, bottom);
+                clip.LineTo(right, bottom);
+                clip.LineTo(right, top);
+                clip.LineTo(left, top);
+                clip.CloseFigure();
+                any = true;
+            }
+        }
+
+        if (!any) return true;
+        _shadingRegion = null;
+        var brush = BrushFor(fill: true, res);
+        if (brush is null) return false;
+        var region = TakeShadingRegion();
+        _canvas.PushClip(clip);
+        if (region is not null) _canvas.PushClip(region);
+        try { _canvas.DrawRectangle(brush, 0, 0, 1, 1); }
+        finally
+        {
+            if (region is not null) _canvas.PopClip();
+            _canvas.PopClip();
+        }
+
+        return true;
     }
 
     void DoXObject(List<PdfItem> o, PdfDictionary? res)
