@@ -53,6 +53,28 @@ namespace PeachDrawing.PDF.Tests.Import
         }
 
         [Fact]
+        public void FilledLine_HasNoArea_ButIsDrawnAsAOnePixelLineInTheFillColor()
+        {
+            // Filling a path that is only a line paints nothing by the letter of the specification; a viewer shows it as a hairline.
+            var pdf = Pdf("0 0 1 rg 10 50 m 90 50 l f");
+
+            var hit = Enumerable.Range(48, 4).Select(y => Px(pdf, 50, y)).Any(p => p.B > 100 && p.A > 100 && p.R < 60);
+            Assert.True(hit, "a blue pixel lies on the line (a pixel-wide line on a pixel boundary is two half-covered rows)");
+            Assert.Equal(0, Px(pdf, 50, 40).A);                          // and only on the line
+        }
+
+        [Fact]
+        public void FilledSliverNarrowerThanAQuarterPixel_IsDrawnAsAHairline_AWiderRuleIsNot()
+        {
+            var sliver = Pdf("1 0 0 rg 10 30 80 0.01 re f");
+            var rule = Pdf("1 0 0 rg 10 30 80 0.5 re f");
+
+            Assert.True(Enumerable.Range(68, 4).Select(y => Px(sliver, 50, y)).Any(p => p.R > 100 && p.A > 100), "the sliver shows as a line");
+            var weight = Enumerable.Range(68, 4).Max(y => Px(rule, 50, y).A);
+            Assert.InRange(weight, 100, 200);                            // a half-unit rule is an ordinary fill: half covered, not a full pixel
+        }
+
+        [Fact]
         public void ClipRestrictsLaterPaint_AndQRestoresIt()
         {
             var pdf = Pdf("q 0 0 20 20 re W n 0 0 1 rg 0 0 100 100 re f Q 0 1 0 rg 60 60 20 20 re f");

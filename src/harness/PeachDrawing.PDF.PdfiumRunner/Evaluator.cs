@@ -12,6 +12,9 @@ internal sealed record Tolerance(int Threshold = 48, double MaxDifferingFraction
 /// <summary>Renders each page of a test's PDF as PDFium's test tool does (one pixel per point, white background, annotations and form fields drawn) and compares it with the expectation.</summary>
 internal sealed class Evaluator(Tolerance tolerance, string? dumpDirectory = null)
 {
+    /// <summary>PDFium's ink below which a page is not judged by it: a pixel or two (a dot at a page corner) is noise, not content.</summary>
+    private const int MinimumInk = 16;
+
     public TestResult Evaluate(CorpusTest test)
     {
         byte[] pdf;
@@ -69,7 +72,7 @@ internal sealed class Evaluator(Tolerance tolerance, string? dumpDirectory = nul
             // A page can sit inside the pixel tolerance and still have lost what PDFium drew (a check mark on a small page), so a page with
             // under a quarter of PDFium's ink is blank, not a pass.
             int expectedInk = expected.InkPixels(tolerance.Threshold);
-            if (expectedInk > 0 && actual.InkPixels(tolerance.Threshold) * 4 < expectedInk)
+            if (expectedInk >= MinimumInk && actual.InkPixels(tolerance.Threshold) * 4 < expectedInk)
             {
                 blank = true;
                 blankWhy = Unsupported(unsupported);
@@ -88,12 +91,12 @@ internal sealed class Evaluator(Tolerance tolerance, string? dumpDirectory = nul
         canvas.DrawRectangle(canvas.GetSolidBrush(PaintColor.FromArgb(255, 255, 255, 255)), 0, 0, width, height);
         var unsupported = source.Paint(page, canvas, PdfAnnotationPaint.All);
 
-        // pdfium_test runs with a form-fill environment whose highlight color (0xFFE4DD, alpha 100, BGR) tints every field but push buttons and
-        // signatures; the expected images carry it, so the same tint is drawn here rather than counted as a difference.
+        // pdfium_test runs with a form-fill environment whose highlight color (0xFFE4DD, alpha 100, BGR) tints every field but push buttons, signatures
+        // and read-only fields; the expected images carry it, so the same tint is drawn here rather than counted as a difference.
         var highlight = canvas.GetSolidBrush(PaintColor.FromArgb(100, 221, 228, 255));
         foreach (var field in source.GetFormFields(page, 1))
         {
-            if (field.Kind is PdfFormFieldKind.PushButton or PdfFormFieldKind.Signature)
+            if (field.Kind is PdfFormFieldKind.PushButton or PdfFormFieldKind.Signature || field.ReadOnly)
                 continue;
             canvas.DrawRectangle(highlight, field.Bounds.X, field.Bounds.Y, field.Bounds.Width, field.Bounds.Height);
         }

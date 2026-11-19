@@ -133,6 +133,36 @@ namespace PeachDrawing.PDF.Tests.Import
         }
 
         [Fact]
+        public void Link_DrawsItsBorderInItsColor_AndAZeroWidthMeansNone()
+        {
+            var framed = Render("<< /Type /Annot /Subtype /Link /Rect [20 20 80 60] /Border [0 0 2] /C [0 0 1] /A << /S /URI /URI (http://a.test/) >> >>");
+            var none = Render("<< /Type /Annot /Subtype /Link /Rect [20 20 80 60] /Border [0 0 0] /A << /S /URI /URI (http://a.test/) >> >>");
+
+            Assert.Equal((0, 0, 255, 255), framed[50, 41]);               // the top edge of the frame (page y 60 is canvas row 40; the line is 2 wide)
+            Assert.Equal(0, framed[50, 55].A);                           // the inside is left alone
+            Assert.Equal(0, none[50, 41].A);
+        }
+
+        [Fact]
+        public void Link_WithNoBorderEntry_GetsTheDefaultOnePointBlackFrame()
+        {
+            var p = Render("<< /Type /Annot /Subtype /Link /Rect [20 20 80 60] /A << /S /URI /URI (http://a.test/) >> >>");
+
+            Assert.True(Ink(p, 20, 39, 80, 43) > 40, "a black line runs along the top edge");
+        }
+
+        [Fact]
+        public void Link_DashedBorder_HasGaps()
+        {
+            var p = Render("<< /Type /Annot /Subtype /Link /Rect [10 40 90 60] /BS << /W 2 /S /D /D [4 4] >> /C [0 0 0] >>");
+
+            int on = 0, off = 0;
+            for (int x = 12; x < 88; x++)
+                if (p[x, 59].A > 100 || p[x, 60].A > 100 || p[x, 40].A > 100 || p[x, 41].A > 100) on++; else off++;
+            Assert.True(on > 10 && off > 10, $"{on} inked and {off} clear columns along the top edge");
+        }
+
+        [Fact]
         public void AnnotationWithItsOwnAppearance_IsNotRemade()
         {
             var appearance = TestPdf.Stream("/Type /XObject /Subtype /Form /BBox [0 0 40 20]", "0 1 0 rg 0 0 40 20 re f");

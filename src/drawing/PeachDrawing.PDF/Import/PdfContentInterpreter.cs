@@ -1257,7 +1257,11 @@ internal sealed class PdfContentInterpreter
                 var brush = BrushFor(fill: true, res);
                 var region = brush is null ? null : TakeShadingRegion();
                 if (region is not null) _canvas.PushClip(region);
-                try { if (brush is not null) _canvas.DrawPath(brush, path); }
+                try
+                {
+                    if (brush is not null && !TryFillThinAsHairline(path))
+                        _canvas.DrawPath(brush, path);
+                }
                 finally { if (region is not null) _canvas.PopClip(); }
             }
         }
@@ -1272,6 +1276,45 @@ internal sealed class PdfContentInterpreter
             Cur.Pushes.Add(new(Push.Clip, _canvas));
         }
         _pendingClip = null;
+    }
+
+    /// <summary>
+    /// A fill whose shape has no area to speak of (a line, or a sliver narrower than a quarter of a pixel) paints nothing by the letter of
+    /// the specification, and a viewer draws it as a one pixel line in the fill color anyway, so that a path an author meant to be seen is
+    /// not lost to rounding. Only on a canvas of pixels and for a plain color: a PDF canvas keeps the file's own paths, and a pattern has no
+    /// single color to draw the line in. Returns true when it drew the line.
+    /// </summary>
+    bool TryFillThinAsHairline(GraphicsPath path)
+    {
+        if (_canvas.RenderContext is PdfRenderContext || Cur.FillSpace.IsPattern || Cur.FillPattern is not null) return false;
+        var toDevice = _canvas.CurrentTransform;
+        double pixel = Math.Sqrt(Math.Abs((double)toDevice.M11 * toDevice.M22 - (double)toDevice.M12 * toDevice.M21));
+        if (!(pixel > 0)) return false;
+
+        double area = 0, perimeter = 0;
+        var contours = path.Flatten(0.25 / pixel);
+        if (contours.Count == 0) return false;
+        foreach (var contour in contours)
+        {
+            var points = contour.Points;
+            double twice = 0;
+            for (int i = 0; i < points.Count; i++)
+            {
+                var a = points[i];
+                var b = points[(i + 1) % points.Count];
+                twice += a.X * b.Y - b.X * a.Y;
+                perimeter += Math.Sqrt((b.X - a.X) * (b.X - a.X) + (b.Y - a.Y) * (b.Y - a.Y));
+            }
+
+            area += Math.Abs(twice) / 2;
+        }
+
+        // The mean width of the shape (twice its area over its perimeter) against a quarter of a pixel; a point has no perimeter and no line.
+        if (!(perimeter > 0) || 2 * area / perimeter * pixel >= 0.25) return false;
+        var pen = _canvas.GetPen(Cur.FillSpace.ToColor(Cur.Fill, Cur.FillAlpha));
+        pen.Width = 1 / pixel;
+        _canvas.DrawPath(pen, path);
+        return true;
     }
 
     // ---------------------------------------------------------------- XObjects

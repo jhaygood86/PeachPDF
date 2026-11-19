@@ -92,7 +92,7 @@ internal static class PdfAppearance
         {
             if (doc.Resolve(item) is not PdfDictionary annot) continue;
             var subtype = doc.NameOf(annot.GetRaw("Subtype"));
-            if (subtype is null or "/Link" or "/Popup") continue;
+            if (subtype is null or "/Popup") continue;
             // A widget that is carried as a form field is not drawn here; one that cannot be (a push button, a signature) always is.
             if (subtype == "/Widget" && !includeWidgets && PdfSourceForms.KindOf(doc, annot) is not null) continue;
             int flags = doc.IntOf(annot.GetRaw("F"));

@@ -132,14 +132,14 @@ public sealed class RunnerTests : IDisposable
     [Fact]
     public void Evaluate_ABlankPageWhereInkIsExpected_IsBlankNotAPass()
     {
-        // An all-white page against an expectation with a small mark: within the tolerance by pixel count, so only the blank check catches it.
+        // An all-white page against an expectation with a small mark (20 pixels, past the minimum the ink rule judges): the tolerance here is wide, so only the blank check catches it.
         var pixels = new byte[20 * 20 * 4];
         Array.Fill(pixels, (byte)255);
-        for (var i = 0; i < 2; i++)
+        for (var i = 0; i < 20; i++)
             (pixels[i * 4], pixels[i * 4 + 1], pixels[i * 4 + 2]) = (0, 0, 0);
         Write("white", Template("1 1 1"), new RgbaImage(20, 20, pixels).ToPng());
 
-        var result = new Evaluator(new Tolerance()).Evaluate(Corpus.Discover(_root).Single());
+        var result = new Evaluator(new Tolerance(Threshold: 48, MaxDifferingFraction: 0.5)).Evaluate(Corpus.Discover(_root).Single());
 
         Assert.Equal(Outcome.Blank, result.Outcome);
     }

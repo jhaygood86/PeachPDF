@@ -23,6 +23,7 @@ internal static partial class PdfAppearanceSynthesizer
         {
             "/Highlight" or "/Underline" or "/StrikeOut" or "/Squiggly" => TextMarkup(doc, annot),
             "/Widget" => Widget(doc, annot, context),
+            "/Link" => LinkBorder(doc, annot),
             _ => null,
         };
     }
@@ -55,6 +56,48 @@ internal static partial class PdfAppearanceSynthesizer
             3 => values + (fill ? " rg " : " RG "),
             _ => values + (fill ? " k " : " K "),
         };
+    }
+
+    // ---------------------------------------------------------------- link border
+
+    /// <summary>
+    /// The border of a link annotation (PDF 12.5.2): a rectangle in the <c>/C</c> color (black without one), as wide as <c>/BS /W</c> or the
+    /// third number of <c>/Border</c> says (1 without either), dashed by <c>/BS /D</c> or the fourth entry of <c>/Border</c>. A width of zero
+    /// draws nothing, which is how most producers say a link has no frame.
+    /// </summary>
+    static Result? LinkBorder(PdfSourceDocument doc, PdfDictionary annot)
+    {
+        if (doc.ArrayOf(annot, "Rect") is not { Elements.Count: >= 4 } rect)
+            return null;
+        double width = 1;
+        PdfArray? dash = null;
+        if (doc.DictOf(annot, "BS") is { } bs)
+        {
+            if (bs.ContainsKeyRaw("W")) width = doc.NumberOf(bs.GetRaw("W"), 1);
+            if (doc.NameOf(bs.GetRaw("S")) == "/D") dash = doc.ArrayOf(bs, "D") ?? ParseArray(doc, "[3]");
+        }
+        else if (doc.ArrayOf(annot, "Border") is { Elements.Count: >= 3 } border)
+        {
+            width = doc.NumberOf(border.Elements[2], 1);
+            if (border.Elements.Count >= 4 && doc.Resolve(border.Elements[3]) is PdfArray { Elements.Count: > 0 } pattern) dash = pattern;
+        }
+
+        if (!(width > 0)) return null;
+        double x0 = Math.Min(doc.NumberOf(rect.Elements[0]), doc.NumberOf(rect.Elements[2])), y0 = Math.Min(doc.NumberOf(rect.Elements[1]), doc.NumberOf(rect.Elements[3]));
+        double w = Math.Abs(doc.NumberOf(rect.Elements[2]) - doc.NumberOf(rect.Elements[0])), h = Math.Abs(doc.NumberOf(rect.Elements[3]) - doc.NumberOf(rect.Elements[1]));
+        if (!(w > width) || !(h > width)) return null;
+
+        var content = new StringBuilder(ColorOperator(doc, annot.GetRaw("C"), fill: false, "0 0 0 RG "));
+        content.Append($"{Num(width)} w ");
+        if (dash is not null) content.Append('[').Append(string.Join(' ', System.Linq.Enumerable.Select(dash.Elements, e => Num(doc.NumberOf(e))))).Append("] 0 d ");
+        content.Append($"{Num(x0 + width / 2)} {Num(y0 + width / 2)} {Num(w - width)} {Num(h - width)} re S\n");
+        return Build(doc, content.ToString(), null);
+    }
+
+    static PdfArray ParseArray(PdfSourceDocument doc, string text)
+    {
+        var lexer = new PdfLexer(Encoding.Latin1.GetBytes(text));
+        return (PdfArray)doc.ParseItem(lexer, lexer.Next());
     }
 
     // ---------------------------------------------------------------- text markup
