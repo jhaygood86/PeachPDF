@@ -49,6 +49,18 @@ internal sealed class PdfColorSpace
     /// <summary>The colour a space starts with (ISO 32000-1, 8.6.5).</summary>
     public double[] Initial { get; }
 
+    /// <summary>
+    /// The range each component's stored value spans, as (min, max) pairs: how an image sample or an Indexed palette byte is read when no
+    /// <c>/Decode</c> says otherwise (PDF 8.9.5.2). Null for 0..1 in every component; a Lab space spans 0..100 and its own a and b ranges.
+    /// </summary>
+    public double[]? DefaultDecode { get; private init; }
+
+    /// <summary>Where component <paramref name="i"/> starts when its stored value is at the bottom of its range.</summary>
+    public double DecodeMin(int i) => DefaultDecode is { } d && d.Length >= i * 2 + 2 ? d[i * 2] : 0;
+
+    /// <summary>Where component <paramref name="i"/> ends when its stored value is at the top of its range.</summary>
+    public double DecodeMax(int i) => DefaultDecode is { } d && d.Length >= i * 2 + 2 ? d[i * 2 + 1] : 1;
+
     static byte Byte(double v) => (byte)Math.Round(Math.Clamp(v, 0, 1) * 255);
 
     static int Alpha(double a) => (int)Math.Round(Math.Clamp(a, 0, 1) * 255);
@@ -178,7 +190,8 @@ internal sealed class PdfColorSpace
             for (int i = 0; i < n; i++)
             {
                 int pos = idx * n + i;
-                comps[i] = pos < table.Length ? table[pos] / 255.0 : 0;
+                double stored = pos < table.Length ? table[pos] / 255.0 : 0;
+                comps[i] = baseSpace.DecodeMin(i) + stored * (baseSpace.DecodeMax(i) - baseSpace.DecodeMin(i));
             }
             return baseSpace.ToColor(comps, a);
         }, [0]);
@@ -208,6 +221,9 @@ internal sealed class PdfColorSpace
             double b = d65 ? 0.0557 * x - 0.2040 * y + 1.0570 * z : 0.0720 * x - 0.2290 * y + 1.4057 * z;
             static double Gamma(double v) => v <= 0.0031308 ? 12.92 * v : 1.055 * Math.Pow(v, 1 / 2.4) - 0.055;
             return PaintColor.FromArgb(Alpha(a), Byte(Gamma(r)), Byte(Gamma(g)), Byte(Gamma(b)));
-        }, [0, 0, 0]);
+        }, [0, 0, 0])
+        {
+            DefaultDecode = [0, 100, range[0], range[1], range[2], range[3]],
+        };
     }
 }

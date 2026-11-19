@@ -45,6 +45,32 @@ namespace PeachDrawing.PDF.Tests.Import
             Near((255, 255, 255), Fill("/CS0 cs 1 sc", "/ColorSpace << /CS0 [/ICCBased 5 0 R] >>", icc).Pixel);
         }
 
+        [Theory]
+        [InlineData(0, 255, 255, 255)]      // palette entry 0 is FF 80 80: L = 100, a and b near 0
+        [InlineData(1, 119, 119, 119)]      // entry 1 is 80 80 80: L about 50
+        public void IndexedPaletteOverLab_ReadsItsBytesAcrossLabsOwnRanges(int index, int r, int g, int b)
+        {
+            const string space = "/ColorSpace << /CS0 [/Indexed [/Lab << /WhitePoint [0.9505 1 1.089] /Range [-128 127 -128 127] >>] 1 <FF8080808080>] >>";
+
+            Near((r, g, b), Fill($"/CS0 cs {index} sc", space).Pixel, 8);
+        }
+
+        [Fact]
+        public void LabImage_ReadsItsSamplesAcrossLabsOwnRanges()
+        {
+            // One pixel, three 8-bit samples FF 80 80: L = 100 and a, b near 0, which is white (not the near-black of L = 1).
+            var image = TestPdf.Stream("/Type /XObject /Subtype /Image /Width 1 /Height 1 /BitsPerComponent 8 " +
+                "/ColorSpace [/Lab << /WhitePoint [0.9505 1 1.089] /Range [-128 127 -128 127] >>]", TestPdf.Binary([0xFF, 0x80, 0x80]));
+
+            var doc = PdfSourceDocument.Open(TestPdf.Build("100 0 0 100 0 0 cm /Im0 Do", resources: "/XObject << /Im0 5 0 R >>", extraObjects: image));
+            using var canvas = new RasterRenderContext().CreateCanvas(100, 100);
+            PdfPagePainter.Paint(doc, doc.Pages[0], canvas);
+            var span = canvas.ToPixelBuffer().PremultipliedRgba.Span;
+            var i = (50 * 100 + 50) * 4;
+
+            Near((255, 255, 255), (span[i], span[i + 1], span[i + 2], span[i + 3]), 8);
+        }
+
         [Fact]
         public void LabSpace_ConvertsThroughXyzToRgb()
         {

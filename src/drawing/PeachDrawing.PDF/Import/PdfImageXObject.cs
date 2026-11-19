@@ -142,8 +142,8 @@ internal static class PdfImageXObject
                     int bitPos = (x * comps + c) * bpc;
                     int v = ReadSample(data, rowStart, bitPos, bpc);
                     raw[c] = v;
-                    double d0 = decode is not null && decode.Length >= c * 2 + 2 ? decode[c * 2] : 0;
-                    double d1 = decode is not null && decode.Length >= c * 2 + 2 ? decode[c * 2 + 1] : (indexed ? max : 1);
+                    double d0 = decode is not null && decode.Length >= c * 2 + 2 ? decode[c * 2] : space.DecodeMin(c);
+                    double d1 = decode is not null && decode.Length >= c * 2 + 2 ? decode[c * 2 + 1] : (indexed ? max : space.DecodeMax(c));
                     samples[c] = indexed ? d0 + v * (d1 - d0) / max : d0 + v / max * (d1 - d0);
                 }
                 var color = space.ToColor(samples, 1);
