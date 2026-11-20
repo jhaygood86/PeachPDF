@@ -12,8 +12,18 @@
 
   <!-- Runtime async (the runtime, not the compiler, suspends and resumes async methods) only exists on the
        .NET 11 runtime, so it is on for net11.0 targets only; net10.0 keeps the compiler's state machines. -->
-  <PropertyGroup Condition="$(TargetFramework.StartsWith('net11.0'))">
+  <PropertyGroup Condition="$(TargetFramework.StartsWith('net11.0')) And '$(PeachRuntimeAsync)' != 'false'">
     <Features>$(Features);runtime-async=on</Features>
+  </PropertyGroup>
+
+  <!-- A host whose runtime cannot execute runtime-async methods (the Blazor WebAssembly demo: the browser's
+       interpreter throws InvalidProgramException on the first one) passes PeachRuntimeAsync=false to its
+       ProjectReferences, which still build for net11.0, just without the flag. It is a global property, so it
+       reaches every project the reference pulls in; those builds get their own obj/bin so they never overwrite
+       the runtime-async build of the same project that the tests and other hosts use. -->
+  <PropertyGroup Condition="'$(PeachRuntimeAsync)' == 'false'">
+    <IntermediateOutputPath>obj\no-runtime-async\$(Configuration)\</IntermediateOutputPath>
+    <OutputPath>bin\no-runtime-async\$(Configuration)\</OutputPath>
   </PropertyGroup>
 
   <!-- IDE hosts that ignore global.json would otherwise fail later with an obscure NETSDK1045. -->
