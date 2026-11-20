@@ -2745,6 +2745,15 @@ namespace PeachBrackets.Html.Dom
 
             var computed = new Dictionary<CssBox, double>(targetRows.Count);
 
+            // css-tables-3 "distribute extra height to the rows": a row holding a percentage-height
+            // cell is served its share of the table's height first, capped so the other rows keep their
+            // content height; only what is left is spread over the remaining (auto) rows.
+            if (!_isVertical && TryDistributeToPercentageRows(targetRows, naturalHeights, resolvedSize, surplus, computed))
+            {
+                floors = computed;
+                return true;
+            }
+
             if (totalNatural > 0)
             {
                 for (var i = 0; i < targetRows.Count; i++)
@@ -2765,6 +2774,76 @@ namespace PeachBrackets.Html.Dom
             }
 
             floors = computed;
+            return true;
+        }
+
+        /// <summary>
+        /// Serves the rows whose cells state a percentage <c>height</c> their share of
+        /// <paramref name="tableSize"/> before the surplus is spread over the other rows. Each such row
+        /// takes the largest percentage among its single-row cells, capped so the rows after it keep their
+        /// natural height (and never below its own). Returns false when no row states a percentage, leaving
+        /// the proportional spread to the caller.
+        /// </summary>
+        private bool TryDistributeToPercentageRows(
+            List<CssBox> rows, double[] naturalHeights, double tableSize, double surplus,
+            Dictionary<CssBox, double> computed)
+        {
+            var wanted = new double[rows.Count];
+            var anyPercentage = false;
+
+            for (var i = 0; i < rows.Count; i++)
+            {
+                wanted[i] = double.NaN;
+                foreach (var cell in rows[i].Boxes)
+                {
+                    if (!cell.IsTableCell || cell is CssSpacingBox || GetRowSpan(cell) > 1) continue;
+                    if (!CssValueParser.IsValidLength(cell.Height) || !CssValueParser.DependsOnPercentage(cell.Height)) continue;
+
+                    var target = CssValueParser.ParseLength(cell.Height, tableSize, cell);
+                    wanted[i] = double.IsNaN(wanted[i]) ? target : Math.Max(wanted[i], target);
+                    anyPercentage = true;
+                }
+            }
+
+            if (!anyPercentage) return false;
+
+            var totalNatural = naturalHeights.Sum();
+            var budget = totalNatural + surplus;
+            var assigned = new double[rows.Count];
+            var remainingNatural = totalNatural;
+            var used = 0d;
+
+            for (var i = 0; i < rows.Count; i++)
+            {
+                if (double.IsNaN(wanted[i])) continue;
+
+                remainingNatural -= naturalHeights[i];
+                var cap = budget - used - remainingNatural;
+                assigned[i] = Math.Max(naturalHeights[i], Math.Min(wanted[i], cap));
+                used += assigned[i];
+            }
+
+            // What the percentage rows did not take, shared by the auto rows in proportion to their
+            // natural height (evenly when all are empty), or by the percentage rows when there are none.
+            var autoRows = Enumerable.Range(0, rows.Count).Where(i => double.IsNaN(wanted[i])).ToList();
+            var autoNatural = autoRows.Sum(i => naturalHeights[i]);
+            var leftover = budget - used - autoNatural;
+
+            if (autoRows.Count > 0)
+            {
+                foreach (var i in autoRows)
+                {
+                    var share = autoNatural > 0 ? naturalHeights[i] / autoNatural : 1d / autoRows.Count;
+                    assigned[i] = naturalHeights[i] + Math.Max(0, leftover) * share;
+                }
+            }
+            else if (leftover > 0 && used > 0)
+            {
+                for (var i = 0; i < rows.Count; i++)
+                    assigned[i] += leftover * (assigned[i] / used);
+            }
+
+            for (var i = 0; i < rows.Count; i++) computed[rows[i]] = assigned[i];
             return true;
         }
 

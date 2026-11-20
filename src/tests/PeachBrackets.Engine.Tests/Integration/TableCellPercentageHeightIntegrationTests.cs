@@ -55,6 +55,49 @@ public class TableCellPercentageHeightIntegrationTests
         Assert.Equal(50, cell.ActualBottom - cell.Location.Y, 1);
     }
 
+    private static async Task<double[]> RowHeightsAsync(string cell1, string cell2, string cell3, string tableStyle = "height:300pt")
+    {
+        var (root, _) = await LayoutHarness.LayoutAsync(
+            LayoutHarness.Wrap(
+                $"<style>td{{padding:0}}</style><table id='t' style='border-spacing:0;width:100pt;{tableStyle}'>" +
+                $"<tr id='r1'><td {cell1}><div style='height:50pt'></div></td></tr>" +
+                $"<tr id='r2'><td {cell2}><div style='height:50pt'></div></td></tr>" +
+                $"<tr id='r3'><td {cell3}><div style='height:50pt'></div></td></tr></table>"),
+            pageWidth: 600, pageHeight: 600);
+        return new[] { "r1", "r2", "r3" }
+            .Select(id => LayoutHarness.FindById(root, id)!)
+            .Select(r => Math.Round(r.ActualBottom - r.Location.Y))
+            .ToArray();
+    }
+
+    [Fact]
+    public async Task APercentageCell_AtOneHundredPercent_TakesTheHeightTheOtherRowsLeave()
+    {
+        var h = await RowHeightsAsync("", "style='height:100%'", "");
+        Assert.Equal(new[] { 50d, 200d, 50d }, h);
+    }
+
+    [Fact]
+    public async Task APercentageCell_AtFiftyPercent_TakesItsShareAndTheRestIsSpread()
+    {
+        var h = await RowHeightsAsync("", "style='height:50%'", "");
+        Assert.Equal(new[] { 75d, 150d, 75d }, h);
+    }
+
+    [Fact]
+    public async Task TwoPercentageCells_AreServedInOrderAndCapped()
+    {
+        var h = await RowHeightsAsync("style='height:100%'", "style='height:100%'", "");
+        Assert.Equal(new[] { 200d, 50d, 50d }, h);
+    }
+
+    [Fact]
+    public async Task APercentageCell_InAnAutoHeightTable_StaysAtContentHeight()
+    {
+        var h = await RowHeightsAsync("", "style='height:100%'", "", tableStyle: "");
+        Assert.Equal(new[] { 50d, 50d, 50d }, h);
+    }
+
     [Fact]
     public async Task ACellsOwnPercentageHeight_ActsAsAutoEvenAgainstAnExplicitlyTallTable()
     {
