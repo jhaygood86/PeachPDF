@@ -27,6 +27,9 @@
       that way.
     -->
     <NoWarn>$(NoWarn);BL0016</NoWarn>
+    <!-- This project's own code too: the interpreter cannot run runtime-async methods (see the references below). -->
+    <Features>$(Features.Replace('runtime-async=on', ''))</Features>
+    <DisableTransitiveProjectReferences>true</DisableTransitiveProjectReferences>
   </PropertyGroup>
 
   <ItemGroup>
@@ -35,13 +38,28 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\PeachPDF\PeachPDF.csproj" />
+    <!--
+      Every library below still builds for net11.0, but without runtime-async (PeachRuntimeAsync=false, see
+      src/Directory.Build.props): that file compiles every net11.0 target with runtime-async=on, and the browser's
+      WebAssembly interpreter cannot execute those methods - Generate PDF threw an InvalidProgramException with an
+      empty message. A reference's AdditionalProperties reach only that reference's own build: the SDK resolves the
+      transitive references of a ProjectReference again with this project's properties, which would put the
+      runtime-async copy of each library into the app beside the good one. So the whole closure of PeachPDF is listed
+      here and transitive project references are switched off. A new library under PeachPDF must be added to this list.
+    -->
+    <ProjectReference Include="..\..\PeachPDF\PeachPDF.csproj" AdditionalProperties="PeachRuntimeAsync=false" />
+    <ProjectReference Include="..\..\engine\PeachBrackets\PeachBrackets.csproj" AdditionalProperties="PeachRuntimeAsync=false" />
+    <ProjectReference Include="..\..\drawing\PeachDrawing.PDF\PeachDrawing.PDF.csproj" AdditionalProperties="PeachRuntimeAsync=false" />
+    <ProjectReference Include="..\..\drawing\PeachDrawing\PeachDrawing.csproj" AdditionalProperties="PeachRuntimeAsync=false" />
+    <ProjectReference Include="..\..\drawing\PeachDrawing.Core\PeachDrawing.Core.csproj" AdditionalProperties="PeachRuntimeAsync=false" />
+    <ProjectReference Include="..\..\drawing\PeachDrawing.Text\PeachDrawing.Text.csproj" AdditionalProperties="PeachRuntimeAsync=false" />
+    <ProjectReference Include="..\..\drawing\PeachDrawing.Text.Data\PeachDrawing.Text.Data.csproj" />
     <!--
       Registers a pure-managed Brotli decoder at startup (see Program.cs) so the shared Unicode/hyphenation/
       dictionary data and WOFF2 fonts - both Brotli-compressed - decode here too: a browser has no Brotli decoder
       of its own, and System.IO.Compression.BrotliStream throws PlatformNotSupportedException in WebAssembly.
     -->
-    <ProjectReference Include="..\..\drawing\PeachDrawing.Text.Brotli\PeachDrawing.Text.Brotli.csproj" />
+    <ProjectReference Include="..\..\drawing\PeachDrawing.Text.Brotli\PeachDrawing.Text.Brotli.csproj" AdditionalProperties="PeachRuntimeAsync=false" />
   </ItemGroup>
 
   <!--
