@@ -7249,8 +7249,13 @@ namespace PeachBrackets.Html.Dom
                                 new LineBoxExtent(half + xHalf, half - xHalf), CumulativeRaiseOf(word.OwnerBox, blockBox)));
                             break;
                         default:
+                            // A text entry or drop-down sits on its line of text: its margin box reaches above the baseline by the margin, the border,
+                            // the padding and the centering above the text, and below it by the rest (AtomicInlineBaselineOf).
+                            var aboveBaseline = SitsOnItsTextLine(word.OwnerBox, line.OwnerBox) is { } textControl
+                                ? word.OwnerBox.ActualMarginTop + textControl.TextLineBaselineOffset(word.Height)
+                                : atomicHeight;
                             baselineExtent = baselineExtent.Union(RaisedBy(
-                                new LineBoxExtent(atomicHeight, 0), CumulativeRaiseOf(word.OwnerBox, blockBox)));
+                                new LineBoxExtent(aboveBaseline, atomicHeight - aboveBaseline), CumulativeRaiseOf(word.OwnerBox, blockBox)));
                             break;
                     }
                 }
@@ -7398,8 +7403,10 @@ namespace PeachBrackets.Html.Dom
                 // as one atomic unit via its own box-model machinery - applying this pre-shift too would
                 // double the top inset for it.
                 var laysOutAsAtomicBox = await LaysOutAsAnAtomicBox(g, b, box, coordinates.CurrentY);
+                // Nor does a replaced box (a form control): its border and padding are folded into its one phantom word's height, and its margin is added where
+                // AtomicInlineBaselineOf aligns it, so insetting its line again counted all three twice and grew the line past the box.
                 var appliesAtomicInset = b.DerivedStyle.ActualDisplay is Keywords.InlineBlock && !ReferenceEquals(b, box)
-                    && !laysOutAsAtomicBox;
+                    && !laysOutAsAtomicBox && !b.IsImage;
                 var clonesAtomicDecorations = appliesAtomicInset && b.BoxDecorationBreak.Value == BoxDecorationBreakMode.Clone;
                 // The margin box is what an atomic inline occupies on its line (CSS 2.1 §10.8.1): its vertical margins push the content down inside the
                 // line and make the line taller, exactly as its border and padding do. A negative margin is left out (it would pull the box above the line,
@@ -11119,6 +11126,13 @@ namespace PeachBrackets.Html.Dom
             return null;
         }
 
+        /// <summary>The text entry or drop-down <paramref name="box"/> is, when it is an inline-block on a line of <paramref name="lineOwner"/>'s: those sit on their line of
+        /// text (<see cref="CssBoxFormField.HasTextLineBaseline"/>). A control that is a block of its own (positioned, or <c>display: block</c>) is not on a line of anyone's, so
+        /// its own line takes it by its bottom edge like any replaced content.</summary>
+        private static CssBoxFormField? SitsOnItsTextLine(CssBox box, CssBox lineOwner) =>
+            box is CssBoxFormField { HasTextLineBaseline: true } control && !ReferenceEquals(control, lineOwner)
+            && control.DerivedStyle.ActualDisplay == Keywords.InlineBlock ? control : null;
+
         /// <summary>
         /// Where CSS 2.1 <see href="https://www.w3.org/TR/CSS21/visudet.html#line-height">§10.8.1</see>
         /// puts <paramref name="box"/>'s own baseline, given the rectangle <paramref name="rect"/> the
@@ -11156,6 +11170,10 @@ namespace PeachBrackets.Html.Dom
             // rectangles of its own lines; reading its last line's baseline back there would align every
             // line inside it to the last one, spreading its own content apart and out of its box.
             if (ReferenceEquals(box, lineBox.OwnerBox)) return null;
+
+            // A text entry or drop-down is one line of text in a box, and an inline-block's baseline is its last line box's (HTML renders it as an
+            // inline-block depicting a one-line text control), so it sits on its text rather than on its bottom edge like a checkbox or an image.
+            if (SitsOnItsTextLine(box, lineBox.OwnerBox) is { } textControl) return textControl.TextLineBaseline(rect);
 
             if (box.IsImage) return rect.Bottom + box.ActualMarginBottom;
 
