@@ -76,6 +76,18 @@ namespace PeachBrackets.Engine.Tests.Integration
         }
 
         [Fact]
+        public async Task ACaptionThatDeclaresAWidth_WidensTheTableToIt()
+        {
+            var root = await LayoutRootAsync("<table style='border-spacing: 0'><caption id='cap' style='width: 80pt; height: 10pt'></caption><tr><td id='a' style='padding: 0; width: 20pt'><div style='height: 5pt'></div></td></tr></table>");
+
+            var caption = Find(root, "cap");
+            var cell = Find(root, "a");
+
+            Assert.Equal(80, caption.ActualRight - caption.Location.X, 1);
+            Assert.True(cell.ActualRight - cell.Location.X >= 79, $"the cell is {cell.ActualRight - cell.Location.X}pt wide");
+        }
+
+        [Fact]
         public async Task AnAbsoluteBoxInACell_WhoseContainingBlockIsARelativeRowGroup_IsPlacedAgainstTheGroupWhereItEndsUp()
         {
             var plain = await LayoutRootAsync("<table style='border-spacing: 0'><tbody id='g' style='position: relative'><tr><td style='padding: 0'><div id='x' style='position: absolute; left: 20pt; top: 4pt; width: 5pt; height: 5pt'></div>"

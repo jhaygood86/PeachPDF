@@ -54,6 +54,25 @@ namespace PeachBrackets.Engine.Tests.Integration
             Assert.Equal(flex.ClientTop, child.Location.Y, 3);
         }
 
+        [Theory]
+        [InlineData("end")]
+        [InlineData("safe end")]
+        [InlineData("unsafe end")]
+        public async Task AnOverflowPositionKeywordInFrontOfEnd_DoesNotChangeWhereThereIsRoom(string alignSelf)
+        {
+            var (flex, child) = await LayoutAsync("", $"align-self: {alignSelf}");
+
+            Assert.Equal(flex.ClientTop + 50, child.Location.Y, 3);
+        }
+
+        [Fact]
+        public async Task SafeEnd_FallsBackToStart_WhenTheBoxOverflowsTheContainer()
+        {
+            var (flex, child) = await LayoutAsync("", "align-self: safe end; height: 80pt");
+
+            Assert.Equal(flex.ClientTop, child.Location.Y, 3);
+        }
+
         [Fact]
         public async Task AnAxisWithAnInsetIsLeftToThatInset()
         {

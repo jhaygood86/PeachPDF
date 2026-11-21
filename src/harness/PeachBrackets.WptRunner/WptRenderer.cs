@@ -105,6 +105,10 @@ internal sealed partial class WptRenderer(string wptRoot) : IReftestRenderer
 
     private async ValueTask<RNetworkResponse?> LoadAsync(Uri uri)
     {
+        // A data: URL carries its own content, as a browser reads it (an image, a stylesheet, a font); the host's loader is what decodes it.
+        if (uri.IsAbsoluteUri && uri.Scheme == "data")
+            return await HostResourceLoader.LoadAsync(uri);
+
         if (!uri.IsAbsoluteUri || !uri.AbsoluteUri.StartsWith(Origin + "/", StringComparison.Ordinal))
             return null;
 

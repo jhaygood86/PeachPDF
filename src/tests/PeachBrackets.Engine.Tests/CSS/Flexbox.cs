@@ -88,9 +88,9 @@ namespace PeachBrackets.Engine.Tests.CSS
         [MemberData(nameof(JustifyContentInvalidPrefixTestDataValues))]
         public void JustifyContentIllegalPrefixValues(string value)
         {
-            var snippet = $"align-items: {value}";
+            var snippet = $"justify-content: {value}";
             var property = ParseDeclaration(snippet);
-            Assert.Equal("align-items", property.Name);
+            Assert.Equal("justify-content", property.Name);
             Assert.False(property.HasValue);
         }
 
@@ -373,21 +373,8 @@ namespace PeachBrackets.Engine.Tests.CSS
             {
                 return new[]
                 {
-                    new object[] { $"{Keywords.Safe} {Keywords.Start}" },
-                    [$"{Keywords.Safe} {Keywords.End}"],
-                    [$"{Keywords.Safe} {Keywords.FlexStart}"],
-                    [$"{Keywords.Safe} {Keywords.FlexEnd}"],
-                    [$"{Keywords.Safe} {Keywords.SelfStart}"],
-                    [$"{Keywords.Safe} {Keywords.SelfEnd}"],
-
-                    [$"{Keywords.Unsafe} {Keywords.Start}"],
-                    [$"{Keywords.Unsafe} {Keywords.End}"],
-                    [$"{Keywords.Unsafe} {Keywords.FlexStart}"],
-                    [$"{Keywords.Unsafe} {Keywords.FlexEnd}"],
-                    [$"{Keywords.Unsafe} {Keywords.SelfStart}"],
-                    [$"{Keywords.Unsafe} {Keywords.SelfEnd}"],
-
-                    [$"{Keywords.First} {Keywords.Start}"],
+                    new object[] { $"{Keywords.First} {Keywords.Start}" },
+                    
                     [$"{Keywords.First} {Keywords.End}"],
                     [$"{Keywords.First} {Keywords.FlexStart}"],
                     [$"{Keywords.First} {Keywords.FlexEnd}"],

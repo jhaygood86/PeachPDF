@@ -598,8 +598,12 @@ namespace PeachBrackets.Css
         {
             var alignItemsConverter = Map.AlignItems.ToConverter();
 
-            return alignItemsConverter.Or(alignItemsConverter.ConditionalStartsWithKeyword(Keywords.Center, Keywords.Safe, Keywords.Unsafe))
-                                      .Or(alignItemsConverter.ConditionalStartsWithKeyword(Keywords.Baseline, Keywords.First, Keywords.Last))
+            // css-align-3 section 4.4: `[safe | unsafe]? <self-position>`, where <self-position> is any of these, not only center.
+            var overflowAligned = alignItemsConverter;
+            foreach (var position in new[] { Keywords.Center, Keywords.Start, Keywords.End, Keywords.FlexStart, Keywords.FlexEnd, Keywords.SelfStart, Keywords.SelfEnd })
+                overflowAligned = overflowAligned.Or(alignItemsConverter.ConditionalStartsWithKeyword(position, Keywords.Safe, Keywords.Unsafe));
+
+            return overflowAligned.Or(alignItemsConverter.ConditionalStartsWithKeyword(Keywords.Baseline, Keywords.First, Keywords.Last))
                                       .OrGlobalValue();
         });
 
