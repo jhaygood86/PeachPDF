@@ -2,6 +2,11 @@ name: Publish NuGet Package
 
 on:
   workflow_dispatch:
+    inputs:
+      apple-only:
+        description: Publish only PeachDrawing.CoreGraphics and PeachBrackets.Apple of the version in src/Version.props (a re-run after those two jobs failed; the tag, the release and the other packages are left alone)
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -10,6 +15,7 @@ permissions:
 
 jobs:
   publish:
+    if: ${{ !inputs.apple-only }}
     runs-on: ubuntu-latest
 
     steps:
@@ -155,6 +161,7 @@ jobs:
   # it depends on (PeachBrackets, PeachDrawing.Skia and what they need) are on the feed.
   publish-android:
     needs: publish
+    if: ${{ !inputs.apple-only }}
     runs-on: ubuntu-latest
 
     steps:
@@ -196,6 +203,7 @@ jobs:
   # packages it depends on (PeachBrackets, PeachDrawing.Win2D and what they need) are on the feed.
   publish-winui:
     needs: publish-win2d
+    if: ${{ !inputs.apple-only }}
     runs-on: windows-latest
 
     steps:
@@ -235,6 +243,8 @@ jobs:
   # pushed by its own job once the packages it depends on (PeachDrawing, PeachDrawing.Core, PeachDrawing.Text) are on the feed.
   publish-coregraphics:
     needs: publish
+    # With apple-only the publish job is skipped, which would skip this one too without an explicit condition.
+    if: ${{ !cancelled() && (needs.publish.result == 'success' || needs.publish.result == 'skipped') }}
     runs-on: macos-latest
 
     steps:
@@ -248,8 +258,8 @@ jobs:
           11.0.x
           10.0.x
 
-    - name: Install the macos and ios workloads
-      run: dotnet workload install macos ios
+    - name: Install the macos, ios and maccatalyst workloads
+      run: dotnet workload install macos ios maccatalyst
 
     - name: Read package version
       id: version
@@ -290,8 +300,8 @@ jobs:
           11.0.x
           10.0.x
 
-    - name: Install the macos and ios workloads
-      run: dotnet workload install macos ios
+    - name: Install the macos, ios and maccatalyst workloads
+      run: dotnet workload install macos ios maccatalyst
 
     - name: Read package version
       id: version
@@ -320,6 +330,7 @@ jobs:
   # the packages it depends on (PeachDrawing, PeachDrawing.Core, PeachDrawing.Text) are on the feed.
   publish-win2d:
     needs: publish
+    if: ${{ !inputs.apple-only }}
     runs-on: windows-latest
 
     steps:
