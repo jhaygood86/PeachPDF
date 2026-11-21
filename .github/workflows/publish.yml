@@ -287,6 +287,8 @@ jobs:
   # its own job once PeachDrawing.CoreGraphics (and so everything it depends on) is on the feed.
   publish-apple:
     needs: publish-coregraphics
+    # A job is skipped when any job it transitively needs is, so with apple-only (publish skipped) it needs its own condition.
+    if: ${{ !cancelled() && needs.publish-coregraphics.result == 'success' }}
     runs-on: macos-latest
 
     steps:
