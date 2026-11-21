@@ -60,6 +60,54 @@ namespace PeachBrackets.Html.Dom
         private int PositiveInt(string attribute, int fallback) =>
             int.TryParse(GetAttribute(attribute, string.Empty), System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var n) && n > 0 ? n : fallback;
 
+        // The input types whose control is one line of text in a box (HTML "The input element as a text entry widget"); every other type is a button, a glyph,
+        // a picker or a file chooser, which keep the replaced element's bottom-margin-edge baseline.
+        private static readonly string[] TextEntryTypes = ["text", "search", "tel", "url", "email", "password", "number"];
+
+        /// <summary>
+        /// Whether the control is one line of text, so its baseline is that line's rather than its bottom margin edge: a text entry input, or a drop-down
+        /// <c>&lt;select&gt;</c> (a list box shows several lines and a <c>&lt;textarea&gt;</c> is not one). HTML renders these as an <c>inline-block</c> "depicting
+        /// a one-line text control", and CSS 2.1 section 10.8.1 puts an inline-block's baseline on its last line box, which here is that line of text.
+        /// </summary>
+        internal bool HasTextLineBaseline
+        {
+            get
+            {
+                if (HtmlTag is not { } tag) return false;
+
+                if (tag.Name.Equals("select", System.StringComparison.OrdinalIgnoreCase))
+                    return !tag.HasAttribute("multiple") && !(int.TryParse(GetAttribute("size", string.Empty), System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var size) && size > 1);
+
+                if (!tag.Name.Equals("input", System.StringComparison.OrdinalIgnoreCase)) return false;
+
+                var type = GetAttribute("type", "text").Trim();
+                if (type.Length == 0) return true;
+                foreach (var known in TextEntryTypes)
+                    if (known.Equals(type, System.StringComparison.OrdinalIgnoreCase)) return true;
+
+                // An unknown type falls back to the Text state.
+                return !IsKnownNonTextType(type);
+            }
+        }
+
+        private static bool IsKnownNonTextType(string type) =>
+            type.ToLowerInvariant() is "hidden" or "checkbox" or "radio" or "submit" or "reset" or "button" or "image" or "file" or "range" or "color"
+                or "date" or "month" or "week" or "time" or "datetime-local";
+
+        /// <summary>
+        /// How far below the top of the border box <paramref name="borderBoxHeight"/> tall the baseline of the control's line of text is: the line is
+        /// centered in the content box, as <c>ScreenFormControlPainter</c> places it.
+        /// </summary>
+        internal double TextLineBaselineOffset(double borderBoxHeight)
+        {
+            var font = ActualFont;
+            var contentHeight = System.Math.Max(0, borderBoxHeight - ActualBorderTopWidth - ActualBorderBottomWidth - ActualPaddingTop - ActualPaddingBottom);
+            return ActualBorderTopWidth + ActualPaddingTop + System.Math.Max((contentHeight - font.Height) / 2, 0) + font.Ascent;
+        }
+
+        /// <summary>The baseline of the control's line of text, given the border box the flow left it at.</summary>
+        internal double TextLineBaseline(Rect borderBox) => borderBox.Top + TextLineBaselineOffset(borderBox.Height);
+
         internal override ValueTask MeasureWordsSize(Canvas g)
         {
             if (_wordsSizeMeasured)
