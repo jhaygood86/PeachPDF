@@ -478,7 +478,10 @@ namespace PeachBrackets.Html.Paint
                 {
                     g.PushTransform(Matrix3x2.CreateTranslation((float)viewShift.Dx, (float)viewShift.Dy));
                     viewShifted = true;
-                    if (container.View.HasScroll) _scrollFrames++;
+
+                    // The clip the canvas holds was pushed in the frame before this translation, so inside it a fragment cannot be compared with it, whether or
+                    // not anything is scrolled: a sticky box held by its container's scrollport is moved into the clip from outside it.
+                    _scrollFrames++;
                 }
 
                 // A fragment only exists where its box has something in this fragmentainer, so the
@@ -558,7 +561,7 @@ namespace PeachBrackets.Html.Paint
                 if (viewShifted)
                 {
                     g.PopTransform();
-                    if (container.View.HasScroll) _scrollFrames--;
+                    _scrollFrames--;
                 }
 
                 // Restore clips

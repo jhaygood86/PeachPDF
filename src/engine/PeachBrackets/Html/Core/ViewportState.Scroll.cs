@@ -83,12 +83,20 @@ namespace PeachBrackets.Html
         /// </summary>
         internal (double Dx, double Dy) ClipShiftFor(CssBox box, CssBox clipper)
         {
-            if (_scroll.Count == 0)
+            if (_scroll.Count == 0 && _displacements.Count == 0)
                 return default;
 
             double dx = 0, dy = 0;
             for (var current = box; current is not null && !ReferenceEquals(current, clipper);)
             {
+                // A sticky box held inside the clipper is painted in a frame moved by how far it is held, which the clip, pushed in that frame, must not follow.
+                if (current.Position.Value == PositionMode.Sticky)
+                {
+                    var (stuckX, stuckY) = DisplacementOf(current);
+                    dx -= stuckX;
+                    dy -= stuckY;
+                }
+
                 var scroller = ScrollParentOf(current);
                 if (scroller is null) break;
 

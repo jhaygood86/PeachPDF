@@ -613,6 +613,7 @@ namespace PeachBrackets.Html.Dom
 
                 var table = new CssLayoutEngineTable(g, tableBox, resume);
                 await table.Layout(g);
+                var finished = table;
 
                 if (tableBox.PendingBreakToken is not null)
                 {
@@ -678,7 +679,13 @@ namespace PeachBrackets.Html.Dom
                         // passing null through is exactly what always ran here.
                         var redo = new CssLayoutEngineTable(g, tableBox, resume);
                         await redo.Layout(g);
+                        finished = redo;
                     }
+
+                    // The parts are all where the table put them; only now can what CSS 2.1 section 9.4.3 does to them (a visual shift that
+                    // moves nothing else) be applied without the layout above reading it back as geometry.
+                    if (resume is null && tableBox.PendingBreakToken is null)
+                        await finished.ApplyRelativePartOffsetsAsync(g);
                 }
 
                 // Cleared once the table is genuinely, fully done - PendingBreakToken null after
@@ -721,6 +728,54 @@ namespace PeachBrackets.Html.Dom
 
 
         #region Private Methods
+
+        /// <summary>
+        /// Moves each <c>position: relative</c> caption, row group, row and cell by its offsets (CSS 2.1 section 9.4.3 applies to every box but a table
+        /// column or column group), with everything it holds. The table placed every part by its own rules, so this runs once all are placed, outermost first:
+        /// a row's offset has already carried its cells when a cell's own is added on top.
+        /// </summary>
+        private async ValueTask ApplyRelativePartOffsetsAsync(Canvas g)
+        {
+            if (!_tableBox.Boxes.Any(HoldsRelativePart))
+                return;
+
+            // A box positioned against a row or row group was placed while that part still sat at the origin (a row group is given its rectangle from its rows
+            // once they are placed), so it is placed again now that every part is where it ends up. A box whose containing block is the cell is not: the cell
+            // was placed first, and its content may since have been moved by vertical-align, which the box's static position went with.
+            foreach (var cell in _allRows.SelectMany(row => row.Boxes).Where(c => c.DerivedStyle.ActualDisplay == Keywords.TableCell))
+            {
+                foreach (var child in cell.Boxes.Where(c => c.IsAbsolutelyPositioned && c.DerivedStyle.ActualDisplay != Keywords.None).ToList())
+                {
+                    if (DomUtils.GetNearestPositionedAncestor(child).DerivedStyle.ActualDisplay is Keywords.TableRow or Keywords.TableRowGroup or Keywords.TableHeaderGroup or Keywords.TableFooterGroup)
+                        await cell.LayoutBlockChild(g, child);
+                }
+            }
+
+            foreach (var part in _tableBox.Boxes)
+                ApplyRelativeOffsetsTo(part);
+
+            static bool HoldsRelativePart(CssBox part) =>
+                part.DerivedStyle.ActualDisplay is Keywords.TableCaption or Keywords.TableRowGroup or Keywords.TableHeaderGroup or Keywords.TableFooterGroup or Keywords.TableRow or Keywords.TableCell
+                && (part.Position.Value is PositionMode.Relative || part.Boxes.Any(HoldsRelativePart));
+
+            static void ApplyRelativeOffsetsTo(CssBox part)
+            {
+                if (part.DerivedStyle.ActualDisplay is not (Keywords.TableCaption or Keywords.TableRowGroup or Keywords.TableHeaderGroup or Keywords.TableFooterGroup or Keywords.TableRow or Keywords.TableCell))
+                    return;
+
+                if (part.Position.Value is PositionMode.Relative)
+                {
+                    var (dx, dy) = CssBox.ComputeRelativeOffset(part);
+                    part.RelativeOffsetX = dx;
+                    part.RelativeOffsetY = dy;
+                    if (dx != 0) part.OffsetLeft(dx);
+                    if (dy != 0) part.OffsetTop(dy);
+                }
+
+                foreach (var child in part.Boxes)
+                    ApplyRelativeOffsetsTo(child);
+            }
+        }
 
         /// <summary>
         /// Analyzes the Table and assigns values to this CssTable object.

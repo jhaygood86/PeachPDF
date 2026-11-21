@@ -845,6 +845,33 @@ namespace PeachBrackets.Engine.Tests.Integration
             Assert.InRange(after.Top, container.Location.Y - 1, container.Location.Y + 1);
         }
 
+        [Fact]
+        public async Task ABlockLevelAbsoluteBox_AmongInlineContent_IsAtTheStartOfTheLineAfterWhatPrecedesIt()
+        {
+            // A block would end the line it interrupts and start at the container's content edge, ignoring the first line's text-indent.
+            var (root, _) = await LayoutAsync(
+                "<div id='d' style='width: 300pt; line-height: 20pt; text-indent: 15pt'>aaa <span>bb<div id='a' style='position: absolute; width: 5pt; height: 5pt'></div></span><br>cc</div>");
+
+            var div = Find(root, "d");
+            var abs = Find(root, "a");
+
+            Assert.Equal(div.ClientLeft, abs.Location.X, 3);
+            Assert.Equal(div.ClientTop + 20, abs.Location.Y, 3);
+        }
+
+        [Fact]
+        public async Task AnInlineLevelAbsoluteBox_AmongInlineContent_StaysAtThePointOnTheLineItWasPassedAt()
+        {
+            var (root, _) = await LayoutAsync(
+                "<div id='d' style='width: 300pt; line-height: 20pt'>aaa <span>bb<div id='a' style='position: absolute; display: inline; width: 5pt; height: 5pt'></div></span><br>cc</div>");
+
+            var div = Find(root, "d");
+            var abs = Find(root, "a");
+
+            Assert.True(abs.Location.X > div.ClientLeft + 5, $"the box was put at x={abs.Location.X}");
+            Assert.Equal(div.ClientTop, abs.Location.Y, 3);
+        }
+
         private static Task<(CssBox Root, HtmlContainerInt Container)> LayoutAsync(string body, double pageHeight = 842) =>
             LayoutHarness.LayoutAsync(LayoutHarness.Wrap(body), pageHeight: pageHeight);
 

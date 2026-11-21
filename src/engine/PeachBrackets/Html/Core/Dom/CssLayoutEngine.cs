@@ -761,6 +761,15 @@ namespace PeachBrackets.Html.Dom
                 // box whose offsets on an axis are both auto.
                 box.InlineStaticPosition = (PlaceOnFinalLine(setAside), FinalLineEdgesOf(setAside.Line, setAside.Y).Top);
 
+                // A box that was block-level is where a block would be (CSS 2.1 section 10.6.4): at the start of the line after what comes before it, since a
+                // block ends the line it interrupts - never at the point on the line it was passed at, and not at the start of the first line's text-indent.
+                if (box.WasBlockLevelBeforeBlockification == true && setAside.Line.OwnerBox is { } lineOwner)
+                {
+                    var (lineTop, lineBottom) = FinalLineEdgesOf(setAside.Line, setAside.Y);
+                    var edge = box.ParentBox?.Direction.Value == DirectionMode.Rtl ? lineOwner.ClientRight : lineOwner.ClientLeft;
+                    box.InlineStaticPosition = (edge, setAside.WordIndex > 0 ? lineBottom : lineTop);
+                }
+
                 // The box is left to run as passes of its own: LayoutBlockChild resumes the record its break leaves,
                 // which is what detaching here was written to avoid depending on, and unbroken the box's last line
                 // crossed the page foot and was clipped away. That holds inside a column as well: the box's containing
@@ -3835,10 +3844,11 @@ namespace PeachBrackets.Html.Dom
             }
             else if (box.Position.Value is PositionMode.Absolute
                      && box.Top.Value.IsValue && box.Bottom.Value.IsValue
+                     && box.DerivedStyle.ActualDisplay is not Keywords.Table
                      && heightBasisIsCalculated)
             {
                 // CSS 2.1 §10.6.4: an absolutely-positioned box with auto height but both `top` and `bottom`
-                // set fills the space between them in the containing block. The counterpart of the §10.3.7
+                // set (a table keeps the height its rows give it, as in a browser) fills the space between them in the containing block. The counterpart of the §10.3.7
                 // width rule above; sizes a Charts.css area/line `td::before` (auto height, `inset: 0`) to
                 // its cell's height.
                 var top = CssValueParser.ParseLength(box.Top.Value.Value!.Value, heightBasis, box);

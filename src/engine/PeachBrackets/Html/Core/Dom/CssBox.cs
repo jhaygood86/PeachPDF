@@ -1787,6 +1787,12 @@ namespace PeachBrackets.Html.Dom
         /// <summary>The grid area an absolutely positioned child of a grid container is placed against, in the same coordinates as <see cref="Location"/>: the area its <c>grid-column</c>/<c>grid-row</c> lines name, with the padding edge for a line that does not exist.</summary>
         internal Rect? GridContainingArea { get => _rare?.GridContainingArea; set { if (_rare is null) { if (value is null) return; _rare = new BoxRareState(); } _rare.GridContainingArea = value; } }
 
+        /// <summary>
+        /// Whether an absolutely positioned box was block-level before CSS 2.1 section 9.7 blockified it (null until that has been decided). Its static position
+        /// among inline content is then where a block would be: the start of the line after what precedes it, not the point on the line it was passed at.
+        /// </summary>
+        internal bool? WasBlockLevelBeforeBlockification { get; set; }
+
         internal (double X, double Y)? InlineStaticPosition { get => _rare is null ? default((double X, double Y)?) : _rare.InlineStaticPosition; set { if (_rare is null) { if (EqualityComparer<(double X, double Y)?>.Default.Equals(value, default((double X, double Y)?))) return; _rare = new BoxRareState(); } _rare.InlineStaticPosition = value; } }
 
         /// <summary>
@@ -7739,6 +7745,16 @@ namespace PeachBrackets.Html.Dom
         /// </summary>
         private static double? RelativeContainingBlockHeight(CssBox box)
         {
+            // A table's rows, row groups and cells refer to the height their parent part declares, not the height it ends up with: the table distributes
+            // extra height over its rows, so no used height is definite until the table is done.
+            if (box.DerivedStyle.ActualDisplay is Keywords.TableRow or Keywords.TableRowGroup or Keywords.TableHeaderGroup or Keywords.TableFooterGroup or Keywords.TableCell
+                && box.ParentBox is { } part)
+            {
+                return CssLayoutEngine.HasDefiniteHeight(part) && !CssValueParser.DependsOnPercentage(part.Height)
+                    ? CssValueParser.ParseLength(part.Height, 0, part)
+                    : null;
+            }
+
             var block = box.ContainingBlock;
             if (CssLayoutEngine.ResolveDefiniteHeightValue(block) is not { } height) return null;
 
@@ -8242,6 +8258,72 @@ namespace PeachBrackets.Html.Dom
         }
 
         /// <summary>
+        /// An absolutely positioned child of a flex container sits at its static position, which is as if it were the only item of the container (css-flexbox-1
+        /// section 4.1): aligned in the container's content box by <c>justify-content</c> along the main axis and by its <c>align-self</c> (the container's
+        /// <c>align-items</c> where that is <c>auto</c>) across it, on each axis where both insets are <c>auto</c>. Horizontal writing modes only.
+        /// </summary>
+        private void AlignStaticPositionInFlex()
+        {
+            if (ParentBox is not { } flex || flex.DerivedStyle.ActualDisplay is not (Keywords.Flex or Keywords.InlineFlex) || flex.WritingMode.Value.IsVertical())
+            {
+                return;
+            }
+
+            var rtl = flex.Direction.Value == DirectionMode.Rtl;
+            var row = flex.FlexDirection.Value is Css.FlexDirection.Row or Css.FlexDirection.RowReverse;
+            var reverse = flex.FlexDirection.Value is Css.FlexDirection.RowReverse or Css.FlexDirection.ColumnReverse;
+            var wrapReverse = flex.FlexWrap.Value == Css.FlexWrap.WrapReverse;
+            var contentBox = new Rect(flex.ClientLeft, flex.ClientTop, flex.ClientRight - flex.ClientLeft, flex.ClientBottom - flex.ClientTop);
+
+            // Where the flex-start edge of each axis is: the far (right or bottom) side or the near one.
+            var mainStartFar = row ? rtl != reverse : reverse;
+            var crossStartFar = row ? wrapReverse : rtl != wrapReverse;
+
+            double MainFraction(double free)
+            {
+                var start = mainStartFar ? 1.0 : 0.0;
+                return flex.JustifyContent.Value switch
+                {
+                    Css.JustifyContent.Center or Css.JustifyContent.SpaceAround or Css.JustifyContent.SpaceEvenly => free < 0 ? start : 0.5,
+                    Css.JustifyContent.FlexEnd => 1 - start,
+                    Css.JustifyContent.End => row && rtl ? 0 : 1,
+                    Css.JustifyContent.Right => row ? 1 : start,
+                    Css.JustifyContent.Left => row ? 0 : start,
+                    _ => start
+                };
+            }
+
+            double CrossFraction(double free)
+            {
+                var start = crossStartFar ? 1.0 : 0.0;
+                var words = StaticSelfAlignment(AlignSelf.ToString(), flex.AlignItems.ToString()).ToLowerInvariant().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                if (words.Contains("safe") && free < 0) return start;
+                return (words.Length == 0 ? Keywords.Normal : words[^1]) switch
+                {
+                    "center" => 0.5,
+                    "flex-end" => 1 - start,
+                    "end" or "self-end" => !row && rtl ? 0 : 1,
+                    "start" or "self-start" => !row && rtl ? 1 : 0,
+                    _ => start
+                };
+            }
+
+            if (Left.Value.IsKeyword && Right.Value.IsKeyword)
+            {
+                var free = contentBox.Width - (ActualBoxSizingWidth + ActualMarginLeft + ActualMarginRight);
+                var target = contentBox.X + free * (row ? MainFraction(free) : CrossFraction(free)) + ActualMarginLeft;
+                if (Math.Abs(target - Location.X) > 0.01) OffsetLeft(target - Location.X);
+            }
+
+            if (Top.Value.IsKeyword && Bottom.Value.IsKeyword)
+            {
+                var free = contentBox.Height - (ActualBoxSizingHeight + ActualMarginTop + ActualMarginBottom);
+                var target = contentBox.Y + free * (row ? CrossFraction(free) : MainFraction(free)) + ActualMarginTop;
+                if (Math.Abs(target - Location.Y) > 0.01) OffsetTop(target - Location.Y);
+            }
+        }
+
+        /// <summary>
         /// The alignment an absolutely positioned child's static position takes: only <c>auto</c> defers to the container's <c>*-items</c>; <c>normal</c> and
         /// <c>stretch</c> are the box's own and, as the box has no stretched size here, behave as <c>start</c> (css-align-3 section 6.1).
         /// </summary>
@@ -8483,6 +8565,7 @@ namespace PeachBrackets.Html.Dom
                 }
 
                 AlignStaticPositionInGrid();
+                AlignStaticPositionInFlex();
             }
 
             // A fixed box's containing block is the viewport (the first page's content area in paged media), so `right`/`bottom` measure from that area's far
@@ -8647,7 +8730,7 @@ namespace PeachBrackets.Html.Dom
             // containing block's whole height past the bottom of it instead of filling it exactly.
             if (Position.Value is not (PositionMode.Absolute or PositionMode.Fixed)
                 || !Top.Value.IsValue || !Bottom.Value.IsValue
-                || !CssLayoutEngine.HasDefiniteHeight(this)
+                || !(CssLayoutEngine.HasDefiniteHeight(this) || DerivedStyle.ActualDisplay is Keywords.Table)
                 || (!MarginTop.Value.IsKeyword && !MarginBottom.Value.IsKeyword))
             {
                 return;
