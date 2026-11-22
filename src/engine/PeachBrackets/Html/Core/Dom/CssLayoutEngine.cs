@@ -6821,7 +6821,7 @@ namespace PeachBrackets.Html.Dom
                 return false;
             }
 
-            if (HasBlockLevelDescendant(child)) return true;
+            if (HasBlockLevelDescendant(child) || (CountForcedLineBreaks(child) is > 0 and var forcedBreaks && FitsTheFragmentainer(child, forcedBreaks, blockTop))) return true;
 
             var available = PageAwareWidthBasis(child.ContainingBlock, blockTop);
 
@@ -6845,6 +6845,45 @@ namespace PeachBrackets.Html.Dom
             // A hair of slack, so a box whose content measures its own width exactly - the overwhelmingly
             // common `width` set to fit its label - is not pushed onto the atomic path by rounding.
             return await GetMaxContentWidth(g, child) > available + 0.01;
+        }
+
+        /// <summary>
+        /// How many forced line breaks (<c>&lt;br&gt;</c>, or a newline a <c>white-space</c> value preserves) <paramref name="box"/> holds in its own inline content. Any makes
+        /// more than one line, and flowed into its parent's lines instead, a break would end the parent's line, not the box's. Nested atomic inlines have lines of their own and
+        /// are not looked into.
+        /// </summary>
+        private static int CountForcedLineBreaks(CssBox box)
+        {
+            var count = 0;
+
+            foreach (var childBox in box.Boxes)
+            {
+                if (childBox.DerivedStyle.ActualDisplay == Keywords.None) continue;
+                if (childBox.IsBrElement) count++;
+                else if (childBox.PreservesBreaks && childBox.Text is { } text) count += text.Count(static c => c == '\n');
+                else if (!DomUtils.IsAtomicInline(childBox)) count += CountForcedLineBreaks(childBox);
+            }
+
+            return count;
+        }
+
+        /// <summary>
+        /// Whether an inline-block with <paramref name="forcedBreaks"/> forced breaks, starting at <paramref name="blockTop"/>, fits what is left of the fragmentainer it is laid out
+        /// in. An atomic box does not split across fragmentainers, so one that would straddle a break keeps being flowed line by line into its parent, where its lines can.
+        /// </summary>
+        private static bool FitsTheFragmentainer(CssBox box, int forcedBreaks, double blockTop)
+        {
+            // A multi-column container measures its content in passes that have no fragmentainer to ask, so inside one the answer is the cautious one.
+            for (var ancestor = box.ParentBox; ancestor is not null; ancestor = ancestor.ParentBox)
+            {
+                if (ancestor.EstablishesMultiColumnContext) return false;
+            }
+
+            if (box.HtmlContainer?.CurrentFragmentainer is not { IsFragmenting: true } fragmentainer) return true;
+
+            var height = (forcedBreaks + 1) * box.ActualLineHeight
+                         + box.ActualBorderTopWidth + box.ActualPaddingTop + box.ActualPaddingBottom + box.ActualBorderBottomWidth;
+            return blockTop + height <= fragmentainer.BandBottom;
         }
 
         /// <summary>

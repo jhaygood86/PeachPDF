@@ -45,3 +45,9 @@ css-position went from 35 to 54 passing reftests (floor 32 -> 51; the CI-font ma
 Also, an inline whose first word wrapped away has no rectangle on the line it began on (`FirstHostingLineBox`); `InlineContainingBlockOf` now uses an empty fragment at the end of that line's last non-space word (css-position `-004`).
 
 Not done: `-005` to `-012` (inline-block and multicol variants) have other causes.
+
+## An inline-block with a forced line break is laid out as an atomic box
+
+An `inline-block` whose content fits one line was flowed into its parent's line boxes, so a `<br>` (or a preserved newline) inside it ended the parent's line, and the box was painted as per-line fragments. `LaysOutAsAnAtomicBox` now also takes the atomic path when the box holds forced breaks (`CountForcedLineBreaks`), unless that would make a box that has to split across a page or column: `FitsTheFragmentainer` keeps the old flow when the box would straddle the fragmentainer's end, and inside a multi-column container, whose measuring passes have no fragmentainer to ask. Two existing tests (`InsetShiftedInlineBlock_SecondInternalLine_MovesAloneToNextColumn`, `Clone_InlineBlockCrossingSeveralPageBreaks_ReopensItsTopInsetOnEveryPage`) pin that split behavior.
+
+Effect on WPT: css2-flow +3, css-lists +1, css-position `-004`/`-006` closer. `flexbox-baseline-multi-line-vert-001` stopped passing: its reference uses an inline-block with `<br>` and a float, and had matched only because the test and the reference were wrong the same way. `-005` is down to two columns of anti-aliasing from a fractional container offset (the fallback font's space width), not a positioning difference.
