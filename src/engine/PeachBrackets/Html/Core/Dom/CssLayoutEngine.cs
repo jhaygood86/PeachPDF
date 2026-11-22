@@ -777,6 +777,7 @@ namespace PeachBrackets.Html.Dom
                 {
                     if (detach) box.HtmlContainer?.RestoreFragmentainer(previous);
                     if (emptyInline is not null) emptyInline.EmptyInlineContainingBlock = null;
+                    box.KeptInlineStaticPosition = box.InlineStaticPosition;
                     box.InlineStaticPosition = null;
                 }
             }

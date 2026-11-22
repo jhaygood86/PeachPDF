@@ -18,3 +18,7 @@ inline and laid out with the directly nested ones, so it shares this remaining e
 every fragmentainer, or re-resolved once the last fragment exists. A box in the `Break` branch is also what
 lets its content be distributed over the pages it reaches, so deferring it changes which pass owns it.
 Tracked as [#1336](https://github.com/jhaygood86/PeachPDF/issues/1336).
+
+**Columns are not affected:** a multi-column container restates the box once every column of the fill is
+final (`CssLayoutEngineColumns.RestateFragmentedAbsolutes`), so each column's slice sees every fragment of the
+inline. The gap remains for a flow broken across *pages*.

@@ -33,6 +33,13 @@ namespace PeachBrackets.Html.Fragments
             internal Dictionary<CssLineBox, Rect> Rectangles { get; } = [with(rectangleCapacity)];
 
             /// <summary>
+            /// Whether this geometry was stated for this fragmentainer on purpose - a slice of an out-of-flow box laid out
+            /// against the part of its containing block in this fragmentainer - rather than read off the box where the
+            /// fragmentainer ended. Such a box is emitted by every fragmentainer that states it, not only the last.
+            /// </summary>
+            internal bool IsStatedPerFragmentainer { get; set; }
+
+            /// <summary>
             /// Where each of the box's words sat, or null for one that belongs to the <i>next</i>
             /// fragmentainer.
             /// </summary>
@@ -171,6 +178,17 @@ namespace PeachBrackets.Html.Fragments
 
         /// <summary>States <paramref name="root"/> and every descendant at their current geometry.</summary>
         internal void AddWhole(CssBox root) => CaptureBox(root, excluded: null);
+
+        /// <summary>
+        /// States <paramref name="root"/> and its descendants at their current geometry as this fragmentainer's own slice of an
+        /// out-of-flow box (<see cref="BoxGeometry.IsStatedPerFragmentainer"/>), replacing whatever was captured for them.
+        /// </summary>
+        internal void AddSlice(CssBox root)
+        {
+            CaptureBox(root, excluded: null);
+
+            if (_geometry.TryGetValue(root, out var geometry)) geometry.IsStatedPerFragmentainer = true;
+        }
 
         internal bool TryGetGeometry(CssBox box, out BoxGeometry geometry) => _geometry.TryGetValue(box, out geometry!);
 

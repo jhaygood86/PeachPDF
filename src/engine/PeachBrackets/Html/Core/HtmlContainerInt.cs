@@ -4126,6 +4126,10 @@ namespace PeachBrackets.Html
         /// <summary>
         /// How many nested fragmentainers <paramref name="contextRoot"/> has recorded in <paramref name="slot"/>.
         /// </summary>
+        /// <summary>States <paramref name="box"/>'s geometry as its slice in one recorded fragmentainer of <paramref name="contextRoot"/>.</summary>
+        internal bool StateSliceInCapturedInstance(CssBox contextRoot, int slot, int index, CssBox box) =>
+            _emitter?.StateSliceInCapturedInstance(contextRoot, slot, index, box) ?? false;
+
         internal int CapturedInstanceCount(CssBox contextRoot, int slot) =>
             _emitter?.CapturedInstanceCount(contextRoot, slot) ?? 0;
 
