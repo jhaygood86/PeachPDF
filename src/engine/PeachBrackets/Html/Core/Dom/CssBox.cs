@@ -1869,6 +1869,20 @@ namespace PeachBrackets.Html.Dom
             DeferredFloatsOnly = snapshot.OnlyTheFloats;
         }
 
+        /// <summary>
+        /// The containing block this positioned inline forms for an absolutely positioned descendant within <i>one</i> fragmentainer
+        /// of a fragmented flow (the slice of the inline in one column), set only while the descendant is laid out for that
+        /// fragmentainer (<c>CssLayoutEngineColumns.RestateFragmentedAbsolutes</c>). Takes the place of the one rectangle
+        /// <see cref="DomUtils.InlineContainingBlockOf"/> forms from the first and last fragments across every column.
+        /// </summary>
+        /// <summary>
+        /// The <see cref="InlineStaticPosition"/> the box was last laid out with, kept after the layout so the box can be laid
+        /// out again for each fragmentainer of its containing block.
+        /// </summary>
+        internal (double X, double Y)? KeptInlineStaticPosition { get => _rare is null ? default((double X, double Y)?) : _rare.KeptInlineStaticPosition; set { if (_rare is null) { if (value is null) return; _rare = new BoxRareState(); } _rare.KeptInlineStaticPosition = value; } }
+
+        internal Rect? FragmentContainingBlock { get => _rare is null ? default(Rect?) : _rare.FragmentContainingBlock; set { if (_rare is null) { if (value is null) return; _rare = new BoxRareState(); } _rare.FragmentContainingBlock = value; } }
+
         internal Rect? EmptyInlineContainingBlock { get => _rare is null ? default(Rect?) : _rare.EmptyInlineContainingBlock; set { if (_rare is null) { if (EqualityComparer<Rect?>.Default.Equals(value, default(Rect?))) return; _rare = new BoxRareState(); } _rare.EmptyInlineContainingBlock = value; } }
 
         /// <summary>

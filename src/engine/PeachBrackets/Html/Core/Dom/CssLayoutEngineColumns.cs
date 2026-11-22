@@ -855,6 +855,8 @@ namespace PeachBrackets.Html.Dom
             {
                 htmlContainer.ForgetInCapturedInstancesFrom(columnsBox, startSlot, recordedBefore, BeyondThisColumn(carry));
             }
+            await RestateFragmentedAbsolutes(g, columnsBox, htmlContainer);
+
             // One rule per gap between the columns actually used in this run, spanning the content they
             // hold - never through a spanning box, which is never part of a run.
             var gap = pitch - columnWidth;
@@ -887,6 +889,187 @@ namespace PeachBrackets.Html.Dom
             return innermost is BlockBreakToken { IsBreakBefore: true } token
                 && token.ResumeChildIndex < token.Box.Boxes.Count
                 && CssBox.ForcedColumnBreakFallsBefore(token.Box.Boxes[token.ResumeChildIndex]);
+        }
+
+        /// <summary>
+        /// Gives an absolutely positioned box whose containing block is a positioned <i>inline</i> split over several columns a
+        /// slice per column, each laid out against the part of the inline in that column.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <see href="https://www.w3.org/TR/css-position-3/#def-cb">CSS Positioned Layout 3 §2.1</see> forms the inline's
+        /// containing block from its first and last fragments, and css-break-3 §3 fragments an out-of-flow box with its
+        /// containing block, so the box continues into each fragmentainer the block does. The block is formed as if the
+        /// columns were one strip: its inline edges are the start-most edges of the first fragment and the end-most of the last
+        /// (the swap <see cref="DomUtils.InlineContainingBlockOf"/> makes in <c>rtl</c>), each measured from the inline start of
+        /// <i>its own</i> column, and the same offsets apply in every column; the strip is then cut at the column bands, so the
+        /// first column's slice starts at the first fragment, the last column's ends at the last fragment, and the columns between
+        /// are filled.
+        /// </para>
+        /// <para>
+        /// Laid out here, once the columns are final, because a column's slice cannot be known before the next column has
+        /// been filled. Each slice's geometry is stated in the fragmentainer it belongs to
+        /// (<see cref="HtmlContainerInt.StateSliceInCapturedInstance"/>), and the emitter emits it from each.
+        /// </para>
+        /// </remarks>
+        private static async ValueTask RestateFragmentedAbsolutes(Canvas g, CssBox columnsBox, HtmlContainerInt htmlContainer)
+        {
+            if (htmlContainer.ColumnFragmentainers.Count < 2) return;
+
+            List<CssBox>? absolutes = null;
+            CollectAbsolutesInInlines(columnsBox, columnsBox, htmlContainer, ref absolutes);
+            if (absolutes is null) return;
+
+            var records = new List<ColumnFragmentainerRecord>();
+            var indexInSlot = new List<int>();
+            var seen = new Dictionary<int, int>();
+
+            foreach (var record in htmlContainer.ColumnFragmentainers)
+            {
+                if (!ReferenceEquals(record.ColumnsBox, columnsBox)) continue;
+
+                seen.TryGetValue(record.Slot, out var count);
+                seen[record.Slot] = count + 1;
+                records.Add(record);
+                indexInSlot.Add(count);
+            }
+
+            if (records.Count < 2) return;
+
+            foreach (var box in absolutes)
+            {
+                var inline = DomUtils.GetNearestPositionedAncestor(box);
+                var slices = FragmentSlicesOf(inline, records);
+                if (slices is null) continue;
+
+                var previous = htmlContainer.DetachFragmentainer();
+                try
+                {
+                    foreach (var (column, slice) in slices)
+                    {
+                        inline.FragmentContainingBlock = slice;
+                        box.InlineStaticPosition = box.KeptInlineStaticPosition;
+
+                        try
+                        {
+                            await box.ParentBox!.LayoutBlockChild(g, box);
+                        }
+                        finally
+                        {
+                            box.InlineStaticPosition = null;
+                            inline.FragmentContainingBlock = null;
+                        }
+
+                        htmlContainer.StateSliceInCapturedInstance(columnsBox, records[column].Slot, indexInSlot[column], box);
+                    }
+                }
+                finally
+                {
+                    htmlContainer.RestoreFragmentainer(previous);
+                }
+            }
+        }
+
+        /// <summary>Collects the absolutely positioned boxes under <paramref name="box"/> whose containing block is a positioned inline holding line fragments, outside any nested multi-column container.</summary>
+        private static void CollectAbsolutesInInlines(CssBox box, CssBox columnsBox, HtmlContainerInt htmlContainer, ref List<CssBox>? found)
+        {
+            foreach (var child in box.Boxes)
+            {
+                if (child.Position.Value == PositionMode.Absolute
+                    && DomUtils.GetNearestPositionedAncestor(child) is { RectangleCount: > 1, IsInline: true } inline
+                    && !DomUtils.IsAtomicInline(inline)
+                    && DomUtils.IsSelfOrDescendantOf(inline, columnsBox))
+                {
+                    (found ??= []).Add(child);
+                }
+
+                // A nested container's columns are its own to restate.
+                if (!ReferenceEquals(child, columnsBox) && htmlContainer.HoldsCapturedInstances(child)) continue;
+
+                CollectAbsolutesInInlines(child, columnsBox, htmlContainer, ref found);
+            }
+        }
+
+        /// <summary>
+        /// The containing block <paramref name="inline"/> forms in each of the <paramref name="columns"/> it has a fragment in,
+        /// or null when every fragment is in one column (or one cannot be placed in a column), where the single rectangle stands.
+        /// </summary>
+        private static List<(int Column, Rect Slice)>? FragmentSlicesOf(CssBox inline, List<ColumnFragmentainerRecord> columns)
+        {
+            var rectangles = inline.RectanglesView;
+            if (rectangles.Count < 2) return null;
+
+            // The column a fragment is in: the one whose inline span holds its middle (half-open, so a fragment at the start of
+            // a column is not taken for the end of the one before) and whose band holds its middle (a fragment's box is the
+            // font's content area, which can reach past the line box it sits on).
+            int ColumnOf(Rect rect)
+            {
+                var centre = rect.X + rect.Width / 2;
+
+                for (var i = 0; i < columns.Count; i++)
+                {
+                    if (centre >= columns[i].InlineLeft - 0.01 && centre < columns[i].InlineRight - 0.01 && columns[i].ContainsBlock(rect.Y + rect.Height / 2)) return i;
+                }
+
+                return -1;
+            }
+
+            // The first and last fragments in the order the columns are read. A fragment that is in no column is left out, and so is
+            // an empty one while the inline has any other: browsers do not count the zero-width box a trailing <br> leaves
+            // at the start of the next line.
+            var anyContent = rectangles.Values.Any(r => r.Width > 0.01);
+            Rect first = default, last = default;
+            int firstColumn = -1, lastColumn = -1;
+
+            foreach (var rect in rectangles.Values)
+            {
+                if (anyContent && rect.Width <= 0.01) continue;
+
+                var column = ColumnOf(rect);
+                if (column < 0) continue;
+
+                if (firstColumn < 0 || column < firstColumn || (column == firstColumn && rect.Top < first.Top))
+                {
+                    first = rect;
+                    firstColumn = column;
+                }
+
+                if (lastColumn < 0 || column > lastColumn || (column == lastColumn && rect.Bottom > last.Bottom))
+                {
+                    last = rect;
+                    lastColumn = column;
+                }
+            }
+
+            if (firstColumn < 0 || lastColumn < 0 || firstColumn == lastColumn) return null;
+
+            var rtl = inline.Direction.Value == DirectionMode.Rtl;
+
+            // Each inline edge relative to the inline start of the column its fragment is in; the block edges stay absolute.
+            var leftSource = rtl ? last : first;
+            var leftColumn = columns[rtl ? lastColumn : firstColumn];
+            var rightSource = rtl ? first : last;
+            var rightColumn = columns[rtl ? firstColumn : lastColumn];
+
+            var leftOffset = leftSource.Left + inline.ActualBorderLeftWidth - leftColumn.InlineLeft;
+            var rightOffset = rightSource.Right - inline.ActualBorderRightWidth - rightColumn.InlineLeft;
+            var top = first.Top + inline.ActualBorderTopWidth;
+            var bottom = last.Bottom - inline.ActualBorderBottomWidth;
+
+            var slices = new List<(int, Rect)>();
+
+            for (var c = firstColumn; c <= lastColumn; c++)
+            {
+                var column = columns[c];
+                var sliceTop = c == firstColumn ? top : column.BandTop;
+                var sliceBottom = c == lastColumn ? bottom : column.BandBottom;
+                var left = column.InlineLeft + leftOffset;
+                var right = column.InlineLeft + rightOffset;
+
+                slices.Add((c, new Rect(left, sliceTop, Math.Max(0, right - left), Math.Max(0, sliceBottom - sliceTop))));
+            }
+
+            return slices;
         }
 
         /// <summary>

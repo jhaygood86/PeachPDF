@@ -1629,6 +1629,26 @@ namespace PeachBrackets.Html.Fragmentation
         /// <summary>
         /// How many nested fragmentainers <paramref name="contextRoot"/> has recorded in <paramref name="slot"/>.
         /// </summary>
+        /// <summary>
+        /// States <paramref name="box"/>'s current geometry as its slice in the <paramref name="index"/>th fragmentainer
+        /// <paramref name="contextRoot"/> recorded in <paramref name="slot"/> - the box laid out against the part of its
+        /// containing block that is in that fragmentainer.
+        /// </summary>
+        /// <returns>false when there is no such fragmentainer</returns>
+        internal bool StateSliceInCapturedInstance(CssBox contextRoot, int slot, int index, CssBox box)
+        {
+            if (!_capturedInstances.TryGetValue((contextRoot, slot), out var fragmentainers)
+                || index < 0 || index >= fragmentainers.Count)
+            {
+                return false;
+            }
+
+            fragmentainers[index].Geometry.AddSlice(box);
+            box.DiscardEmittedNothing();
+
+            return true;
+        }
+
         internal int CapturedInstanceCount(CssBox contextRoot, int slot) =>
             _capturedInstances.TryGetValue((contextRoot, slot), out var fragmentainers) ? fragmentainers.Count : 0;
 
@@ -3404,7 +3424,11 @@ namespace PeachBrackets.Html.Fragmentation
             if (capture is { Region.Left: not null, ContextRoot: { } columnsRoot } inAColumn
                 && box.Position.Value is PositionMode.Absolute)
             {
-                if (HeldByALaterColumn(box, columnsRoot, slot.Index, inAColumn)) return null;
+                // A box laid out once for each column its containing block (a positioned inline) is in has a slice stated in
+                // each of them, and every column emits its own.
+                var statedHere = inAColumn.Geometry.TryGetGeometry(box, out var slice) && slice.IsStatedPerFragmentainer;
+
+                if (!statedHere && HeldByALaterColumn(box, columnsRoot, slot.Index, inAColumn)) return null;
 
                 capture = inAColumn with { Region = PageRegionOf(isFixed: false, slot) };
             }
