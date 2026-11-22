@@ -977,6 +977,25 @@ namespace PeachBrackets.Html.Utils
         }
 
         /// <summary>
+        /// The first fragment of an inline that a block split, as <see cref="CssBox.SplitInlineLeading"/> names it: the rectangle of the piece before the block, or the empty
+        /// fragment at the end of the last line of the block the inline began in.
+        /// </summary>
+        private static Rect? LeadingFragmentOf(CssBox leading)
+        {
+            if (leading.IsInline)
+            {
+                var rectangles = leading.RectanglesView;
+                return rectangles.Count > 0 ? rectangles.Values.MinBy(r => r.Top) : null;
+            }
+
+            if (leading.LineBoxes.Count == 0) return null;
+
+            var line = leading.LineBoxes[^1];
+            var x = line.Words.Count > 0 ? line.Words.Max(w => w.Right) : leading.ClientLeft;
+            return new Rect(x, line.LineTop, 0, Math.Max(0, line.LineBottom - line.LineTop));
+        }
+
+        /// <summary>
         /// The containing block a positioned <b>inline</b> ancestor forms for an absolutely positioned
         /// descendant, or null when <paramref name="ancestor"/> is not a non-atomic inline with laid-out
         /// fragments (or, for an empty one, a <see cref="CssBox.EmptyInlineContainingBlock"/>). Every other
@@ -1015,6 +1034,12 @@ namespace PeachBrackets.Html.Utils
             var first = ancestor.FirstHostingLineBox is { } firstLine && rectangles.TryGetValue(firstLine, out var f)
                 ? f
                 : rectangles.Values.MinBy(r => r.Top);
+
+            // A piece after a block that split the inline: the first fragment is before the block.
+            if (ancestor.SplitInlineLeading is { } leading && LeadingFragmentOf(leading) is { } leadingFragment && leadingFragment.Top < first.Top)
+            {
+                first = leadingFragment;
+            }
             var last = ancestor.LastHostingLineBox is { } lastLine && rectangles.TryGetValue(lastLine, out var l)
                 ? l
                 : rectangles.Values.MaxBy(r => r.Bottom);

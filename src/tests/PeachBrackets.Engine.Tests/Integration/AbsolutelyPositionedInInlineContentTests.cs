@@ -310,6 +310,20 @@ namespace PeachBrackets.Engine.Tests.Integration
         }
 
         [Fact]
+        public async Task AbsolutelyPositionedChild_AfterABlockThatSplitAPositionedInline_IsPlacedFromTheLineTheInlineBeganOn()
+        {
+            // The block splits the inline in two; the containing block still starts at the inline's first fragment, on the line before the block.
+            var (root, _) = await LayoutAsync(
+                "<div id='c' style='width: 100pt'><div style='height: 60pt'></div><i id='b'>B</i> <span style='position: relative'><div style='height: 10pt'></div>AA " +
+                "<b id='a' style='position: absolute; top: 0; left: 0; width: 4pt; height: 4pt'></b></span></div>");
+
+            var abs = Find(root, "a");
+            var before = Assert.Single(Find(root, "b").Rectangles.Values);
+
+            Assert.Equal(before.Top, abs.Location.Y, 0);
+        }
+
+        [Fact]
         public async Task AbsolutelyPositionedChild_OfAFloatInsideAnEmptyPositionedInline_IsNotLeftAtTheOrigin()
         {
             // No word is placed in the inline itself, so it has no fragment: the box is anchored at the

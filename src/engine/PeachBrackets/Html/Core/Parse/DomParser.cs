@@ -4349,6 +4349,7 @@ namespace PeachBrackets.Html.Parse
                 {
                     rightBox = CssBox.CreateBox(parentBox, badBox.HtmlTag);
                     rightBox.InheritStyle(badBox, true);
+                    rightBox.SplitInlineLeading = badBox.SplitInlineLeading ?? leftbox ?? leftBlock;
 
                     // Right after the block that was split at, which is index 1 unless the recursion above already hoisted the block (and
                     // its own pieces) into the parent: then the pieces are in source order after it and the right piece belongs at the end.

@@ -1799,6 +1799,13 @@ namespace PeachBrackets.Html.Dom
         /// </summary>
         internal bool? WasBlockLevelBeforeBlockification { get; set; }
 
+        /// <summary>
+        /// For a piece of an inline that a block split in two or more (the clone holding what follows the block): where the inline's first fragment is. Either the piece of the
+        /// inline before the block, or, when nothing of the inline came before it, the block holding the line it began on, where it is an empty fragment at the line's end. The
+        /// containing block of a positioned inline is formed from its first and last fragments (css-position-3 section 2.1), so the pieces after the block need it.
+        /// </summary>
+        internal CssBox? SplitInlineLeading { get; set; }
+
         /// <summary>Whether the place an inline-level absolute box was passed at on its line has an odd bidi level, so the box starts there at its right edge (<see cref="StaticPositionIn"/>).</summary>
         internal bool InlineStaticPlaceIsRtl { get; set; }
 
