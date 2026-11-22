@@ -173,6 +173,7 @@ PeachDrawing.PDF.PdfComposer : sealed class
   method PdfComposerPage AddPage(Double widthPoints, Double heightPoints)
   method PdfFormBuilder CreateFormBuilder(PdfRenderContext renderContext, String generatedNamePrefix = Field)
   method PdfTagRecorder CreateTagRecorder(Boolean requireAlternateText = False)
+  method Task SaveAsync(Stream stream, CancellationToken cancellationToken = null)
   method Void AddBookmarks(IEnumerable<PdfBookmark> bookmarks)
   method Void AddNamedDestination(String name, Int32 pageIndex, Double topPoints)
   method Void AddPageLabels(IEnumerable<PdfPageLabelRange> ranges)
@@ -428,6 +429,7 @@ PeachDrawing.PDF.PdfSigningOptions : sealed class
   property IList<X509Certificate2> AdditionalCertificates { get; }
   property Int32 ReservedSignatureBytes { get; set; }
   property PdfSignatureFormat Format { get; set; }
+  property PdfTimestampOptions Timestamp { get; set; }
   property String ContactInfo { get; set; }
   property String Location { get; set; }
   property String Reason { get; set; }
@@ -548,6 +550,11 @@ PeachDrawing.PDF.PdfTextSearchOptions : enum Int32
   MatchCase = 1
   None = 0
   WholeWord = 2
+PeachDrawing.PDF.PdfTimestampOptions : sealed class
+  ctor()
+  method static PdfTimestampOptions FromHttpAuthority(Uri authority, HttpClient client)
+  property Func<ReadOnlyMemory<Byte>, CancellationToken, Task<Byte[]>> Exchange { get; set; }
+  property HashAlgorithmName HashAlgorithm { get; set; }
 PeachDrawing.PDF.PdfUAConformance : enum Int32
   None = 0
   UA1 = 1

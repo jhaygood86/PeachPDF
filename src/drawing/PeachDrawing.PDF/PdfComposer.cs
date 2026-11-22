@@ -5,6 +5,8 @@ using PeachDrawing.PDF.Engine.Security;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace PeachDrawing.PDF;
 /// <summary>
@@ -281,6 +283,63 @@ public sealed partial class PdfComposer : IDisposable
     public void Save(Stream stream)
     {
         ArgumentNullException.ThrowIfNull(stream);
+        if (_signing?.Timestamp is not null)
+            throw new InvalidOperationException("The document is signed with a timestamp, whose authority is asked asynchronously: call SaveAsync.");
+
+        PrepareToSave();
+        if (_signing is null)
+        {
+            _document.Save(stream);
+            return;
+        }
+
+        // The signature covers the final bytes, so the file is written to memory, signed in place and then copied out.
+        var file = WriteToMemory();
+        PdfDocumentSigner.Seal(file, _signing);
+        CopyOut(file, stream);
+    }
+
+    /// <summary>
+    /// Finishes the pages and writes the file like <see cref="Save"/>, asking the time stamping authority of
+    /// <see cref="PdfSigningOptions.Timestamp"/> for its token when the document is signed with one.
+    /// </summary>
+    /// <param name="stream">where to write; it is not closed</param>
+    /// <param name="cancellationToken">cancels the request to the authority</param>
+    /// <returns>a task that completes when the file is written</returns>
+    /// <exception cref="InvalidOperationException">the document has no pages, or the authority's answer is refused or its token does not fit in the room reserved for the signature</exception>
+    public async Task SaveAsync(Stream stream, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(stream);
+
+        PrepareToSave();
+        if (_signing is null)
+        {
+            _document.Save(stream);
+            return;
+        }
+
+        var file = WriteToMemory();
+        await PdfDocumentSigner.SealAsync(file, _signing, cancellationToken).ConfigureAwait(false);
+        CopyOut(file, stream);
+    }
+
+    private byte[] WriteToMemory()
+    {
+        _signatureField ??= PdfDocumentSigner.AddField(_document, _signing!);
+        using var buffer = new MemoryStream();
+        _document.Save(buffer);
+        return buffer.ToArray();
+    }
+
+    private static void CopyOut(byte[] file, Stream stream)
+    {
+        stream.Write(file);
+        if (stream.CanSeek)
+            stream.Position = 0;
+    }
+
+    private void PrepareToSave()
+    {
 
         if (_document.PageCount == 0)
             throw new InvalidOperationException("A PDF file needs at least one page; call AddPage first.");
@@ -300,22 +359,6 @@ public sealed partial class PdfComposer : IDisposable
         foreach (var page in _pages)
             page.ApplyPrintBoxes();
         WritePageLabels();
-
-        if (_signing is null)
-        {
-            _document.Save(stream);
-            return;
-        }
-
-        // The signature covers the final bytes, so the file is written to memory, signed in place and then copied out.
-        _signatureField ??= PdfDocumentSigner.AddField(_document, _signing);
-        using var buffer = new MemoryStream();
-        _document.Save(buffer);
-        var file = buffer.ToArray();
-        PdfDocumentSigner.Seal(file, _signing);
-        stream.Write(file);
-        if (stream.CanSeek)
-            stream.Position = 0;
     }
 
     private PdfSigningOptions? _signing;

@@ -168,7 +168,20 @@ var options = new PdfComposerOptions
 
 The saved file has an invisible signature field on the first page whose value is a detached CMS signature over every byte of the file except the signature itself, so a reader reports any later change. The composer reserves room for the signature (`ReservedSignatureBytes`, 16 KB by default), writes the file, then fills the room in without moving any byte, which is why signing works with encryption and with `Linearize`. `Pkcs7Detached` writes `adbe.pkcs7.detached` with the signing time as a signed attribute and is read by the most software; `CadesDetached` writes `ETSI.CAdES.detached`, the form the PAdES baseline profiles build on, binding the signing certificate with a signed attribute. The digest is SHA-256, SHA-384 or SHA-512 (`HashAlgorithm`), and RSA and ECDSA keys are both supported.
 
-Only the signing certificate and the ones in `AdditionalCertificates` are embedded; the chain is neither built nor fetched. A signed file must not be changed afterwards, and a `PdfOperation` that draws or copies a signed source writes an unsigned file and says so in `Warnings`. Timestamps, long-term validation data, visible signature appearances and signing an existing file are not written yet.
+Only the signing certificate and the ones in `AdditionalCertificates` are embedded; the chain is neither built nor fetched. A signed file must not be changed afterwards, and a `PdfOperation` that draws or copies a signed source writes an unsigned file and says so in `Warnings`. Long-term validation data, visible signature appearances and signing an existing file are not written yet.
+
+### Timestamps
+
+```csharp
+Signing = new PdfSigningOptions
+{
+    Certificate = certificate,
+    Format = PdfSignatureFormat.CadesDetached,
+    Timestamp = PdfTimestampOptions.FromHttpAuthority(new Uri("https://tsa.example/"), httpClient),
+},
+```
+
+A time stamping authority (RFC 3161) can vouch for when the signature was made: the composer builds the request for the signature value, checks the authority's answer (the digest and nonce must match) and embeds the token in the signature, so a reader can show a signing time the signer could not have chosen. The package makes no network request of its own. `PdfTimestampOptions.FromHttpAuthority` posts the request with the `HttpClient` you give it (so credentials, proxies and timeouts are yours); a host with its own transport sets `Exchange`, a function from the request's bytes to the response's bytes, instead. Because the exchange is asynchronous, a timestamped document is written with `PdfComposer.SaveAsync`; `Save` refuses it. The token adds several kilobytes, so raise `ReservedSignatureBytes` when a save reports that the signature does not fit.
 
 ## Archival and print conformance
 

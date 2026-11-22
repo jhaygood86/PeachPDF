@@ -47,6 +47,12 @@ public sealed class PdfSigningOptions
     /// <summary>The signature format. Defaults to <see cref="PdfSignatureFormat.Pkcs7Detached"/>.</summary>
     public PdfSignatureFormat Format { get; set; } = PdfSignatureFormat.Pkcs7Detached;
 
+    /// <summary>
+    /// A time stamping authority to have vouch for the signing time, or <see langword="null"/> (the default) for none. A document
+    /// that has one must be saved with <see cref="PdfComposer.SaveAsync"/>.
+    /// </summary>
+    public PdfTimestampOptions? Timestamp { get; set; }
+
     /// <summary>The signer's name as the signature field shows it, or <see langword="null"/> to leave it out.</summary>
     public string? SignerName { get; set; }
 
@@ -77,6 +83,7 @@ public sealed class PdfSigningOptions
             Location = Location,
             ContactInfo = ContactInfo,
             ReservedSignatureBytes = ReservedSignatureBytes,
+            Timestamp = Timestamp?.Clone(),
         };
         foreach (var certificate in AdditionalCertificates)
             copy.AdditionalCertificates.Add(certificate);
@@ -93,6 +100,7 @@ public sealed class PdfSigningOptions
             throw new InvalidOperationException("PdfSigningOptions.HashAlgorithm must be SHA-256, SHA-384 or SHA-512.");
         if (!Enum.IsDefined(Format))
             throw new InvalidOperationException("PdfSigningOptions.Format is not a defined format.");
+        Timestamp?.Validate();
         if (ReservedSignatureBytes is < 2048 or > 1_000_000)
             throw new InvalidOperationException("PdfSigningOptions.ReservedSignatureBytes must be from 2048 to 1000000.");
     }

@@ -3,6 +3,8 @@ using System.Formats.Asn1;
 using System.Security.Cryptography;
 using System.Security.Cryptography.Pkcs;
 using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
 using PeachDrawing.PDF.Engine.AcroForms;
 using PeachDrawing.PDF.Engine.Annotations;
 using PeachDrawing.PDF.Engine.Internal;
@@ -17,6 +19,7 @@ internal static class PdfDocumentSigner
 {
     const string ByteRangePlaceholder = "[0 0000000000 0000000000 0000000000]";
     const string ContentTypeSigningCertificateV2 = "1.2.840.113549.1.9.16.2.47";
+    const string SignatureTimeStampToken = "1.2.840.113549.1.9.16.2.14";
 
     /// <summary>Adds the invisible signature field (and its value dictionary with the placeholders) to the first page and the form.</summary>
     public static PdfSignatureField AddField(PdfDocument document, PdfSigningOptions options)
@@ -62,6 +65,22 @@ internal static class PdfDocumentSigner
     /// <exception cref="InvalidOperationException">the placeholder is not in the file exactly once, or the signature does not fit in it</exception>
     public static void Seal(byte[] file, PdfSigningOptions options)
     {
+        var (covered, contentsStart) = PatchByteRange(file, options);
+        Write(file, contentsStart, options, BuildCms(covered, options).Encode());
+    }
+
+    /// <summary>As <see cref="Seal"/>, and embeds the time stamping authority's token when the options ask for one.</summary>
+    public static async Task SealAsync(byte[] file, PdfSigningOptions options, CancellationToken cancellationToken)
+    {
+        var (covered, contentsStart) = PatchByteRange(file, options);
+        var cms = BuildCms(covered, options);
+        if (options.Timestamp is { } timestamp)
+            await AddTimestampAsync(cms, timestamp, cancellationToken).ConfigureAwait(false);
+        Write(file, contentsStart, options, cms.Encode());
+    }
+
+    static (byte[] Covered, int ContentsStart) PatchByteRange(byte[] file, PdfSigningOptions options)
+    {
         int reserved = options.ReservedSignatureBytes * 2;
         var contentsNeedle = Encoding.ASCII.GetBytes("<" + new string('0', reserved) + ">");
         int contentsStart = Single(file, contentsNeedle, "/Contents");
@@ -74,9 +93,12 @@ internal static class PdfDocumentSigner
         var covered = new byte[file.Length - contentsNeedle.Length];
         Buffer.BlockCopy(file, 0, covered, 0, contentsStart);
         Buffer.BlockCopy(file, contentsEnd, covered, contentsStart, file.Length - contentsEnd);
+        return (covered, contentsStart);
+    }
 
-        var signature = Sign(covered, options);
-        if (signature.Length * 2 > reserved)
+    static void Write(byte[] file, int contentsStart, PdfSigningOptions options, byte[] signature)
+    {
+        if (signature.Length > options.ReservedSignatureBytes)
         {
             throw new InvalidOperationException(
                 $"The signature is {signature.Length} bytes but only {options.ReservedSignatureBytes} are reserved; raise PdfSigningOptions.ReservedSignatureBytes.");
@@ -84,6 +106,29 @@ internal static class PdfDocumentSigner
 
         var hex = Encoding.ASCII.GetBytes(Convert.ToHexString(signature));
         Buffer.BlockCopy(hex, 0, file, contentsStart + 1, hex.Length);
+    }
+
+    /// <summary>
+    /// Asks the authority to timestamp the signature value (RFC 3161) and adds its token as the <c>signature-time-stamp-token</c>
+    /// unsigned attribute (RFC 3161 Appendix A), which a signature's own digest does not cover.
+    /// </summary>
+    static async Task AddTimestampAsync(SignedCms cms, PdfTimestampOptions options, CancellationToken cancellationToken)
+    {
+        var signer = cms.SignerInfos[0];
+        var request = Rfc3161TimestampRequest.CreateFromData(signer.GetSignature(), options.HashAlgorithm, nonce: PdfEntropy.GetBytes(8), requestSignerCertificates: true);
+        var response = await options.Exchange!(request.Encode(), cancellationToken).ConfigureAwait(false);
+
+        Rfc3161TimestampToken token;
+        try
+        {
+            token = request.ProcessResponse(response, out _);
+        }
+        catch (CryptographicException error)
+        {
+            throw new InvalidOperationException("The time stamping authority's response was refused: " + error.Message, error);
+        }
+
+        signer.AddUnsignedAttribute(new AsnEncodedData(new Oid(SignatureTimeStampToken), token.AsSignedCms().Encode()));
     }
 
     static int Single(byte[] file, byte[] needle, string name)
@@ -94,8 +139,8 @@ internal static class PdfDocumentSigner
         return first;
     }
 
-    /// <summary>The DER-encoded detached CMS signature of <paramref name="data"/>.</summary>
-    internal static byte[] Sign(byte[] data, PdfSigningOptions options)
+    /// <summary>The detached CMS signature of <paramref name="data"/>.</summary>
+    internal static SignedCms BuildCms(byte[] data, PdfSigningOptions options)
     {
         var certificate = options.Certificate!;
         var signer = new CmsSigner(SubjectIdentifierType.IssuerAndSerialNumber, certificate)
@@ -113,7 +158,7 @@ internal static class PdfDocumentSigner
 
         var cms = new SignedCms(new ContentInfo(data), detached: true);
         cms.ComputeSignature(signer);
-        return cms.Encode();
+        return cms;
     }
 
     /// <summary>The ESS <c>signing-certificate-v2</c> attribute (RFC 5035) that binds the signature to one certificate.</summary>
