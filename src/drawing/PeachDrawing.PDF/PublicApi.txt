@@ -378,6 +378,7 @@ PeachDrawing.PDF.PdfPageSource : sealed class
   method IReadOnlyList<PdfEmbeddedFile> GetAttachments()
   method IReadOnlyList<PdfFormFieldDefinition> GetFormFields(Int32 pageIndex, Double pixelsPerPoint = 1, Func<String, String> rename = null)
   method IReadOnlyList<PdfSourceLink> GetLinks(Int32 pageIndex)
+  method IReadOnlyList<PdfSourceSignature> GetSignatures()
   method IReadOnlyList<String> GetPageLabels()
   method PdfPageText GetText(Int32 pageIndex)
   method PdfSourceConformance GetConformance()
@@ -496,6 +497,23 @@ PeachDrawing.PDF.PdfSourceOutputIntent : sealed class
   property Byte[] Profile { get; init; }
   property String Identifier { get; init; }
   property String Info { get; init; }
+PeachDrawing.PDF.PdfSourceSignature : sealed class
+  ctor()
+  property Boolean CoversWholeFile { get; init; }
+  property Boolean IsDocumentTimestamp { get; init; }
+  property Boolean IsIntact { get; init; }
+  property Boolean? TimestampIsValid { get; init; }
+  property DateTimeOffset? ClaimedTime { get; init; }
+  property DateTimeOffset? TimestampTime { get; init; }
+  property String ContactInfo { get; init; }
+  property String FieldName { get; init; }
+  property String Location { get; init; }
+  property String Problem { get; init; }
+  property String Reason { get; init; }
+  property String SignerName { get; init; }
+  property String SubFilter { get; init; }
+  property X509Certificate2 SignerCertificate { get; init; }
+  property X509Certificate2 TimestampCertificate { get; init; }
 PeachDrawing.PDF.PdfStructureAttributeValue : sealed class
   method static PdfStructureAttributeValue FromBoolean(Boolean flag)
   method static PdfStructureAttributeValue FromList(IEnumerable<PdfStructureAttributeValue> items)

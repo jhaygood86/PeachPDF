@@ -253,6 +253,16 @@ public sealed class PdfPageSource
         get { lock (_sync) return _forms.HasSignatures(); }
     }
 
+    /// <summary>
+    /// The digital signatures and document timestamps the file carries, in the order its form lists them, each checked against the bytes
+    /// it covers. Nothing here decides whether a certificate is trusted: see <see cref="PdfSourceSignature"/>.
+    /// </summary>
+    /// <returns>the signatures, or an empty list for an unsigned file</returns>
+    public IReadOnlyList<PdfSourceSignature> GetSignatures()
+    {
+        lock (_sync) return new PdfSourceSignatures(_document).Read();
+    }
+
     /// <summary>The PDF/A and PDF/X levels the file claims for itself.</summary>
     /// <returns>the levels, <c>None</c> where it claims none</returns>
     public PdfSourceConformance GetConformance()

@@ -168,7 +168,7 @@ var options = new PdfComposerOptions
 
 The saved file has an invisible signature field on the first page whose value is a detached CMS signature over every byte of the file except the signature itself, so a reader reports any later change. The composer reserves room for the signature (`ReservedSignatureBytes`, 16 KB by default), writes the file, then fills the room in without moving any byte, which is why signing works with encryption and with `Linearize`. `Pkcs7Detached` writes `adbe.pkcs7.detached` with the signing time as a signed attribute and is read by the most software; `CadesDetached` writes `ETSI.CAdES.detached`, the form the PAdES baseline profiles build on, binding the signing certificate with a signed attribute. The digest is SHA-256, SHA-384 or SHA-512 (`HashAlgorithm`), and RSA and ECDSA keys are both supported.
 
-Only the signing certificate and the ones in `AdditionalCertificates` are embedded; the chain is neither built nor fetched. A signed file must not be changed afterwards, and a `PdfOperation` that draws or copies a signed source writes an unsigned file and says so in `Warnings`. Long-term validation data and visible signature appearances are not written yet.
+Only the signing certificate and the ones in `AdditionalCertificates` are embedded; the chain is neither built nor fetched. A signed file must not be changed afterwards, and a `PdfOperation` that draws or copies a signed source writes an unsigned file and says so in `Warnings`. Long-term validation data and visible signature appearances are not written yet. To check a file's signatures, see [Reading signatures](#reading-signatures).
 
 ### Timestamps
 
@@ -191,6 +191,17 @@ byte[] stamped = await PdfFileSigner.AddDocumentTimestampAsync(signed, PdfTimest
 ```
 
 `PdfFileSigner` signs or timestamps a PDF you did not write with this package, as an incremental update: every byte of the original stays exactly as it was, so signatures the file already carries stay valid, and only the catalog, the form, the first page and the lists that name the new field are written again, followed by a new cross-reference section (a classic table, or a stream when the file uses one). `Sign` and `SignAsync` add one invisible signature field to the first page, numbered after the fields the file already has (`Signature1`, `Signature2`...); `AddDocumentTimestampAsync` adds a document timestamp instead (a `DocTimeStamp` field whose token covers the whole file, signatures included), which is how a signed file is kept trustworthy after its certificate expires. Call them again on the result to add more. The input array is not modified. An encrypted file is refused, because its objects would have to be written encrypted; so is one whose cross-reference data is damaged and had to be rebuilt.
+
+### Reading signatures
+
+```csharp
+foreach (var signature in PdfPageSource.Open(bytes).GetSignatures())
+    Console.WriteLine($"{signature.FieldName}: intact={signature.IsIntact}, whole file={signature.CoversWholeFile}, signer={signature.SignerCertificate?.Subject}");
+```
+
+`PdfPageSource.GetSignatures` lists each signature and document timestamp in the order the form lists them, as `PdfSourceSignature` values: what the signature states (`SignerName`, `Reason`, `Location`, `ContactInfo`, the signer's own `ClaimedTime`), the certificate it embeds, and what checking found. `IsIntact` is true when the CMS signature (or the timestamp token) is well formed and matches the bytes its byte range names; when it is false, `Problem` says why. `CoversWholeFile` is false when bytes follow the signed range, which is the normal state of every signature but the last in a file that was extended; this does not tell a harmless later signature from a change. An embedded timestamp is reported as `TimestampTime`, `TimestampCertificate` and `TimestampIsValid` (whether the token vouches for this signature's value). A signature is read from the file's own bytes, so an encrypted file works.
+
+Whether to trust what is reported is yours to decide: nothing here builds a certificate chain, checks revocation, or compares the signing time with the certificate's validity. Build an `X509Chain` from `SignerCertificate` (or `TimestampCertificate`) with the policy you need. Signatures made with the legacy sub-filters (`adbe.x509.rsa_sha1`) are reported as not intact rather than checked.
 
 ## Archival and print conformance
 
