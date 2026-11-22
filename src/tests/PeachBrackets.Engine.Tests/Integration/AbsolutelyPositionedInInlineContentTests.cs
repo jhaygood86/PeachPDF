@@ -324,6 +324,21 @@ namespace PeachBrackets.Engine.Tests.Integration
         }
 
         [Fact]
+        public async Task AbsolutelyPositionedChild_OfAPositionedInlineWhoseFirstWordWrapped_IsPlacedFromTheEndOfTheLineItBeganOn()
+        {
+            // None of the inline's words fit after "BBBB", so it has no fragment on that line; its first fragment is empty, at the end of the text there.
+            var (root, _) = await LayoutAsync(
+                "<div id='c' style='width: 100pt'><i id='b' style='letter-spacing: 12pt'>BBBB</i> <span id='s' style='position: relative'>" +
+                "<b id='a' style='position: absolute; top: 0; left: 0; width: 4pt; height: 4pt'></b>AA A AA AAAA</span></div>");
+
+            var abs = Find(root, "a");
+            var before = Assert.Single(Find(root, "b").Rectangles.Values);
+
+            Assert.InRange(abs.Location.X, before.Right - 1, before.Right + 4); // the word ends after the last letter's trailing spacing
+            Assert.InRange(abs.Location.Y, before.Top - 2, before.Top + 2); // on the line before the wrapped text
+        }
+
+        [Fact]
         public async Task AbsolutelyPositionedChild_OfAFloatInsideAnEmptyPositionedInline_IsNotLeftAtTheOrigin()
         {
             // No word is placed in the inline itself, so it has no fragment: the box is anchored at the

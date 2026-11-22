@@ -42,4 +42,6 @@ css-position went from 35 to 54 passing reftests (floor 32 -> 51; the CI-font ma
 
 `CorrectBlockSplitBadBox` turns an inline split by a block into hoisted blocks plus a clone of the inline that holds what follows, with no link to what came before. `CssBox.SplitInlineLeading` now names the first fragment (the piece before the block, or an empty fragment at the end of the last line of the block the inline began in), and `DomUtils.InlineContainingBlockOf` takes its top from it (css-position-3 section 2.1). Fixes `position-absolute-in-inline-003`.
 
-Not done: `-004` needs the span's zero-width fragment at the end of the line its first word wrapped away from; `-005` to `-012` (inline-block and multicol variants) have other causes.
+Also, an inline whose first word wrapped away has no rectangle on the line it began on (`FirstHostingLineBox`); `InlineContainingBlockOf` now uses an empty fragment at the end of that line's last non-space word (css-position `-004`).
+
+Not done: `-005` to `-012` (inline-block and multicol variants) have other causes.

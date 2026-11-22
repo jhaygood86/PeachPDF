@@ -996,6 +996,18 @@ namespace PeachBrackets.Html.Utils
         }
 
         /// <summary>
+        /// A zero-width fragment where the content of <paramref name="line"/> ends: after its last word that is not collapsible space (before its first, in a right-to-left inline).
+        /// </summary>
+        private static Rect? EmptyFragmentAtTheEndOf(CssLineBox line, bool rtl)
+        {
+            var words = line.Words.Where(w => !w.IsSpaces).ToList();
+            if (words.Count == 0) return null;
+
+            var x = rtl ? words.Min(w => w.Left) : words.Max(w => w.Right);
+            return new Rect(x, line.LineTop, 0, Math.Max(0, line.LineBottom - line.LineTop));
+        }
+
+        /// <summary>
         /// The containing block a positioned <b>inline</b> ancestor forms for an absolutely positioned
         /// descendant, or null when <paramref name="ancestor"/> is not a non-atomic inline with laid-out
         /// fragments (or, for an empty one, a <see cref="CssBox.EmptyInlineContainingBlock"/>). Every other
@@ -1034,6 +1046,13 @@ namespace PeachBrackets.Html.Utils
             var first = ancestor.FirstHostingLineBox is { } firstLine && rectangles.TryGetValue(firstLine, out var f)
                 ? f
                 : rectangles.Values.MinBy(r => r.Top);
+
+            // The inline began on a line where none of its words fit, and wrapped: its first fragment is empty, at the end of what is on that line.
+            if (ancestor.FirstHostingLineBox is { } openingLine && !rectangles.ContainsKey(openingLine) && openingLine.LineTop < first.Top
+                && EmptyFragmentAtTheEndOf(openingLine, ancestor.Direction.Value == DirectionMode.Rtl) is { } emptyFragment)
+            {
+                first = emptyFragment;
+            }
 
             // A piece after a block that split the inline: the first fragment is before the block.
             if (ancestor.SplitInlineLeading is { } leading && LeadingFragmentOf(leading) is { } leadingFragment && leadingFragment.Top < first.Top)
