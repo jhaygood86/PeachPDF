@@ -895,7 +895,7 @@ namespace PeachBrackets.Html.Dom
         /// </para>
         /// <para>
         /// Its inline position is where the walk passed the box, carried through alignment and bidi
-        /// reordering by an adjacent word (<see cref="PlaceOnFinalLine"/>, which is right within a bidi run
+        /// reordering by an adjacent word (<see cref="PlaceOnFinalLine(SetAsideBox)"/>, which is right within a bidi run
         /// but not at a run boundary). Its block extent is the content
         /// area a word in the inline's own font has on the line (baseline less ascent, one font height),
         /// plus the inline's padding; on a line with no word, it starts at the line's top. The inline's own
@@ -1054,6 +1054,7 @@ namespace PeachBrackets.Html.Dom
         /// </summary>
         /// <param name="setAside">the set-aside box</param>
         /// <param name="anchorLevel">the level the anchor word was reordered at</param>
+        /// <param name="placeLevel">the level the place itself resolves to, whether or not it is in its anchor's run</param>
         /// <returns>the place's inline position on the final line, or null to let the caller place it in its anchor's run</returns>
         private static double? PlaceAtABidiRunBoundary(SetAsideBox setAside, byte anchorLevel, out byte placeLevel)
         {
@@ -6568,6 +6569,43 @@ namespace PeachBrackets.Html.Dom
             }
 
             return best;
+        }
+
+        /// <summary>
+        /// Where an inline-level absolute box among a block's block-level children is put (css-position-3 section 3.4): at the start of a line of its own at
+        /// <paramref name="top"/>, which is as narrow as the floats there leave it, aligned by the block's <c>text-align</c> as an empty line is. In a right-to-left
+        /// block the box's right edge is there, as at any place of an odd bidi level.
+        /// </summary>
+        /// <returns>the inline position of the place, and whether it is where the box's right edge goes</returns>
+        internal static (double X, bool IsRightEdge) StaticPositionOfALineAt(CssBox block, CssBox box, double top)
+        {
+            var left = block.ClientLeft;
+            var right = block.ClientRight;
+
+            // The floats before the box among the block's children that reach down to the line's top: the line is narrowed to leave them clear.
+            foreach (var sibling in block.Boxes)
+            {
+                if (ReferenceEquals(sibling, box)) break;
+                if (!sibling.IsFloated || sibling.DerivedStyle.ActualDisplay == Keywords.None) continue;
+                if (sibling.FlowBottomEdgeIn(block) + sibling.ActualMarginBottom <= top || sibling.Location.Y - sibling.ActualMarginTop > top) continue;
+
+                if (sibling.EffectiveFloatSide == Floating.Right) right = Math.Min(right, sibling.FlowLeftEdgeIn(block) - sibling.ActualMarginLeft);
+                else left = Math.Max(left, sibling.FlowRightEdgeIn(block) + sibling.ActualMarginRight);
+            }
+
+            var rtl = block.Direction.Value == DirectionMode.Rtl;
+            var alignment = ResolveLogicalAlignment(block.ActualTextAlignAll,
+                rtl ? HorizontalAlignment.Right : HorizontalAlignment.Left, rtl ? HorizontalAlignment.Left : HorizontalAlignment.Right);
+
+            var x = alignment switch
+            {
+                HorizontalAlignment.Left => left,
+                HorizontalAlignment.Right => right,
+                HorizontalAlignment.Center => (left + right) / 2,
+                _ => rtl ? right : left
+            };
+
+            return (x, rtl);
         }
 
         /// <summary>

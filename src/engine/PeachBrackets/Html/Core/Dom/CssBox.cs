@@ -8249,6 +8249,14 @@ namespace PeachBrackets.Html.Dom
                 top = previous is null ? ClientTop : previous.StaticBottom + previous.ActualMarginBottom;
             }
 
+            // An inline-level box among block-level siblings has a line of its own at that place, as narrow as the floats there leave it and aligned by text-align.
+            if (acrossStatic && top is { } lineTop && child.WasBlockLevelBeforeBlockification == false && !WritingMode.Value.IsVertical())
+            {
+                var (lineX, isRight) = CssLayoutEngine.StaticPositionOfALineAt(this, child, lineTop);
+                left = isRight ? null : lineX;
+                rightEdge = isRight ? lineX : null;
+            }
+
             return left is null && top is null && rightEdge is null ? null : (left, top, rightEdge, null);
         }
 
