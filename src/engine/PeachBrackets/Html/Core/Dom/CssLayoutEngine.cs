@@ -719,8 +719,20 @@ namespace PeachBrackets.Html.Dom
 
             await LayoutAbsolutelyPositioned(g, coordinates, int.MaxValue);
 
+            // The inlines have all their fragments now: the boxes a break laid out against some of them go where the last one puts them.
+            if (blockBox.BoxesAwaitingTheInlinesLastFragment is { } awaiting)
+            {
+                blockBox.BoxesAwaitingTheInlinesLastFragment = null;
+                foreach (var box in awaiting) box.PlaceAgainstTheInlinesFinalFragments();
+            }
+
             return null;
         }
+
+        /// <summary>Whether the box's <c>right</c> or <c>bottom</c> is measured from a positioned inline's last fragment, which a page break may not have produced yet.</summary>
+        private static bool NeedsTheInlinesLastFragment(CssBox box) =>
+            ((box.Left.Value.IsKeyword && box.Right.Value.IsValue) || (box.Top.Value.IsKeyword && box.Bottom.Value.IsValue))
+            && DomUtils.GetNearestPositionedAncestor(box) is { IsInline: true } ancestor && !DomUtils.IsAtomicInline(ancestor);
 
         /// <summary>
         /// Lays out the absolutely positioned boxes <see cref="FlowBox"/> set aside among the block's inline
@@ -782,6 +794,13 @@ namespace PeachBrackets.Html.Dom
                 try
                 {
                     await box.ParentBox!.LayoutBlockChild(g, box);
+
+                    // Laid out at a page break, against the inline's fragments so far: its later ones place the box again once the flow is done (#1336).
+                    if (beforeOrdinal != int.MaxValue && setAside.Line.OwnerBox is { } flowOwner && NeedsTheInlinesLastFragment(box))
+                    {
+                        var waiting = flowOwner.BoxesAwaitingTheInlinesLastFragment ??= [];
+                        if (!waiting.Contains(box)) waiting.Add(box);
+                    }
                 }
                 finally
                 {

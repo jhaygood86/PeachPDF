@@ -345,6 +345,39 @@ namespace PeachBrackets.Engine.Tests.Integration
         }
 
         [Fact]
+        public async Task AbsoluteBoxInAPositionedInlineThatCrossesAPageBreak_HasItsBottomOnTheInlinesLastFragment()
+        {
+            // The box is laid out by the pass that stops at the break, before the inline's later lines exist; its `bottom` has to be measured from the last of them (#1336).
+            var lines = string.Join("", Enumerable.Range(0, 10).Select(i => $"Line{i}<br>"));
+            var (root, _) = await LayoutAsync(
+                "<div style='line-height: 20pt'><span id='s' style='position: relative'><span id='a' style='position: absolute; left: 0; bottom: 0; width: 8pt; height: 8pt'></span>" +
+                $"{lines}</span></div>",
+                pageHeight: 140);
+
+            var inlineBottom = Find(root, "s").Rectangles.Values.Max(r => r.Bottom);
+            var abs = Find(root, "a");
+
+            Assert.True(inlineBottom - Origin > 140, $"the inline did not cross the break: its bottom is {inlineBottom}");
+            Assert.Equal(inlineBottom, abs.ActualBottom, 1);
+        }
+
+        [Fact]
+        public async Task AbsoluteBoxInAPositionedInlineThatCrossesAPageBreak_HasItsRightOnTheInlinesLastFragment()
+        {
+            var lines = string.Join("", Enumerable.Range(0, 9).Select(i => $"ab<br>"));
+            var (root, _) = await LayoutAsync(
+                "<div style='line-height: 20pt'><span id='s' style='position: relative'><span id='a' style='position: absolute; top: 0; right: 0; width: 8pt; height: 8pt'></span>" +
+                $"{lines}a much longer last line</span></div>",
+                pageHeight: 140);
+
+            var rectangles = Find(root, "s").Rectangles.Values.ToList();
+            var abs = Find(root, "a");
+
+            Assert.True(rectangles.Max(r => r.Bottom) - Origin > 140, "the inline did not cross the break");
+            Assert.Equal(rectangles.MaxBy(r => r.Bottom).Right, abs.ActualRight, 1);
+        }
+
+        [Fact]
         public async Task AbsolutelyPositionedChild_BesideABlock_KeepsTheInlineRunInOneAnonymousBlock()
         {
             // The block sibling makes the div's content mixed, so its inline run is wrapped. The positioned

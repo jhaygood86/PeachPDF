@@ -1796,6 +1796,43 @@ namespace PeachBrackets.Html.Dom
         /// <summary>Whether the place an inline-level absolute box was passed at on its line has an odd bidi level, so the box starts there at its right edge (<see cref="StaticPositionIn"/>).</summary>
         internal bool InlineStaticPlaceIsRtl { get; set; }
 
+        /// <summary>
+        /// The absolute boxes of this block's inline flow that were laid out by a pass that stopped at a page break, whose containing block is a positioned inline that
+        /// goes on after the break: their <c>right</c>/<c>bottom</c> were measured from the last fragment the inline had by then. Placed again once the flow completes
+        /// (<see cref="PlaceAgainstTheInlinesFinalFragments"/>).
+        /// </summary>
+        internal List<CssBox>? BoxesAwaitingTheInlinesLastFragment { get; set; }
+
+        /// <summary>
+        /// Moves an absolute box whose containing block is a positioned inline to where its <c>right</c> and <c>bottom</c> put it against the inline's final first and last
+        /// fragments (CSS Positioned Layout 3 section 2.1). Both placements move by the difference from where the box is, so this can follow a placement made when the
+        /// inline's later fragments did not exist yet (#1336).
+        /// </summary>
+        internal void PlaceAgainstTheInlinesFinalFragments()
+        {
+            if (Position.Value is not PositionMode.Absolute || ParentBox is null) return;
+
+            var nearestPositionedAncestor = DomUtils.GetNearestPositionedAncestor(this);
+            if (DomUtils.InlineContainingBlockOf(nearestPositionedAncestor) is not { } inlineContainingBlock) return;
+
+            if (Left.Value.IsKeyword && Right.Value.IsValue)
+            {
+                var right = CssValueParser.ParseLength(Right.Value.Value!.Value, AbsoluteContainingBlockWidth(nearestPositionedAncestor), this);
+                var delta = inlineContainingBlock.Right - right - ActualRight;
+                if (Math.Abs(delta) > 0.01) OffsetLeft(delta);
+            }
+
+            if (Top.Value.IsKeyword && Bottom.Value.IsValue)
+            {
+                var before = ActualBottom;
+                PlaceAbsoluteBottomEdge(null);
+                if (Math.Abs(ActualBottom - before) < 0.01) return;
+            }
+
+            // Placed again after the pages it used to sit on were emitted: they have to be drawn again with it.
+            HtmlContainer?.InvalidateEmittedFragmentainersReceiving(this);
+        }
+
         internal (double X, double Y)? InlineStaticPosition { get => _rare is null ? default((double X, double Y)?) : _rare.InlineStaticPosition; set { if (_rare is null) { if (EqualityComparer<(double X, double Y)?>.Default.Equals(value, default((double X, double Y)?))) return; _rare = new BoxRareState(); } _rare.InlineStaticPosition = value; } }
 
         /// <summary>
