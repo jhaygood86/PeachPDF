@@ -1780,6 +1780,12 @@ namespace PeachBrackets.Html.Dom
         /// The margin-edge the right side of this absolutely positioned box sits at, for a box whose static position is measured
         /// from the right edge (a <c>direction: rtl</c> parent, CSS 2.1 section 10.3.7). Applied once the box's width is known.
         /// </summary>
+        /// <summary>The y a box's bottom margin edge is to be put at once it is laid out, when its static position is anchored at its bottom edge (a bottom-to-top inline flow); the vertical counterpart of <see cref="StaticRightEdge"/>.</summary>
+        internal double? StaticBottomEdge { get; set; }
+
+        /// <summary>The words and the out-of-flow boxes (with the number of words before each) of a vertical flow whose lines are finalized in the epilogue, kept so static positions can be recorded then.</summary>
+        internal (List<CssRect> Words, List<(CssBox Box, int WordIndex)> Boxes)? PendingVerticalStaticBoxes { get; set; }
+
         internal double? StaticRightEdge { get => _rare?.StaticRightEdge; set { if (_rare is null) { if (value is null) return; _rare = new BoxRareState(); } _rare.StaticRightEdge = value; } }
 
         /// <summary>The grid area an absolutely positioned child of a grid container is placed against, in the same coordinates as <see cref="Location"/>: the area its <c>grid-column</c>/<c>grid-row</c> lines name, where a line that does not exist is the padding edge (css-grid-1 section 9). Null when the child has no such area.</summary>
@@ -8099,11 +8105,13 @@ namespace PeachBrackets.Html.Dom
                     // With both offsets on an axis `auto` the box sits at its static position, where it would be in flow (CSS 2.1 sections 10.3.7
                     // and 10.6.4): the parent's content edge across, and below the previous in-flow sibling down.
                     child.StaticRightEdge = null;
+                    child.StaticBottomEdge = null;
                     if (StaticPositionIn(child) is { } staticPosition)
                     {
                         if (staticPosition.Left is { } staticLeft) left = staticLeft + child.ActualMarginLeft;
                         if (staticPosition.Top is { } staticTop) top = staticTop + child.ActualMarginTop;
                         child.StaticRightEdge = staticPosition.RightEdge;
+                        child.StaticBottomEdge = staticPosition.BottomEdge;
                     }
 
                     // In a grid the static position rectangle is the grid area (css-grid-1 section 9: as if the box were the only item in it).
@@ -8195,7 +8203,7 @@ namespace PeachBrackets.Html.Dom
         /// across (left-to-right flow) and the previous in-flow sibling's margin edge down, or the parent's content top for the first. A box among inline
         /// content has its position on a line, which <see cref="InlineStaticPosition"/> carries.
         /// </summary>
-        private (double? Left, double? Top, double? RightEdge)? StaticPositionIn(CssBox child)
+        private (double? Left, double? Top, double? RightEdge, double? BottomEdge)? StaticPositionIn(CssBox child)
         {
             if (!ReferenceEquals(child.ParentBox, this)) return null;
 
@@ -8208,12 +8216,20 @@ namespace PeachBrackets.Html.Dom
                 // `[box]bbb` has the box's right edge at 300, `bbb[box]` at 252, and `aaa[box]bbb` its left edge at 252, where the Latin run is left to right).
                 var lineOwner = this;
                 while (lineOwner.IsInline && !DomUtils.IsAtomicInline(lineOwner) && lineOwner.ParentBox is { } outer) lineOwner = outer;
-                var rightEdgeAtThePlace = child.WasBlockLevelBeforeBlockification == true ? lineOwner.Direction.Value == DirectionMode.Rtl : child.InlineStaticPlaceIsRtl;
+                // In a vertical flow the across axis is the block axis, and its start edge is on the right in vertical-rl.
+                var rightEdgeAtThePlace = lineOwner.WritingMode.Value.IsVertical()
+                    ? WritingModeFrame.For(lineOwner).BlockStartIsRight
+                    : child.WasBlockLevelBeforeBlockification == true ? lineOwner.Direction.Value == DirectionMode.Rtl : child.InlineStaticPlaceIsRtl;
                 double? inlineLeft = acrossIsStatic && !rightEdgeAtThePlace ? onLine.X : null;
                 double? inlineRight = acrossIsStatic && rightEdgeAtThePlace ? onLine.X : null;
-                double? inlineTop = child.Top.Value.Value is null && child.Bottom.Value.Value is null ? onLine.Y : null;
+                var downStatic = child.Top.Value.Value is null && child.Bottom.Value.Value is null;
 
-                return inlineLeft is null && inlineRight is null && inlineTop is null ? null : (inlineLeft, inlineTop, inlineRight);
+                // In a vertical flow the along axis is vertical: the box starts at the place in the direction its level runs, so a bottom-to-top one has its bottom edge there.
+                var bottomEdgeAtThePlace = lineOwner.WritingMode.Value.IsVertical() && child.InlineStaticPlaceIsRtl;
+                double? inlineTop = downStatic && !bottomEdgeAtThePlace ? onLine.Y : null;
+                double? inlineBottom = downStatic && bottomEdgeAtThePlace ? onLine.Y : null;
+
+                return inlineLeft is null && inlineRight is null && inlineTop is null && inlineBottom is null ? null : (inlineLeft, inlineTop, inlineRight, inlineBottom);
             }
 
             var rtl = Direction.Value == DirectionMode.Rtl;
@@ -8233,7 +8249,7 @@ namespace PeachBrackets.Html.Dom
                 top = previous is null ? ClientTop : previous.StaticBottom + previous.ActualMarginBottom;
             }
 
-            return left is null && top is null && rightEdge is null ? null : (left, top, rightEdge);
+            return left is null && top is null && rightEdge is null ? null : (left, top, rightEdge, null);
         }
 
         /// <summary>
@@ -8441,6 +8457,13 @@ namespace PeachBrackets.Html.Dom
                 // and stays fixed.
                 CssLayoutEngine.FinalizeVerticalLineBoxes(this, WritingModeFrame.For(this), ClientTop, ClientBottom);
                 _pendingVerticalInlineFinalize = false;
+
+                // The boxes among the lines were laid out before the lines were where they end up, so they are placed again at their static positions.
+                if (PendingVerticalStaticBoxes is { } pendingStatic)
+                {
+                    PendingVerticalStaticBoxes = null;
+                    await CssLayoutEngine.PlaceVerticalStaticBoxesAsync(g, this, pendingStatic.Words, pendingStatic.Boxes);
+                }
             }
 
             // Settle descendants' percentage heights against this box before their auto block margins use
@@ -8582,6 +8605,12 @@ namespace PeachBrackets.Html.Dom
                 {
                     OffsetLeft(staticRightEdge - ActualMarginRight - ActualRight);
                     StaticRightEdge = null;
+                }
+
+                if (StaticBottomEdge is { } staticBottomEdge)
+                {
+                    OffsetTop(staticBottomEdge - ActualMarginBottom - ActualBottom);
+                    StaticBottomEdge = null;
                 }
 
                 if (Left.Value.IsKeyword && Right.Value.IsValue)
