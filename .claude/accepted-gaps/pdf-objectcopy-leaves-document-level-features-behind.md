@@ -12,7 +12,8 @@ annotations, and the form fields its widgets belong to. It deliberately does not
   `/SubmitForm` (or one with a `/JS` entry) is removed instead of copied, because merging someone else's file must
   not smuggle behaviour into the output. The same goes for page-level `/AA`.
 - **Signatures**: copying changes the byte ranges a signature covers, so a signed field comes across unsigned in
-  effect; it is not re-signed.
+  effect; it is not re-signed. `PdfOperation.Warnings` now names a signed source (`PdfPageSource.HasSignatures`), in both
+  copy modes, so the loss is no longer silent. Signing and timestamping output is not implemented yet.
 - **A form's calculation order** (`/CO`) and `/XFA`.
 
 Two things are limited rather than absent:

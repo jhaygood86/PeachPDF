@@ -384,6 +384,7 @@ PeachDrawing.PDF.PdfPageSource : sealed class
   method static PdfPageSource Open(Byte[] pdf, String password)
   method static PdfPageSource Open(Stream stream)
   method static PdfPageSource Open(Stream stream, String password)
+  property Boolean HasSignatures { get; }
   property Int32 PageCount { get; }
 PeachDrawing.PDF.PdfPageText : sealed class
   method IReadOnlyList<PdfTextRange> Find(String query, PdfTextSearchOptions options = None)

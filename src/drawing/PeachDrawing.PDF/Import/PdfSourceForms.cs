@@ -68,6 +68,35 @@ internal sealed class PdfSourceForms(PdfSourceDocument doc)
 
     PdfDictionary? AcroForm => doc.Resolve(doc.Trailer.GetRaw("Root")) is PdfDictionary root ? doc.DictOf(root, "AcroForm") : null;
 
+    /// <summary>
+    /// Whether the file carries a digital signature or document timestamp: a signature field that holds a value, or an
+    /// <c>/AcroForm</c> whose <c>/SigFlags</c> says signatures exist (ISO 32000-1 §12.7.2, §12.8.2).
+    /// </summary>
+    public bool HasSignatures()
+    {
+        if (AcroForm is not { } form) return false;
+        if ((doc.IntOf(form.GetRaw("SigFlags")) & 1) != 0) return true;
+
+        // The field tree is walked with a visit budget, so a file whose /Kids loop (or fan out) cannot hold the reader.
+        var pending = new Stack<PdfDictionary>();
+        if (doc.ArrayOf(form, "Fields") is { } roots)
+        {
+            foreach (var root in roots.Elements)
+                if (doc.Resolve(root) is PdfDictionary field) pending.Push(field);
+        }
+
+        for (int budget = 100_000; pending.Count > 0 && budget > 0; budget--)
+        {
+            var field = pending.Pop();
+            if (doc.NameOf(Inherited(doc, field, "FT")) == "/Sig" && doc.Resolve(field.GetRaw("V")) is PdfDictionary) return true;
+            if (doc.ArrayOf(field, "Kids") is not { } kids) continue;
+            foreach (var kid in kids.Elements)
+                if (doc.Resolve(kid) is PdfDictionary child) pending.Push(child);
+        }
+
+        return false;
+    }
+
     /// <summary>The form fields on <paramref name="page"/>, in the order their widgets appear.</summary>
     public IReadOnlyList<PdfFormFieldDefinition> Fields(PdfDictionary page, double pixelsPerPoint, Func<string, string>? rename = null)
     {

@@ -244,6 +244,15 @@ public sealed class PdfPageSource
         lock (_sync) return _forms.Fields(Page(pageIndex), pixelsPerPoint, rename);
     }
 
+    /// <summary>
+    /// Whether the file is digitally signed or carries a document timestamp. A signature covers the exact bytes of the file, so a
+    /// <see cref="PdfOperation"/> that draws or copies its pages writes a new file in which the signature is not carried.
+    /// </summary>
+    public bool HasSignatures
+    {
+        get { lock (_sync) return _forms.HasSignatures(); }
+    }
+
     /// <summary>The PDF/A and PDF/X levels the file claims for itself.</summary>
     /// <returns>the levels, <c>None</c> where it claims none</returns>
     public PdfSourceConformance GetConformance()
