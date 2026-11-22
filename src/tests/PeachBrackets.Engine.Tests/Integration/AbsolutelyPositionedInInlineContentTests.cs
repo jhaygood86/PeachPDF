@@ -338,6 +338,27 @@ namespace PeachBrackets.Engine.Tests.Integration
             Assert.InRange(abs.Location.Y, before.Top - 2, before.Top + 2); // on the line before the wrapped text
         }
 
+        [Theory]
+        [InlineData("vertical-rl")]
+        [InlineData("vertical-lr")]
+        public async Task InAVerticalWritingMode_AnAbsoluteBoxWithAllInsetsZero_FillsThePositionedInlinesContainingBlock(string writingMode)
+        {
+            // The inline's containing block runs along Y from its first fragment's start to its last fragment's end, and along X across all its lines.
+            var (root, _) = await LayoutAsync(
+                $"<div style='writing-mode: {writingMode}; width: 200pt; height: 200pt'>XX <span id='s' style='position: relative'>XXXX<br>XXXXXXXX<br>XXXXX " +
+                "<div id='a' style='position: absolute; inset: 0'></div></span></div>");
+
+            var containingBlock = DomUtils.InlineContainingBlockOf(Find(root, "s"));
+            var abs = Find(root, "a");
+
+            Assert.NotNull(containingBlock);
+            Assert.True(containingBlock.Value.Width > 0 && containingBlock.Value.Height > 0, $"the containing block has an area, was {containingBlock}");
+            Assert.Equal(containingBlock.Value.Left, abs.Location.X, 1);
+            Assert.Equal(containingBlock.Value.Top, abs.Location.Y, 1);
+            Assert.Equal(containingBlock.Value.Width, abs.ActualRight - abs.Location.X, 1);
+            Assert.Equal(containingBlock.Value.Height, abs.ActualBottom - abs.Location.Y, 1);
+        }
+
         [Fact]
         public async Task AbsolutelyPositionedChild_OfAFloatInsideAnEmptyPositionedInline_IsNotLeftAtTheOrigin()
         {

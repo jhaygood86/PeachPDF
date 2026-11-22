@@ -1259,7 +1259,10 @@ namespace PeachBrackets.Html.Dom
             // onto the other physical axis), ActualRight for vertical-lr (identical shape to the height
             // case, just on X). Reads frame.BlockStartIsRight rather than re-deriving
             // LogicalPropertyResolver.BlockStart a second time for the same box.
-            var widthIsAuto = !CssValueParser.IsValidLength(blockBox.Width);
+            // An absolutely positioned box with both `left` and `right` fills the space between them (CSS 2.1 section 10.3.7), which GetBoxWidth resolved:
+            // its content does not size it.
+            var widthIsAuto = !CssValueParser.IsValidLength(blockBox.Width)
+                              && !(blockBox.Position.Value is PositionMode.Absolute or PositionMode.Fixed && blockBox.Left.Value.IsValue && blockBox.Right.Value.IsValue);
 
             var placedFloats = new List<CssBox.VerticalFloatPlacement>();
             var bottomFloats = new List<(CssBox Box, double InlineFromBottom)>();
