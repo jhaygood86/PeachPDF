@@ -6583,7 +6583,7 @@ namespace PeachBrackets.Html.Dom
         /// would honour half of a stated choice.
         /// </para>
         /// </remarks>
-        private static bool ForcedColumnBreakFallsBefore(CssBox childBox)
+        internal static bool ForcedColumnBreakFallsBefore(CssBox childBox)
         {
             if (BreakPropagation.PropagatesBreakBeforeOutward(childBox)) return false;
 

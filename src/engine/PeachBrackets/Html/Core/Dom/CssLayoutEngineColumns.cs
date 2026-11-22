@@ -408,7 +408,7 @@ namespace PeachBrackets.Html.Dom
                     (carry, contentBottom, filledColumns, runRuleSegments) = await LayoutRunSegment(
                         g, columnsBox, segment.Children, segmentResume, segmentStartAt, boxTop,
                         pageBudget, columnLeft, pitch, columnWidth, containerWidth, columnCount, startSlot,
-                        htmlContainer, originalRight, recordedSoFar);
+                        htmlContainer, originalRight, recordedSoFar, cappedByHeight);
 
                     ruleSegments.AddRange(runRuleSegments);
                 }
@@ -635,7 +635,7 @@ namespace PeachBrackets.Html.Dom
             Canvas g, CssBox columnsBox, List<CssBox> children, BreakToken? resume, BreakToken? startAt,
             double boxTop, double pageBudget, double columnLeft, double pitch, double columnWidth,
             double containerWidth, int columnCount, int startSlot, HtmlContainerInt htmlContainer,
-            double originalRight, int recordedBefore)
+            double originalRight, int recordedBefore, bool heightCapped)
         {
             // A float or inline-block container lays its content out apart from the page (CssLayoutEngine.LayoutContentUnbroken,
             // FlowAtomicBlockContentChild), so no fragmentainer is current when it is reached. Its columns are its own to break
@@ -829,6 +829,24 @@ namespace PeachBrackets.Html.Dom
                         columnWidth, containerWidth, columnCount, startSlot, htmlContainer);
             }
 
+            // css-multicol-1 section 3.3 (overflow columns): content that does not fit the last column of a container on a surface with no page grid goes in further
+            // columns to its right, each as wide as the others, not on a page that does not exist. On a paged surface the rest continues on the next page instead, and
+            // in an outer column it goes on in the next outer column.
+            if (carry is not null && !IsColumnSpanBoundary(carry) && MakesOverflowColumns(htmlContainer, carry, heightCapped))
+            {
+                for (var extra = 0; extra < MaxOverflowColumns && carry is not null && !IsColumnSpanBoundary(carry); extra++)
+                {
+                    PassRewind.RollBackTo(resume, children);
+                    columnsBox.RestoreDeferredFloats(deferredAtTheStart);
+                    htmlContainer.ClearCapturedInstancesFrom(columnsBox, startSlot, recordedBefore);
+
+                    columnCount++;
+                    (carry, contentBottom, filledColumns) =
+                        await FillColumns(g, columnsBox, children, startAt, boxTop, pageBudget, columnLeft, pitch,
+                            columnWidth, containerWidth, columnCount, startSlot, htmlContainer);
+                }
+            }
+
             // What the last column left for the next one may have been placed in an earlier column first: a break that
             // falls before a box (a widows or orphans correction that could not be met, a table row that did not fit)
             // moves the whole box on, and the earlier columns still held what they had laid out of it, so it was drawn
@@ -848,6 +866,27 @@ namespace PeachBrackets.Html.Dom
             }
 
             return (carry, contentBottom, filledColumns, ruleSegments);
+        }
+
+        /// <summary>How many overflow columns a container makes at most, which stops content that cannot be divided (a box taller than the column) from making them for ever.</summary>
+        private const int MaxOverflowColumns = 200;
+
+        /// <summary>Whether a container makes overflow columns: on a continuous surface, not inside an outer column (whose next column is where the rest goes), and when it is short of columns for forced breaks or for a definite height.</summary>
+        private static bool MakesOverflowColumns(HtmlContainerInt htmlContainer, BreakToken? carry, bool heightCapped) =>
+            htmlContainer.Continuous && htmlContainer.CurrentFragmentainer is not { HasOwnBand: true } && (heightCapped || EndsAtAForcedColumnBreak(carry));
+
+        /// <summary>
+        /// Whether what a fill left over starts at a break the author forced between columns (<c>break-before: column</c>, <c>break-after: column</c>), as opposed to
+        /// content that ran out of the room the surface gives a column: only the first is a column the container itself is short of.
+        /// </summary>
+        private static bool EndsAtAForcedColumnBreak(BreakToken? carry)
+        {
+            var innermost = carry;
+            while (innermost is BlockBreakToken { ChildToken: { } child }) innermost = child;
+
+            return innermost is BlockBreakToken { IsBreakBefore: true } token
+                && token.ResumeChildIndex < token.Box.Boxes.Count
+                && CssBox.ForcedColumnBreakFallsBefore(token.Box.Boxes[token.ResumeChildIndex]);
         }
 
         /// <summary>
