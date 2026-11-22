@@ -168,7 +168,7 @@ var options = new PdfComposerOptions
 
 The saved file has an invisible signature field on the first page whose value is a detached CMS signature over every byte of the file except the signature itself, so a reader reports any later change. The composer reserves room for the signature (`ReservedSignatureBytes`, 16 KB by default), writes the file, then fills the room in without moving any byte, which is why signing works with encryption and with `Linearize`. `Pkcs7Detached` writes `adbe.pkcs7.detached` with the signing time as a signed attribute and is read by the most software; `CadesDetached` writes `ETSI.CAdES.detached`, the form the PAdES baseline profiles build on, binding the signing certificate with a signed attribute. The digest is SHA-256, SHA-384 or SHA-512 (`HashAlgorithm`), and RSA and ECDSA keys are both supported.
 
-Only the signing certificate and the ones in `AdditionalCertificates` are embedded; the chain is neither built nor fetched. A signed file must not be changed afterwards, and a `PdfOperation` that draws or copies a signed source writes an unsigned file and says so in `Warnings`. Long-term validation data, visible signature appearances and signing an existing file are not written yet.
+Only the signing certificate and the ones in `AdditionalCertificates` are embedded; the chain is neither built nor fetched. A signed file must not be changed afterwards, and a `PdfOperation` that draws or copies a signed source writes an unsigned file and says so in `Warnings`. Long-term validation data and visible signature appearances are not written yet.
 
 ### Timestamps
 
@@ -182,6 +182,15 @@ Signing = new PdfSigningOptions
 ```
 
 A time stamping authority (RFC 3161) can vouch for when the signature was made: the composer builds the request for the signature value, checks the authority's answer (the digest and nonce must match) and embeds the token in the signature, so a reader can show a signing time the signer could not have chosen. The package makes no network request of its own. `PdfTimestampOptions.FromHttpAuthority` posts the request with the `HttpClient` you give it (so credentials, proxies and timeouts are yours); a host with its own transport sets `Exchange`, a function from the request's bytes to the response's bytes, instead. Because the exchange is asynchronous, a timestamped document is written with `PdfComposer.SaveAsync`; `Save` refuses it. The token adds several kilobytes, so raise `ReservedSignatureBytes` when a save reports that the signature does not fit.
+
+### Signing a file that already exists
+
+```csharp
+byte[] signed = PdfFileSigner.Sign(File.ReadAllBytes("contract.pdf"), new PdfSigningOptions { Certificate = certificate });
+byte[] stamped = await PdfFileSigner.AddDocumentTimestampAsync(signed, PdfTimestampOptions.FromHttpAuthority(authority, httpClient));
+```
+
+`PdfFileSigner` signs or timestamps a PDF you did not write with this package, as an incremental update: every byte of the original stays exactly as it was, so signatures the file already carries stay valid, and only the catalog, the form, the first page and the lists that name the new field are written again, followed by a new cross-reference section (a classic table, or a stream when the file uses one). `Sign` and `SignAsync` add one invisible signature field to the first page, numbered after the fields the file already has (`Signature1`, `Signature2`...); `AddDocumentTimestampAsync` adds a document timestamp instead (a `DocTimeStamp` field whose token covers the whole file, signatures included), which is how a signed file is kept trustworthy after its certificate expires. Call them again on the result to add more. The input array is not modified. An encrypted file is refused, because its objects would have to be written encrypted; so is one whose cross-reference data is damaged and had to be rebuilt.
 
 ## Archival and print conformance
 

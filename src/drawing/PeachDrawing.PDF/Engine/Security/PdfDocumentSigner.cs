@@ -17,7 +17,7 @@ namespace PeachDrawing.PDF.Engine.Security;
 /// </summary>
 internal static class PdfDocumentSigner
 {
-    const string ByteRangePlaceholder = "[0 0000000000 0000000000 0000000000]";
+    internal const string ByteRangePlaceholder = "[0 0000000000 0000000000 0000000000]";
     const string ContentTypeSigningCertificateV2 = "1.2.840.113549.1.9.16.2.47";
     const string SignatureTimeStampToken = "1.2.840.113549.1.9.16.2.14";
 
@@ -65,23 +65,72 @@ internal static class PdfDocumentSigner
     /// <exception cref="InvalidOperationException">the placeholder is not in the file exactly once, or the signature does not fit in it</exception>
     public static void Seal(byte[] file, PdfSigningOptions options)
     {
-        var (covered, contentsStart) = PatchByteRange(file, options);
-        Write(file, contentsStart, options, BuildCms(covered, options).Encode());
+        var (covered, contentsStart) = PatchByteRange(file, options.ReservedSignatureBytes);
+        Write(file, contentsStart, options.ReservedSignatureBytes, BuildCms(covered, options).Encode());
     }
 
     /// <summary>As <see cref="Seal"/>, and embeds the time stamping authority's token when the options ask for one.</summary>
     public static async Task SealAsync(byte[] file, PdfSigningOptions options, CancellationToken cancellationToken)
     {
-        var (covered, contentsStart) = PatchByteRange(file, options);
+        var (covered, contentsStart) = PatchByteRange(file, options.ReservedSignatureBytes);
         var cms = BuildCms(covered, options);
         if (options.Timestamp is { } timestamp)
             await AddTimestampAsync(cms, timestamp, cancellationToken).ConfigureAwait(false);
-        Write(file, contentsStart, options, cms.Encode());
+        Write(file, contentsStart, options.ReservedSignatureBytes, cms.Encode());
     }
 
-    static (byte[] Covered, int ContentsStart) PatchByteRange(byte[] file, PdfSigningOptions options)
+    /// <summary>
+    /// Fills a document timestamp's placeholders (RFC 3161 as a PDF signature, <c>ETSI.RFC3161</c>): the authority timestamps the digest of the
+    /// bytes the <c>/ByteRange</c> covers, and the token itself is the <c>/Contents</c>.
+    /// </summary>
+    public static async Task SealTimestampAsync(byte[] file, PdfTimestampOptions options, int reservedBytes, CancellationToken cancellationToken)
     {
-        int reserved = options.ReservedSignatureBytes * 2;
+        var (covered, contentsStart) = PatchByteRange(file, reservedBytes);
+        var request = Rfc3161TimestampRequest.CreateFromData(covered, options.HashAlgorithm, nonce: PdfEntropy.GetBytes(8), requestSignerCertificates: true);
+        var response = await options.Exchange!(request.Encode(), cancellationToken).ConfigureAwait(false);
+
+        Rfc3161TimestampToken token;
+        try
+        {
+            token = request.ProcessResponse(response, out _);
+        }
+        catch (CryptographicException error)
+        {
+            throw new InvalidOperationException("The time stamping authority's response was refused: " + error.Message, error);
+        }
+
+        Write(file, contentsStart, reservedBytes, token.AsSignedCms().Encode());
+    }
+
+    /// <summary>The text of a signature value dictionary with its placeholders, for a signature appended to an existing file.</summary>
+    public static string SignatureValueText(PdfSigningOptions options)
+    {
+        var text = new StringBuilder("<< /Type /Sig /Filter /Adobe.PPKLite /SubFilter ");
+        text.Append(options.Format == PdfSignatureFormat.CadesDetached ? "/ETSI.CAdES.detached" : "/adbe.pkcs7.detached");
+        text.Append(" /ByteRange ").Append(ByteRangePlaceholder);
+        text.Append(" /Contents <").Append('0', options.ReservedSignatureBytes * 2).Append('>');
+        text.Append(" /M (D:").Append(PdfEntropy.UtcNow().ToString("yyyyMMddHHmmss", System.Globalization.CultureInfo.InvariantCulture)).Append("Z)");
+        AppendText(text, "/Name", options.SignerName);
+        AppendText(text, "/Reason", options.Reason);
+        AppendText(text, "/Location", options.Location);
+        AppendText(text, "/ContactInfo", options.ContactInfo);
+        return text.Append(" >>").ToString();
+    }
+
+    /// <summary>The text of a document timestamp's value dictionary with its placeholders.</summary>
+    public static string TimestampValueText(int reservedBytes) =>
+        "<< /Type /DocTimeStamp /Filter /Adobe.PPKLite /SubFilter /ETSI.RFC3161 /ByteRange " + ByteRangePlaceholder
+        + " /Contents <" + new string('0', reservedBytes * 2) + "> >>";
+
+    static void AppendText(StringBuilder text, string key, string? value)
+    {
+        if (!string.IsNullOrEmpty(value))
+            text.Append(' ').Append(key).Append(" <FEFF").Append(Convert.ToHexString(Encoding.BigEndianUnicode.GetBytes(value))).Append('>');
+    }
+
+    static (byte[] Covered, int ContentsStart) PatchByteRange(byte[] file, int reservedBytes)
+    {
+        int reserved = reservedBytes * 2;
         var contentsNeedle = Encoding.ASCII.GetBytes("<" + new string('0', reserved) + ">");
         int contentsStart = Single(file, contentsNeedle, "/Contents");
         int contentsEnd = contentsStart + contentsNeedle.Length;
@@ -96,12 +145,12 @@ internal static class PdfDocumentSigner
         return (covered, contentsStart);
     }
 
-    static void Write(byte[] file, int contentsStart, PdfSigningOptions options, byte[] signature)
+    static void Write(byte[] file, int contentsStart, int reservedBytes, byte[] signature)
     {
-        if (signature.Length > options.ReservedSignatureBytes)
+        if (signature.Length > reservedBytes)
         {
             throw new InvalidOperationException(
-                $"The signature is {signature.Length} bytes but only {options.ReservedSignatureBytes} are reserved; raise PdfSigningOptions.ReservedSignatureBytes.");
+                $"The signature is {signature.Length} bytes but only {reservedBytes} are reserved; raise the reserved size (PdfSigningOptions.ReservedSignatureBytes).");
         }
 
         var hex = Encoding.ASCII.GetBytes(Convert.ToHexString(signature));
