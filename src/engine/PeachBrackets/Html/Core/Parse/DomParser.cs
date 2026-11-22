@@ -1703,8 +1703,12 @@ namespace PeachBrackets.Html.Parse
             }
             else if (sibling is { Eligible: true, Style: null } && box.Boxes.Count == boxesBefore
                 && (displayContentsShells?.Count ?? 0) == shellsBefore && box.MatchesFirstLetterSelector == firstLetterBefore
-                && box.CustomProperties is not { Count: > 0 } && !box.UsesSiblingPosition)
+                && box.CustomProperties is not { Count: > 0 } && !box.UsesSiblingPosition
+                && !box.HasLogicalProperties)
             {
+                // A logical longhand (`inline-size`, `margin-inline-start`...) is kept on the box and turned into its physical property after the cascade, once the writing
+                // mode is known (ResolveLogicalProperties), so what the style this box ends with holds is not all it was given: a sibling that adopted it would have
+                // the physical result of the first one's cascade only where that resolution had run, and never the logical values themselves.
                 sibling.Style = box.ComputedStyle;
                 sibling.WasBlockLevel = box.WasBlockLevelBeforeBlockification;
             }

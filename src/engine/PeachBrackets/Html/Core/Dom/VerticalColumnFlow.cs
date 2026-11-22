@@ -80,6 +80,12 @@ namespace PeachBrackets.Html.Dom
             internal SortedDictionary<int, (double Start, double End)> Pieces { get; } = [];
 
             internal bool IsLeaf => Kids.Count == 0;
+
+            /// <summary>
+            /// Where a childless block taller than a column is cut: the strip and the logical range of each of its pieces, as css-break-3 section 4 has a block with
+            /// a definite block size continue into the next fragmentainer. Null for a node that is not.
+            /// </summary>
+            internal List<(int Strip, double Start, double End)>? Splits { get; set; }
         }
 
         /// <summary>Builds the break-point tree of <paramref name="container"/>'s laid-out content.</summary>
@@ -175,6 +181,16 @@ namespace PeachBrackets.Html.Dom
                 AvoidInside = BreakValues.AvoidsBreak(box.BreakInside.Value, FragmentationContext.Column)
             };
         }
+
+        /// <summary>Whether a block with no content is fragmented across columns by its size, as one of a definite block size is: a plain block, not a replaced or monolithic box.</summary>
+        private static bool IsFragmentableBlock(CssBox box) =>
+            box.DerivedStyle.ActualDisplay == Keywords.Block
+            && box.WritingMode.Value.IsVertical()
+            && box.PlacesItselfAsBlockBox
+            && !box.EstablishesMultiColumnContext
+            && !box.IsImage
+            && !MonolithicContent.IsMonolithic(box)
+            && box.Boxes.Count == 0;
 
         /// <summary>
         /// Whether a block child is cut between its own lines and children, rather than moved as one piece.
@@ -310,11 +326,43 @@ namespace PeachBrackets.Html.Dom
         {
             if (node.IsLeaf && node.Strip >= 0)
             {
-                var strip = runStrips[node.Strip - by];
-                strip.Extent = Math.Max(strip.Extent, node.End - strip.Start);
+                if (node.Splits is { } splits)
+                {
+                    foreach (var (index, _, end) in splits)
+                    {
+                        var piece = runStrips[index - by];
+                        piece.Extent = Math.Max(piece.Extent, end - piece.Start);
+                    }
+                }
+                else
+                {
+                    var strip = runStrips[node.Strip - by];
+                    strip.Extent = Math.Max(strip.Extent, node.End - strip.Start);
+                }
             }
 
             foreach (var kid in node.Kids) MeasureExtents(kid, runStrips, by);
+
+            // A block holding other things ends in the strip of the last of them, and its far edge (its own border and padding) is part of what that strip holds:
+            // a column is as wide as the boxes in it, not only the lines.
+            if (!node.IsLeaf && node.Line is null && LastStripOf(node) is { } last && last >= by && last - by < runStrips.Count)
+            {
+                var strip = runStrips[last - by];
+                strip.Extent = Math.Max(strip.Extent, node.End - strip.Start);
+            }
+        }
+
+        /// <summary>The strip the last of <paramref name="node"/>'s pieces is in, or null for a node nothing was placed in.</summary>
+        private static int? LastStripOf(Node node)
+        {
+            int? last = null;
+            Visit(node, n =>
+            {
+                if (!n.IsLeaf || n.Strip < 0) return;
+                last = last is null ? n.Strip : Math.Max(last.Value, n.Strip);
+            });
+
+            return last;
         }
 
         /// <summary>
@@ -347,6 +395,28 @@ namespace PeachBrackets.Html.Dom
 
                 if (node.IsLeaf)
                 {
+                    if (node.Line is null && node.Box.LineBoxes.Count == 0 && IsFragmentableBlock(node.Box) && node.End - node.Start > blockSize + Epsilon)
+                    {
+                        // A block with nothing in it but its own size is cut where the strips end, its first piece beginning in the strip it is in.
+                        node.Splits = [];
+                        var cursor = node.Start;
+
+                        while (cursor < node.End - Epsilon)
+                        {
+                            var pieceEnd = Math.Min(node.End, current + blockSize);
+                            if (pieceEnd <= cursor + Epsilon) pieceEnd = node.End;
+
+                            node.Splits.Add((strips.Count - 1, cursor, pieceEnd));
+                            cursor = pieceEnd;
+                            hasContent = true;
+
+                            if (cursor < node.End - Epsilon) StartStrip(cursor);
+                        }
+
+                        node.Strip = strips.Count - 1;
+                        return;
+                    }
+
                     if (hasContent && node.End - current > blockSize + Epsilon) StartStrip(node.Start);
 
                     node.Strip = strips.Count - 1;
@@ -503,7 +573,15 @@ namespace PeachBrackets.Html.Dom
 
             if (node.IsLeaf)
             {
-                if (node.Strip >= 0) node.Pieces[node.Strip] = (node.Start, node.End);
+                if (node.Splits is { } splits)
+                {
+                    foreach (var (strip, start, end) in splits) node.Pieces[strip] = (start, end);
+                }
+                else if (node.Strip >= 0)
+                {
+                    node.Pieces[node.Strip] = (node.Start, node.End);
+                }
+
                 return;
             }
 
