@@ -1793,6 +1793,9 @@ namespace PeachBrackets.Html.Dom
         /// </summary>
         internal bool? WasBlockLevelBeforeBlockification { get; set; }
 
+        /// <summary>Whether the place an inline-level absolute box was passed at on its line has an odd bidi level, so the box starts there at its right edge (<see cref="StaticPositionIn"/>).</summary>
+        internal bool InlineStaticPlaceIsRtl { get; set; }
+
         internal (double X, double Y)? InlineStaticPosition { get => _rare is null ? default((double X, double Y)?) : _rare.InlineStaticPosition; set { if (_rare is null) { if (EqualityComparer<(double X, double Y)?>.Default.Equals(value, default((double X, double Y)?))) return; _rare = new BoxRareState(); } _rare.InlineStaticPosition = value; } }
 
         /// <summary>
@@ -8163,8 +8166,14 @@ namespace PeachBrackets.Html.Dom
             if (child.InlineStaticPosition is { } onLine)
             {
                 var acrossIsStatic = child.Left.Value.Value is null && child.Right.Value.Value is null;
-                double? inlineLeft = acrossIsStatic && Direction.Value != DirectionMode.Rtl ? onLine.X : null;
-                double? inlineRight = acrossIsStatic && Direction.Value == DirectionMode.Rtl ? onLine.X : null;
+                // A block-level box sits at the line's start edge, which is its right edge in an rtl flow. One that was inline-level takes the slot the line
+                // reserved for it by bidi reordering and starts there in the direction of the place's own bidi level (measured in Chrome in a 300px rtl line:
+                // `[box]bbb` has the box's right edge at 300, `bbb[box]` at 252, and `aaa[box]bbb` its left edge at 252, where the Latin run is left to right).
+                var lineOwner = this;
+                while (lineOwner.IsInline && !DomUtils.IsAtomicInline(lineOwner) && lineOwner.ParentBox is { } outer) lineOwner = outer;
+                var rightEdgeAtThePlace = child.WasBlockLevelBeforeBlockification == true ? lineOwner.Direction.Value == DirectionMode.Rtl : child.InlineStaticPlaceIsRtl;
+                double? inlineLeft = acrossIsStatic && !rightEdgeAtThePlace ? onLine.X : null;
+                double? inlineRight = acrossIsStatic && rightEdgeAtThePlace ? onLine.X : null;
                 double? inlineTop = child.Top.Value.Value is null && child.Bottom.Value.Value is null ? onLine.Y : null;
 
                 return inlineLeft is null && inlineRight is null && inlineTop is null ? null : (inlineLeft, inlineTop, inlineRight);

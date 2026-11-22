@@ -759,14 +759,15 @@ namespace PeachBrackets.Html.Dom
                 // Its static position is its place on the final line: the inline position the walk passed it at, carried
                 // through alignment and bidi reordering, and the line's top. CssBox.StaticPositionIn reads it for a
                 // box whose offsets on an axis are both auto.
-                box.InlineStaticPosition = (PlaceOnFinalLine(setAside), FinalLineEdgesOf(setAside.Line, setAside.Y).Top);
+                box.InlineStaticPosition = (PlaceOnFinalLine(setAside, out var placeIsRtl), FinalLineEdgesOf(setAside.Line, setAside.Y).Top);
+                box.InlineStaticPlaceIsRtl = placeIsRtl;
 
                 // A box that was block-level is where a block would be (CSS 2.1 section 10.6.4): at the start of the line after what comes before it, since a
                 // block ends the line it interrupts - never at the point on the line it was passed at, and not at the start of the first line's text-indent.
                 if (box.WasBlockLevelBeforeBlockification == true && setAside.Line.OwnerBox is { } lineOwner)
                 {
                     var (lineTop, lineBottom) = FinalLineEdgesOf(setAside.Line, setAside.Y);
-                    var edge = box.ParentBox?.Direction.Value == DirectionMode.Rtl ? lineOwner.ClientRight : lineOwner.ClientLeft;
+                    var edge = lineOwner.Direction.Value == DirectionMode.Rtl ? lineOwner.ClientRight : lineOwner.ClientLeft;
                     box.InlineStaticPosition = (edge, setAside.WordIndex > 0 ? lineBottom : lineTop);
                 }
 
@@ -997,15 +998,92 @@ namespace PeachBrackets.Html.Dom
         /// </remarks>
         /// <param name="setAside">the set-aside box</param>
         /// <returns>the place's inline position on the final line</returns>
-        private static double PlaceOnFinalLine(SetAsideBox setAside)
+        private static double PlaceOnFinalLine(SetAsideBox setAside) => PlaceOnFinalLine(setAside, out _);
+
+        /// <summary>
+        /// <see cref="PlaceOnFinalLine(SetAsideBox)"/>, also saying whether the place's resolved bidi level is odd: a box placed there starts at its inline-start edge in
+        /// that direction, so an rtl place has the box's right edge on it and an ltr one the left edge (as Chrome does, in an rtl paragraph too).
+        /// </summary>
+        private static double PlaceOnFinalLine(SetAsideBox setAside, out bool rtlLevel)
         {
-            if (setAside.Anchor is not { } word) return PlaceOnWordlessLine(setAside);
+            if (setAside.Anchor is not { } word)
+            {
+                rtlLevel = EmbeddingLevelOf(setAside) % 2 == 1;
+                return PlaceOnWordlessLine(setAside);
+            }
 
             var offset = setAside.X - setAside.AnchorLeft;
+            var anchorLevel = ReorderedLevelOf(word, setAside.Line);
 
-            return ReorderedLevelOf(word, setAside.Line) % 2 == 1
+            if (PlaceAtABidiRunBoundary(setAside, anchorLevel, out var placeLevel) is { } atBoundary)
+            {
+                rtlLevel = placeLevel % 2 == 1;
+                return atBoundary;
+            }
+
+            rtlLevel = anchorLevel % 2 == 1;
+            return anchorLevel % 2 == 1
                 ? word.Left + word.Width - offset
                 : word.Left + offset;
+        }
+
+        /// <summary>
+        /// Where a place lands when its own bidi level is not its anchor's, or null when it is in its anchor's run (UAX #9 section 3.3.5, #1309). The place is a
+        /// zero-width neutral: between two words of one direction it takes that direction, anywhere else the embedding direction of the inline it sits in.
+        /// Reordering then puts it in a run of its own beside the higher-level run it follows or precedes in reading order: on the left of that run at an odd
+        /// level (the run reversed with the rest of its level), on the right of it at an even one.
+        /// </summary>
+        /// <param name="setAside">the set-aside box</param>
+        /// <param name="anchorLevel">the level the anchor word was reordered at</param>
+        /// <returns>the place's inline position on the final line, or null to let the caller place it in its anchor's run</returns>
+        private static double? PlaceAtABidiRunBoundary(SetAsideBox setAside, byte anchorLevel, out byte placeLevel)
+        {
+            placeLevel = anchorLevel;
+            var line = setAside.Line;
+            var words = line.Words;
+            var before = setAside.WordIndex > 0 && setAside.WordIndex <= words.Count ? words[setAside.WordIndex - 1] : null;
+            var after = setAside.WordIndex < words.Count ? words[setAside.WordIndex] : null;
+            if (before is null && after is null) return null;
+
+            var embedding = EmbeddingLevelOf(setAside);
+
+            var beforeLevel = before is null ? (byte?)null : ReorderedLevelOf(before, line);
+            var afterLevel = after is null ? (byte?)null : ReorderedLevelOf(after, line);
+
+            // N1: between two words of one direction the place takes that direction (at the lower of their levels); otherwise N2, the embedding direction.
+            var level = beforeLevel is { } b && afterLevel is { } a && b % 2 == a % 2 ? Math.Min(b, a) : embedding;
+
+            placeLevel = level;
+            if (level == anchorLevel) return null;
+
+            // The run of higher-level words the place follows (or, failing that, precedes) in reading order.
+            int first, last;
+            if (beforeLevel > level)
+            {
+                last = setAside.WordIndex - 1;
+                first = last;
+                while (first > 0 && ReorderedLevelOf(words[first - 1], line) > level) first--;
+            }
+            else if (afterLevel > level)
+            {
+                first = setAside.WordIndex;
+                last = first;
+                while (last < words.Count - 1 && ReorderedLevelOf(words[last + 1], line) > level) last++;
+            }
+            else
+            {
+                return null;
+            }
+
+            double left = double.MaxValue, right = double.MinValue;
+            for (var i = first; i <= last; i++)
+            {
+                left = Math.Min(left, words[i].Left);
+                right = Math.Max(right, words[i].Left + words[i].Width);
+            }
+
+            var rtlLevel = level % 2 == 1;
+            return beforeLevel > level == rtlLevel ? left : right;
         }
 
         /// <summary>
@@ -1017,6 +1095,13 @@ namespace PeachBrackets.Html.Dom
         /// </summary>
         /// <param name="setAside">the set-aside box, on a line with no word</param>
         /// <returns>the place's inline position on the line</returns>
+        private static byte EmbeddingLevelOf(SetAsideBox setAside)
+        {
+            var ownerRtl = setAside.Line.OwnerBox.Direction.Value == DirectionMode.Rtl;
+            var embeddingRtl = (setAside.Box.ParentBox ?? setAside.Line.OwnerBox).Direction.Value == DirectionMode.Rtl;
+            return (byte)((ownerRtl ? 1 : 0) + (embeddingRtl == ownerRtl ? 0 : 1));
+        }
+
         private static double PlaceOnWordlessLine(SetAsideBox setAside)
         {
             var line = setAside.Line;

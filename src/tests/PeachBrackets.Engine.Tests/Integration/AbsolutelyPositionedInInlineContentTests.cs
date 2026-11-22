@@ -872,6 +872,31 @@ namespace PeachBrackets.Engine.Tests.Integration
             Assert.Equal(div.ClientTop, abs.Location.Y, 3);
         }
 
+        [Fact]
+        public async Task AnEmptyPositionedInline_AtTheEndOfALeftToRightRunInAnRtlLine_IsAtThatRunsLeftEdge()
+        {
+            // UAX #9: the neutral at the end of the paragraph takes the paragraph direction, so it is a run of its own on the far side of the ltr run: the left,
+            // where an ltr run's end would otherwise put it on the right (#1309; measured in Chrome: run [188,300], box at 188).
+            var (root, _) = await LayoutAsync(
+                "<style>body{margin:0} #c{width:300pt;line-height:20pt} .r{position:relative} #x{position:absolute;left:0;top:0;width:4pt;height:4pt}</style>"
+                + "<div id='c' dir='rtl'><span>aaa bbb</span><span class='r'><div id='x'></div></span></div>");
+
+            var x = Find(root, "x");
+            var left = Descendants(Find(root, "c")).Where(b => b.Words.Count > 0).SelectMany(b => b.Words).Min(w => w.Left);
+
+            Assert.Equal(left, x.Location.X, 0.5);
+        }
+
+        [Fact]
+        public async Task AnEmptyPositionedInline_BeforeAnRtlRunInAnLtrLine_IsAtTheStartOfTheLine()
+        {
+            var (root, _) = await LayoutAsync(
+                "<style>body{margin:0} #c{width:300pt;line-height:20pt} .r{position:relative} #x{position:absolute;left:0;top:0;width:4pt;height:4pt}</style>"
+                + "<div id='c' dir='ltr'><span class='r'><div id='x'></div></span><span>אבג דהו</span></div>");
+
+            Assert.Equal(Find(root, "c").ClientLeft, Find(root, "x").Location.X, 0.5);
+        }
+
         private static Task<(CssBox Root, HtmlContainerInt Container)> LayoutAsync(string body, double pageHeight = 842) =>
             LayoutHarness.LayoutAsync(LayoutHarness.Wrap(body), pageHeight: pageHeight);
 
