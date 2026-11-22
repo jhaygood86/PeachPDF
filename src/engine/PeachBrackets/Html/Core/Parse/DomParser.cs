@@ -1298,6 +1298,9 @@ namespace PeachBrackets.Html.Parse
 
             /// <summary>The style the first of them ended up with, once it has one worth sharing.</summary>
             internal ComputedStyle? Style { get; set; }
+
+            /// <summary>What blockification found out about the first of them (<see cref="CssBox.WasBlockLevelBeforeBlockification"/>), which is not in the style it shares.</summary>
+            internal bool? WasBlockLevel { get; set; }
         }
 
         /// <summary>
@@ -1376,6 +1379,7 @@ namespace PeachBrackets.Html.Parse
                     else
                     {
                         box.AdoptComputedStyle(siblingStyle);
+                        box.WasBlockLevelBeforeBlockification = sibling.WasBlockLevel;
                         box.CopyStatefulCandidatesFrom(sibling.Stateful, sibling.StatefulRelational);
                         goto styleSettled;
                     }
@@ -1699,9 +1703,14 @@ namespace PeachBrackets.Html.Parse
             }
             else if (sibling is { Eligible: true, Style: null } && box.Boxes.Count == boxesBefore
                 && (displayContentsShells?.Count ?? 0) == shellsBefore && box.MatchesFirstLetterSelector == firstLetterBefore
-                && box.CustomProperties is not { Count: > 0 } && !box.UsesSiblingPosition)
+                && box.CustomProperties is not { Count: > 0 } && !box.UsesSiblingPosition
+                && !box.HasLogicalProperties)
             {
+                // A logical longhand (`inline-size`, `margin-inline-start`...) is kept on the box and turned into its physical property after the cascade, once the writing
+                // mode is known (ResolveLogicalProperties), so what the style this box ends with holds is not all it was given: a sibling that adopted it would have
+                // the physical result of the first one's cascade only where that resolution had run, and never the logical values themselves.
                 sibling.Style = box.ComputedStyle;
+                sibling.WasBlockLevel = box.WasBlockLevelBeforeBlockification;
             }
 
         styleSettled:
@@ -1903,6 +1912,10 @@ namespace PeachBrackets.Html.Parse
         private static void BlockifyPositionedBox(CssBox box)
         {
             if (box.Position.Value is not (PositionMode.Absolute or PositionMode.Fixed)) return;
+
+            // Decided once, from the display the author gave: a second blockification would see the first one's result.
+            box.WasBlockLevelBeforeBlockification ??= box.Display.Value is not (DisplayMode.Inline or DisplayMode.InlineBlock or DisplayMode.InlineFlex
+                or DisplayMode.InlineGrid or DisplayMode.InlineGridLanes or DisplayMode.InlineTable);
 
             box.Display = box.Display.Value switch
             {
@@ -4336,6 +4349,7 @@ namespace PeachBrackets.Html.Parse
                 {
                     rightBox = CssBox.CreateBox(parentBox, badBox.HtmlTag);
                     rightBox.InheritStyle(badBox, true);
+                    rightBox.SplitInlineLeading = badBox.SplitInlineLeading ?? leftbox ?? leftBlock;
 
                     // Right after the block that was split at, which is index 1 unless the recursion above already hoisted the block (and
                     // its own pieces) into the parent: then the pieces are in source order after it and the right piece belongs at the end.

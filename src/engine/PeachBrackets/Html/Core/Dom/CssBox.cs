@@ -1780,12 +1780,71 @@ namespace PeachBrackets.Html.Dom
         /// The margin-edge the right side of this absolutely positioned box sits at, for a box whose static position is measured
         /// from the right edge (a <c>direction: rtl</c> parent, CSS 2.1 section 10.3.7). Applied once the box's width is known.
         /// </summary>
+        /// <summary>The y a box's bottom margin edge is to be put at once it is laid out, when its static position is anchored at its bottom edge (a bottom-to-top inline flow); the vertical counterpart of <see cref="StaticRightEdge"/>.</summary>
+        internal double? StaticBottomEdge { get; set; }
+
+        /// <summary>The words and the out-of-flow boxes (with the number of words before each) of a vertical flow whose lines are finalized in the epilogue, kept so static positions can be recorded then.</summary>
+        internal (List<CssRect> Words, List<(CssBox Box, int WordIndex)> Boxes)? PendingVerticalStaticBoxes { get; set; }
+
         internal double? StaticRightEdge { get => _rare?.StaticRightEdge; set { if (_rare is null) { if (value is null) return; _rare = new BoxRareState(); } _rare.StaticRightEdge = value; } }
 
         /// <summary>The grid area an absolutely positioned child of a grid container is placed against, in the same coordinates as <see cref="Location"/>: the area its <c>grid-column</c>/<c>grid-row</c> lines name, where a line that does not exist is the padding edge (css-grid-1 section 9). Null when the child has no such area.</summary>
 
         /// <summary>The grid area an absolutely positioned child of a grid container is placed against, in the same coordinates as <see cref="Location"/>: the area its <c>grid-column</c>/<c>grid-row</c> lines name, with the padding edge for a line that does not exist.</summary>
         internal Rect? GridContainingArea { get => _rare?.GridContainingArea; set { if (_rare is null) { if (value is null) return; _rare = new BoxRareState(); } _rare.GridContainingArea = value; } }
+
+        /// <summary>
+        /// Whether an absolutely positioned box was block-level before CSS 2.1 section 9.7 blockified it (null until that has been decided). Its static position
+        /// among inline content is then where a block would be: the start of the line after what precedes it, not the point on the line it was passed at.
+        /// </summary>
+        internal bool? WasBlockLevelBeforeBlockification { get; set; }
+
+        /// <summary>
+        /// For a piece of an inline that a block split in two or more (the clone holding what follows the block): where the inline's first fragment is. Either the piece of the
+        /// inline before the block, or, when nothing of the inline came before it, the block holding the line it began on, where it is an empty fragment at the line's end. The
+        /// containing block of a positioned inline is formed from its first and last fragments (css-position-3 section 2.1), so the pieces after the block need it.
+        /// </summary>
+        internal CssBox? SplitInlineLeading { get; set; }
+
+        /// <summary>Whether the place an inline-level absolute box was passed at on its line has an odd bidi level, so the box starts there at its right edge (<see cref="StaticPositionIn"/>).</summary>
+        internal bool InlineStaticPlaceIsRtl { get; set; }
+
+        /// <summary>
+        /// The absolute boxes of this block's inline flow that were laid out by a pass that stopped at a page break, whose containing block is a positioned inline that
+        /// goes on after the break: their <c>right</c>/<c>bottom</c> were measured from the last fragment the inline had by then. Placed again once the flow completes
+        /// (<see cref="PlaceAgainstTheInlinesFinalFragments"/>).
+        /// </summary>
+        internal List<CssBox>? BoxesAwaitingTheInlinesLastFragment { get; set; }
+
+        /// <summary>
+        /// Moves an absolute box whose containing block is a positioned inline to where its <c>right</c> and <c>bottom</c> put it against the inline's final first and last
+        /// fragments (CSS Positioned Layout 3 section 2.1). Both placements move by the difference from where the box is, so this can follow a placement made when the
+        /// inline's later fragments did not exist yet (#1336).
+        /// </summary>
+        internal void PlaceAgainstTheInlinesFinalFragments()
+        {
+            if (Position.Value is not PositionMode.Absolute || ParentBox is null) return;
+
+            var nearestPositionedAncestor = DomUtils.GetNearestPositionedAncestor(this);
+            if (DomUtils.InlineContainingBlockOf(nearestPositionedAncestor) is not { } inlineContainingBlock) return;
+
+            if (Left.Value.IsKeyword && Right.Value.IsValue)
+            {
+                var right = CssValueParser.ParseLength(Right.Value.Value!.Value, AbsoluteContainingBlockWidth(nearestPositionedAncestor), this);
+                var delta = inlineContainingBlock.Right - right - ActualRight;
+                if (Math.Abs(delta) > 0.01) OffsetLeft(delta);
+            }
+
+            if (Top.Value.IsKeyword && Bottom.Value.IsValue)
+            {
+                var before = ActualBottom;
+                PlaceAbsoluteBottomEdge(null);
+                if (Math.Abs(ActualBottom - before) < 0.01) return;
+            }
+
+            // Placed again after the pages it used to sit on were emitted: they have to be drawn again with it.
+            HtmlContainer?.InvalidateEmittedFragmentainersReceiving(this);
+        }
 
         internal (double X, double Y)? InlineStaticPosition { get => _rare is null ? default((double X, double Y)?) : _rare.InlineStaticPosition; set { if (_rare is null) { if (EqualityComparer<(double X, double Y)?>.Default.Equals(value, default((double X, double Y)?))) return; _rare = new BoxRareState(); } _rare.InlineStaticPosition = value; } }
 
@@ -6551,7 +6610,7 @@ namespace PeachBrackets.Html.Dom
         /// would honour half of a stated choice.
         /// </para>
         /// </remarks>
-        private static bool ForcedColumnBreakFallsBefore(CssBox childBox)
+        internal static bool ForcedColumnBreakFallsBefore(CssBox childBox)
         {
             if (BreakPropagation.PropagatesBreakBeforeOutward(childBox)) return false;
 
@@ -7753,6 +7812,16 @@ namespace PeachBrackets.Html.Dom
         /// </summary>
         private static double? RelativeContainingBlockHeight(CssBox box)
         {
+            // A table's rows, row groups and cells refer to the height their parent part declares, not the height it ends up with: the table distributes
+            // extra height over its rows, so no used height is definite until the table is done.
+            if (box.DerivedStyle.ActualDisplay is Keywords.TableRow or Keywords.TableRowGroup or Keywords.TableHeaderGroup or Keywords.TableFooterGroup or Keywords.TableCell
+                && box.ParentBox is { } part)
+            {
+                return CssLayoutEngine.HasDefiniteHeight(part) && !CssValueParser.DependsOnPercentage(part.Height)
+                    ? CssValueParser.ParseLength(part.Height, 0, part)
+                    : null;
+            }
+
             var block = box.ContainingBlock;
             if (CssLayoutEngine.ResolveDefiniteHeightValue(block) is not { } height) return null;
 
@@ -8057,11 +8126,13 @@ namespace PeachBrackets.Html.Dom
                     // With both offsets on an axis `auto` the box sits at its static position, where it would be in flow (CSS 2.1 sections 10.3.7
                     // and 10.6.4): the parent's content edge across, and below the previous in-flow sibling down.
                     child.StaticRightEdge = null;
+                    child.StaticBottomEdge = null;
                     if (StaticPositionIn(child) is { } staticPosition)
                     {
                         if (staticPosition.Left is { } staticLeft) left = staticLeft + child.ActualMarginLeft;
                         if (staticPosition.Top is { } staticTop) top = staticTop + child.ActualMarginTop;
                         child.StaticRightEdge = staticPosition.RightEdge;
+                        child.StaticBottomEdge = staticPosition.BottomEdge;
                     }
 
                     // In a grid the static position rectangle is the grid area (css-grid-1 section 9: as if the box were the only item in it).
@@ -8153,7 +8224,7 @@ namespace PeachBrackets.Html.Dom
         /// across (left-to-right flow) and the previous in-flow sibling's margin edge down, or the parent's content top for the first. A box among inline
         /// content has its position on a line, which <see cref="InlineStaticPosition"/> carries.
         /// </summary>
-        private (double? Left, double? Top, double? RightEdge)? StaticPositionIn(CssBox child)
+        private (double? Left, double? Top, double? RightEdge, double? BottomEdge)? StaticPositionIn(CssBox child)
         {
             if (!ReferenceEquals(child.ParentBox, this)) return null;
 
@@ -8161,11 +8232,25 @@ namespace PeachBrackets.Html.Dom
             if (child.InlineStaticPosition is { } onLine)
             {
                 var acrossIsStatic = child.Left.Value.Value is null && child.Right.Value.Value is null;
-                double? inlineLeft = acrossIsStatic && Direction.Value != DirectionMode.Rtl ? onLine.X : null;
-                double? inlineRight = acrossIsStatic && Direction.Value == DirectionMode.Rtl ? onLine.X : null;
-                double? inlineTop = child.Top.Value.Value is null && child.Bottom.Value.Value is null ? onLine.Y : null;
+                // A block-level box sits at the line's start edge, which is its right edge in an rtl flow. One that was inline-level takes the slot the line
+                // reserved for it by bidi reordering and starts there in the direction of the place's own bidi level (measured in Chrome in a 300px rtl line:
+                // `[box]bbb` has the box's right edge at 300, `bbb[box]` at 252, and `aaa[box]bbb` its left edge at 252, where the Latin run is left to right).
+                var lineOwner = this;
+                while (lineOwner.IsInline && !DomUtils.IsAtomicInline(lineOwner) && lineOwner.ParentBox is { } outer) lineOwner = outer;
+                // In a vertical flow the across axis is the block axis, and its start edge is on the right in vertical-rl.
+                var rightEdgeAtThePlace = lineOwner.WritingMode.Value.IsVertical()
+                    ? WritingModeFrame.For(lineOwner).BlockStartIsRight
+                    : child.WasBlockLevelBeforeBlockification == true ? lineOwner.Direction.Value == DirectionMode.Rtl : child.InlineStaticPlaceIsRtl;
+                double? inlineLeft = acrossIsStatic && !rightEdgeAtThePlace ? onLine.X : null;
+                double? inlineRight = acrossIsStatic && rightEdgeAtThePlace ? onLine.X : null;
+                var downStatic = child.Top.Value.Value is null && child.Bottom.Value.Value is null;
 
-                return inlineLeft is null && inlineRight is null && inlineTop is null ? null : (inlineLeft, inlineTop, inlineRight);
+                // In a vertical flow the along axis is vertical: the box starts at the place in the direction its level runs, so a bottom-to-top one has its bottom edge there.
+                var bottomEdgeAtThePlace = lineOwner.WritingMode.Value.IsVertical() && child.InlineStaticPlaceIsRtl;
+                double? inlineTop = downStatic && !bottomEdgeAtThePlace ? onLine.Y : null;
+                double? inlineBottom = downStatic && bottomEdgeAtThePlace ? onLine.Y : null;
+
+                return inlineLeft is null && inlineRight is null && inlineTop is null && inlineBottom is null ? null : (inlineLeft, inlineTop, inlineRight, inlineBottom);
             }
 
             var rtl = Direction.Value == DirectionMode.Rtl;
@@ -8185,7 +8270,15 @@ namespace PeachBrackets.Html.Dom
                 top = previous is null ? ClientTop : previous.StaticBottom + previous.ActualMarginBottom;
             }
 
-            return left is null && top is null && rightEdge is null ? null : (left, top, rightEdge);
+            // An inline-level box among block-level siblings has a line of its own at that place, as narrow as the floats there leave it and aligned by text-align.
+            if (acrossStatic && top is { } lineTop && child.WasBlockLevelBeforeBlockification == false && !WritingMode.Value.IsVertical())
+            {
+                var (lineX, isRight) = CssLayoutEngine.StaticPositionOfALineAt(this, child, lineTop);
+                left = isRight ? null : lineX;
+                rightEdge = isRight ? lineX : null;
+            }
+
+            return left is null && top is null && rightEdge is null ? null : (left, top, rightEdge, null);
         }
 
         /// <summary>
@@ -8251,6 +8344,72 @@ namespace PeachBrackets.Html.Dom
                     : Factor(StaticSelfAlignment(AlignSelf.ToString(), grid.AlignItems.ToString()), free);
                 if (vertical && frame.InlineStartIsBottom) fraction = 1 - fraction;
                 var target = area.Y + free * fraction + ActualMarginTop;
+                if (Math.Abs(target - Location.Y) > 0.01) OffsetTop(target - Location.Y);
+            }
+        }
+
+        /// <summary>
+        /// An absolutely positioned child of a flex container sits at its static position, which is as if it were the only item of the container (css-flexbox-1
+        /// section 4.1): aligned in the container's content box by <c>justify-content</c> along the main axis and by its <c>align-self</c> (the container's
+        /// <c>align-items</c> where that is <c>auto</c>) across it, on each axis where both insets are <c>auto</c>. Horizontal writing modes only.
+        /// </summary>
+        private void AlignStaticPositionInFlex()
+        {
+            if (ParentBox is not { } flex || flex.DerivedStyle.ActualDisplay is not (Keywords.Flex or Keywords.InlineFlex) || flex.WritingMode.Value.IsVertical())
+            {
+                return;
+            }
+
+            var rtl = flex.Direction.Value == DirectionMode.Rtl;
+            var row = flex.FlexDirection.Value is Css.FlexDirection.Row or Css.FlexDirection.RowReverse;
+            var reverse = flex.FlexDirection.Value is Css.FlexDirection.RowReverse or Css.FlexDirection.ColumnReverse;
+            var wrapReverse = flex.FlexWrap.Value == Css.FlexWrap.WrapReverse;
+            var contentBox = new Rect(flex.ClientLeft, flex.ClientTop, flex.ClientRight - flex.ClientLeft, flex.ClientBottom - flex.ClientTop);
+
+            // Where the flex-start edge of each axis is: the far (right or bottom) side or the near one.
+            var mainStartFar = row ? rtl != reverse : reverse;
+            var crossStartFar = row ? wrapReverse : rtl != wrapReverse;
+
+            double MainFraction(double free)
+            {
+                var start = mainStartFar ? 1.0 : 0.0;
+                return flex.JustifyContent.Value switch
+                {
+                    Css.JustifyContent.Center or Css.JustifyContent.SpaceAround or Css.JustifyContent.SpaceEvenly => free < 0 ? start : 0.5,
+                    Css.JustifyContent.FlexEnd => 1 - start,
+                    Css.JustifyContent.End => row && rtl ? 0 : 1,
+                    Css.JustifyContent.Right => row ? 1 : start,
+                    Css.JustifyContent.Left => row ? 0 : start,
+                    _ => start
+                };
+            }
+
+            double CrossFraction(double free)
+            {
+                var start = crossStartFar ? 1.0 : 0.0;
+                var words = StaticSelfAlignment(AlignSelf.ToString(), flex.AlignItems.ToString()).ToLowerInvariant().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                if (words.Contains("safe") && free < 0) return start;
+                return (words.Length == 0 ? Keywords.Normal : words[^1]) switch
+                {
+                    "center" => 0.5,
+                    "flex-end" => 1 - start,
+                    "end" or "self-end" => !row && rtl ? 0 : 1,
+                    "start" or "self-start" => !row && rtl ? 1 : 0,
+                    _ => start
+                };
+            }
+
+            if (Left.Value.IsKeyword && Right.Value.IsKeyword)
+            {
+                var free = contentBox.Width - (ActualBoxSizingWidth + ActualMarginLeft + ActualMarginRight);
+                var target = contentBox.X + free * (row ? MainFraction(free) : CrossFraction(free)) + ActualMarginLeft;
+                if (Math.Abs(target - Location.X) > 0.01) OffsetLeft(target - Location.X);
+            }
+
+            if (Top.Value.IsKeyword && Bottom.Value.IsKeyword)
+            {
+                var free = contentBox.Height - (ActualBoxSizingHeight + ActualMarginTop + ActualMarginBottom);
+                var target = contentBox.Y + free * (row ? CrossFraction(free) : MainFraction(free)) + ActualMarginTop;
                 if (Math.Abs(target - Location.Y) > 0.01) OffsetTop(target - Location.Y);
             }
         }
@@ -8327,6 +8486,13 @@ namespace PeachBrackets.Html.Dom
                 // and stays fixed.
                 CssLayoutEngine.FinalizeVerticalLineBoxes(this, WritingModeFrame.For(this), ClientTop, ClientBottom);
                 _pendingVerticalInlineFinalize = false;
+
+                // The boxes among the lines were laid out before the lines were where they end up, so they are placed again at their static positions.
+                if (PendingVerticalStaticBoxes is { } pendingStatic)
+                {
+                    PendingVerticalStaticBoxes = null;
+                    await CssLayoutEngine.PlaceVerticalStaticBoxesAsync(g, this, pendingStatic.Words, pendingStatic.Boxes);
+                }
             }
 
             // Settle descendants' percentage heights against this box before their auto block margins use
@@ -8470,6 +8636,12 @@ namespace PeachBrackets.Html.Dom
                     StaticRightEdge = null;
                 }
 
+                if (StaticBottomEdge is { } staticBottomEdge)
+                {
+                    OffsetTop(staticBottomEdge - ActualMarginBottom - ActualBottom);
+                    StaticBottomEdge = null;
+                }
+
                 if (Left.Value.IsKeyword && Right.Value.IsValue)
                 {
                     var nearestPositionedAncestor = DomUtils.GetNearestPositionedAncestor(this);
@@ -8497,6 +8669,7 @@ namespace PeachBrackets.Html.Dom
                 }
 
                 AlignStaticPositionInGrid();
+                AlignStaticPositionInFlex();
             }
 
             // A fixed box's containing block is the viewport (the first page's content area in paged media), so `right`/`bottom` measure from that area's far
@@ -8661,7 +8834,7 @@ namespace PeachBrackets.Html.Dom
             // containing block's whole height past the bottom of it instead of filling it exactly.
             if (Position.Value is not (PositionMode.Absolute or PositionMode.Fixed)
                 || !Top.Value.IsValue || !Bottom.Value.IsValue
-                || !CssLayoutEngine.HasDefiniteHeight(this)
+                || !(CssLayoutEngine.HasDefiniteHeight(this) || DerivedStyle.ActualDisplay is Keywords.Table)
                 || (!MarginTop.Value.IsKeyword && !MarginBottom.Value.IsKeyword))
             {
                 return;

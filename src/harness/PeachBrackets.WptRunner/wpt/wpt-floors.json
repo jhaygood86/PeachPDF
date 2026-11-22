@@ -2,21 +2,21 @@
   "formatVersion": 1,
   "wptCommit": "33926aca0f4313541f0ac5d67d4a4ab949d50b16",
   "floors": {
-    "css-backgrounds": 395,
+    "css-backgrounds": 396,
     "css-color": 216,
-    "css-flexbox": 532,
-    "css-grid": 411,
-    "css-lists": 45,
-    "css-multicol": 141,
-    "css-position": 35,
+    "css-flexbox": 542,
+    "css-grid": 920,
+    "css-lists": 56,
+    "css-multicol": 146,
+    "css-position": 94,
     "css-tables": 87,
-    "css-text": 634,
+    "css-text": 640,
     "css-transforms": 513,
     "css-values": 83,
-    "css2-floats": 193,
-    "css2-flow": 1718,
+    "css2-floats": 195,
+    "css2-flow": 1816,
     "css2-generated": 212,
-    "css2-positioning": 447,
-    "css2-tables": 173
+    "css2-positioning": 451,
+    "css2-tables": 174
   }
 }

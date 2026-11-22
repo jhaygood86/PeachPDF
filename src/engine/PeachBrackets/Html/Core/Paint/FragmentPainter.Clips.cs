@@ -115,7 +115,7 @@ namespace PeachBrackets.Html.Paint
 
             // The clip is its clipper's padding box, in the clipper's own frame; this fragment is painted in the frame the scrolling of every container from the
             // clipper down to it has carried back, so the clip is moved the same way to stay where the clipper's padding box is.
-            if (rect is { } clipRect && container.View.HasScroll && DomUtils.ClippingBoxOf(fragment.Box) is { } scrollClipper
+            if (rect is { } clipRect && !container.View.IsEmpty && DomUtils.ClippingBoxOf(fragment.Box) is { } scrollClipper
                 && container.View.ClipShiftFor(fragment.Box, scrollClipper) is var (scrollDx, scrollDy) && (scrollDx != 0 || scrollDy != 0))
             {
                 rect = new Rect(clipRect.X + scrollDx, clipRect.Y + scrollDy, clipRect.Width, clipRect.Height);
@@ -140,7 +140,7 @@ namespace PeachBrackets.Html.Paint
                     }
 
                     var (entryRect, entryCurve) = (entry.Rect, entry.Curve);
-                    if (container.View.HasScroll && container.View.ClipShiftFor(fragment.Box, entry.Clipper) is var (entryDx, entryDy) && (entryDx != 0 || entryDy != 0))
+                    if (!container.View.IsEmpty && container.View.ClipShiftFor(fragment.Box, entry.Clipper) is var (entryDx, entryDy) && (entryDx != 0 || entryDy != 0))
                     {
                         entryRect = new Rect(entryRect.X + entryDx, entryRect.Y + entryDy, entryRect.Width, entryRect.Height);
                         if (entryCurve is not null) entryCurve = entryCurve with { Rect = new Rect(entryCurve.Rect.X + entryDx, entryCurve.Rect.Y + entryDy, entryCurve.Rect.Width, entryCurve.Rect.Height) };

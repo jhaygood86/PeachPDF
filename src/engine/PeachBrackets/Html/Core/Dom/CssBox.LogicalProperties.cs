@@ -79,6 +79,19 @@ namespace PeachBrackets.Html.Dom
         /// A logical longhand with no recorded order (one written by a path other than
         /// <c>CssUtils.SetPropertyValue</c>) keeps winning, which is the behaviour before order was tracked.
         /// </remarks>
+        /// <summary>Whether a logical longhand (size, margin, padding, inset, border or corner) was cascaded onto this box and is still to be, or has been, resolved to its physical property.</summary>
+        internal bool HasLogicalProperties =>
+            InlineSize is not null || BlockSize is not null || MinInlineSize is not null || MinBlockSize is not null || MaxInlineSize is not null || MaxBlockSize is not null
+            || MarginBlockStart is not null || MarginBlockEnd is not null || MarginInlineStart is not null || MarginInlineEnd is not null
+            || PaddingBlockStart is not null || PaddingBlockEnd is not null || PaddingInlineStart is not null || PaddingInlineEnd is not null
+            || InsetBlockStart is not null || InsetBlockEnd is not null || InsetInlineStart is not null || InsetInlineEnd is not null
+            || BorderBlockStartWidth is not null || BorderBlockStartStyle is not null || BorderBlockStartColor is not null
+            || BorderBlockEndWidth is not null || BorderBlockEndStyle is not null || BorderBlockEndColor is not null
+            || BorderInlineStartWidth is not null || BorderInlineStartStyle is not null || BorderInlineStartColor is not null
+            || BorderInlineEndWidth is not null || BorderInlineEndStyle is not null || BorderInlineEndColor is not null
+            || CornerStartStartShape is not null || CornerStartEndShape is not null || CornerEndStartShape is not null || CornerEndEndShape is not null
+            || BorderStartStartRadius is not null || BorderStartEndRadius is not null || BorderEndStartRadius is not null || BorderEndEndRadius is not null;
+
         internal void ResolveLogicalProperties()
         {
             if (InlineSize is null && BlockSize is null && MinInlineSize is null && MinBlockSize is null && MaxInlineSize is null && MaxBlockSize is null

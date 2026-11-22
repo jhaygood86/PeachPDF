@@ -977,6 +977,55 @@ namespace PeachBrackets.Html.Utils
         }
 
         /// <summary>
+        /// The first fragment of an inline that a block split, as <see cref="CssBox.SplitInlineLeading"/> names it: the rectangle of the piece before the block, or the empty
+        /// fragment at the end of the last line of the block the inline began in.
+        /// </summary>
+        private static Rect? LeadingFragmentOf(CssBox leading)
+        {
+            if (leading.IsInline)
+            {
+                var rectangles = leading.RectanglesView;
+                return rectangles.Count > 0 ? rectangles.Values.MinBy(r => r.Top) : null;
+            }
+
+            if (leading.LineBoxes.Count == 0) return null;
+
+            var line = leading.LineBoxes[^1];
+            var x = line.Words.Count > 0 ? line.Words.Max(w => w.Right) : leading.ClientLeft;
+            return new Rect(x, line.LineTop, 0, Math.Max(0, line.LineBottom - line.LineTop));
+        }
+
+        /// <summary>
+        /// A zero-width fragment where the content of <paramref name="line"/> ends: after its last word that is not collapsible space (before its first, in a right-to-left inline).
+        /// </summary>
+        private static Rect? EmptyFragmentAtTheEndOf(CssLineBox line, bool rtl)
+        {
+            var words = line.Words.Where(w => !w.IsSpaces).ToList();
+            if (words.Count == 0) return null;
+
+            var x = rtl ? words.Min(w => w.Left) : words.Max(w => w.Right);
+            return new Rect(x, line.LineTop, 0, Math.Max(0, line.LineBottom - line.LineTop));
+        }
+
+        /// <summary>
+        /// <see cref="InlineContainingBlockOf"/> for an inline in a vertical writing mode, where the axes swap: the inline axis runs along Y, from the first fragment's start edge to
+        /// the last fragment's end edge, and the block axis along X, from the first fragment's block-start edge to the last fragment's block-end edge.
+        /// </summary>
+        private static Rect VerticalInlineContainingBlock(CssBox ancestor, Rect first, Rect last)
+        {
+            var writingMode = ancestor.WritingMode.Value;
+            var inlineStartIsBottom = LogicalPropertyResolver.InlineStart(writingMode, ancestor.Direction.Value) == PhysicalSide.Bottom;
+            var blockStartIsRight = LogicalPropertyResolver.BlockStart(writingMode) == PhysicalSide.Right;
+
+            var top = (inlineStartIsBottom ? last.Top : first.Top) + ancestor.ActualBorderTopWidth;
+            var bottom = (inlineStartIsBottom ? first.Bottom : last.Bottom) - ancestor.ActualBorderBottomWidth;
+            var left = (blockStartIsRight ? last.Left : first.Left) + ancestor.ActualBorderLeftWidth;
+            var right = (blockStartIsRight ? first.Right : last.Right) - ancestor.ActualBorderRightWidth;
+
+            return new Rect(left, top, Math.Max(0, right - left), Math.Max(0, bottom - top));
+        }
+
+        /// <summary>
         /// The containing block a positioned <b>inline</b> ancestor forms for an absolutely positioned
         /// descendant, or null when <paramref name="ancestor"/> is not a non-atomic inline with laid-out
         /// fragments (or, for an empty one, a <see cref="CssBox.EmptyInlineContainingBlock"/>). Every other
@@ -1018,9 +1067,27 @@ namespace PeachBrackets.Html.Utils
             var first = ancestor.FirstHostingLineBox is { } firstLine && rectangles.TryGetValue(firstLine, out var f)
                 ? f
                 : rectangles.Values.MinBy(r => r.Top);
+
+            // The inline began on a line where none of its words fit, and wrapped: its first fragment is empty, at the end of what is on that line.
+            if (ancestor.FirstHostingLineBox is { } openingLine && !rectangles.ContainsKey(openingLine) && openingLine.LineTop < first.Top
+                && EmptyFragmentAtTheEndOf(openingLine, ancestor.Direction.Value == DirectionMode.Rtl) is { } emptyFragment)
+            {
+                first = emptyFragment;
+            }
+
+            // A piece after a block that split the inline: the first fragment is before the block.
+            if (ancestor.SplitInlineLeading is { } leading && LeadingFragmentOf(leading) is { } leadingFragment && leadingFragment.Top < first.Top)
+            {
+                first = leadingFragment;
+            }
             var last = ancestor.LastHostingLineBox is { } lastLine && rectangles.TryGetValue(lastLine, out var l)
                 ? l
                 : rectangles.Values.MaxBy(r => r.Bottom);
+
+            if (ancestor.WritingMode.Value.IsVertical())
+            {
+                return VerticalInlineContainingBlock(ancestor, first, last);
+            }
 
             var rtl = ancestor.Direction.Value == DirectionMode.Rtl;
             var left = (rtl ? last : first).Left + ancestor.ActualBorderLeftWidth;

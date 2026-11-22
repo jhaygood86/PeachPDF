@@ -144,7 +144,27 @@ namespace PeachBrackets.Engine.Tests.Integration
         }
 
         [Fact]
-        public async Task AmongInlineContentInADirectionRtlParent_TheRightEdgeSitsAtThePlaceOnTheLine()
+        public async Task AtTheStartOfAnRtlLine_TheBoxsRightEdgeIsOnTheLinesRightEdge()
+        {
+            // Chrome, 300px rtl line: `[box]bbb` has the box at [296,300]. The place is before an ltr run, a neutral at the paragraph's start, so it is an rtl one.
+            var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                "<style>body{margin:0} #c{width:300pt;line-height:20pt} #a{position:absolute;width:4pt;height:4pt}</style><div id='c' dir='rtl'><span id='a'></span>bbb</div>"));
+
+            Assert.Equal(LayoutHarness.FindById(root, "c")!.ClientRight, LayoutHarness.FindById(root, "a")!.ActualRight, 0.5);
+        }
+
+        [Fact]
+        public async Task AfterAnLtrRunInAnRtlLine_TheBoxsRightEdgeIsOnTheRunsLeftEdge()
+        {
+            // Chrome: `bbb[box]` has the box at [248,252], the run's left edge being 252.
+            var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                "<style>body{margin:0} #c{width:300pt;line-height:20pt} #a{position:absolute;width:4pt;height:4pt}</style><div id='c' dir='rtl'><span>bbb</span><span id='a'></span></div>"));
+
+            Assert.Equal(WordOf(root, "bbb").Left, LayoutHarness.FindById(root, "a")!.ActualRight, 0.5);
+        }
+
+        [Fact]
+        public async Task AmongInlineContentInADirectionRtlParent_TheLeftEdgeSitsAtThePlaceOnTheLine()
         {
             var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
                 "<style>body{margin:0} #c{width:300pt;line-height:20pt} #a{position:absolute;width:4pt;height:4pt}</style>"
@@ -152,8 +172,9 @@ namespace PeachBrackets.Engine.Tests.Integration
             var a = LayoutHarness.FindById(root, "a")!;
             var aaa = WordOf(root, "aaa");
 
-            // Latin words form a left-to-right run inside the rtl line; the place is after "aaa" and the box's right edge is there.
-            Assert.Equal(aaa.Right, a.ActualRight, 0.5);
+            // Latin words form a left-to-right run inside the rtl line; the place is after "aaa", and an inline-level box starts there and runs rightward whichever way
+            // the line runs (measured in Chrome: aaa [204,252], box [252,256] in a 300px rtl container).
+            Assert.Equal(aaa.Right, a.Location.X, 0.5);
         }
     }
 }

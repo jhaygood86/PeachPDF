@@ -719,8 +719,20 @@ namespace PeachBrackets.Html.Dom
 
             await LayoutAbsolutelyPositioned(g, coordinates, int.MaxValue);
 
+            // The inlines have all their fragments now: the boxes a break laid out against some of them go where the last one puts them.
+            if (blockBox.BoxesAwaitingTheInlinesLastFragment is { } awaiting)
+            {
+                blockBox.BoxesAwaitingTheInlinesLastFragment = null;
+                foreach (var box in awaiting) box.PlaceAgainstTheInlinesFinalFragments();
+            }
+
             return null;
         }
+
+        /// <summary>Whether the box's <c>right</c> or <c>bottom</c> is measured from a positioned inline's last fragment, which a page break may not have produced yet.</summary>
+        private static bool NeedsTheInlinesLastFragment(CssBox box) =>
+            ((box.Left.Value.IsKeyword && box.Right.Value.IsValue) || (box.Top.Value.IsKeyword && box.Bottom.Value.IsValue))
+            && DomUtils.GetNearestPositionedAncestor(box) is { IsInline: true } ancestor && !DomUtils.IsAtomicInline(ancestor);
 
         /// <summary>
         /// Lays out the absolutely positioned boxes <see cref="FlowBox"/> set aside among the block's inline
@@ -759,7 +771,17 @@ namespace PeachBrackets.Html.Dom
                 // Its static position is its place on the final line: the inline position the walk passed it at, carried
                 // through alignment and bidi reordering, and the line's top. CssBox.StaticPositionIn reads it for a
                 // box whose offsets on an axis are both auto.
-                box.InlineStaticPosition = (PlaceOnFinalLine(setAside), FinalLineEdgesOf(setAside.Line, setAside.Y).Top);
+                box.InlineStaticPosition = (PlaceOnFinalLine(setAside, out var placeIsRtl), FinalLineEdgesOf(setAside.Line, setAside.Y).Top);
+                box.InlineStaticPlaceIsRtl = placeIsRtl;
+
+                // A box that was block-level is where a block would be (CSS 2.1 section 10.6.4): at the start of the line after what comes before it, since a
+                // block ends the line it interrupts - never at the point on the line it was passed at, and not at the start of the first line's text-indent.
+                if (box.WasBlockLevelBeforeBlockification == true && setAside.Line.OwnerBox is { } lineOwner)
+                {
+                    var (lineTop, lineBottom) = FinalLineEdgesOf(setAside.Line, setAside.Y);
+                    var edge = lineOwner.Direction.Value == DirectionMode.Rtl ? lineOwner.ClientRight : lineOwner.ClientLeft;
+                    box.InlineStaticPosition = (edge, setAside.WordIndex > 0 ? lineBottom : lineTop);
+                }
 
                 // The box is left to run as passes of its own: LayoutBlockChild resumes the record its break leaves,
                 // which is what detaching here was written to avoid depending on, and unbroken the box's last line
@@ -772,6 +794,13 @@ namespace PeachBrackets.Html.Dom
                 try
                 {
                     await box.ParentBox!.LayoutBlockChild(g, box);
+
+                    // Laid out at a page break, against the inline's fragments so far: its later ones place the box again once the flow is done (#1336).
+                    if (beforeOrdinal != int.MaxValue && setAside.Line.OwnerBox is { } flowOwner && NeedsTheInlinesLastFragment(box))
+                    {
+                        var waiting = flowOwner.BoxesAwaitingTheInlinesLastFragment ??= [];
+                        if (!waiting.Contains(box)) waiting.Add(box);
+                    }
                 }
                 finally
                 {
@@ -867,7 +896,7 @@ namespace PeachBrackets.Html.Dom
         /// </para>
         /// <para>
         /// Its inline position is where the walk passed the box, carried through alignment and bidi
-        /// reordering by an adjacent word (<see cref="PlaceOnFinalLine"/>, which is right within a bidi run
+        /// reordering by an adjacent word (<see cref="PlaceOnFinalLine(SetAsideBox)"/>, which is right within a bidi run
         /// but not at a run boundary). Its block extent is the content
         /// area a word in the inline's own font has on the line (baseline less ascent, one font height),
         /// plus the inline's padding; on a line with no word, it starts at the line's top. The inline's own
@@ -989,15 +1018,93 @@ namespace PeachBrackets.Html.Dom
         /// </remarks>
         /// <param name="setAside">the set-aside box</param>
         /// <returns>the place's inline position on the final line</returns>
-        private static double PlaceOnFinalLine(SetAsideBox setAside)
+        private static double PlaceOnFinalLine(SetAsideBox setAside) => PlaceOnFinalLine(setAside, out _);
+
+        /// <summary>
+        /// <see cref="PlaceOnFinalLine(SetAsideBox)"/>, also saying whether the place's resolved bidi level is odd: a box placed there starts at its inline-start edge in
+        /// that direction, so an rtl place has the box's right edge on it and an ltr one the left edge (as Chrome does, in an rtl paragraph too).
+        /// </summary>
+        private static double PlaceOnFinalLine(SetAsideBox setAside, out bool rtlLevel)
         {
-            if (setAside.Anchor is not { } word) return PlaceOnWordlessLine(setAside);
+            if (setAside.Anchor is not { } word)
+            {
+                rtlLevel = EmbeddingLevelOf(setAside) % 2 == 1;
+                return PlaceOnWordlessLine(setAside);
+            }
 
             var offset = setAside.X - setAside.AnchorLeft;
+            var anchorLevel = ReorderedLevelOf(word, setAside.Line);
 
-            return ReorderedLevelOf(word, setAside.Line) % 2 == 1
+            if (PlaceAtABidiRunBoundary(setAside, anchorLevel, out var placeLevel) is { } atBoundary)
+            {
+                rtlLevel = placeLevel % 2 == 1;
+                return atBoundary;
+            }
+
+            rtlLevel = anchorLevel % 2 == 1;
+            return anchorLevel % 2 == 1
                 ? word.Left + word.Width - offset
                 : word.Left + offset;
+        }
+
+        /// <summary>
+        /// Where a place lands when its own bidi level is not its anchor's, or null when it is in its anchor's run (UAX #9 section 3.3.5, #1309). The place is a
+        /// zero-width neutral: between two words of one direction it takes that direction, anywhere else the embedding direction of the inline it sits in.
+        /// Reordering then puts it in a run of its own beside the higher-level run it follows or precedes in reading order: on the left of that run at an odd
+        /// level (the run reversed with the rest of its level), on the right of it at an even one.
+        /// </summary>
+        /// <param name="setAside">the set-aside box</param>
+        /// <param name="anchorLevel">the level the anchor word was reordered at</param>
+        /// <param name="placeLevel">the level the place itself resolves to, whether or not it is in its anchor's run</param>
+        /// <returns>the place's inline position on the final line, or null to let the caller place it in its anchor's run</returns>
+        private static double? PlaceAtABidiRunBoundary(SetAsideBox setAside, byte anchorLevel, out byte placeLevel)
+        {
+            placeLevel = anchorLevel;
+            var line = setAside.Line;
+            var words = line.Words;
+            var before = setAside.WordIndex > 0 && setAside.WordIndex <= words.Count ? words[setAside.WordIndex - 1] : null;
+            var after = setAside.WordIndex < words.Count ? words[setAside.WordIndex] : null;
+            if (before is null && after is null) return null;
+
+            var embedding = EmbeddingLevelOf(setAside);
+
+            var beforeLevel = before is null ? (byte?)null : ReorderedLevelOf(before, line);
+            var afterLevel = after is null ? (byte?)null : ReorderedLevelOf(after, line);
+
+            // N1: between two words of one direction the place takes that direction (at the lower of their levels); otherwise N2, the embedding direction.
+            var level = beforeLevel is { } b && afterLevel is { } a && b % 2 == a % 2 ? Math.Min(b, a) : embedding;
+
+            placeLevel = level;
+            if (level == anchorLevel) return null;
+
+            // The run of higher-level words the place follows (or, failing that, precedes) in reading order.
+            int first, last;
+            if (beforeLevel > level)
+            {
+                last = setAside.WordIndex - 1;
+                first = last;
+                while (first > 0 && ReorderedLevelOf(words[first - 1], line) > level) first--;
+            }
+            else if (afterLevel > level)
+            {
+                first = setAside.WordIndex;
+                last = first;
+                while (last < words.Count - 1 && ReorderedLevelOf(words[last + 1], line) > level) last++;
+            }
+            else
+            {
+                return null;
+            }
+
+            double left = double.MaxValue, right = double.MinValue;
+            for (var i = first; i <= last; i++)
+            {
+                left = Math.Min(left, words[i].Left);
+                right = Math.Max(right, words[i].Left + words[i].Width);
+            }
+
+            var rtlLevel = level % 2 == 1;
+            return beforeLevel > level == rtlLevel ? left : right;
         }
 
         /// <summary>
@@ -1009,6 +1116,13 @@ namespace PeachBrackets.Html.Dom
         /// </summary>
         /// <param name="setAside">the set-aside box, on a line with no word</param>
         /// <returns>the place's inline position on the line</returns>
+        private static byte EmbeddingLevelOf(SetAsideBox setAside)
+        {
+            var ownerRtl = setAside.Line.OwnerBox.Direction.Value == DirectionMode.Rtl;
+            var embeddingRtl = (setAside.Box.ParentBox ?? setAside.Line.OwnerBox).Direction.Value == DirectionMode.Rtl;
+            return (byte)((ownerRtl ? 1 : 0) + (embeddingRtl == ownerRtl ? 0 : 1));
+        }
+
         private static double PlaceOnWordlessLine(SetAsideBox setAside)
         {
             var line = setAside.Line;
@@ -1146,7 +1260,10 @@ namespace PeachBrackets.Html.Dom
             // onto the other physical axis), ActualRight for vertical-lr (identical shape to the height
             // case, just on X). Reads frame.BlockStartIsRight rather than re-deriving
             // LogicalPropertyResolver.BlockStart a second time for the same box.
-            var widthIsAuto = !CssValueParser.IsValidLength(blockBox.Width);
+            // An absolutely positioned box with both `left` and `right` fills the space between them (CSS 2.1 section 10.3.7), which GetBoxWidth resolved:
+            // its content does not size it.
+            var widthIsAuto = !CssValueParser.IsValidLength(blockBox.Width)
+                              && !(blockBox.Position.Value is PositionMode.Absolute or PositionMode.Fixed && blockBox.Left.Value.IsValue && blockBox.Right.Value.IsValue);
 
             var placedFloats = new List<CssBox.VerticalFloatPlacement>();
             var bottomFloats = new List<(CssBox Box, double InlineFromBottom)>();
@@ -1584,13 +1701,116 @@ namespace PeachBrackets.Html.Dom
             if (frame.InlineStartIsBottom)
             {
                 blockBox._pendingVerticalInlineFinalize = true;
+                blockBox.PendingVerticalStaticBoxes = (words, outOfFlowDescendants);
             }
             else
             {
                 FinalizeVerticalLineBoxes(blockBox, finalFrame, clientTop, finalClientBottom);
+                RecordVerticalStaticPositions(blockBox, words, outOfFlowDescendants, finalFrame, clientTop);
             }
 
             await LayoutOutOfFlowDescendants(g, blockBox, outOfFlowDescendants);
+        }
+
+        /// <summary>
+        /// Gives each absolutely positioned box among a vertical box's inline content the static position it would have had in the flow (css-position-3 section 3.4):
+        /// along the line, at the place its word was passed at - the box's top edge there - and across it, at the block-start edge of that line. A box that was
+        /// block-level starts the line after what precedes it, at the start of the inline axis, as one in a horizontal flow starts the next line. Left-to-right inline
+        /// flow only; a bottom-to-top one finalizes its lines later.
+        /// </summary>
+        /// <summary>Records the static positions of a vertical box whose lines were finalized after its out-of-flow boxes were laid out, and lays those boxes out again.</summary>
+        internal static async ValueTask PlaceVerticalStaticBoxesAsync(Canvas g, CssBox blockBox, List<CssRect> words, List<(CssBox Box, int WordIndex)> outOfFlowDescendants)
+        {
+            RecordVerticalStaticPositions(blockBox, words, outOfFlowDescendants, WritingModeFrame.For(blockBox), blockBox.ClientTop);
+
+            foreach (var (box, _) in outOfFlowDescendants)
+            {
+                if (box.InlineStaticPosition is not null && box.ParentBox is { } parent)
+                    await parent.LayoutBlockChild(g, box);
+            }
+        }
+
+        /// <summary>The top and bottom of the words from <paramref name="from"/> in <paramref name="step"/> direction while their level is above <paramref name="level"/>.</summary>
+        private static (double Top, double Bottom) ExtentOfHigherRun(List<CssRect> words, int from, int step, byte level)
+        {
+            double top = double.MaxValue, bottom = double.MinValue;
+            for (var i = from; i >= 0 && i < words.Count && words[i].BidiLevel > level; i += step)
+            {
+                top = Math.Min(top, words[i].Top);
+                bottom = Math.Max(bottom, words[i].Top + words[i].Height);
+            }
+
+            return (top, bottom);
+        }
+
+        private static void RecordVerticalStaticPositions(CssBox blockBox, List<CssRect> words, List<(CssBox Box, int WordIndex)> outOfFlowDescendants, WritingModeFrame frame, double clientTop)
+        {
+            var lines = blockBox.LineBoxes;
+
+            double BlockStartOf(CssLineBox line) =>
+                frame.BlockStartIsRight ? line.Words.Max(w => w.Left + w.Width) : line.Words.Min(w => w.Left);
+
+            CssLineBox? LineOf(CssRect? word) => word is null ? null : lines.FirstOrDefault(l => l.Words.Contains(word));
+
+            foreach (var (box, wordIndex) in outOfFlowDescendants)
+            {
+                if (box.Position.Value is not PositionMode.Absolute || box.DerivedStyle.ActualDisplay == Keywords.None || wordIndex > words.Count) continue;
+
+                var before = wordIndex > 0 ? words[wordIndex - 1] : null;
+                var after = wordIndex < words.Count ? words[wordIndex] : null;
+                var beforeLine = LineOf(before);
+                var line = beforeLine ?? LineOf(after);
+                if (line is null || line.Words.Count == 0) continue;
+
+                double across, along;
+                var oddPlace = false;
+                if (box.WasBlockLevelBeforeBlockification == true)
+                {
+                    // The line after what precedes the box; where nothing does, the line the box is on.
+                    var index = lines.IndexOf(line);
+                    var next = before is null ? line : index + 1 < lines.Count && lines[index + 1].Words.Count > 0 ? lines[index + 1] : null;
+                    across = next is not null
+                        ? BlockStartOf(next)
+                        : frame.BlockStartIsRight ? line.Words.Min(w => w.Left) : line.Words.Max(w => w.Left + w.Width);
+                    // The start of the inline axis: the top, or the bottom in a bottom-to-top flow, where the box starts from its bottom edge.
+                    oddPlace = frame.InlineStartIsBottom;
+                    along = frame.InlineStartIsBottom ? blockBox.ClientBottom : clientTop;
+                }
+                else
+                {
+                    across = BlockStartOf(line);
+
+                    // The place's own bidi level: between two words of one direction that direction, otherwise the flow's. A box starts there in the direction that level
+                    // runs, so an odd (bottom-to-top) level has its bottom edge on the logical end of the word before it, which is that word's top.
+                    var beforeLevel = before?.BidiLevel;
+                    var afterLevel = after?.BidiLevel;
+                    var level = beforeLevel is { } b && afterLevel is { } a && b % 2 == a % 2 ? Math.Min(b, a) : (frame.InlineStartIsBottom ? 1 : 0);
+                    oddPlace = level % 2 == 1;
+
+                    // Next to a run of a higher level than the place's own, the place is a run of its own beside it: after it in reading order, that is above it at an odd
+                    // level (the column reads from the bottom) and below it at an even one; before it, the other way round (the same rule as in a horizontal line).
+                    var lineWords = line.Words;
+                    if (before is not null && before.BidiLevel > level)
+                    {
+                        var (runTop, runBottom) = ExtentOfHigherRun(lineWords, lineWords.IndexOf(before), -1, (byte)level);
+                        along = oddPlace ? runTop : runBottom;
+                    }
+                    else if (after is not null && after.BidiLevel > level)
+                    {
+                        var (runTop, runBottom) = ExtentOfHigherRun(lineWords, lineWords.IndexOf(after), 1, (byte)level);
+                        along = oddPlace ? runBottom : runTop;
+                    }
+                    else
+                    {
+                        along = before is null
+                            ? (oddPlace ? after!.Top + after.Height : after!.Top)
+                            : before.BidiLevel % 2 == 1 ? before.Top : before.Top + before.Height;
+                    }
+                }
+
+                box.InlineStaticPosition = (across, along);
+                box.InlineStaticPlaceIsRtl = oddPlace;
+            }
         }
 
         private static void ReplaceCollectedWordWithOverflowWrapSplit(List<CssRect> collectedWords, int index,
@@ -2229,7 +2449,8 @@ namespace PeachBrackets.Html.Dom
                 // A float the column flow already placed (CreateVerticalLineBoxes) is done.
                 if (child.IsFloated && child.VerticalFloatOccupancy is not null) continue;
 
-                await blockBox.LayoutBlockChild(g, child);
+                // A box among the inline content has its static position stated for the frame it is a child of, which is its parent, as in a horizontal flow.
+                await (child.InlineStaticPosition is not null && child.ParentBox is { } parent ? parent : blockBox).LayoutBlockChild(g, child);
             }
         }
 
@@ -3836,10 +4057,11 @@ namespace PeachBrackets.Html.Dom
             }
             else if (box.Position.Value is PositionMode.Absolute
                      && box.Top.Value.IsValue && box.Bottom.Value.IsValue
+                     && box.DerivedStyle.ActualDisplay is not Keywords.Table
                      && heightBasisIsCalculated)
             {
                 // CSS 2.1 §10.6.4: an absolutely-positioned box with auto height but both `top` and `bottom`
-                // set fills the space between them in the containing block. The counterpart of the §10.3.7
+                // set (a table keeps the height its rows give it, as in a browser) fills the space between them in the containing block. The counterpart of the §10.3.7
                 // width rule above; sizes a Charts.css area/line `td::before` (auto height, `inset: 0`) to
                 // its cell's height.
                 var top = CssValueParser.ParseLength(box.Top.Value.Value!.Value, heightBasis, box);
@@ -6354,6 +6576,43 @@ namespace PeachBrackets.Html.Dom
         }
 
         /// <summary>
+        /// Where an inline-level absolute box among a block's block-level children is put (css-position-3 section 3.4): at the start of a line of its own at
+        /// <paramref name="top"/>, which is as narrow as the floats there leave it, aligned by the block's <c>text-align</c> as an empty line is. In a right-to-left
+        /// block the box's right edge is there, as at any place of an odd bidi level.
+        /// </summary>
+        /// <returns>the inline position of the place, and whether it is where the box's right edge goes</returns>
+        internal static (double X, bool IsRightEdge) StaticPositionOfALineAt(CssBox block, CssBox box, double top)
+        {
+            var left = block.ClientLeft;
+            var right = block.ClientRight;
+
+            // The floats before the box among the block's children that reach down to the line's top: the line is narrowed to leave them clear.
+            foreach (var sibling in block.Boxes)
+            {
+                if (ReferenceEquals(sibling, box)) break;
+                if (!sibling.IsFloated || sibling.DerivedStyle.ActualDisplay == Keywords.None) continue;
+                if (sibling.FlowBottomEdgeIn(block) + sibling.ActualMarginBottom <= top || sibling.Location.Y - sibling.ActualMarginTop > top) continue;
+
+                if (sibling.EffectiveFloatSide == Floating.Right) right = Math.Min(right, sibling.FlowLeftEdgeIn(block) - sibling.ActualMarginLeft);
+                else left = Math.Max(left, sibling.FlowRightEdgeIn(block) + sibling.ActualMarginRight);
+            }
+
+            var rtl = block.Direction.Value == DirectionMode.Rtl;
+            var alignment = ResolveLogicalAlignment(block.ActualTextAlignAll,
+                rtl ? HorizontalAlignment.Right : HorizontalAlignment.Left, rtl ? HorizontalAlignment.Left : HorizontalAlignment.Right);
+
+            var x = alignment switch
+            {
+                HorizontalAlignment.Left => left,
+                HorizontalAlignment.Right => right,
+                HorizontalAlignment.Center => (left + right) / 2,
+                _ => rtl ? right : left
+            };
+
+            return (x, rtl);
+        }
+
+        /// <summary>
         /// The inline extent <paramref name="block"/> may take beside the floats that reach its top edge:
         /// <paramref name="left"/> and <paramref name="right"/> narrowed to leave them clear.
         /// </summary>
@@ -6566,7 +6825,7 @@ namespace PeachBrackets.Html.Dom
                 return false;
             }
 
-            if (HasBlockLevelDescendant(child)) return true;
+            if (HasBlockLevelDescendant(child) || (CountForcedLineBreaks(child) is > 0 and var forcedBreaks && FitsTheFragmentainer(child, forcedBreaks, blockTop))) return true;
 
             var available = PageAwareWidthBasis(child.ContainingBlock, blockTop);
 
@@ -6590,6 +6849,45 @@ namespace PeachBrackets.Html.Dom
             // A hair of slack, so a box whose content measures its own width exactly - the overwhelmingly
             // common `width` set to fit its label - is not pushed onto the atomic path by rounding.
             return await GetMaxContentWidth(g, child) > available + 0.01;
+        }
+
+        /// <summary>
+        /// How many forced line breaks (<c>&lt;br&gt;</c>, or a newline a <c>white-space</c> value preserves) <paramref name="box"/> holds in its own inline content. Any makes
+        /// more than one line, and flowed into its parent's lines instead, a break would end the parent's line, not the box's. Nested atomic inlines have lines of their own and
+        /// are not looked into.
+        /// </summary>
+        private static int CountForcedLineBreaks(CssBox box)
+        {
+            var count = 0;
+
+            foreach (var childBox in box.Boxes)
+            {
+                if (childBox.DerivedStyle.ActualDisplay == Keywords.None) continue;
+                if (childBox.IsBrElement) count++;
+                else if (childBox.PreservesBreaks && childBox.Text is { } text) count += text.Count(static c => c == '\n');
+                else if (!DomUtils.IsAtomicInline(childBox)) count += CountForcedLineBreaks(childBox);
+            }
+
+            return count;
+        }
+
+        /// <summary>
+        /// Whether an inline-block with <paramref name="forcedBreaks"/> forced breaks, starting at <paramref name="blockTop"/>, fits what is left of the fragmentainer it is laid out
+        /// in. An atomic box does not split across fragmentainers, so one that would straddle a break keeps being flowed line by line into its parent, where its lines can.
+        /// </summary>
+        private static bool FitsTheFragmentainer(CssBox box, int forcedBreaks, double blockTop)
+        {
+            // A multi-column container measures its content in passes that have no fragmentainer to ask, so inside one the answer is the cautious one.
+            for (var ancestor = box.ParentBox; ancestor is not null; ancestor = ancestor.ParentBox)
+            {
+                if (ancestor.EstablishesMultiColumnContext) return false;
+            }
+
+            if (box.HtmlContainer?.CurrentFragmentainer is not { IsFragmenting: true } fragmentainer) return true;
+
+            var height = (forcedBreaks + 1) * box.ActualLineHeight
+                         + box.ActualBorderTopWidth + box.ActualPaddingTop + box.ActualPaddingBottom + box.ActualBorderBottomWidth;
+            return blockTop + height <= fragmentainer.BandBottom;
         }
 
         /// <summary>
@@ -10650,7 +10948,12 @@ namespace PeachBrackets.Html.Dom
 
             var runs = Bidi.ReorderLine(levels, 0, levels.Length);
 
-            if (runs.Count == 1 && !runs[0].IsRtl) return;
+            // The natural placement follows the paragraph's own direction (along the column from its inline start, whichever end that is). A run that runs the
+            // other way from the paragraph - a right-to-left run in a left-to-right paragraph, or a left-to-right one in a direction: rtl one - is reversed within itself.
+            // (A sideways-lr column also reads from the bottom, but its text is left to right, so its runs are the paragraph's direction and stay as placed.)
+            var paragraphIsRtl = baseLevel == 1;
+            // A lone left-to-right word has nothing to reverse, and its placement already carries its inline box's spacing, which a repositioning would drop.
+            if (runs.Count == 1 && (runs[0].IsRtl == paragraphIsRtl || (!runs[0].IsRtl && lineBox.Words.Count == 1))) return;
 
             // The line's last word has no CssRect.FullHeight (there is no vertical counterpart of
             // FullWidth) - ActualWordSpacing is added explicitly so the fallback boundary agrees with
@@ -10662,7 +10965,9 @@ namespace PeachBrackets.Html.Dom
 
             var runNewStart = slots[0];
 
-            foreach (var run in runs)
+            // The runs come in visual order from the left, which is from the inline start for a left-to-right paragraph and from the inline end for a direction: rtl
+            // one: the offsets above are from the inline start, so the runs are taken from there.
+            foreach (var run in paragraphIsRtl ? runs.Reverse() : runs)
             {
                 var runOldStart = slots[run.Start];
                 var lastIndexInRun = run.Start + run.Length - 1;
@@ -10670,13 +10975,51 @@ namespace PeachBrackets.Html.Dom
                 var runContentExtent = slots[lastIndexInRun] + lineBox.Words[lastIndexInRun].Height - runOldStart;
                 var trailingGap = SlotBoundaryAfter(lastIndexInRun) - (runOldStart + runContentExtent);
 
+                if (!run.IsRtl && paragraphIsRtl)
+                {
+                    // Reversing the slots would mirror the room an inline box reserves along the column with the words, leaving its padding on the wrong side: a box
+                    // keeps its start edge at the physical end its own direction names (the bottom, in this column) whatever order its words are in. So the run is
+                    // placed word by word from its bottom edge, up, with the physical bottom spacing of the boxes ending at a word below it and the top spacing of
+                    // those starting at the next above it.
+                    var first = run.Start;
+                    var last = lastIndexInRun;
+                    var openingAtFirst = BoxesOpeningAt(lineBox, first);
+                    var bottomBoundary = clientBottom - slots[first] + openingAtFirst.Sum(b => InlineAxisSpacing(b, top: false));
+
+                    var closingAtLast = BoxesClosingAt(lineBox, last);
+                    var y = bottomBoundary - closingAtLast.Sum(b => InlineAxisSpacing(b, top: false));
+
+                    for (var idx = last; idx >= first; idx--)
+                    {
+                        var word = lineBox.Words[idx];
+                        PlaceVerticalBidiRunWord(word, y - word.Height, run.Level, mirror: false);
+                        y -= word.Height;
+
+                        if (idx > first)
+                        {
+                            // The room between the two words as they were placed (the word spacing and the boxes' spacing on their natural sides), less what the boxes
+                            // had there, is the word spacing; the boxes' spacing then goes on the sides they have in this order.
+                            var closing = BoxesClosingAt(lineBox, idx - 1);
+                            var opening = BoxesOpeningAt(lineBox, idx);
+                            var naturalRoom = slots[idx] - (slots[idx - 1] + lineBox.Words[idx - 1].Height);
+                            var wordSpacing = naturalRoom - closing.Sum(b => InlineAxisSpacing(b, top: true)) - opening.Sum(b => InlineAxisSpacing(b, top: false));
+
+                            y -= wordSpacing + closing.Sum(b => InlineAxisSpacing(b, top: false)) + opening.Sum(b => InlineAxisSpacing(b, top: true));
+                        }
+                    }
+
+                    var visualExtent = bottomBoundary - (y - BoxesOpeningAt(lineBox, first).Sum(b => InlineAxisSpacing(b, top: true)));
+                    runNewStart += visualExtent + trailingGap;
+                    continue;
+                }
+
                 for (var k = 0; k < run.Length; k++)
                 {
                     var idx = run.Start + k;
                     var word = lineBox.Words[idx];
                     var offsetFromRunStart = slots[idx] - runOldStart;
 
-                    var newLogicalOffset = run.IsRtl
+                    var newLogicalOffset = run.IsRtl != paragraphIsRtl
                         ? runNewStart + runContentExtent - (offsetFromRunStart + word.Height)
                         : runNewStart + offsetFromRunStart;
 
@@ -10689,6 +11032,32 @@ namespace PeachBrackets.Html.Dom
 
                 runNewStart += runContentExtent + trailingGap;
             }
+        }
+
+        /// <summary>The inline boxes holding the word at <paramref name="index"/> of the line, innermost first, up to (not including) the line's block.</summary>
+        private static List<CssBox> InlineBoxesOf(CssLineBox line, int index)
+        {
+            var boxes = new List<CssBox>();
+            if (index < 0 || index >= line.Words.Count) return boxes;
+
+            for (var current = line.Words[index].OwnerBox; current is not null && !ReferenceEquals(current, line.OwnerBox); current = current.ParentBox)
+                boxes.Add(current);
+
+            return boxes;
+        }
+
+        /// <summary>The inline boxes that start at the word at <paramref name="index"/>: those holding it and not the word before it on the line.</summary>
+        private static List<CssBox> BoxesOpeningAt(CssLineBox line, int index)
+        {
+            var before = InlineBoxesOf(line, index - 1);
+            return InlineBoxesOf(line, index).Where(b => !before.Contains(b)).ToList();
+        }
+
+        /// <summary>The inline boxes that end at the word at <paramref name="index"/>: those holding it and not the word after it on the line.</summary>
+        private static List<CssBox> BoxesClosingAt(CssLineBox line, int index)
+        {
+            var after = InlineBoxesOf(line, index + 1);
+            return InlineBoxesOf(line, index).Where(b => !after.Contains(b)).ToList();
         }
 
         private static void PlaceVerticalBidiRunWord(CssRect word, double newTop, byte level, bool mirror)

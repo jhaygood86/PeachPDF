@@ -33,6 +33,17 @@ public class ScrollContainerGapTests
     }
 
     [Fact]
+    public async Task AStickyBoxWithABottomInset_BeyondTheScrollportOfItsContainer_IsHeldAtTheBottomOfTheScrollport()
+    {
+        var (_, document) = await LoadAsync("#s { width: 100pt; height: 100pt; overflow: hidden } #w { display: flex; flex-direction: column; height: 500pt } #h { position: sticky; bottom: 0; height: 100pt; margin-top: auto }",
+            "<div id=s><div id=w><div id=h></div></div></div>");
+        document.SetViewport(document.Viewport);
+        var port = document.GetScrollMetrics(document.GetElement("s")!)!.Value.Viewport;
+
+        Assert.Equal(port.Y, document.GetElementBounds("h")!.Value.Y, 1);
+    }
+
+    [Fact]
     public async Task AStickyBoxInAScrollContainer_LeavesWithItsContainingBlock()
     {
         var (_, document) = await LoadAsync("#s { width: 100pt; height: 100pt; overflow: auto } .i { height: 50pt } #w { height: 120pt } #h { position: sticky; top: 0; height: 20pt }",

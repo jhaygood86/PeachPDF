@@ -60,6 +60,10 @@ internal sealed partial class WptRenderer(string wptRoot) : IReftestRenderer
             await document.LayoutAsync(measuring);
         }
 
+        // A browser shows the page through a viewport at scroll position 0, which is what makes `position: sticky` boxes stick; without one
+        // the engine computes no sticky displacement at all.
+        document.SetViewport(document.Viewport);
+
         // The layout unit is the point, so the canvas is scaled by 4/3 to make one CSS pixel one device pixel. (A surface declared as
         // 4/3 pixels per point instead was measured: it passes about a third fewer tests, with larger edge differences.)
         // Layout runs in CSS pixels (PixelsPerPoint below), so the canvas shows one CSS pixel per device pixel with no transform in between,
@@ -101,6 +105,10 @@ internal sealed partial class WptRenderer(string wptRoot) : IReftestRenderer
 
     private async ValueTask<RNetworkResponse?> LoadAsync(Uri uri)
     {
+        // A data: URL carries its own content, as a browser reads it (an image, a stylesheet, a font); the host's loader is what decodes it.
+        if (uri.IsAbsoluteUri && uri.Scheme == "data")
+            return await HostResourceLoader.LoadAsync(uri);
+
         if (!uri.IsAbsoluteUri || !uri.AbsoluteUri.StartsWith(Origin + "/", StringComparison.Ordinal))
             return null;
 

@@ -255,10 +255,12 @@ namespace PeachBrackets.Html
             if (startInset is { } near)
                 shift = Math.Max(shift, viewStart + near - start);
 
-            if (blockEnd is { } limit && end + shift > limit)
-                shift = limit - end;
-            if (blockStart is { } origin && start + shift < origin)
-                shift = origin - start;
+            // The containing block only limits how far the box is carried: a box that already lies outside it (a negative margin, content that overflows a
+            // fixed-height parent) is not pulled back in, so each edge only holds a box that is moving towards it.
+            if (shift > 0 && blockEnd is { } limit && end + shift > limit)
+                shift = Math.Max(0, limit - end);
+            if (shift < 0 && blockStart is { } origin && start + shift < origin)
+                shift = Math.Min(0, origin - start);
 
             return shift;
         }

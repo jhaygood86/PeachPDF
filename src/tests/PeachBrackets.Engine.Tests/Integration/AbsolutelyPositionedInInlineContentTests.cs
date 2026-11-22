@@ -310,6 +310,56 @@ namespace PeachBrackets.Engine.Tests.Integration
         }
 
         [Fact]
+        public async Task AbsolutelyPositionedChild_AfterABlockThatSplitAPositionedInline_IsPlacedFromTheLineTheInlineBeganOn()
+        {
+            // The block splits the inline in two; the containing block still starts at the inline's first fragment, on the line before the block.
+            var (root, _) = await LayoutAsync(
+                "<div id='c' style='width: 100pt'><div style='height: 60pt'></div><i id='b'>B</i> <span style='position: relative'><div style='height: 10pt'></div>AA " +
+                "<b id='a' style='position: absolute; top: 0; left: 0; width: 4pt; height: 4pt'></b></span></div>");
+
+            var abs = Find(root, "a");
+            var before = Assert.Single(Find(root, "b").Rectangles.Values);
+
+            Assert.Equal(before.Top, abs.Location.Y, 0);
+        }
+
+        [Fact]
+        public async Task AbsolutelyPositionedChild_OfAPositionedInlineWhoseFirstWordWrapped_IsPlacedFromTheEndOfTheLineItBeganOn()
+        {
+            // None of the inline's words fit after "BBBB", so it has no fragment on that line; its first fragment is empty, at the end of the text there.
+            var (root, _) = await LayoutAsync(
+                "<div id='c' style='width: 100pt'><i id='b' style='letter-spacing: 12pt'>BBBB</i> <span id='s' style='position: relative'>" +
+                "<b id='a' style='position: absolute; top: 0; left: 0; width: 4pt; height: 4pt'></b>AA A AA AAAA</span></div>");
+
+            var abs = Find(root, "a");
+            var before = Assert.Single(Find(root, "b").Rectangles.Values);
+
+            Assert.InRange(abs.Location.X, before.Right - 1, before.Right + 4); // the word ends after the last letter's trailing spacing
+            Assert.InRange(abs.Location.Y, before.Top - 2, before.Top + 2); // on the line before the wrapped text
+        }
+
+        [Theory]
+        [InlineData("vertical-rl")]
+        [InlineData("vertical-lr")]
+        public async Task InAVerticalWritingMode_AnAbsoluteBoxWithAllInsetsZero_FillsThePositionedInlinesContainingBlock(string writingMode)
+        {
+            // The inline's containing block runs along Y from its first fragment's start to its last fragment's end, and along X across all its lines.
+            var (root, _) = await LayoutAsync(
+                $"<div style='writing-mode: {writingMode}; width: 200pt; height: 200pt'>XX <span id='s' style='position: relative'>XXXX<br>XXXXXXXX<br>XXXXX " +
+                "<div id='a' style='position: absolute; inset: 0'></div></span></div>");
+
+            var containingBlock = DomUtils.InlineContainingBlockOf(Find(root, "s"));
+            var abs = Find(root, "a");
+
+            Assert.NotNull(containingBlock);
+            Assert.True(containingBlock.Value.Width > 0 && containingBlock.Value.Height > 0, $"the containing block has an area, was {containingBlock}");
+            Assert.Equal(containingBlock.Value.Left, abs.Location.X, 1);
+            Assert.Equal(containingBlock.Value.Top, abs.Location.Y, 1);
+            Assert.Equal(containingBlock.Value.Width, abs.ActualRight - abs.Location.X, 1);
+            Assert.Equal(containingBlock.Value.Height, abs.ActualBottom - abs.Location.Y, 1);
+        }
+
+        [Fact]
         public async Task AbsolutelyPositionedChild_OfAFloatInsideAnEmptyPositionedInline_IsNotLeftAtTheOrigin()
         {
             // No word is placed in the inline itself, so it has no fragment: the box is anchored at the
@@ -342,6 +392,39 @@ namespace PeachBrackets.Engine.Tests.Integration
             Assert.Equal(div.Location.X + 5, abs.Location.X, 3);
             Assert.Equal(div.Location.Y + 6, abs.Location.Y, 3);
             Assert.Equal(8, abs.ActualRight - abs.Location.X, 3);
+        }
+
+        [Fact]
+        public async Task AbsoluteBoxInAPositionedInlineThatCrossesAPageBreak_HasItsBottomOnTheInlinesLastFragment()
+        {
+            // The box is laid out by the pass that stops at the break, before the inline's later lines exist; its `bottom` has to be measured from the last of them (#1336).
+            var lines = string.Join("", Enumerable.Range(0, 10).Select(i => $"Line{i}<br>"));
+            var (root, _) = await LayoutAsync(
+                "<div style='line-height: 20pt'><span id='s' style='position: relative'><span id='a' style='position: absolute; left: 0; bottom: 0; width: 8pt; height: 8pt'></span>" +
+                $"{lines}</span></div>",
+                pageHeight: 140);
+
+            var inlineBottom = Find(root, "s").Rectangles.Values.Max(r => r.Bottom);
+            var abs = Find(root, "a");
+
+            Assert.True(inlineBottom - Origin > 140, $"the inline did not cross the break: its bottom is {inlineBottom}");
+            Assert.Equal(inlineBottom, abs.ActualBottom, 1);
+        }
+
+        [Fact]
+        public async Task AbsoluteBoxInAPositionedInlineThatCrossesAPageBreak_HasItsRightOnTheInlinesLastFragment()
+        {
+            var lines = string.Join("", Enumerable.Range(0, 9).Select(i => $"ab<br>"));
+            var (root, _) = await LayoutAsync(
+                "<div style='line-height: 20pt'><span id='s' style='position: relative'><span id='a' style='position: absolute; top: 0; right: 0; width: 8pt; height: 8pt'></span>" +
+                $"{lines}a much longer last line</span></div>",
+                pageHeight: 140);
+
+            var rectangles = Find(root, "s").Rectangles.Values.ToList();
+            var abs = Find(root, "a");
+
+            Assert.True(rectangles.Max(r => r.Bottom) - Origin > 140, "the inline did not cross the break");
+            Assert.Equal(rectangles.MaxBy(r => r.Bottom).Right, abs.ActualRight, 1);
         }
 
         [Fact]
@@ -843,6 +926,58 @@ namespace PeachBrackets.Engine.Tests.Integration
             // Both words are in the first column (200pt wide), on the same line.
             Assert.True(after.Left < container.Location.X + 200, $"text after the abs box started at x={after.Left}");
             Assert.InRange(after.Top, container.Location.Y - 1, container.Location.Y + 1);
+        }
+
+        [Fact]
+        public async Task ABlockLevelAbsoluteBox_AmongInlineContent_IsAtTheStartOfTheLineAfterWhatPrecedesIt()
+        {
+            // A block would end the line it interrupts and start at the container's content edge, ignoring the first line's text-indent.
+            var (root, _) = await LayoutAsync(
+                "<div id='d' style='width: 300pt; line-height: 20pt; text-indent: 15pt'>aaa <span>bb<div id='a' style='position: absolute; width: 5pt; height: 5pt'></div></span><br>cc</div>");
+
+            var div = Find(root, "d");
+            var abs = Find(root, "a");
+
+            Assert.Equal(div.ClientLeft, abs.Location.X, 3);
+            Assert.Equal(div.ClientTop + 20, abs.Location.Y, 3);
+        }
+
+        [Fact]
+        public async Task AnInlineLevelAbsoluteBox_AmongInlineContent_StaysAtThePointOnTheLineItWasPassedAt()
+        {
+            var (root, _) = await LayoutAsync(
+                "<div id='d' style='width: 300pt; line-height: 20pt'>aaa <span>bb<div id='a' style='position: absolute; display: inline; width: 5pt; height: 5pt'></div></span><br>cc</div>");
+
+            var div = Find(root, "d");
+            var abs = Find(root, "a");
+
+            Assert.True(abs.Location.X > div.ClientLeft + 5, $"the box was put at x={abs.Location.X}");
+            Assert.Equal(div.ClientTop, abs.Location.Y, 3);
+        }
+
+        [Fact]
+        public async Task AnEmptyPositionedInline_AtTheEndOfALeftToRightRunInAnRtlLine_IsAtThatRunsLeftEdge()
+        {
+            // UAX #9: the neutral at the end of the paragraph takes the paragraph direction, so it is a run of its own on the far side of the ltr run: the left,
+            // where an ltr run's end would otherwise put it on the right (#1309; measured in Chrome: run [188,300], box at 188).
+            var (root, _) = await LayoutAsync(
+                "<style>body{margin:0} #c{width:300pt;line-height:20pt} .r{position:relative} #x{position:absolute;left:0;top:0;width:4pt;height:4pt}</style>"
+                + "<div id='c' dir='rtl'><span>aaa bbb</span><span class='r'><div id='x'></div></span></div>");
+
+            var x = Find(root, "x");
+            var left = Descendants(Find(root, "c")).Where(b => b.Words.Count > 0).SelectMany(b => b.Words).Min(w => w.Left);
+
+            Assert.Equal(left, x.Location.X, 0.5);
+        }
+
+        [Fact]
+        public async Task AnEmptyPositionedInline_BeforeAnRtlRunInAnLtrLine_IsAtTheStartOfTheLine()
+        {
+            var (root, _) = await LayoutAsync(
+                "<style>body{margin:0} #c{width:300pt;line-height:20pt} .r{position:relative} #x{position:absolute;left:0;top:0;width:4pt;height:4pt}</style>"
+                + "<div id='c' dir='ltr'><span class='r'><div id='x'></div></span><span>אבג דהו</span></div>");
+
+            Assert.Equal(Find(root, "c").ClientLeft, Find(root, "x").Location.X, 0.5);
         }
 
         private static Task<(CssBox Root, HtmlContainerInt Container)> LayoutAsync(string body, double pageHeight = 842) =>

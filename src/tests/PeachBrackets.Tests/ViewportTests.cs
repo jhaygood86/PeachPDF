@@ -55,6 +55,30 @@ public class ViewportTests
     }
 
     [Fact]
+    public async Task AStickyBoxHeldInsideAClippingContainer_IsPaintedWhereItIsHeld_NotClippedAwayAtItsLayoutPlace()
+    {
+        // The box lies 400pt down a 100pt container that clips it; its bottom inset holds it at the bottom of the container, which it must be painted in.
+        const string html = "<div style='width:100pt;height:100pt;overflow:hidden'><div style='display:flex;flex-direction:column;height:500pt'><div style='position:sticky;bottom:0;margin-top:auto;width:100pt;height:100pt;background:red'></div></div></div>";
+        var (context, document) = await TestDocument.LoadAsync(TestDocument.Wrap(html), Screen());
+
+        document.SetViewport(document.Viewport);
+
+        Assert.Equal((0, 0, 99, 99), await RedAsync(context, document));
+    }
+
+    [Fact]
+    public async Task AStickyBoxThatLiesOutsideItsContainingBlock_IsNotPulledBackInByIt()
+    {
+        // The 100pt box sits above the top of its 100pt scroll container (a negative margin), so the container's bottom edge does not move it.
+        const string html = "<div style='width:100pt;height:100pt;overflow:hidden;background:green'><div style='margin-top:-100pt'></div><div style='position:sticky;bottom:0;height:100pt;background:red'></div></div>";
+        var (context, document) = await TestDocument.LoadAsync(TestDocument.Wrap(html), Screen());
+
+        document.SetViewport(document.Viewport);
+
+        Assert.Null(await RedAsync(context, document));
+    }
+
+    [Fact]
     public async Task MovingTheViewport_ReportsWhereThingsWereAndAre()
     {
         var (_, document) = await TestDocument.LoadAsync(TestDocument.Wrap(Fixed), Screen());
