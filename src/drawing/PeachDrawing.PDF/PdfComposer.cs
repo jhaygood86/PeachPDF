@@ -1,6 +1,7 @@
 ﻿using PeachDrawing.PDF.Engine;
 using PeachDrawing.PDF.Engine.Advanced;
 using PeachDrawing.PDF.Engine.Drawing;
+using PeachDrawing.PDF.Engine.Security;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -300,8 +301,25 @@ public sealed partial class PdfComposer : IDisposable
             page.ApplyPrintBoxes();
         WritePageLabels();
 
-        _document.Save(stream);
+        if (_signing is null)
+        {
+            _document.Save(stream);
+            return;
+        }
+
+        // The signature covers the final bytes, so the file is written to memory, signed in place and then copied out.
+        _signatureField ??= PdfDocumentSigner.AddField(_document, _signing);
+        using var buffer = new MemoryStream();
+        _document.Save(buffer);
+        var file = buffer.ToArray();
+        PdfDocumentSigner.Seal(file, _signing);
+        stream.Write(file);
+        if (stream.CanSeek)
+            stream.Position = 0;
     }
+
+    private PdfSigningOptions? _signing;
+    private PeachDrawing.PDF.Engine.AcroForms.PdfSignatureField? _signatureField;
 
     /// <summary>Releases the document. Canvases returned by <see cref="AddPage"/> are not usable afterwards.</summary>
     public void Dispose()

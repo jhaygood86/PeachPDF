@@ -34,6 +34,12 @@ public sealed partial class PdfComposer
     {
         ArgumentNullException.ThrowIfNull(options);
         EstablishFormat(options);
+        if (options.Signing is { } signing)
+        {
+            signing.Validate();
+            _signing = signing.Clone();
+        }
+
         ApplyInformation(options);
         _configured = true;
     }

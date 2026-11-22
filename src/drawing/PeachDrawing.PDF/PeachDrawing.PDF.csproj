@@ -36,6 +36,8 @@
 		<ProjectReference Include="..\PeachDrawing.Core\PeachDrawing.Core.csproj" />
 		<ProjectReference Include="..\PeachDrawing.Text\PeachDrawing.Text.csproj" />
 		<PackageReference Include="PeachImage" />
+		<!-- CMS signatures and RFC 3161 timestamps for signed PDFs (Microsoft, MIT). -->
+		<PackageReference Include="System.Security.Cryptography.Pkcs" />
 	</ItemGroup>
 	<ItemGroup>
 		<None Remove="Engine\Resources\ColorProfiles\sRGB2014.icc" />

@@ -109,6 +109,12 @@ public sealed class PdfComposerOptions
     /// </summary>
     public PdfEncryptionOptions? Encryption { get; set; }
 
+    /// <summary>
+    /// Signs the file with a certificate's private key, or <see langword="null"/> (the default) to leave it unsigned. A signed file
+    /// must not be changed after it is saved.
+    /// </summary>
+    public PdfSigningOptions? Signing { get; set; }
+
     // ---- Compression -------------------------------------------------------------------------------------------------
 
     /// <summary>

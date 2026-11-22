@@ -203,6 +203,7 @@ PeachDrawing.PDF.PdfComposerOptions : sealed class
   property PdfAConformance Conformance { get; set; }
   property PdfEncryptionOptions Encryption { get; set; }
   property PdfFacturXInfo FacturX { get; set; }
+  property PdfSigningOptions Signing { get; set; }
   property PdfUAConformance UAConformance { get; set; }
   property PdfVersion? Version { get; set; }
   property PdfXConformance XConformance { get; set; }
@@ -418,6 +419,20 @@ PeachDrawing.PDF.PdfRenderContext : class
   method virtual String GetCssMediaType(IEnumerable<String> mediaTypesAvailable)
   property Double LayoutUnitsPerPoint { get; }
   property Double PixelsPerPoint { get; set; }
+PeachDrawing.PDF.PdfSignatureFormat : enum Int32
+  CadesDetached = 1
+  Pkcs7Detached = 0
+PeachDrawing.PDF.PdfSigningOptions : sealed class
+  ctor()
+  property HashAlgorithmName HashAlgorithm { get; set; }
+  property IList<X509Certificate2> AdditionalCertificates { get; }
+  property Int32 ReservedSignatureBytes { get; set; }
+  property PdfSignatureFormat Format { get; set; }
+  property String ContactInfo { get; set; }
+  property String Location { get; set; }
+  property String Reason { get; set; }
+  property String SignerName { get; set; }
+  property X509Certificate2 Certificate { get; set; }
 PeachDrawing.PDF.PdfSourceConformance : sealed class
   ctor(PdfAConformance PdfA, PdfXConformance PdfX)
   method PdfSourceConformance <Clone>$()

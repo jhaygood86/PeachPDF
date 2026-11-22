@@ -100,6 +100,7 @@ rather than producing a file whose header disagrees with how its pages were writ
 | `ImageCompression`, `DownscaleImages`, `DownscaleQuality`, `MaximumDownscaleMultiplier`, `JxlPassthrough` | How images are embedded and how large they may be. |
 | `FlattenTransparency`, `PortableColorFilters` | Draw transparency and color filters as plain content, for readers that handle them poorly. |
 | `Encryption` | A `PdfEncryptionOptions`: AES-256 password protection with a user password, an owner password and a `PdfPermissions` set. |
+| `Signing` | A `PdfSigningOptions`: signs the file with a certificate's private key - see [Digital signatures](#digital-signatures). |
 
 The options are read when they are applied: a later change to the object does not reach a document already configured.
 
@@ -150,6 +151,24 @@ on deprecated algorithms and are not offered. A reader enforces `Permissions` vo
 software, not a cryptographic barrier. An encrypted file has a header of at least 1.7. With no `UserPassword` the document opens without
 a password and the permissions still apply; with no `OwnerPassword` a random one is generated and discarded, so the restrictions can
 never be lifted. The options are copied when the composer is created, so changing them afterwards does not affect a document in progress.
+
+## Digital signatures
+
+```csharp
+var options = new PdfComposerOptions
+{
+    Signing = new PdfSigningOptions
+    {
+        Certificate = certificate,                       // an X509Certificate2 with its private key
+        Format = PdfSignatureFormat.CadesDetached,       // or Pkcs7Detached (the default)
+        Reason = "Approved",
+    },
+};
+```
+
+The saved file has an invisible signature field on the first page whose value is a detached CMS signature over every byte of the file except the signature itself, so a reader reports any later change. The composer reserves room for the signature (`ReservedSignatureBytes`, 16 KB by default), writes the file, then fills the room in without moving any byte, which is why signing works with encryption and with `Linearize`. `Pkcs7Detached` writes `adbe.pkcs7.detached` with the signing time as a signed attribute and is read by the most software; `CadesDetached` writes `ETSI.CAdES.detached`, the form the PAdES baseline profiles build on, binding the signing certificate with a signed attribute. The digest is SHA-256, SHA-384 or SHA-512 (`HashAlgorithm`), and RSA and ECDSA keys are both supported.
+
+Only the signing certificate and the ones in `AdditionalCertificates` are embedded; the chain is neither built nor fetched. A signed file must not be changed afterwards, and a `PdfOperation` that draws or copies a signed source writes an unsigned file and says so in `Warnings`. Timestamps, long-term validation data, visible signature appearances and signing an existing file are not written yet.
 
 ## Archival and print conformance
 
