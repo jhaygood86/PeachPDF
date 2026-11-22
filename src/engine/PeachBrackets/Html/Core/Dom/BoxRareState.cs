@@ -92,6 +92,8 @@ namespace PeachBrackets.Html.Dom
         internal string? SectionBeginId;
         internal string? SectionEndId;
         internal Rect? EmptyInlineContainingBlock;
+        internal Rect? FragmentContainingBlock;
+        internal (double X, double Y)? KeptInlineStaticPosition;
         internal List<CssBox>? DeferredFloats;
         internal bool DeferredFloatsOnly;
         internal (double X, double Y)? InlineStaticPosition;

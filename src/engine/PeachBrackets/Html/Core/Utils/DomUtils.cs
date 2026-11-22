@@ -1007,6 +1007,9 @@ namespace PeachBrackets.Html.Utils
         {
             if (!ancestor.IsInline || IsAtomicInline(ancestor)) return null;
 
+            // Within one fragmentainer of a fragmented flow, the slice the box is being laid out for.
+            if (ancestor.FragmentContainingBlock is { } slice) return slice;
+
             // An inline with no fragment - one holding only absolutely positioned boxes - is given a
             // zero-width one at their place on the line while they are laid out.
             if (ancestor.RectangleCount == 0) return ancestor.EmptyInlineContainingBlock;
