@@ -34,6 +34,7 @@ public sealed class PdfOperation
     private readonly List<string> _warnings = [];
     private PdfEncryptionOptions? _encryption;
     private PdfCopyMode _copyMode;
+    private PdfSignedSourcePolicy _signedSources;
     private bool _linearize;
 
     private PdfOperation()
@@ -224,6 +225,22 @@ public sealed class PdfOperation
         return this;
     }
 
+    /// <summary>
+    /// Chooses what happens when a file the output draws or copies pages from is digitally signed. The signature cannot be carried into a
+    /// new file, so by default the output is written without it and <see cref="Warnings"/> says so; <see cref="PdfSignedSourcePolicy.Reject"/>
+    /// refuses to write instead. Overlays and underlays are not checked: drawing over a page is what they are for.
+    /// </summary>
+    /// <param name="policy">the policy; <see cref="PdfSignedSourcePolicy.Warn"/> until this is called</param>
+    /// <returns>this operation</returns>
+    public PdfOperation WithSignedSourcePolicy(PdfSignedSourcePolicy policy)
+    {
+        if (!Enum.IsDefined(policy))
+            throw new ArgumentOutOfRangeException(nameof(policy), policy, null);
+
+        _signedSources = policy;
+        return this;
+    }
+
     /// <summary>Writes the output to a file, replacing it.</summary>
     /// <param name="filePath">where to write</param>
     public void Save(string filePath)
@@ -355,6 +372,8 @@ public sealed class PdfOperation
     internal PdfEncryptionOptions? EncryptionOptions => _encryption;
 
     internal PdfCopyMode CopyMode => _copyMode;
+
+    internal PdfSignedSourcePolicy SignedSources => _signedSources;
 
     internal bool LinearizeOutput => _linearize;
 

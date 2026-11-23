@@ -66,6 +66,59 @@ namespace PeachDrawing.PDF.Tests.Operations
             Assert.Single(operation.Warnings, w => w.StartsWith("digital signature not carried", StringComparison.Ordinal));
         }
 
+        [Theory]
+        [InlineData(PdfCopyMode.Redraw)]
+        [InlineData(PdfCopyMode.ObjectCopy)]
+        public void TheRejectPolicy_RefusesASignedSource_AndWritesNothing(PdfCopyMode mode)
+        {
+            var operation = PdfOperation.LoadBytes(Signed()).WithCopyMode(mode).WithSignedSourcePolicy(PdfSignedSourcePolicy.Reject);
+            using var stream = new MemoryStream();
+
+            var error = Assert.Throws<InvalidOperationException>(() => operation.Save(stream));
+
+            Assert.Contains("signed", error.Message);
+            Assert.Equal(0, stream.Length);
+        }
+
+        [Fact]
+        public void TheRejectPolicy_AlsoRefusesAMergedSignedFile_AndAppendingToAComposer()
+        {
+            var signed = Signed();
+            var plain = TestPdf.BuildPages(1);
+
+            Assert.Throws<InvalidOperationException>(() => PdfOperation.LoadBytes(plain).MergeBytes(signed).WithSignedSourcePolicy(PdfSignedSourcePolicy.Reject).ToArray());
+
+            var context = new PdfRenderContext();
+            using var composer = new PdfComposer(context);
+            var operation = PdfOperation.LoadBytes(signed).WithSignedSourcePolicy(PdfSignedSourcePolicy.Reject);
+            Assert.Throws<InvalidOperationException>(() => operation.AppendTo(composer, context));
+            Assert.Equal(0, composer.PageCount);
+        }
+
+        [Fact]
+        public void TheRejectPolicy_LetsAnUnsignedSourceThrough_AndAnOverlayOfASignedFile()
+        {
+            var plain = TestPdf.BuildPages(1);
+            var operation = PdfOperation.LoadBytes(plain).WithSignedSourcePolicy(PdfSignedSourcePolicy.Reject);
+            Assert.Equal(1, PdfPageSource.Open(operation.ToArray()).PageCount);
+
+            // A layer is drawn over the output on purpose; its signature is not the output's to keep.
+            var layered = PdfOperation.LoadBytes(plain)
+                .OverlayFile(new PdfLayerConfiguration { Data = Signed() })
+                .WithSignedSourcePolicy(PdfSignedSourcePolicy.Reject);
+            Assert.Equal(1, PdfPageSource.Open(layered.ToArray()).PageCount);
+        }
+
+        [Fact]
+        public void TheWarnPolicy_IsTheDefault_AndAnUndefinedPolicyIsRefused()
+        {
+            var operation = PdfOperation.LoadBytes(Signed());
+            operation.ToArray();
+            Assert.Single(operation.Warnings);
+
+            Assert.Throws<ArgumentOutOfRangeException>(() => PdfOperation.LoadBytes(Signed()).WithSignedSourcePolicy((PdfSignedSourcePolicy)99));
+        }
+
         [Fact]
         public void AnUnsignedSource_IsNotReported()
         {

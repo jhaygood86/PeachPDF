@@ -399,7 +399,7 @@ PdfOperation
 - `ExtendMetadata` adds XML elements, each in its own schema's namespace, inside the XMP packet's `rdf:Description`.
 - `Linearize` writes the output in the linearized ("fast web view") layout; see `PdfComposerOptions.Linearize` in the options table above.
 - `Encrypt` protects the output with AES-256. `Decrypt` (and `RemoveRestrictions`, the same step) writes it with no protection even though the pages came from a protected file: a file is read with its password when it is loaded, so there is nothing else to remove.
-- `Save` writes a file or a stream; `ToArray` returns the bytes. `Warnings` names what the importer could not draw, after a save. It also reports a source that was digitally signed (or carries a document timestamp): a signature covers the exact bytes of its file, so it is not carried into the new file in either copy mode. `PdfPageSource.HasSignatures` tells you beforehand.
+- `Save` writes a file or a stream; `ToArray` returns the bytes. `Warnings` names what the importer could not draw, after a save. It also reports a source that was digitally signed (or carries a document timestamp): a signature covers the exact bytes of its file, so it is not carried into the new file in either copy mode. `PdfPageSource.HasSignatures` tells you beforehand, and `WithSignedSourcePolicy(PdfSignedSourcePolicy.Reject)` makes the operation refuse a signed source (the save throws and writes nothing) instead of warning; an overlay or underlay is not checked, since drawing over a page is what it is for.
 
 A selector, which `PdfPageSelector.Select` also reads for you, is a comma-separated list read left to right:
 
