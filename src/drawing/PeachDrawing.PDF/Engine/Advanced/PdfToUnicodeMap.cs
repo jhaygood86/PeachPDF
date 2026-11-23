@@ -72,6 +72,13 @@ internal sealed class PdfToUnicodeMap : PdfDictionary
             glyphIndexToText[index] = entry.Value.Length == 0 ? CharacterMapInfo.NoText : entry.Value;
         }
 
+        foreach (KeyValuePair<int, string> entry in _characterMapInfo.VariantCidToText)
+        {
+            lowIndex = Math.Min(lowIndex, entry.Key);
+            hiIndex = Math.Max(hiIndex, entry.Key);
+            glyphIndexToText[entry.Key] = entry.Value;
+        }
+
         // Lines end with a plain line feed on every platform, so the same document gives the same bytes everywhere.
         var cmap = new StringBuilder(prefix);
         cmap.Append("1 begincodespacerange\n");

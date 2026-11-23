@@ -74,6 +74,8 @@ internal sealed class PdfType0Font : PdfFont
 
             for (int idx = 0; idx < count; idx++)
                 w.Append(System.Globalization.CultureInfo.InvariantCulture, $"{glyphIndices[idx]}[{glyphWidths[idx]}]");
+            foreach (var variant in _characterMapInfo.VariantCidToGlyph)
+                w.Append(System.Globalization.CultureInfo.InvariantCulture, $"{variant.Key}[{PdfTypefaceMetrics.GlyphWidth(typeface, variant.Value)}]");
             w.Append("]");
             _descendantFont.Elements.SetValue(PdfCidFont.Keys.W, new PdfLiteral(w.ToString()));
 

@@ -60,9 +60,12 @@ public class PdfToUnicodeMapTests
         string cmap = Encoding.UTF8.GetString(map.Stream!.Value);
 
         Assert.DoesNotContain("><>", cmap);
-        // BEH and TEH share their body glyph (they differ only in the dots), so one destination serves both.
-        Assert.Contains("\u062A", info.LigatureGlyphToText.Values);
-        Assert.Contains("\u064A", info.LigatureGlyphToText.Values);
+        // BEH, YEH and TEH can share one body glyph (they differ only in the dots), so the first drawn keeps the glyph's own code
+        // and a later one gets a code of its own that draws the same glyph.
+        Assert.Contains("\u0628", info.LigatureGlyphToText.Values);
+        Assert.NotEmpty(info.VariantCidToText);
+        foreach (var variant in info.VariantCidToText)
+            Assert.Contains($"<{variant.Key:X4}><{variant.Key:X4}><{(int)variant.Value[0]:X4}>\n", cmap);
         // The component glyphs map to an invisible character rather than being left unmapped, which makes
         // readers extract their glyph code as text.
         Assert.Contains(CharacterMapInfo.NoText, info.LigatureGlyphToText.Values);

@@ -135,7 +135,7 @@ internal static class PdfEncoders
     /// Writes the literal <see cref="FormatGlyphIdsAsHexLiteral"/> returns into <paramref name="output"/>, which must hold
     /// <see cref="GlyphIdsHexLiteralLength"/> characters, so a caller that appends it straight to a content stream allocates no string.
     /// </summary>
-    internal static void WriteGlyphIdsAsHexLiteral(System.Collections.Generic.IReadOnlyList<PeachDrawing.Text.Shaping.PlacedGlyph> source, Span<char> output)
+    internal static void WriteGlyphIdsAsHexLiteral(System.Collections.Generic.IReadOnlyList<PeachDrawing.Text.Shaping.PlacedGlyph> source, Span<char> output, int[]? codes = null)
     {
         ReadOnlySpan<byte> digits = HexDigits;
         int position = 0;
@@ -143,7 +143,7 @@ internal static class PdfEncoders
 
         for (int unit = 0; unit < source.Count; unit++)
         {
-            int id = (char)source[unit].GlyphIndex;
+            int id = codes is null ? (char)source[unit].GlyphIndex : (char)codes[unit];
             output[position] = (char)digits[(id >> 12) & 0xF];
             output[position + 1] = (char)digits[(id >> 8) & 0xF];
             output[position + 2] = (char)digits[(id >> 4) & 0xF];

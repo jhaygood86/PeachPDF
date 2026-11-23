@@ -69,6 +69,38 @@ internal sealed class PdfCidFont : PdfFont
 
     }
 
+    /// <summary>
+    /// Writes the <c>/CIDToGIDMap</c> stream a font needs once some glyph is drawn with a code of its own (see
+    /// <see cref="CharacterMapInfo.VariantCidToGlyph"/>): every glyph the subset holds keeps its own index as its code, and each variant
+    /// code names the glyph it draws.
+    /// </summary>
+    private void WriteCidToGidMap()
+    {
+        int length = _characterMapInfo.VariantCidToGlyph.Keys.Max() + 1;
+        byte[] map = new byte[length * 2];
+        foreach (int glyph in _characterMapInfo.GlyphIndices)
+        {
+            map[glyph * 2] = (byte)(glyph >> 8);
+            map[glyph * 2 + 1] = (byte)glyph;
+        }
+        foreach (var variant in _characterMapInfo.VariantCidToGlyph)
+        {
+            map[variant.Key * 2] = (byte)(variant.Value >> 8);
+            map[variant.Key * 2 + 1] = (byte)variant.Value;
+        }
+
+        PdfDictionary stream = new(Owner);
+        Owner.Internals.AddObject(stream);
+        if (!Owner.Options.NoCompression)
+        {
+            map = StreamCompression.Encode(_document.Options, map, out var filter);
+            stream.Elements["/Filter"] = new PdfName(filter);
+        }
+        stream.Elements["/Length"] = new PdfInteger(map.Length);
+        stream.CreateStream(map);
+        Elements[Keys.CIDToGIDMap] = stream.RequiredReference;
+    }
+
     public string BaseFont
     {
         get => Elements.GetName(Keys.BaseFont);
@@ -112,6 +144,9 @@ internal sealed class PdfCidFont : PdfFont
             FontDescriptor.Elements[PdfFontDescriptor.Keys.FontFile2] = fontStream.RequiredReference;
             fontStream.Elements["/Length1"] = new PdfInteger(fontData.Length);
         }
+        if (_characterMapInfo.VariantCidToGlyph.Count > 0 && !(isCff && subSet.Format == ExportedFontFormat.CompactFontFormat))
+            WriteCidToGidMap();
+
         if (!Owner.Options.NoCompression)
         {
             fontData = StreamCompression.Encode(_document.Options, fontData, out var fontFilter);
@@ -125,7 +160,7 @@ internal sealed class PdfCidFont : PdfFont
         // here (see /CIDToGIDMap above), and glyph 0 (.notdef) is always part of the subset.
         if (Owner.Options.PdfAConformance is PdfAConformance.PdfA1B or PdfAConformance.PdfA1A)
         {
-            var cids = _characterMapInfo.GlyphIndices.Append(0).ToArray();
+            var cids = _characterMapInfo.GlyphIndices.Append(0).Concat(_characterMapInfo.VariantCidToGlyph.Keys).ToArray();
             var cidSet = new byte[cids.Max() / 8 + 1];
             foreach (var cid in cids)
                 cidSet[cid >> 3] |= (byte)(0x80 >> (cid & 7));
