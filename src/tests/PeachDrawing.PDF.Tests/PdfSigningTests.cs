@@ -185,6 +185,60 @@ namespace PeachDrawing.PDF.Tests
             cms.CheckSignature(true);
         }
 
+        static int SigningTimeAttributes(byte[] file)
+        {
+            var (covered, signature, _) = Read(file);
+            var cms = new SignedCms(new ContentInfo(covered), detached: true);
+            cms.Decode(signature);
+            return cms.SignerInfos[0].SignedAttributes.Cast<CryptographicAttributeObject>().Count(a => a.Oid!.Value == "1.2.840.113549.1.9.5");
+        }
+
+        [Fact]
+        public void APkcs7Signature_HasOneSigningTime_AndACadesSignatureHasNone()
+        {
+            using var certificate = NewCertificate();
+
+            Assert.Equal(1, SigningTimeAttributes(Save(Signed(certificate, s => s.Format = PdfSignatureFormat.Pkcs7Detached))));
+            Assert.Equal(0, SigningTimeAttributes(Save(Signed(certificate, s => s.Format = PdfSignatureFormat.CadesDetached))));
+        }
+
+        sealed class PlainAppearance : IPdfFormAppearance
+        {
+            public double PixelsPerPoint => 1;
+
+            public double TextFontSizePoints(Size sizePoints, bool autoFontSize, bool isPlaceholder) => 10;
+
+            public void PaintText(Canvas canvas, Size sizePoints, string text, bool autoFontSize, int? combCells, bool isPlaceholder) { }
+
+            public void PaintCheckbox(Canvas canvas, Size sizePoints, bool isChecked) { }
+
+            public void PaintRadio(Canvas canvas, Size sizePoints, bool isSelected) { }
+        }
+
+        [Fact]
+        public void TheSignatureField_TakesAFreeName_WhenTheDocumentAlreadyHasOneCalledSignature1()
+        {
+            using var certificate = NewCertificate();
+            var context = new PdfRenderContext();
+            using var composer = new PdfComposer(context, Signed(certificate));
+            var page = composer.AddPage(100, 100);
+            composer.CreateFormBuilder(context).AddField(page, new PdfFormFieldDefinition
+            {
+                Kind = PdfFormFieldKind.Text,
+                Name = "Signature1",
+                Bounds = new Rect(10, 10, 50, 20),
+                ContentSize = new Size(50, 20),
+                Appearance = new PlainAppearance(),
+            });
+
+            using var stream = new MemoryStream();
+            composer.Save(stream);
+            var file = stream.ToArray();
+
+            Assert.Equal("Signature2", Assert.Single(PdfPageSource.Open(file).GetSignatures()).FieldName);
+            Assert.Contains("(Signature1)", Encoding.Latin1.GetString(file));
+        }
+
         [Fact]
         public void AnUnsignedFile_HasNoSignatureField()
         {

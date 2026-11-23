@@ -255,7 +255,8 @@ public sealed class PdfPageSource
 
     /// <summary>
     /// The digital signatures and document timestamps the file carries, in the order its form lists them, each checked against the bytes
-    /// it covers. Nothing here decides whether a certificate is trusted: see <see cref="PdfSourceSignature"/>.
+    /// it covers. Nothing here decides whether a certificate is trusted: see <see cref="PdfSourceSignature"/>. At most 256 are read, so a
+    /// file built to list thousands cannot make the check cost more than that.
     /// </summary>
     /// <returns>the signatures, or an empty list for an unsigned file</returns>
     public IReadOnlyList<PdfSourceSignature> GetSignatures()

@@ -30,7 +30,16 @@ internal static class PdfIncrementalUpdate
     /// <exception cref="InvalidDataException">the file's cross-reference data is damaged, or it has no page to put the field on</exception>
     public static byte[] AppendSignatureField(byte[] original, string valueDictionary, string fieldNamePrefix)
     {
-        var source = PdfSourceDocument.Open(original);
+        PdfSourceDocument source;
+        try
+        {
+            source = PdfSourceDocument.Open(original);
+        }
+        catch (PdfPasswordException)
+        {
+            throw new NotSupportedException("An encrypted PDF cannot be signed in place: its objects would have to be written encrypted.");
+        }
+
         if (source.IsEncrypted)
             throw new NotSupportedException("An encrypted PDF cannot be signed in place: its objects would have to be written encrypted.");
 
@@ -40,8 +49,11 @@ internal static class PdfIncrementalUpdate
             throw new InvalidDataException("The PDF has no page to put a signature on.");
         var page = source.Pages[0];
 
-        int sizeEntry = source.IntOf(source.Trailer.GetRaw("Size"));
-        int next = Math.Max(source.HighestObjectNumber, sizeEntry - 1) + 1;
+        // A hostile /Size or object number near the limit would wrap the numbers given to the new objects.
+        long highest = Math.Max(source.HighestObjectNumber, source.IntOf(source.Trailer.GetRaw("Size")) - 1L);
+        if (highest > int.MaxValue - 16)
+            throw new InvalidDataException("The PDF's object numbers are too large to add objects to.");
+        int next = (int)highest + 1;
         int valueNumber = next++, fieldNumber = next++;
         var objects = new SortedDictionary<int, string>();
 

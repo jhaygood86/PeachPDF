@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Formats.Asn1;
 using System.Security.Cryptography;
 using System.Security.Cryptography.Pkcs;
@@ -6,6 +7,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using PeachDrawing.PDF.Engine.AcroForms;
+using PeachDrawing.PDF.Engine.Advanced;
 using PeachDrawing.PDF.Engine.Annotations;
 using PeachDrawing.PDF.Engine.Internal;
 
@@ -37,19 +39,37 @@ internal static class PdfDocumentSigner
         SetText(value, "/Location", options.Location);
         SetText(value, "/ContactInfo", options.ContactInfo);
 
+        var form = document.Catalog.AcroForm;
         var field = new PdfSignatureField(document)
         {
-            PartialFieldName = "Signature1",
+            PartialFieldName = FreeFieldName(form),
             Rectangle = new PdfRectangle(0, 0, 0, 0),
             Flags = (PdfAnnotationFlags)(4 | 128), // print + locked
         };
         field.Elements.SetReference("/V", value);
 
         document.Pages[0].Annotations.Add(field);
-        var form = document.Catalog.AcroForm;
         form.AddField(field);
         form.Elements.SetInteger(PdfAcroForm.Keys.SigFlags, 3); // signatures exist, and the file is only appended to from here
         return field;
+    }
+
+    /// <summary>The first "SignatureN" that no field already in the form (a form control the document drew, say) has.</summary>
+    static string FreeFieldName(PdfAcroForm form)
+    {
+        var taken = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var item in form.Fields.Elements)
+        {
+            if (item is PdfReference { Value: PdfDictionary field })
+                taken.Add(field.Elements.GetString("/T"));
+        }
+
+        for (int n = 1; ; n++)
+        {
+            var name = "Signature" + n.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            if (!taken.Contains(name))
+                return name;
+        }
     }
 
     static void SetText(PdfDictionary dictionary, string key, string? text)

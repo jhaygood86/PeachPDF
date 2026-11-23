@@ -234,6 +234,15 @@ namespace PeachDrawing.PDF.Tests
         }
 
         [Fact]
+        public void AFileThatNeedsAPassword_IsRefusedAsEncrypted()
+        {
+            using var certificate = NewCertificate();
+            var file = Compose(new PdfComposerOptions { Encryption = new PdfEncryptionOptions { UserPassword = "secret", OwnerPassword = "owner" } });
+
+            Assert.Throws<NotSupportedException>(() => PdfFileSigner.Sign(file, Options(certificate)));
+        }
+
+        [Fact]
         public void BytesThatAreNotAPdf_AreRefused()
         {
             using var certificate = NewCertificate();

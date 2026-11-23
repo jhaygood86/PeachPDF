@@ -19,6 +19,9 @@ internal sealed class PdfSourceSignatures(PdfSourceDocument doc)
 {
     const string SignatureTimeStampToken = "1.2.840.113549.1.9.16.2.14";
 
+    /// <summary>The most signatures read from one file: each is checked against its own copy of the covered bytes, so a hostile file listing thousands would cost quadratic time and memory.</summary>
+    internal const int MaxSignatures = 256;
+
     public IReadOnlyList<PdfSourceSignature> Read()
     {
         var found = new List<PdfSourceSignature>();
@@ -34,7 +37,7 @@ internal sealed class PdfSourceSignatures(PdfSourceDocument doc)
                 if (doc.Resolve(item) is PdfDictionary field) pending.Push((field, "", null));
         }
 
-        for (int budget = 100_000; pending.Count > 0 && budget > 0; budget--)
+        for (int budget = 100_000; pending.Count > 0 && budget > 0 && found.Count < MaxSignatures; budget--)
         {
             var (field, prefix, inheritedType) = pending.Pop();
             var name = doc.Resolve(field.GetRaw("T")) is PdfString partial && partial.Value.Length > 0
@@ -84,9 +87,15 @@ internal sealed class PdfSourceSignatures(PdfSourceDocument doc)
         // The byte range: [0 a b c], so that the signed bytes are 0..a and b..b+c, with the signature between a and b.
         if (doc.ArrayOf(value, "ByteRange") is not { Elements.Count: 4 } rangeArray)
             return Result(false, false, "The signature has no valid /ByteRange.");
-        var range = rangeArray.Elements.Select(e => (long)doc.NumberOf(e, -1)).ToArray();
         var data = doc.Data;
-        if (range[0] != 0 || range[1] < 0 || range[2] < range[1] + 2 || range[3] < 0 || range[2] + range[3] > data.Length
+
+        // Every entry must be a whole number inside the file before any arithmetic is done on it: a real such as 9.3e18 would saturate a
+        // cast to long and make the sums below wrap around.
+        var numbers = rangeArray.Elements.Select(e => doc.NumberOf(e, double.NaN)).ToArray();
+        if (numbers.Any(n => !double.IsFinite(n) || n < 0 || n > data.Length || n != Math.Floor(n)))
+            return Result(false, false, "The signature's /ByteRange does not match the file.");
+        var range = numbers.Select(n => (long)n).ToArray();
+        if (range[0] != 0 || range[2] < range[1] + 2 || range[2] > data.Length || range[3] > data.Length - range[2]
             || data[range[1]] != (byte)'<' || data[range[2] - 1] != (byte)'>')
             return Result(false, false, "The signature's /ByteRange does not match the file.");
 
@@ -98,7 +107,9 @@ internal sealed class PdfSourceSignatures(PdfSourceDocument doc)
         byte[] contents;
         try
         {
-            contents = TrimDer(Convert.FromHexString(Encoding.ASCII.GetString(data, (int)range[1] + 1, (int)(range[2] - range[1] - 2))));
+            // PDF allows white space between the hexadecimal digits.
+            var hex = new string(Encoding.ASCII.GetString(data, (int)range[1] + 1, (int)(range[2] - range[1] - 2)).Where(c => !char.IsWhiteSpace(c)).ToArray());
+            contents = TrimStructure(Convert.FromHexString(hex));
         }
         catch (Exception error) when (error is FormatException or ArgumentException or InvalidOperationException)
         {
@@ -220,18 +231,60 @@ internal sealed class PdfSourceSignatures(PdfSourceDocument doc)
         : algorithm == HashAlgorithmName.SHA512 ? SHA512.HashData(data)
         : SHA256.HashData(data);
 
-    /// <summary>The DER structure at the start of a zero-padded <c>/Contents</c>: its own length says where it ends.</summary>
-    static byte[] TrimDer(byte[] padded)
+    /// <summary>
+    /// The structure at the start of a zero-padded <c>/Contents</c>: its own length says where it ends. Producers other than this package
+    /// may write BER, where a length can be indefinite (<c>80</c>, closed by <c>00 00</c>), so the structure is walked rather than read as one length.
+    /// </summary>
+    static byte[] TrimStructure(byte[] padded)
     {
         if (padded.Length < 2 || padded[0] != 0x30)
-            throw new FormatException("Not a DER sequence.");
-        int lengthBytes = padded[1] < 0x80 ? 0 : padded[1] & 0x7F;
-        if (lengthBytes > 4 || 2 + lengthBytes > padded.Length)
-            throw new FormatException("Bad DER length.");
-        long length = padded[1] < 0x80 ? padded[1] : padded.Skip(2).Take(lengthBytes).Aggregate(0L, (n, b) => (n << 8) | b);
-        if (2 + lengthBytes + length > padded.Length)
-            throw new FormatException("DER length exceeds the contents.");
-        return padded[..(int)(2 + lengthBytes + length)];
+            throw new FormatException("Not a sequence.");
+        return padded[..ElementEnd(padded, 0, 0)];
+    }
+
+    /// <summary>The offset just past the BER element that starts at <paramref name="start"/>.</summary>
+    static int ElementEnd(byte[] data, int start, int depth)
+    {
+        if (depth > 64 || start + 2 > data.Length)
+            throw new FormatException("Bad BER structure.");
+        byte tag = data[start];
+        if ((tag & 0x1F) == 0x1F)
+            throw new FormatException("High tag numbers are not used here.");
+
+        int at = start + 1;
+        byte first = data[at++];
+        if (first < 0x80)
+            return Checked(data, at, first);
+
+        if (first == 0x80)
+        {
+            // Indefinite length: the children follow until a pair of zero bytes. Only a constructed element may use it.
+            if ((tag & 0x20) == 0)
+                throw new FormatException("A primitive element cannot have an indefinite length.");
+            while (true)
+            {
+                if (at + 2 > data.Length)
+                    throw new FormatException("Unterminated indefinite length.");
+                if (data[at] == 0 && data[at + 1] == 0)
+                    return at + 2;
+                at = ElementEnd(data, at, depth + 1);
+            }
+        }
+
+        int lengthBytes = first & 0x7F;
+        if (lengthBytes > 4 || at + lengthBytes > data.Length)
+            throw new FormatException("Bad BER length.");
+        long length = 0;
+        for (int i = 0; i < lengthBytes; i++)
+            length = (length << 8) | data[at++];
+        return Checked(data, at, length);
+    }
+
+    static int Checked(byte[] data, int at, long length)
+    {
+        if (length < 0 || at + length > data.Length)
+            throw new FormatException("The element's length exceeds the contents.");
+        return (int)(at + length);
     }
 
     /// <summary>A PDF date string, <c>D:YYYYMMDDHHmmSSOHH'mm</c>, with every part after the year optional.</summary>

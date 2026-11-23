@@ -1,3 +1,4 @@
+using System.Formats.Asn1;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
@@ -234,6 +235,96 @@ namespace PeachDrawing.PDF.Tests
             Assert.False(signature.CoversWholeFile);
             Assert.Contains("ByteRange", signature.Problem);
             Assert.Equal("Someone", signature.SignerName);
+        }
+
+        [Theory]
+        [InlineData("/ByteRange [0 5 9300000000000000000.0 1]")]          // saturates a cast to long and wraps the sums
+        [InlineData("/ByteRange [0 -5 10 1]")]
+        [InlineData("/ByteRange [0 5.5 100 1]")]                           // not whole numbers
+        [InlineData("/ByteRange [0 99999999999 100000000000 1]")]          // beyond the file
+        [InlineData("/ByteRange [0 100 50 1]")]                            // a hole that ends before it starts
+        [InlineData("/ByteRange [0 (a) 50 1]")]                            // not numbers
+        public void AHostileByteRange_IsReportedAndNeverThrows(string range)
+        {
+            var signature = Assert.Single(Read(Hand(string.Format(ValueWith, range))));
+
+            Assert.False(signature.IsIntact);
+            Assert.Contains("ByteRange", signature.Problem);
+        }
+
+        [Fact]
+        public void AtMost256SignaturesAreRead_SoAHostileFileCannotMakeTheCheckQuadratic()
+        {
+            const int count = 300;
+            var objects = new List<string> { "<< /Fields [" + string.Join(" ", Enumerable.Range(0, count).Select(i => $"{6 + i} 0 R")) + "] >>" };
+            objects.AddRange(Enumerable.Range(0, count).Select(i => $"<< /FT /Sig /T (S{i}) /V {6 + count + i} 0 R >>"));
+            objects.AddRange(Enumerable.Range(0, count).Select(_ => "<< /Type /Sig /SubFilter /adbe.pkcs7.detached /ByteRange [0 1 2 3] >>"));
+            var file = TestPdf.Build("", catalogExtras: "/AcroForm 5 0 R", extraObjects: [.. objects]);
+
+            var signatures = Read(file);
+
+            Assert.Equal(PeachDrawing.PDF.Import.PdfSourceSignatures.MaxSignatures, signatures.Count);
+            Assert.Equal("S0", signatures[0].FieldName);
+        }
+
+        [Fact]
+        public void WhiteSpaceBetweenTheHexDigits_IsAllowed()
+        {
+            using var certificate = NewCertificate();
+            var file = Signed(certificate);
+            var start = ContentsStart(file);
+            var end = Encoding.Latin1.GetString(file).IndexOf('>', start);
+            for (var i = end - 20; i < end - 10; i++)         // inside the zero padding after the signature
+                file[i] = (byte)(i % 2 == 0 ? ' ' : 10);
+
+            var signature = Assert.Single(Read(file));
+
+            Assert.True(signature.IsIntact, signature.Problem);
+        }
+
+        [Fact]
+        public void ASignatureWrittenWithIndefiniteLengths_IsReadAsBerShouldBe()
+        {
+            using var certificate = NewCertificate();
+            var file = Signed(certificate);
+            var start = ContentsStart(file);
+            var hexEnd = Encoding.Latin1.GetString(file).IndexOf('>', start);
+            var padded = Convert.FromHexString(Encoding.Latin1.GetString(file, start, hexEnd - start));
+
+            // The same ContentInfo, re-framed as a BER producer may write it: the outer sequence and its [0] with indefinite lengths.
+            var outer = new AsnReader(padded, AsnEncodingRules.BER).ReadSequence();
+            var oid = outer.ReadEncodedValue().ToArray();
+            var signedData = outer.ReadSequence(new Asn1Tag(TagClass.ContextSpecific, 0)).ReadEncodedValue().ToArray();
+            byte[] ber = [0x30, 0x80, .. oid, 0xA0, 0x80, .. signedData, 0, 0, 0, 0];
+            Assert.True(ber.Length < (hexEnd - start) / 2);
+
+            Array.Fill(file, (byte)'0', start, hexEnd - start);
+            Encoding.ASCII.GetBytes(Convert.ToHexString(ber)).CopyTo(file, start);
+
+            var signature = Assert.Single(Read(file));
+
+            Assert.True(signature.IsIntact, signature.Problem);
+            Assert.Equal(certificate.Thumbprint, signature.SignerCertificate!.Thumbprint);
+        }
+
+        [Theory]
+        [InlineData("3080")]                // indefinite length that is never closed
+        [InlineData("30840000")]            // a length longer than the contents
+        [InlineData("3085000000000A")]      // a length field wider than four bytes
+        [InlineData("30")]                  // nothing after the tag
+        public void BrokenStructureLengths_AreReportedAsUnreadable(string hex)
+        {
+            using var certificate = NewCertificate();
+            var file = Signed(certificate);
+            var start = ContentsStart(file);
+            var hexEnd = Encoding.Latin1.GetString(file).IndexOf('>', start);
+            Array.Fill(file, (byte)'0', start, hexEnd - start);
+            Encoding.ASCII.GetBytes(hex).CopyTo(file, start);
+
+            var signature = Assert.Single(Read(file));
+
+            Assert.False(signature.IsIntact);
+            Assert.Matches("not (a )?readable", signature.Problem);
         }
 
         [Fact]
