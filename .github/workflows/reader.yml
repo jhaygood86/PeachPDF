@@ -92,6 +92,12 @@ jobs:
     - name: Install the Apple workloads
       run: dotnet workload install macos ios maccatalyst maui-ios maui-maccatalyst
 
+    - name: Select Xcode 27.2
+      run: sudo xcode-select -s /Applications/Xcode_27.2.app/Contents/Developer
+
+    - name: Verify Xcode version
+      run: xcodebuild -version
+
     - name: Build the app for iOS
       run: dotnet build src/reader/PeachReader/PeachReader.csproj -f net11.0-ios -p:ValidateXcodeVersion=false -p:TreatWarningsAsErrors=true
 
