@@ -8,6 +8,7 @@ using System.Security.Cryptography;
 using System.Text;
 using PeachDrawing.Core;
 using PeachDrawing.PDF.Engine.Advanced;
+using PeachDrawing.PDF.Engine.Internal;
 using PeachDrawing.PDF.Import;
 
 namespace PeachDrawing.PDF.Engine.Security;
@@ -139,6 +140,16 @@ internal static class PdfIncrementalUpdate
                 $"/Resources << /Font << /Helv {fontNumber} 0 R >> >> /Length {content.Length} >>\nstream\n{Encoding.Latin1.GetString(content)}\nendstream";
             appearanceEntry = $" /AP << /N {formNumber} 0 R >>";
         }
+        else
+        {
+            // An invisible signature still gets an empty appearance (a form whose box is a point): ISO 19005-1 6.9 asks every form field of a
+            // PDF/A-1 file for one, with no exception for a field that has no area.
+            int emptyNumber = next++;
+            byte[] nothing = "q Q"u8.ToArray();
+            var stored = decryptor is { EncryptsStreams: true } ? decryptor.EncryptStream(nothing, emptyNumber, 0) : nothing;
+            objects[emptyNumber] = $"<< /Type /XObject /Subtype /Form /BBox [0 0 0 0] /Length {stored.Length} >>\nstream\n{Encoding.Latin1.GetString(stored)}\nendstream";
+            appearanceEntry = $" /AP << /N {emptyNumber} 0 R >>";
+        }
 
         objects[valueNumber] = valueDictionary(Encrypt(valueNumber));
         var nameBytes = Encoding.Latin1.GetBytes(fieldName);
@@ -155,11 +166,17 @@ internal static class PdfIncrementalUpdate
     /// <summary>
     /// The file with validation data appended to its document security store (<c>/DSS</c>, ISO 32000-2 12.8.4.3): one stream per
     /// certificate, OCSP response and CRL that the store does not already hold, and the catalog (and the store) pointing at them. A file
-    /// older than PDF 2.0 also gets the extension entry that says it uses the store.
+    /// older than PDF 2.0 also gets the extension entry that says it uses the store. Each signature the data is for also gets its own
+    /// <c>/VRI</c> entry, listing what belongs to it.
     /// </summary>
+    /// <param name="original">the bytes of the file</param>
+    /// <param name="data">the validation data to add</param>
+    /// <param name="password">the password of an encrypted file, or <see langword="null"/></param>
+    /// <param name="signatureFieldName">the signature field the data is for, or <see langword="null"/> for every signature in the file</param>
     /// <exception cref="PdfPasswordException">the file needs a password that was not given or is wrong</exception>
+    /// <exception cref="InvalidOperationException">the file has no signature field with that name</exception>
     /// <exception cref="InvalidDataException">the file's cross-reference data is damaged</exception>
-    public static byte[] AppendValidationData(byte[] original, PdfValidationData data, string? password)
+    public static byte[] AppendValidationData(byte[] original, PdfValidationData data, string? password, string? signatureFieldName = null)
     {
         var source = PdfSourceDocument.Open(original, password);
         var decryptor = source.Decryptor;
@@ -176,57 +193,122 @@ internal static class PdfIncrementalUpdate
         int next = (int)highest + 1;
         var objects = new SortedDictionary<int, string>();
 
-        // What the store already holds, so that data added twice is stored once.
+        // The signatures the data is for: a signature (not a document timestamp) is named in the store by a key made from its contents.
+        var identities = new PdfSourceSignatures(source).ReadIdentities()
+            .Where(i => !i.IsTimestamp && (signatureFieldName is null || i.FieldName == signatureFieldName)).ToList();
+        if (signatureFieldName is not null && identities.Count == 0)
+            throw new InvalidOperationException($"The file has no signature field named \"{signatureFieldName}\".");
+
+        // The object that holds the store's own strings (its entries' update times): the store, or the catalog when the store is direct.
         var dssBefore = source.DictOf(root, "DSS");
+        var dssIsNew = dssBefore is null;
+        int container = dssBefore is null ? next++
+            : root.GetRaw("DSS") is PdfReference held ? held.ObjectNumber : rootItem.ObjectNumber;
+
+        // What the store already holds, so that data added twice is stored once, and where each piece is.
         var overrides = new Dictionary<string, string>();
         var changed = false;
+        var callReferences = new Dictionary<string, List<string>>();
         foreach (var (key, blobs) in new[] { ("/Certs", data.Certificates), ("/OCSPs", data.OcspResponses), ("/CRLs", data.Crls) })
         {
             var references = new List<string>();
-            var seen = new HashSet<string>(StringComparer.Ordinal);
+            var byDigest = new Dictionary<string, string>(StringComparer.Ordinal);
             if (dssBefore is not null && source.ArrayOf(dssBefore, key) is { } existing)
             {
                 foreach (var element in existing.Elements)
                 {
-                    references.Add(Serialize(element, NoOverrides));
+                    var reference = Serialize(element, NoOverrides);
+                    references.Add(reference);
                     if (source.Resolve(element) is PdfDictionary { Stream: not null } stream)
-                        seen.Add(Convert.ToHexString(SHA256.HashData(source.DecodeStream(stream).Data)));
+                        byDigest[Convert.ToHexString(SHA256.HashData(source.DecodeStream(stream).Data))] = reference;
                 }
             }
 
+            var mine = new List<string>();
             foreach (var blob in blobs)
             {
-                if (!seen.Add(Convert.ToHexString(SHA256.HashData(blob)))) continue;
+                var digest = Convert.ToHexString(SHA256.HashData(blob));
+                if (!byDigest.TryGetValue(digest, out var reference))
+                {
+                    // Each entry is a stream; in an encrypted file it is stored under its own object's key.
+                    int number = next++;
+                    var stored = decryptor is { EncryptsStreams: true } ? decryptor.EncryptStream(blob, number, 0) : blob;
+                    objects[number] = $"<< /Length {stored.Length} >>\nstream\n{Encoding.Latin1.GetString(stored)}\nendstream";
+                    reference = $"{number} 0 R";
+                    byDigest[digest] = reference;
+                    references.Add(reference);
+                    changed = true;
+                }
 
-                // Each entry is a stream; in an encrypted file it is stored under its own object's key.
-                int number = next++;
-                var stored = decryptor is { EncryptsStreams: true } ? decryptor.EncryptStream(blob, number, 0) : blob;
-                objects[number] = $"<< /Length {stored.Length} >>\nstream\n{Encoding.Latin1.GetString(stored)}\nendstream";
-                references.Add($"{number} 0 R");
-                changed = true;
+                if (!mine.Contains(reference)) mine.Add(reference);
             }
 
+            callReferences[key] = mine;
             if (references.Count > 0)
                 overrides[key] = "[" + string.Join(' ', references) + "]";
         }
 
-        if (!changed)
+        // One /VRI entry per signature, merged with the entry it already has: what belongs to it, and when that was last brought up to date.
+        var entries = new Dictionary<string, string>(StringComparer.Ordinal);
+        var vriBefore = dssBefore is null ? null : source.DictOf(dssBefore, "VRI");
+        var vriChanged = false;
+        foreach (var identity in identities)
+        {
+            var key = "/" + Convert.ToHexString(SHA1.HashData(Encoding.ASCII.GetBytes(Convert.ToHexStringLower(identity.Contents))));
+            var before = vriBefore is null ? null : source.DictOf(vriBefore, key);
+
+            var parts = new List<string> { "/Type /VRI" };
+            var entryChanged = before is null;
+            foreach (var (vriKey, storeKey) in new[] { ("/Cert", "/Certs"), ("/CRL", "/CRLs"), ("/OCSP", "/OCSPs") })
+            {
+                var merged = new List<string>();
+                if (before is not null && source.ArrayOf(before, vriKey) is { } had)
+                    merged.AddRange(had.Elements.Select(e => Serialize(e, NoOverrides)));
+                var known = merged.Count;
+                foreach (var reference in callReferences[storeKey])
+                    if (!merged.Contains(reference)) merged.Add(reference);
+                entryChanged |= merged.Count != known;
+                if (merged.Count > 0) parts.Add($"{vriKey} [{string.Join(' ', merged)}]");
+            }
+
+            if (!entryChanged) continue;
+
+            var stamp = Encoding.Latin1.GetBytes("D:" + PdfEntropy.UtcNow().ToString("yyyyMMddHHmmss", CultureInfo.InvariantCulture) + "Z");
+            parts.Add($"/TU <{Convert.ToHexString(EncryptStrings(container)?.Invoke(stamp) ?? stamp)}>");
+            entries[key] = "<< " + string.Join(' ', parts) + " >>";
+            vriChanged = true;
+        }
+
+        if (!changed && !vriChanged)
             return (byte[])original.Clone();
 
-        var rootOverrides = new Dictionary<string, string>();
-        if (dssBefore is not null && root.GetRaw("DSS") is PdfReference dssReference)
+        if (entries.Count > 0)
         {
-            objects[dssReference.ObjectNumber] = Serialize(dssBefore, overrides, encrypt: EncryptStrings(dssReference.ObjectNumber));
+            // The dictionary of entries keeps the ones for other signatures as they were.
+            var all = new List<string>();
+            if (vriBefore is not null)
+            {
+                foreach (var kv in vriBefore)
+                    if (!entries.ContainsKey(kv.Key)) all.Add($"{kv.Key} {Serialize(kv.Value, NoOverrides, encrypt: EncryptStrings(container))}");
+            }
+
+            all.AddRange(entries.Select(e => $"{e.Key} {e.Value}"));
+            overrides["/VRI"] = "<< " + string.Join(' ', all) + " >>";
         }
-        else if (dssBefore is not null)
+
+        var rootOverrides = new Dictionary<string, string>();
+        if (dssIsNew)
         {
-            rootOverrides["/DSS"] = Serialize(dssBefore, overrides, encrypt: EncryptStrings(rootItem.ObjectNumber));
+            objects[container] = "<< " + string.Join(' ', overrides.Select(o => $"{o.Key} {o.Value}")) + " >>";
+            rootOverrides["/DSS"] = $"{container} 0 R";
+        }
+        else if (root.GetRaw("DSS") is PdfReference)
+        {
+            objects[container] = Serialize(dssBefore!, overrides, encrypt: EncryptStrings(container));
         }
         else
         {
-            int dssNumber = next++;
-            objects[dssNumber] = "<< " + string.Join(' ', overrides.Select(o => $"{o.Key} {o.Value}")) + " >>";
-            rootOverrides["/DSS"] = $"{dssNumber} 0 R";
+            rootOverrides["/DSS"] = Serialize(dssBefore!, overrides, encrypt: EncryptStrings(container));
         }
 
         // Before PDF 2.0 a file that uses the store says so with an extension entry (ESIC, level 1 over PDF 1.7).
@@ -242,7 +324,8 @@ internal static class PdfIncrementalUpdate
                 rootOverrides["/Extensions"] = $"<< /ESIC {esic} >>";
         }
 
-        objects[rootItem.ObjectNumber] = Serialize(root, rootOverrides, encrypt: EncryptStrings(rootItem.ObjectNumber));
+        if (rootOverrides.Count > 0)
+            objects[rootItem.ObjectNumber] = Serialize(root, rootOverrides, encrypt: EncryptStrings(rootItem.ObjectNumber));
 
         if (source.WasRebuilt)
             throw new InvalidDataException("The PDF's cross-reference data is damaged, so it cannot be extended; repair the file first.");

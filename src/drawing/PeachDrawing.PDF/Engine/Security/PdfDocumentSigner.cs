@@ -63,11 +63,34 @@ internal static class PdfDocumentSigner
 
         if (appearance is not null)
             AttachAppearance(document, field, options, appearance);
+        else
+            AttachEmptyAppearance(document, field);
 
         page.Annotations.Add(field);
         form.AddField(field);
         form.Elements.SetInteger(PdfAcroForm.Keys.SigFlags, 3); // signatures exist, and the file is only appended to from here
         return field;
+    }
+
+    /// <summary>
+    /// Gives an invisible signature widget an empty appearance stream (a form whose box is a point). ISO 19005-1 6.9 asks every form field of a
+    /// PDF/A-1 file for an appearance dictionary and, unlike the later parts, makes no exception for a field with no area.
+    /// </summary>
+    static void AttachEmptyAppearance(PdfDocument document, PdfSignatureField field)
+    {
+        var form = new PdfDictionary(document);
+        document.Internals.AddObject(form);
+        form.Elements.SetName("/Type", "/XObject");
+        form.Elements.SetName("/Subtype", "/Form");
+        form.Elements.SetRectangle("/BBox", new PdfRectangle(0, 0, 0, 0));
+        // A no-op rather than nothing: the engine writes an empty stream with no line break before endstream, which ISO 19005 6.1.7 rejects.
+        var nothing = "q Q"u8.ToArray();
+        form.Stream = new PdfDictionary.PdfStream(nothing, form);
+        form.Elements[PdfDictionary.PdfStream.Keys.Length] = new PdfInteger(nothing.Length);
+
+        var ap = new PdfDictionary(document);
+        ap.Elements.SetReference("/N", form);
+        field.Elements.SetObject("/AP", ap);
     }
 
     /// <summary>Gives the widget an appearance stream: a border and the text, in the standard Helvetica font.</summary>

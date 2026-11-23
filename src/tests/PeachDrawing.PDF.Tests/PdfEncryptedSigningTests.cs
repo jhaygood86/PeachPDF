@@ -164,6 +164,18 @@ namespace PeachDrawing.PDF.Tests
         }
 
         [Fact]
+        public void AnInvisibleSignatureInAnEncryptedFile_HasAnEncryptedEmptyAppearance()
+        {
+            using var certificate = NewCertificate();
+            var signed = PdfFileSigner.Sign(Encrypted("secret"), Options(certificate), "secret");
+            var text = Encoding.Latin1.GetString(signed);
+
+            Assert.Contains("/BBox [0 0 0 0]", text);
+            Assert.DoesNotContain("q Q", text);                                    // its stream is stored encrypted
+            Assert.True(Assert.Single(PdfPageSource.Open(signed, "secret").GetSignatures()).IsIntact);
+        }
+
+        [Fact]
         public void AnUnencryptedFile_IgnoresAPassword()
         {
             using var certificate = NewCertificate();

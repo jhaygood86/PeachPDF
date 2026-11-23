@@ -91,6 +91,18 @@ namespace PeachDrawing.PDF.Tests
         }
 
         [Fact]
+        public void AnInvisibleSignatureAddedInPlace_HasTheSameEmptyAppearance()
+        {
+            using var certificate = NewCertificate();
+            var signed = PdfFileSigner.Sign(Compose(), Options(certificate));
+            var update = Encoding.Latin1.GetString(signed);
+
+            Assert.Matches(@"/Subtype /Widget[\s\S]*?/AP << /N \d+ 0 R >>", update);
+            Assert.Matches(@"/BBox \[0 0 0 0\] /Length 3 >>\s*stream\s*q Q\s*endstream", update);
+            Assert.True(Assert.Single(PdfPageSource.Open(signed).GetSignatures()).IsIntact);
+        }
+
+        [Fact]
         public void TheInputIsNotModified()
         {
             using var certificate = NewCertificate();

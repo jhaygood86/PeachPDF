@@ -420,6 +420,20 @@ namespace PeachDrawing.PDF.Tests
         }
 
         [Fact]
+        public void AnInvisibleSignature_HasAnEmptyAppearance_SoPdfA1AcceptsItsFormField()
+        {
+            // ISO 19005-1 6.9 asks every form field for an appearance dictionary, with no exception for a field that has no area (veraPDF
+            // reports it as 6.9 test 2). The appearance is a no-op form whose box is a point, and its stream is not empty, because the engine
+            // writes an empty stream with no line break before endstream, which 6.1.7 rejects.
+            using var certificate = NewCertificate();
+            var text = Encoding.Latin1.GetString(Save(Signed(certificate)));
+
+            Assert.Matches(@"/AP\s*<<\s*/N \d+ 0 R", text);
+            Assert.Contains("/BBox [0 0 0 0]", text);
+            Assert.Matches(@"/Length 3\s*>>\s*stream\s*q Q\s*endstream", text);
+        }
+
+        [Fact]
         public void AnUnsignedFile_HasNoSignatureField()
         {
             var text = Encoding.Latin1.GetString(Save(new PdfComposerOptions()));

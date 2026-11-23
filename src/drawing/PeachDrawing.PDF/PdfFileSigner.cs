@@ -96,19 +96,20 @@ public static class PdfFileSigner
     /// <param name="pdf">the bytes of the file</param>
     /// <param name="data">what to add; see <see cref="PdfValidationData.CollectAsync"/></param>
     /// <param name="password">the password of an encrypted file, or <see langword="null"/> for a file that opens without one</param>
+    /// <param name="signatureFieldName">the signature field the data is for (for example <c>Signature1</c>), or <see langword="null"/> for every signature in the file</param>
     /// <returns>the file with the data appended</returns>
-    /// <exception cref="InvalidOperationException">there is nothing to add</exception>
+    /// <exception cref="InvalidOperationException">there is nothing to add, or the file has no signature field with that name</exception>
     /// <exception cref="PdfPasswordException">the file needs a password that was not given or is wrong</exception>
     /// <exception cref="NotSupportedException">the file is encrypted with RC4 or a security handler this does not know</exception>
     /// <exception cref="InvalidDataException">the file is not a readable PDF, or its cross-reference data is damaged</exception>
-    public static byte[] AddValidationData(byte[] pdf, PdfValidationData data, string? password = null)
+    public static byte[] AddValidationData(byte[] pdf, PdfValidationData data, string? password = null, string? signatureFieldName = null)
     {
         ArgumentNullException.ThrowIfNull(pdf);
         ArgumentNullException.ThrowIfNull(data);
         if (data.IsEmpty)
             throw new InvalidOperationException("There is no validation data to add.");
 
-        return PdfIncrementalUpdate.AppendValidationData(pdf, data, password);
+        return PdfIncrementalUpdate.AppendValidationData(pdf, data, password, signatureFieldName);
     }
 
     private static PdfIncrementalUpdate.VisibleSignature? Visible(PdfSigningOptions options) =>

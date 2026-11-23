@@ -25,8 +25,47 @@ internal sealed class PdfSourceSignatures(PdfSourceDocument doc)
     public IReadOnlyList<PdfSourceSignature> Read()
     {
         var found = new List<PdfSourceSignature>();
+        foreach (var (name, value) in Enumerate())
+        {
+            if (found.Count >= MaxSignatures) break;
+            found.Add(Check(name, value));
+        }
+
+        return found;
+    }
+
+    /// <summary>
+    /// The signatures and timestamps of the file with the bytes of each one's <c>/Contents</c>, as the file stores them (zero padding
+    /// included): what a validation-data entry is keyed by.
+    /// </summary>
+    public IReadOnlyList<(string FieldName, bool IsTimestamp, byte[] Contents)> ReadIdentities()
+    {
+        var found = new List<(string, bool, byte[])>();
+        foreach (var (name, value) in Enumerate())
+        {
+            if (found.Count >= MaxSignatures) break;
+            if (ValidRange(value) is not { } range) continue;
+
+            try
+            {
+                var hex = new string(Encoding.ASCII.GetString(doc.Data, (int)range[1] + 1, (int)(range[2] - range[1] - 2)).Where(c => !char.IsWhiteSpace(c)).ToArray());
+                var subFilter = doc.NameOf(value.GetRaw("SubFilter"))?.TrimStart('/');
+                found.Add((name, doc.NameOf(value.GetRaw("Type")) == "/DocTimeStamp" || subFilter == "ETSI.RFC3161", Convert.FromHexString(hex)));
+            }
+            catch (FormatException)
+            {
+                // A /Contents that is not hexadecimal has no identity to key anything by.
+            }
+        }
+
+        return found;
+    }
+
+    /// <summary>The signature fields of the form that hold a value, in the order the form lists them, with their fully qualified names.</summary>
+    IEnumerable<(string Name, PdfDictionary Value)> Enumerate()
+    {
         if (doc.Resolve(doc.Trailer.GetRaw("Root")) is not PdfDictionary root || doc.DictOf(root, "AcroForm") is not { } form)
-            return found;
+            yield break;
 
         var seen = new HashSet<PdfDictionary>(ReferenceEqualityComparer.Instance);
         var pending = new Stack<(PdfDictionary Field, string Prefix, string? Type)>();
@@ -37,7 +76,7 @@ internal sealed class PdfSourceSignatures(PdfSourceDocument doc)
                 if (doc.Resolve(item) is PdfDictionary field) pending.Push((field, "", null));
         }
 
-        for (int budget = 100_000; pending.Count > 0 && budget > 0 && found.Count < MaxSignatures; budget--)
+        for (int budget = 100_000; pending.Count > 0 && budget > 0; budget--)
         {
             var (field, prefix, inheritedType) = pending.Pop();
             var name = doc.Resolve(field.GetRaw("T")) is PdfString partial && partial.Value.Length > 0
@@ -46,7 +85,7 @@ internal sealed class PdfSourceSignatures(PdfSourceDocument doc)
             var type = doc.NameOf(field.GetRaw("FT")) ?? inheritedType;
 
             if (type == "/Sig" && doc.Resolve(field.GetRaw("V")) is PdfDictionary value && seen.Add(value))
-                found.Add(Check(name, value));
+                yield return (name, value);
 
             if (doc.ArrayOf(field, "Kids") is { } kids)
             {
@@ -54,8 +93,6 @@ internal sealed class PdfSourceSignatures(PdfSourceDocument doc)
                     if (doc.Resolve(kid) is PdfDictionary child) pending.Push((child, name, type));
             }
         }
-
-        return found;
     }
 
     /// <summary>The certificates, OCSP responses and CRLs in the document security store (<c>/DSS</c>).</summary>
@@ -117,19 +154,9 @@ internal sealed class PdfSourceSignatures(PdfSourceDocument doc)
         };
 
         // The byte range: [0 a b c], so that the signed bytes are 0..a and b..b+c, with the signature between a and b.
-        if (doc.ArrayOf(value, "ByteRange") is not { Elements.Count: 4 } rangeArray)
-            return Result(false, false, "The signature has no valid /ByteRange.");
         var data = doc.Data;
-
-        // Every entry must be a whole number inside the file before any arithmetic is done on it: a real such as 9.3e18 would saturate a
-        // cast to long and make the sums below wrap around.
-        var numbers = rangeArray.Elements.Select(e => doc.NumberOf(e, double.NaN)).ToArray();
-        if (numbers.Any(n => !double.IsFinite(n) || n < 0 || n > data.Length || n != Math.Floor(n)))
-            return Result(false, false, "The signature's /ByteRange does not match the file.");
-        var range = numbers.Select(n => (long)n).ToArray();
-        if (range[0] != 0 || range[2] < range[1] + 2 || range[2] > data.Length || range[3] > data.Length - range[2]
-            || data[range[1]] != (byte)'<' || data[range[2] - 1] != (byte)'>')
-            return Result(false, false, "The signature's /ByteRange does not match the file.");
+        if (ValidRange(value) is not { } range)
+            return Result(false, false, "The signature's /ByteRange is missing or does not match the file.");
 
         bool covers = range[2] + range[3] == data.Length;
         signedEnd = range[2] + range[3];
@@ -157,6 +184,28 @@ internal sealed class PdfSourceSignatures(PdfSourceDocument doc)
             return Result(covers, false, "The signature's /Contents is not the part of the file its /ByteRange leaves out.");
 
         return timestamp ? CheckTimestamp(covered, contents, covers, Result) : CheckSignature(covered, contents, covers, Result);
+    }
+
+    /// <summary>
+    /// The signature's byte range as four numbers, if it is one that fits the file: starting at 0, leaving out a <c>&lt;...&gt;</c> of at
+    /// least two bytes, ending inside the file.
+    /// </summary>
+    long[]? ValidRange(PdfDictionary value)
+    {
+        if (doc.ArrayOf(value, "ByteRange") is not { Elements.Count: 4 } rangeArray)
+            return null;
+        var data = doc.Data;
+
+        // Every entry must be a whole number inside the file before any arithmetic is done on it: a real such as 9.3e18 would saturate a
+        // cast to long and make the sums below wrap around.
+        var numbers = rangeArray.Elements.Select(e => doc.NumberOf(e, double.NaN)).ToArray();
+        if (numbers.Any(n => !double.IsFinite(n) || n < 0 || n > data.Length || n != Math.Floor(n)))
+            return null;
+        var range = numbers.Select(n => (long)n).ToArray();
+        if (range[0] != 0 || range[2] < range[1] + 2 || range[2] > data.Length || range[3] > data.Length - range[2]
+            || data[range[1]] != (byte)'<' || data[range[2] - 1] != (byte)'>')
+            return null;
+        return range;
     }
 
     static PdfSourceSignature CheckSignature(byte[] covered, byte[] contents, bool covers,
