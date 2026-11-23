@@ -234,7 +234,7 @@ internal sealed class PdfWriter
         if (indirect)
         {
             WriteObjectAddress(obj);
-            _inIndirectObject = true;
+            _inIndirectObject = obj is not PdfDictionary { WrittenUnencrypted: true };
         }
         _stack.Add(new StackItem(obj));
         if (indirect)

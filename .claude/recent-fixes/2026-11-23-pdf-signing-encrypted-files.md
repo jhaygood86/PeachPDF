@@ -19,9 +19,9 @@ encrypted (its `/Length` is the ciphertext length), which is binary, so `PdfIncr
 **Found by running it:** the unit tests write and read with the same key code, so they cannot show a symmetric mistake; the independent proof
 is qpdf (through pikepdf), MuPDF, PDFium and pyHanko opening an AES-128 (R4) and an AES-256 (R6) file qpdf encrypted and PeachPDF then
 signed: qpdf finds the field name and `/Reason` decrypted and `check()` reports nothing, MuPDF authenticates and renders the box text, PDFium
-renders it, and pyHanko decrypts and reports the signature intact, valid and covering the entire file. **Separate, pre-existing:** pyHanko
-refuses a file *the composer* encrypted ("Encryption settings must be an indirect reference"), signed or not, because the composer writes
-`/Encrypt` as a direct dictionary in the trailer; qpdf, MuPDF and PDFium open it. Valid PDF, a stricter reader; not changed here.
+renders it, and pyHanko decrypts and reports the signature intact, valid and covering the entire file. **Separate, pre-existing (fixed the same day,
+see [the indirect encryption dictionary](2026-11-23-pdf-encrypt-dictionary-indirect.md)):** pyHanko refused a file *the composer* encrypted ("Encryption settings must be an indirect reference"), signed or not, because the composer wrote
+`/Encrypt` as a direct dictionary in the trailer; qpdf, MuPDF and PDFium opened it.
 
 **Not done:** RC4 files (no .NET RC4), AES-128 *composition* (the composer only writes AES-256, so the R4 path is covered by the
 qpdf-made file in the interop check and not by a unit test), and a per-call choice of which password a file needs beyond the one given.

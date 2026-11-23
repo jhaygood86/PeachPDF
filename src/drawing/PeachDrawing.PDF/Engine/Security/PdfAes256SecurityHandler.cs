@@ -87,10 +87,13 @@ internal sealed class PdfAes256SecurityHandler
         return result;
     }
 
-    /// <summary>Builds the direct /Encrypt dictionary that goes in the trailer.</summary>
+    /// <summary>
+    /// Builds the /Encrypt dictionary the trailer refers to. The caller makes it an indirect object: ISO 32000 allows it direct, but readers
+    /// are stricter than that (pyHanko, for one, refuses a direct one), and it is written without its strings encrypted.
+    /// </summary>
     public PdfDictionary CreateEncryptDictionary(PdfDocument document)
     {
-        var encrypt = new PdfDictionary(document);
+        var encrypt = new PdfDictionary(document) { WrittenUnencrypted = true };
         encrypt.Elements.SetName("/Filter", "/Standard");
         encrypt.Elements.SetInteger("/V", 5);
         encrypt.Elements.SetInteger("/R", 6);

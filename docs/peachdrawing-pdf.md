@@ -148,7 +148,7 @@ var options = new PdfComposerOptions
 
 The file is written with the PDF standard security handler using AES-256 (revision 6 of ISO 32000-2); older handlers (RC4, AES-128) depend
 on deprecated algorithms and are not offered. A reader enforces `Permissions` voluntarily: they are a request made of well-behaved
-software, not a cryptographic barrier. An encrypted file has a header of at least 1.7. With no `UserPassword` the document opens without
+software, not a cryptographic barrier. An encrypted file has a header of at least 1.7, and its encryption dictionary is an indirect object (stored with its entries in the clear, as a reader needs them to derive the key), which is the form every reader accepts; in a linearized file it sits with the catalog, ahead of the first page. With no `UserPassword` the document opens without
 a password and the permissions still apply; with no `OwnerPassword` a random one is generated and discarded, so the restrictions can
 never be lifted. The options are copied when the composer is created, so changing them afterwards does not affect a document in progress.
 
