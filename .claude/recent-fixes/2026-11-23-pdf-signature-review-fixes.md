@@ -21,4 +21,4 @@ an object-copied page does not carry the source's signature value (the earlier w
 `null` form entry cannot occur because the parser drops null values.
 
 **Left, with reasons:** [the hole is not bound to the declared `/Contents`](../accepted-gaps/pdf-signature-reading-does-not-bind-the-hole-to-the-declared-contents.md),
-and [signing is not silent](../accepted-gaps/pdf-signing-does-not-suppress-key-access-prompts.md).
+and signing was not silent (closed the same day: see [key access](2026-11-23-pdf-signing-key-access.md)).

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Formats.Asn1;
 using System.Security.Cryptography;
 using System.Security.Cryptography.Pkcs;
+using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -212,11 +213,24 @@ internal static class PdfDocumentSigner
     internal static SignedCms BuildCms(byte[] data, PdfSigningOptions options)
     {
         var certificate = options.Certificate!;
-        var signer = new CmsSigner(SubjectIdentifierType.IssuerAndSerialNumber, certificate)
+        AsymmetricAlgorithm? ownedKey = options.KeyPin is { } pin ? OpenKeyWithPin(certificate, pin) : null;
+        try
         {
-            DigestAlgorithm = new Oid(DigestOid(options.HashAlgorithm)),
-            IncludeOption = System.Security.Cryptography.X509Certificates.X509IncludeOption.EndCertOnly,
-        };
+            return BuildCms(data, options, certificate, options.PrivateKey ?? ownedKey);
+        }
+        finally
+        {
+            ownedKey?.Dispose();
+        }
+    }
+
+    static SignedCms BuildCms(byte[] data, PdfSigningOptions options, X509Certificate2 certificate, AsymmetricAlgorithm? key)
+    {
+        var signer = key is null
+            ? new CmsSigner(SubjectIdentifierType.IssuerAndSerialNumber, certificate)
+            : new CmsSigner(SubjectIdentifierType.IssuerAndSerialNumber, certificate, key);
+        signer.DigestAlgorithm = new Oid(DigestOid(options.HashAlgorithm));
+        signer.IncludeOption = System.Security.Cryptography.X509Certificates.X509IncludeOption.EndCertOnly;
         foreach (var extra in options.AdditionalCertificates)
             signer.Certificates.Add(extra);
 
@@ -226,8 +240,62 @@ internal static class PdfDocumentSigner
             signer.SignedAttributes.Add(new Pkcs9SigningTime(PdfEntropy.UtcNow().UtcDateTime));
 
         var cms = new SignedCms(new ContentInfo(data), detached: true);
-        cms.ComputeSignature(signer);
+        try
+        {
+            // Silent unless the caller allows a prompt: a key that needs a PIN then fails here instead of waiting for someone to answer.
+            cms.ComputeSignature(signer, silent: !options.AllowKeyPrompt);
+        }
+        catch (CryptographicException error)
+        {
+            throw new InvalidOperationException(
+                "Signing with the key failed: " + error.Message.Trim() + " A key that needs a PIN or other interaction fails unless the options " +
+                "give a KeyPin, a PrivateKey that holds its PIN, or allow a prompt (AllowKeyPrompt).", error);
+        }
+
         return cms;
+    }
+
+    /// <summary>
+    /// Opens the certificate's CNG key with <paramref name="pin"/> set on it, so a smart card or token signs without asking. The key handle
+    /// is shared with the object that signs, which is how the provider's PIN cache is reached.
+    /// </summary>
+    static AsymmetricAlgorithm OpenKeyWithPin(X509Certificate2 certificate, string pin)
+    {
+        if (!OperatingSystem.IsWindows())
+            throw new InvalidOperationException("PdfSigningOptions.KeyPin works only for keys held by Windows CNG.");
+        return OpenCngKeyWithPin(certificate, pin);
+    }
+
+    [System.Runtime.Versioning.SupportedOSPlatform("windows")]
+    static AsymmetricAlgorithm OpenCngKeyWithPin(X509Certificate2 certificate, string pin)
+    {
+        // The property value is the PIN as a zero-terminated UTF-16 string.
+        var property = new CngProperty("SmartCardPin", Encoding.Unicode.GetBytes(pin + "\0"), CngPropertyOptions.None);
+        AsymmetricAlgorithm? key = certificate.GetRSAPrivateKey() ?? (AsymmetricAlgorithm?)certificate.GetECDsaPrivateKey();
+        try
+        {
+            switch (key)
+            {
+                case RSACng rsa:
+                    rsa.Key.SetProperty(property);
+                    return rsa;
+                case ECDsaCng ecdsa:
+                    ecdsa.Key.SetProperty(property);
+                    return ecdsa;
+                default:
+                    throw new InvalidOperationException("PdfSigningOptions.KeyPin works only for RSA and ECDSA keys held by Windows CNG; supply a PrivateKey instead.");
+            }
+        }
+        catch (CryptographicException error)
+        {
+            key?.Dispose();
+            throw new InvalidOperationException("The key's provider did not accept the PIN: " + error.Message.Trim(), error);
+        }
+        catch
+        {
+            key?.Dispose();
+            throw;
+        }
     }
 
     /// <summary>The ESS <c>signing-certificate-v2</c> attribute (RFC 5035) that binds the signature to one certificate.</summary>

@@ -168,6 +168,18 @@ var options = new PdfComposerOptions
 
 The saved file has an invisible signature field on the first page whose value is a detached CMS signature over every byte of the file except the signature itself, so a reader reports any later change. The composer reserves room for the signature (`ReservedSignatureBytes`, 16 KB by default), writes the file, then fills the room in without moving any byte, which is why signing works with encryption and with `Linearize`. `Pkcs7Detached` writes `adbe.pkcs7.detached` with the signing time as a signed attribute and is read by the most software; `CadesDetached` writes `ETSI.CAdES.detached`, the form the PAdES baseline profiles build on, binding the signing certificate with a signed attribute. The digest is SHA-256, SHA-384 or SHA-512 (`HashAlgorithm`), and RSA and ECDSA keys are both supported.
 
+By default signing never waits for anyone: a key that needs a PIN or another prompt makes the save fail with an exception that says what to set, instead of blocking a service that has no one to answer. A desktop application that wants the prompt sets `AllowKeyPrompt = true`. To sign with a key that asks for nothing, give it what it needs up front:
+
+```csharp
+// A key you opened yourself, already holding its PIN (or any RSA/ECDSA object that forwards signing to a hardware module or a key service).
+Signing = new PdfSigningOptions { Certificate = publicCertificate, PrivateKey = myKey },
+
+// Or, for a smart card or token behind Windows CNG, the PIN itself.
+Signing = new PdfSigningOptions { Certificate = certificateFromTheCard, KeyPin = pin },
+```
+
+`PrivateKey` replaces the certificate's own key, so the certificate can be the public one; the key belongs to you and is not disposed. `KeyPin` hands the PIN to a key held by Windows CNG and works nowhere else: on other platforms use `PrivateKey`. The PIN stays in memory as a string for as long as the options do.
+
 Only the signing certificate and the ones in `AdditionalCertificates` are embedded; the chain is neither built nor fetched. A signed file must not be changed afterwards, and a `PdfOperation` that draws or copies a signed source writes an unsigned file and says so in `Warnings`. Long-term validation data and visible signature appearances are not written yet. To check a file's signatures, see [Reading signatures](#reading-signatures).
 
 ### Timestamps

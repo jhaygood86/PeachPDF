@@ -35,8 +35,35 @@ public enum PdfSignatureFormat
 /// </remarks>
 public sealed class PdfSigningOptions
 {
-    /// <summary>The signing certificate, which must have its private key available. Required.</summary>
+    /// <summary>
+    /// The signing certificate. Required. Its private key must be available to the process, unless <see cref="PrivateKey"/> supplies the
+    /// key to sign with (then the certificate only needs to be the public one that goes into the file).
+    /// </summary>
     public X509Certificate2? Certificate { get; set; }
+
+    /// <summary>
+    /// The key to sign with, instead of the certificate's own private key, or <see langword="null"/> (the default) to use that. This is
+    /// the way to sign with a key the process cannot export or open by itself: a key object that already holds its PIN, a wrapper around
+    /// a hardware module (derive from <see cref="System.Security.Cryptography.RSA"/> or <see cref="System.Security.Cryptography.ECDsa"/> and
+    /// forward the signing call), or a cloud key service. It must be an RSA or ECDSA key that matches <see cref="Certificate"/>, and it is
+    /// not disposed: it belongs to the caller.
+    /// </summary>
+    public AsymmetricAlgorithm? PrivateKey { get; set; }
+
+    /// <summary>
+    /// The PIN of the certificate's private key, or <see langword="null"/> (the default). It is handed to the key's provider so that a
+    /// smart card or token signs without asking. Only keys held by Windows CNG (<c>RSACng</c>, <c>ECDsaCng</c>) take a PIN this way; on
+    /// another platform, or for a key held elsewhere, supply <see cref="PrivateKey"/> instead. It cannot be combined with
+    /// <see cref="PrivateKey"/>, and it stays in memory as a string for as long as these options do.
+    /// </summary>
+    public string? KeyPin { get; set; }
+
+    /// <summary>
+    /// Whether signing may stop to ask the user for something the key needs (a PIN dialog, a smart card prompt). <see langword="false"/>
+    /// (the default) makes a key that needs interaction fail the save with an exception, so a service with no one to answer never blocks;
+    /// set it to <see langword="true"/> in a desktop application that wants the prompt.
+    /// </summary>
+    public bool AllowKeyPrompt { get; set; }
 
     /// <summary>Further certificates to embed beside <see cref="Certificate"/>, such as its intermediate issuers.</summary>
     public IList<X509Certificate2> AdditionalCertificates { get; } = [];
@@ -76,6 +103,9 @@ public sealed class PdfSigningOptions
         var copy = new PdfSigningOptions
         {
             Certificate = Certificate,
+            PrivateKey = PrivateKey,
+            KeyPin = KeyPin,
+            AllowKeyPrompt = AllowKeyPrompt,
             HashAlgorithm = HashAlgorithm,
             Format = Format,
             SignerName = SignerName,
@@ -94,8 +124,14 @@ public sealed class PdfSigningOptions
     {
         if (Certificate is null)
             throw new InvalidOperationException("PdfSigningOptions.Certificate is required.");
-        if (!Certificate.HasPrivateKey)
-            throw new InvalidOperationException("PdfSigningOptions.Certificate has no private key to sign with.");
+        if (PrivateKey is not null && PrivateKey is not (RSA or ECDsa))
+            throw new InvalidOperationException("PdfSigningOptions.PrivateKey must be an RSA or ECDSA key.");
+        if (PrivateKey is not null && KeyPin is not null)
+            throw new InvalidOperationException("Give PdfSigningOptions either a PrivateKey (which holds its own PIN) or a KeyPin, not both.");
+        if (KeyPin is not null && !OperatingSystem.IsWindows())
+            throw new InvalidOperationException("PdfSigningOptions.KeyPin works only for keys held by Windows CNG; supply a PrivateKey that holds its PIN instead.");
+        if (PrivateKey is null && !Certificate.HasPrivateKey)
+            throw new InvalidOperationException("PdfSigningOptions.Certificate has no private key to sign with; supply PdfSigningOptions.PrivateKey or a certificate that has one.");
         if (HashAlgorithm != HashAlgorithmName.SHA256 && HashAlgorithm != HashAlgorithmName.SHA384 && HashAlgorithm != HashAlgorithmName.SHA512)
             throw new InvalidOperationException("PdfSigningOptions.HashAlgorithm must be SHA-256, SHA-384 or SHA-512.");
         if (!Enum.IsDefined(Format))

@@ -239,6 +239,140 @@ namespace PeachDrawing.PDF.Tests
             Assert.Contains("(Signature1)", Encoding.Latin1.GetString(file));
         }
 
+        /// <summary>An RSA key that forwards signing to another and counts the calls, like a wrapper around a hardware module would.</summary>
+        sealed class ForwardingRsa(RSA inner, bool failToSign = false) : RSA
+        {
+            public int Signed { get; private set; }
+
+            public bool Disposed { get; private set; }
+
+            public override RSAParameters ExportParameters(bool includePrivateParameters) => inner.ExportParameters(includePrivateParameters);
+
+            public override void ImportParameters(RSAParameters parameters) => throw new NotSupportedException();
+
+            public override byte[] SignHash(byte[] hash, HashAlgorithmName hashAlgorithm, RSASignaturePadding padding)
+            {
+                Signed++;
+                if (failToSign)
+                    throw new CryptographicException("The key needs a PIN.");
+                return inner.SignHash(hash, hashAlgorithm, padding);
+            }
+
+            public override bool VerifyHash(byte[] hash, byte[] signature, HashAlgorithmName hashAlgorithm, RSASignaturePadding padding) =>
+                inner.VerifyHash(hash, signature, hashAlgorithm, padding);
+
+            protected override void Dispose(bool disposing)
+            {
+                Disposed = true;
+                base.Dispose(disposing);
+            }
+        }
+
+        [Fact]
+        public void APublicCertificateAndASeparatePrivateKey_Sign_AndTheKeyIsNotDisposed()
+        {
+            using var certificate = NewCertificate();
+            using var publicOnly = X509CertificateLoader.LoadCertificate(certificate.RawData);
+            using var key = new ForwardingRsa(certificate.GetRSAPrivateKey()!);
+
+            var file = Save(Signed(publicOnly, s => s.PrivateKey = key));
+
+            Assert.True(key.Signed > 0);
+            Assert.False(key.Disposed);
+            var (covered, signature, _) = Read(file);
+            var cms = new SignedCms(new ContentInfo(covered), detached: true);
+            cms.Decode(signature);
+            cms.CheckSignature(verifySignatureOnly: true);
+            Assert.Equal(certificate.Thumbprint, cms.SignerInfos[0].Certificate!.Thumbprint);
+        }
+
+        [Fact]
+        public void AnEcdsaPrivateKey_CanBeSuppliedToo()
+        {
+            using var certificate = NewCertificate(ecdsa: true);
+            using var publicOnly = X509CertificateLoader.LoadCertificate(certificate.RawData);
+            using var key = certificate.GetECDsaPrivateKey()!;
+
+            var (covered, signature, _) = Read(Save(Signed(publicOnly, s => s.PrivateKey = key)));
+
+            var cms = new SignedCms(new ContentInfo(covered), detached: true);
+            cms.Decode(signature);
+            cms.CheckSignature(verifySignatureOnly: true);
+        }
+
+        [Fact]
+        public async Task TheSuppliedKey_IsUsedByTheFileSignerToo()
+        {
+            using var certificate = NewCertificate();
+            using var publicOnly = X509CertificateLoader.LoadCertificate(certificate.RawData);
+            using var key = new ForwardingRsa(certificate.GetRSAPrivateKey()!);
+            var file = Save(new PdfComposerOptions());
+
+            var signed = await PdfFileSigner.SignAsync(file, new PdfSigningOptions { Certificate = publicOnly, PrivateKey = key }, TestContext.Current.CancellationToken);
+
+            Assert.True(key.Signed > 0);
+            Assert.True(PdfPageSource.Open(signed).GetSignatures()[0].IsIntact);
+        }
+
+        [Fact]
+        public void AKeyThatCannotSign_FailsTheSaveAndSaysHowToFixIt()
+        {
+            using var certificate = NewCertificate();
+            using var key = new ForwardingRsa(certificate.GetRSAPrivateKey()!, failToSign: true);
+
+            var error = Assert.Throws<InvalidOperationException>(() => Save(Signed(certificate, s => s.PrivateKey = key)));
+
+            Assert.Contains("needs a PIN", error.Message);
+            Assert.Contains("KeyPin", error.Message);
+            Assert.Contains("AllowKeyPrompt", error.Message);
+            Assert.IsType<CryptographicException>(error.InnerException);
+        }
+
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public void AKeyThatNeedsNoInteraction_SignsWhetherOrNotAPromptIsAllowed(bool allow)
+        {
+            using var certificate = NewCertificate();
+
+            var (covered, signature, _) = Read(Save(Signed(certificate, s => s.AllowKeyPrompt = allow)));
+
+            var cms = new SignedCms(new ContentInfo(covered), detached: true);
+            cms.Decode(signature);
+            cms.CheckSignature(verifySignatureOnly: true);
+            Assert.False(new PdfSigningOptions().AllowKeyPrompt);
+        }
+
+        [Fact]
+        public void KeyOptionsThatContradictEachOther_AreRejected()
+        {
+            using var certificate = NewCertificate();
+            using var key = certificate.GetRSAPrivateKey()!;
+            using var agreement = ECDiffieHellman.Create();
+
+            Assert.Throws<InvalidOperationException>(() => new PdfComposer(new PdfRenderContext(), Signed(certificate, s => { s.PrivateKey = key; s.KeyPin = "1234"; })));
+            Assert.Throws<InvalidOperationException>(() => new PdfComposer(new PdfRenderContext(), Signed(certificate, s => s.PrivateKey = agreement)));
+
+            using var publicOnly = X509CertificateLoader.LoadCertificate(certificate.RawData);
+            Assert.Throws<InvalidOperationException>(() => new PdfComposer(new PdfRenderContext(), Signed(publicOnly)));
+        }
+
+        [Fact]
+        public void APinForAKeyTheProviderDoesNotTake_IsReportedNotIgnored()
+        {
+            // A key from a PFX is a software key: Windows CNG rejects the smart card PIN property for it, and other platforms have no such key.
+            using var certificate = NewCertificate();
+
+            var error = Assert.Throws<InvalidOperationException>(() =>
+            {
+                using var composer = new PdfComposer(new PdfRenderContext(), Signed(certificate, s => s.KeyPin = "1234"));
+                composer.AddPage(100, 100);
+                composer.Save(new MemoryStream());
+            });
+
+            Assert.Contains(OperatingSystem.IsWindows() ? "did not accept the PIN" : "Windows CNG", error.Message);
+        }
+
         [Fact]
         public void AnUnsignedFile_HasNoSignatureField()
         {

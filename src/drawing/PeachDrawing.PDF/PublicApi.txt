@@ -430,12 +430,15 @@ PeachDrawing.PDF.PdfSignatureFormat : enum Int32
   Pkcs7Detached = 0
 PeachDrawing.PDF.PdfSigningOptions : sealed class
   ctor()
+  property AsymmetricAlgorithm PrivateKey { get; set; }
+  property Boolean AllowKeyPrompt { get; set; }
   property HashAlgorithmName HashAlgorithm { get; set; }
   property IList<X509Certificate2> AdditionalCertificates { get; }
   property Int32 ReservedSignatureBytes { get; set; }
   property PdfSignatureFormat Format { get; set; }
   property PdfTimestampOptions Timestamp { get; set; }
   property String ContactInfo { get; set; }
+  property String KeyPin { get; set; }
   property String Location { get; set; }
   property String Reason { get; set; }
   property String SignerName { get; set; }
