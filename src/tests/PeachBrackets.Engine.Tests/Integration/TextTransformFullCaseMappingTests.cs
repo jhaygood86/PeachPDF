@@ -100,5 +100,33 @@ namespace PeachBrackets.Engine.Tests.Integration
             Assert.Equal("STRASSE", word.Text);
             Assert.Equal("stra\u00DFe", ((PeachBrackets.Html.Dom.CssRect)word).FirstLineText);
         }
+
+
+        [Fact]
+        public async Task Capitalize_AnInlineBoxBoundaryDoesNotStartAWord() =>
+            Assert.Equal("Hello", string.Concat(await WordTexts("<p id='p' style='text-transform:capitalize'><b>h</b>ello</p>")));
+
+        [Fact]
+        public async Task Capitalize_AnOutOfFlowBoxDoesNotStartAWord() =>
+            Assert.Equal("Pass", string.Concat(await WordTexts("<p id='p' style='text-transform:capitalize'>p<span style='position:absolute'></span>ass</p>")));
+
+        [Fact]
+        public async Task Capitalize_AWordThatBeganInAnEarlierBoxIsNotCapitalizedAgain_ButTheNextWordIs() =>
+            Assert.Equal("FooBar", string.Concat(await WordTexts("<p id='p' style='text-transform:capitalize'><i>fo</i>o <b>bar</b></p>")));
+
+        [Fact]
+        public async Task Capitalize_PutsALetterNumberInTitleCase() =>
+            Assert.Equal("\u2160", string.Concat(await WordTexts("<p id='p' style='text-transform:capitalize'>\u2170</p>")));
+
+        [Fact]
+        public async Task Capitalize_InDutch_CapitalizesTheIjThatStartsAWordAsAUnit()
+        {
+            Assert.Equal("IJsselmeer", string.Concat(await WordTexts("<p id='p' lang='nl' style='text-transform:capitalize'>ijsselmeer</p>")));
+            Assert.Equal("Ijsselmeer", string.Concat(await WordTexts("<p id='p' lang='en' style='text-transform:capitalize'>ijsselmeer</p>")));
+        }
+
+        [Fact]
+        public async Task Capitalize_LeavesAWordThatStartsWithADigitAlone() =>
+            Assert.Equal("1st(Abc", string.Concat(await WordTexts("<p id='p' style='text-transform:capitalize'>1st (abc</p>")));
     }
 }

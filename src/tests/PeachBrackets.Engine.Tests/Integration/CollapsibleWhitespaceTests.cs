@@ -72,5 +72,16 @@ namespace PeachBrackets.Engine.Tests.Integration
             var lines = await Lines("<p id='p' style='font-family:LineBreakTest; font-size:16pt; width:50pt; white-space:break-spaces'>あいう\u3000え</p>");
             Assert.Equal(["あい", "う\u3000え"], lines);
         }
+
+        /// <summary>The hanging space that ends a word before a break does not count toward <c>min-content</c>, which takes every break.</summary>
+        [Fact]
+        public async Task MinContent_DoesNotCountTheSpaceSeparatorThatHangsAtEachBreak()
+        {
+            var (root, _) = await LayoutHarness.LayoutAsync(Page(
+                "<div id='p' style='position:absolute; width:min-content; font-family:LineBreakTest; font-size:16pt'>あ\u3000あ</div>"));
+            var box = LayoutHarness.FindById(root, "p")!;
+
+            Assert.Equal(16d, box.ActualRight - box.Location.X, 1);       // one em, not two
+        }
     }
 }

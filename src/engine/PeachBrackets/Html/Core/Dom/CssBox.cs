@@ -2065,7 +2065,8 @@ namespace PeachBrackets.Html.Dom
             // The transform can change the text's length (the sharp s uppercases to two letters), and everything resolved per character of
             // this box's own text (bidi levels, scripts, joining forms, the original text) is indexed by where the character stood
             // before it: SourceIndexAt reads it through the map the transform returns.
-            var transformed = TextTransformer.ApplyFull(sourceText, TextTransform.Value, Language, !PreservesSpaces, !PreservesBreaks, out var sourceMap);
+            var transformed = TextTransformer.ApplyFull(sourceText, TextTransform.Value, Language, !PreservesSpaces, !PreservesBreaks,
+                TextTransform.Value == PeachBrackets.Css.TextTransform.Capitalize ? PrecedingWordText(this) : string.Empty, out var sourceMap);
             var text = TextSecurityMasker.Apply(transformed, TextSecurity.Value);
             if (sourceMap is not null && text.Length != transformed.Length) sourceMap = null;
             _transformSourceMap = sourceMap;
@@ -2348,6 +2349,53 @@ namespace PeachBrackets.Html.Dom
             };
             Words.RemoveRange(firstWord, Words.Count - firstWord);
             Words.Add(merged);
+        }
+
+        /// <summary>
+        /// The end of the in-flow text before <paramref name="box"/>'s that has no white space in it: the part of a word an earlier inline box
+        /// began, which this box's text continues. css-text-3 section 2.1.1: out-of-flow boxes and inline box boundaries do not introduce a
+        /// word boundary and are ignored when finding them.
+        /// </summary>
+        private static string PrecedingWordText(CssBox box)
+        {
+            const int Limit = 128;
+            var pieces = new List<string>();
+            var length = 0;
+
+            for (var previous = DomUtils.PrecedingBoxAcrossFirstChildChain(box); previous is not null;
+                 previous = DomUtils.PrecedingBoxAcrossFirstChildChain(previous))
+            {
+                if (previous.IsOutOfFlow || previous.DerivedStyle.ActualDisplay == Keywords.None) continue;
+                if (previous.DerivedStyle.ActualDisplay != Keywords.Inline) break;
+                if (!PrependWordTailOf(previous, pieces, ref length) || length >= Limit) break;
+            }
+
+            pieces.Reverse();
+            return string.Concat(pieces);
+        }
+
+        private static bool PrependWordTailOf(CssBox box, List<string> pieces, ref int length)
+        {
+            for (var i = box.Boxes.Count - 1; i >= 0; i--)
+            {
+                var child = box.Boxes[i];
+                if (child.IsOutOfFlow || child.DerivedStyle.ActualDisplay == Keywords.None) continue;
+                if (!PrependWordTailOf(child, pieces, ref length)) return false;
+            }
+
+            if (box.Boxes.Count > 0 || box.Text is not { Length: > 0 } text)
+                return true;
+
+            var lastSpace = -1;
+            for (var i = text.Length - 1; i >= 0; i--)
+            {
+                if (char.IsWhiteSpace(text[i])) { lastSpace = i; break; }
+            }
+
+            var tail = text.Substring(lastSpace + 1);
+            pieces.Add(tail);
+            length += tail.Length;
+            return lastSpace < 0;
         }
 
         private static int CountPrecedingRegionalIndicators(CssBox box)
@@ -2882,8 +2930,9 @@ namespace PeachBrackets.Html.Dom
         /// about which face a word is drawn in.
         /// </summary>
         /// <remarks>
-        /// Reads the representative codepoint from <see cref="CssRect.OriginalText"/>, not
-        /// <see cref="CssRect.Text"/>: an RTL run's words are reordered/mirrored in place after
+        /// Reads the representative codepoint from <see cref="CssRectWord.PreMirrorText"/> (the text as transformed, in logical order),
+        /// not from <see cref="CssRect.OriginalText"/> (the source, which a <see cref="TextTransform"/> can change into a character the
+        /// face does not have) and not from <see cref="CssRect.Text"/>: an RTL run's words are reordered/mirrored in place after
         /// measurement (<c>CssLayoutEngine.PlaceBidiRunWord</c> calls <see cref="CssRectWord.ReplaceText"/>,
         /// which only ever changes <c>Text</c>), and <see cref="DerivedStyle.ActualFontForCodepoint"/>'s
         /// cache is keyed by the literal codepoint value, not the resolved face - reading a *different*
@@ -2892,13 +2941,12 @@ namespace PeachBrackets.Html.Dom
         /// their uninitialized sentinel), corrupting the baseline alignment <c>FragmentPainter.Text.cs</c>
         /// derives from them - even though every codepoint in one per-codepoint fragment resolves to the
         /// same face by construction (<see cref="EmitPerCodepointFragments"/>), so which one is read does
-        /// not change *which font* is selected. <c>OriginalText</c> is never touched by mirroring, only by
-        /// <see cref="TextTransform"/> (itself always length-and-position-preserving), so it names the same
+        /// not change *which font* is selected. <c>PreMirrorText</c> is never touched by mirroring, so it names the same
         /// representative character at measurement and at paint alike.
         /// </remarks>
         internal static Font ResolveWordFont(CssRect word, CssBox styleSource)
         {
-            if (word.UsesPerCodepointFont && (word.OriginalText ?? word.Text) is { Length: > 0 } text)
+            if (word.UsesPerCodepointFont && ((word as CssRectWord)?.PreMirrorText ?? word.OriginalText ?? word.Text) is { Length: > 0 } text)
             {
                 Rune.DecodeFromUtf16(text, out var rune, out _);
                 // The presentation is re-derived from the word's own first character and the selector
@@ -9169,7 +9217,7 @@ namespace PeachBrackets.Html.Dom
                 boxWord.FirstLineText = firstLineStyle.TextTransform != TextTransform && boxWord.Text != "\n"
                     ? Bidi.Mirror(
                         TextSecurityMasker.Apply(
-                            TextTransformer.ApplyFull(boxWord.OriginalText ?? boxWord.Text!, firstLineStyle.TextTransform.Value, Language, false, false, out _), TextSecurity.Value),
+                            TextTransformer.ApplyFull(boxWord.OriginalText ?? boxWord.Text!, firstLineStyle.TextTransform.Value, Language, false, false, string.Empty, out _), TextSecurity.Value),
                         boxWord.BidiLevel)
                     : null;
                 // When FirstLineText is null (this box's own TextTransform already matches the
@@ -10326,12 +10374,14 @@ namespace PeachBrackets.Html.Dom
                             precedingGraphemeContext: trailingGraphemeContext)
                             && !HasNoWrapOpportunityAroundQuirkyImage(previousWord, word)))
                     {
-                        UpdateMinWidth(ref min, ref minDecoration, unbreakableRunWidth, paddingSum);
+                        // The run ends here, so the space separator that ends it hangs (css-text-3 section 4.1.3) and is not counted.
+                        UpdateMinWidth(ref min, ref minDecoration,
+                            unbreakableRunWidth - (previousWord is null ? 0d : CssLayoutEngine.MeasureTrailingHangingSpace(g, previousWord)), paddingSum);
                         unbreakableRunWidth = 0;
                     }
 
                     unbreakableRunWidth += wordMinWidth;
-                    UpdateMinWidth(ref min, ref minDecoration, unbreakableRunWidth, paddingSum);
+                    UpdateMinWidth(ref min, ref minDecoration, unbreakableRunWidth - CssLayoutEngine.MeasureTrailingHangingSpace(g, word), paddingSum);
                     previousWord = word;
                     if (word is CssRectWord textWord && !string.IsNullOrEmpty(textWord.Text))
                     {
