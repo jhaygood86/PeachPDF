@@ -1,11 +1,11 @@
-// Derived from PDFsharp (MIT) - see LICENSE.md
-
 namespace PeachDrawing.PDF.Engine;
 
-/// <summary>The identification of the embedded PDF engine, used as the default <c>/Creator</c> and <c>/Producer</c>.</summary>
+/// <summary>The name and version this package writes into a document that does not name its own creator and producer.</summary>
 internal static class PdfProductInfo
 {
-    public const string Version = "1.50.4000.0";
-
-    public const string Producer = "PDFsharp 1.50.4000-netstandard (https://github.com/ststeiger/PdfSharpCore)";
+    /// <summary>
+    /// <c>PeachDrawing.PDF {version}</c>, from the one version every package carries. It was the embedded engine's own PDFsharp
+    /// identification (an old branded string with a project address), which no document of ours should name.
+    /// </summary>
+    public static string Producer => PdfComposerProductInfo.Generator;
 }

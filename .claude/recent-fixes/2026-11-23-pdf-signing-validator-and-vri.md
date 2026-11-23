@@ -11,7 +11,7 @@ form's `/BBox [0 0 0 0]`) on both paths. **Trap:** the first attempt made the fo
 `stream` directly followed by `endstream` with no line break, which fails ISO 19005 6.1.7 (the stream length) on *every* level and broke the
 composer path for 2b/3b/4 that had passed: the stream is now `q Q` (a no-op), on both paths. The incremental path writes its own line break, so
 it never had the problem. 28 files now pass: 1b, 2b, 3b and 4, each composer-signed (PKCS#7, CAdES, timestamped), signed in place, with a
-security store, with a document timestamp (1b needs `Creator` set: [separate, pre-existing gap](../accepted-gaps/pdfa1b-info-creator-differs-from-xmp-creatortool.md)).
+security store, with a document timestamp (1b first needed `Creator` set, because of a pre-existing defect fixed straight after: [the default creator](2026-11-23-pdf-default-creator.md)).
 The signature subfilters, the `/DSS`, the document timestamp's `/DocTimeStamp` and the incremental sections all pass as they are.
 
 **Per-signature `/VRI`.** `PdfFileSigner.AddValidationData` writes a `/VRI` entry (`/Type /VRI /Cert /CRL /OCSP /TU`) for each signature the
