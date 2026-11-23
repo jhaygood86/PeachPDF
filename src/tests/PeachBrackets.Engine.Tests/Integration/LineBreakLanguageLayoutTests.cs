@@ -50,6 +50,27 @@ namespace PeachBrackets.Engine.Tests.Integration
             Assert.Equal(["あい", "う〜え", "お"], LineTexts(none));
         }
 
+        /// <summary>
+        /// A character the test font lacks is drawn from a fallback font, which cuts the word it belongs to into fragments. U+2998 cannot
+        /// start a line, so it stays with the kana before it, and the pair moves to the next line when it does not fit - the closing
+        /// character never overflows the line the kana before it landed on.
+        /// </summary>
+        [Fact]
+        public async Task ClosingCharacterFromAFallbackFont_WrapsWithTheCharacterBeforeIt_InsteadOfOverflowing()
+        {
+            var box = await LayOut($"<p id='p' style='{Style}'>あいう\u2998え</p>");
+
+            var lines = LineTexts(box);
+            Assert.Equal("あい", lines[0]);
+            Assert.StartsWith("う\u2998", lines[1]);
+
+            var words = LayoutHarness.Descendants(box).SelectMany(b => b.Words).Where(w => !string.IsNullOrEmpty(w.Text)).ToList();
+            var u = words.Single(w => w.Text == "う");
+            var closer = words.Single(w => w.Text == "\u2998");
+            Assert.Equal(u.Top, closer.Top, 3);
+            Assert.True(closer.Top > words[0].Top);
+        }
+
         [Fact]
         public async Task WaveDash_LandsAtTheStartOfTheSecondLine_InJapaneseText_AndTheParagraphIsTwoLinesTall()
         {

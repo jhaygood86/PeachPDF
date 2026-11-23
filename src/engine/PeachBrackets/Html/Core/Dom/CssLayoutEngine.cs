@@ -5894,6 +5894,26 @@ namespace PeachBrackets.Html.Dom
                 () => growLineToItsExtent(word));
 
         /// <summary>
+        /// The width of the words of <paramref name="box"/> after the one at <paramref name="wordIndex"/> that a line may not end before,
+        /// so they stay on the line the word does (the fragments one word is cut into when its characters come from different fonts, the
+        /// words the Unicode line breaking algorithm glues together).
+        /// </summary>
+        private static double GluedRunWidthAfter(CssBox box, int wordIndex)
+        {
+            var width = 0d;
+
+            for (var i = wordIndex + 1; i < box.Words.Count; i++)
+            {
+                var next = box.Words[i];
+                if (next.IsSpaces || next.IsLineBreak || (!next.SuppressWrapBefore && HasOrdinaryWrapOpportunityBefore(box.Words[i - 1], next))) break;
+
+                width += next.Width;
+            }
+
+            return width;
+        }
+
+        /// <summary>
         /// How wide what has to stay on one line is, starting at <paramref name="word"/>: its own width, or for the word of a
         /// <c>white-space: nowrap</c> run that is not wrapped away from the rest, the run from it to its end.
         /// </summary>
@@ -8072,8 +8092,16 @@ namespace PeachBrackets.Html.Dom
                         var emergencyBoundaryWrap = overflows && !IsAtLineStart(coordinates)
                             && !hasOrdinaryWrapBefore && isGraphemeBoundary
                             && AllowsOverflowWrapAtBoundary(previousWord, word);
+                        // A word the line may end before takes with it the words after it that the line may not end before (css-text-3 section 5: a
+                        // line breaks only at a soft wrap opportunity), so `中⦘`, where the ⦘ cannot start a line, wraps as a pair when the pair does
+                        // not fit, rather than the ⦘ overflowing the line it was glued to.
+                        var gluedRunOverflows = !overflows && hasOrdinaryWrapBefore && b.WhiteSpacePermitsWrapping && !word.IsLineBreak
+                            && !word.IsSpaces && word.HungEndWidth == 0d && !IsAtLineStart(coordinates) && !word.SuppressWrapBefore
+                            && GluedRunWidthAfter(b, wordIndex) is > 0d and var gluedRunWidth
+                            && coordinates.CurrentX + word.Width + gluedRunWidth + rightSpacing + clonedTrailing
+                                > actualLimitRight + LineFitTolerance;
                         var wrapping = (!word.SuppressWrapBefore
-                                && (word.IsLineBreak || wrapNoWrapBox || (overflows && hasOrdinaryWrapBefore)))
+                                && (word.IsLineBreak || wrapNoWrapBox || ((overflows || gluedRunOverflows) && hasOrdinaryWrapBefore)))
                             || emergencyBoundaryWrap;
 
                         if (wrapping && coordinates.SuppressLeadingWrap && IsAtLineStart(coordinates))
