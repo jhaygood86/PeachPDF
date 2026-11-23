@@ -28,17 +28,11 @@ namespace PeachBrackets.Html.Utils
             {
                 case TextTransform.Uppercase:
                 {
-                    var chars = text.ToCharArray();
-                    for (var i = 0; i < chars.Length; i++)
-                        chars[i] = char.ToUpperInvariant(chars[i]);
-                    return new string(chars);
+                    return MapCase(text, upper: true);
                 }
                 case TextTransform.Lowercase:
                 {
-                    var chars = text.ToCharArray();
-                    for (var i = 0; i < chars.Length; i++)
-                        chars[i] = char.ToLowerInvariant(chars[i]);
-                    return new string(chars);
+                    return MapCase(text, upper: false);
                 }
                 case TextTransform.Capitalize:
                 {
@@ -62,6 +56,25 @@ namespace PeachBrackets.Html.Utils
                 default:
                     return text;
             }
+        }
+
+        /// <summary>
+        /// Maps <paramref name="text"/> to upper or lower case one code point at a time, so a letter outside the Basic Multilingual Plane
+        /// (Deseret, Osage, Adlam ...) maps as a whole rather than as two lone surrogates. The mapping is Unicode's simple case mapping, so
+        /// the text keeps its length; the dotless i, which .NET's invariant mapping leaves alone, becomes <c>I</c>.
+        /// </summary>
+        private static string MapCase(string text, bool upper)
+        {
+            var result = new StringBuilder(text.Length);
+            foreach (var rune in text.EnumerateRunes())
+            {
+                var mapped = upper
+                    ? rune.Value == 0x0131 ? new Rune('I') : Rune.ToUpperInvariant(rune)
+                    : Rune.ToLowerInvariant(rune);
+                result.Append(mapped.ToString());
+            }
+
+            return result.ToString();
         }
 
         /// <summary>
