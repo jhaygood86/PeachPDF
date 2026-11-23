@@ -1,3 +1,5 @@
+using System;
+using System.Collections.Generic;
 using System.Text;
 using PeachBrackets.Css;
 
@@ -28,17 +30,11 @@ namespace PeachBrackets.Html.Utils
             {
                 case TextTransform.Uppercase:
                 {
-                    var chars = text.ToCharArray();
-                    for (var i = 0; i < chars.Length; i++)
-                        chars[i] = char.ToUpperInvariant(chars[i]);
-                    return new string(chars);
+                    return MapCase(text, upper: true);
                 }
                 case TextTransform.Lowercase:
                 {
-                    var chars = text.ToCharArray();
-                    for (var i = 0; i < chars.Length; i++)
-                        chars[i] = char.ToLowerInvariant(chars[i]);
-                    return new string(chars);
+                    return MapCase(text, upper: false);
                 }
                 case TextTransform.Capitalize:
                 {
@@ -62,6 +58,166 @@ namespace PeachBrackets.Html.Utils
                 default:
                     return text;
             }
+        }
+
+        /// <summary>
+        /// Applies <paramref name="transform"/> to <paramref name="text"/> as <see cref="Apply"/> does, except that <c>uppercase</c>,
+        /// <c>lowercase</c> and <c>capitalize</c> use Unicode's full case mappings for <paramref name="language"/> (the German sharp s
+        /// becomes <c>SS</c>, or <c>Ss</c> at the start of a word; a Greek final sigma is chosen from its context; Turkish dotted and dotless
+        /// i), and <c>full-width</c> first collapses the white space the box collapses, as css-text-3 section 4.1 does before it applies
+        /// the transform, so each run that survives becomes one ideographic space. Both can change the text's length;
+        /// <paramref name="sourceIndices"/> then says, for each UTF-16 index of the result and for its end, the index of the character of
+        /// <paramref name="text"/> it came from, and is <see langword="null"/> when the length did not change.
+        /// </summary>
+        /// <param name="text">The text.</param>
+        /// <param name="transform">The transform.</param>
+        /// <param name="language">The BCP 47 language of the text, or <see langword="null"/> when it has none.</param>
+        /// <param name="collapseSpaces">Whether runs of spaces and tabs collapse (<c>white-space-collapse</c> is not a preserving value).</param>
+        /// <param name="collapseBreaks">Whether segment breaks collapse with them.</param>
+        /// <param name="precedingText">For <c>capitalize</c>, the end of the text that comes before this text in the same inline flow, so a word that began in an earlier box is not capitalized again.</param>
+        /// <param name="sourceIndices">Where each character of the result came from, or <see langword="null"/>.</param>
+        public static string ApplyFull(string text, TextTransform transform, string? language, bool collapseSpaces, bool collapseBreaks,
+            string precedingText, out int[]? sourceIndices)
+        {
+            sourceIndices = null;
+            if (string.IsNullOrEmpty(text))
+                return text;
+
+            switch (transform)
+            {
+                case TextTransform.Uppercase:
+                    return PeachDrawing.Text.Unicode.CaseMapper.ToUpper(text, language, out sourceIndices);
+                case TextTransform.Lowercase:
+                    return PeachDrawing.Text.Unicode.CaseMapper.ToLower(text, language, out sourceIndices);
+                case TextTransform.Capitalize:
+                    return ApplyCapitalizeFull(text, language, precedingText, out sourceIndices);
+                case TextTransform.FullWidth when collapseSpaces:
+                    return ApplyFullWidthCollapsing(text, collapseBreaks, out sourceIndices);
+                default:
+                    return Apply(text, transform);
+            }
+        }
+
+        /// <summary>
+        /// <c>capitalize</c> with Unicode's full title case mappings: the first letter of each word (a word is a UAX #29 word, as
+        /// css-text-3 suggests) is mapped to title case, which can be longer than the letter (<c>ß</c> becomes <c>Ss</c>) and is not always its
+        /// uppercase (<c>ǆ</c> becomes <c>ǅ</c>). Other characters are left as they are. In Dutch text the <c>ij</c> that starts a word is
+        /// capitalized as a unit (<c>IJsselmeer</c>).
+        /// </summary>
+        public static string ApplyCapitalizeFull(string text, string? language, string precedingText, out int[]? sourceIndices)
+        {
+            var whole = precedingText.Length == 0 ? text : precedingText + text;
+            var offset = precedingText.Length;
+            var boundaries = PeachDrawing.Text.Unicode.Segmenter.FindWordBoundaries(whole);
+            var dutch = language is { Length: >= 2 } && language.AsSpan(0, 2).Equals("nl", StringComparison.OrdinalIgnoreCase)
+                && (language.Length == 2 || language[2] is '-' or '_');
+
+            var result = new StringBuilder(text.Length);
+            List<int>? sources = null;
+            var copied = 0;     // the text before this index in `text` is already in the result
+
+            foreach (var boundary in boundaries)
+            {
+                if (boundary < offset || boundary >= whole.Length) continue;
+
+                Rune.DecodeFromUtf16(whole.AsSpan(boundary), out var first, out var firstLength);
+                if (!IsCapitalizable(first)) continue;
+
+                var start = boundary - offset;
+                Append(text, copied, start - copied);
+                var length = firstLength;
+
+                // Dutch: i followed by j are both capitalized.
+                if (dutch && first.Value is 'i' or 'I' && boundary + 1 < whole.Length && whole[boundary + 1] is 'j' or 'J')
+                    length = 2;
+
+                var piece = PeachDrawing.Text.Unicode.CaseMapper.ToTitle(text.Substring(start, length), language);
+                AppendMapped(result, ref sources, piece, start, length);
+                copied = start + length;
+            }
+
+            Append(text, copied, text.Length - copied);
+            sourceIndices = FinishMap(sources, text.Length);
+            return result.ToString();
+
+            void Append(string source, int from, int count)
+            {
+                if (count <= 0) return;
+                result.Append(source, from, count);
+                if (sources is not null)
+                    for (var i = 0; i < count; i++) sources.Add(from + i);
+            }
+        }
+
+        /// <summary>Whether a character that starts a word is one capitalize puts in title case: a letter, or a letter-like number such as a Roman numeral.</summary>
+        private static bool IsCapitalizable(Rune rune) =>
+            Rune.IsLetter(rune) || Rune.GetUnicodeCategory(rune) == System.Globalization.UnicodeCategory.LetterNumber;
+
+        private static string ApplyFullWidthCollapsing(string text, bool collapseBreaks, out int[]? sourceIndices)
+        {
+            var result = new StringBuilder(text.Length);
+            List<int>? sources = null;
+
+            for (var i = 0; i < text.Length;)
+            {
+                if (IsCollapsible(text[i], collapseBreaks))
+                {
+                    var runStart = i;
+                    while (i < text.Length && IsCollapsible(text[i], collapseBreaks)) i++;
+                    AppendMapped(result, ref sources, "\u3000", runStart, i - runStart);
+                }
+                else
+                {
+                    result.Append(ToFullWidth(text[i]));
+                    if (sources is not null) sources.Add(i);
+                    i++;
+                }
+            }
+
+            sourceIndices = FinishMap(sources, text.Length);
+            return result.ToString();
+        }
+
+        private static bool IsCollapsible(char c, bool collapseBreaks) => c is ' ' or '\t' or '\r' or '\f' || (collapseBreaks && c == '\n');
+
+        /// <summary>Appends <paramref name="piece"/>, the mapping of the <paramref name="sourceLength"/> characters at <paramref name="sourceIndex"/>, keeping the source map once a length has changed.</summary>
+        private static void AppendMapped(StringBuilder result, ref List<int>? sources, string piece, int sourceIndex, int sourceLength)
+        {
+            if (sources is null && piece.Length != sourceLength)
+            {
+                sources = new List<int>(result.Length + piece.Length + 16);
+                for (var before = 0; before < result.Length; before++) sources.Add(before);
+            }
+
+            result.Append(piece);
+            if (sources is not null)
+                for (var c = 0; c < piece.Length; c++) sources.Add(sourceIndex);
+        }
+
+        private static int[]? FinishMap(List<int>? sources, int sourceLength)
+        {
+            if (sources is null) return null;
+            sources.Add(sourceLength);
+            return [.. sources];
+        }
+
+        /// <summary>
+        /// Maps <paramref name="text"/> to upper or lower case one code point at a time, so a letter outside the Basic Multilingual Plane
+        /// (Deseret, Osage, Adlam ...) maps as a whole rather than as two lone surrogates. The mapping is Unicode's simple case mapping, so
+        /// the text keeps its length; the dotless i, which .NET's invariant mapping leaves alone, becomes <c>I</c>.
+        /// </summary>
+        private static string MapCase(string text, bool upper)
+        {
+            var result = new StringBuilder(text.Length);
+            foreach (var rune in text.EnumerateRunes())
+            {
+                var mapped = upper
+                    ? rune.Value == 0x0131 ? new Rune('I') : Rune.ToUpperInvariant(rune)
+                    : Rune.ToLowerInvariant(rune);
+                result.Append(mapped.ToString());
+            }
+
+            return result.ToString();
         }
 
         /// <summary>

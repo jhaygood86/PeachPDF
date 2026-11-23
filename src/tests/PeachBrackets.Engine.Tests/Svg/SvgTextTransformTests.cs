@@ -39,6 +39,30 @@ namespace PeachBrackets.Engine.Tests.Svg
         }
 
         [Fact]
+        public void Uppercase_UsesFullCaseMappings()
+        {
+            var g = Render("""<text x="10" y="50" font-size="20" text-transform="uppercase">straße</text>""");
+
+            Assert.Equal("STRASSE", Assert.Single(g.DrawStringCalls).Text);
+        }
+
+        [Fact]
+        public void Uppercase_UsesTheTextsLanguage()
+        {
+            var g = Render("""<text x="10" y="50" font-size="20" lang="tr" text-transform="uppercase">i</text>""");
+
+            Assert.Equal("İ", Assert.Single(g.DrawStringCalls).Text);
+        }
+
+        [Fact]
+        public void Capitalize_UsesTitleCase()
+        {
+            var g = Render("""<text x="10" y="50" font-size="20" text-transform="capitalize">ßx ǆa</text>""");
+
+            Assert.Equal("Ssx ǅa", Assert.Single(g.DrawStringCalls).Text);
+        }
+
+        [Fact]
         public void Lowercase_TransformsWholeFragment()
         {
             var g = Render("""<text x="10" y="50" font-size="20" text-transform="lowercase">HELLO</text>""");
@@ -74,12 +98,13 @@ namespace PeachBrackets.Engine.Tests.Svg
         }
 
         [Fact]
-        public void Capitalize_WordStartsWithNonLetter_CapitalizesFirstActualLetter()
+        public void Capitalize_WordThatStartsWithADigit_IsLeftAlone()
         {
-            var g = Render("""<text x="10" y="50" font-size="20" text-transform="capitalize">123abc</text>""");
+            // A word is a UAX #29 word, and its first character is a digit, not a letter.
+            var g = Render("""<text x="10" y="50" font-size="20" text-transform="capitalize">123abc (abc</text>""");
 
             var draw = Assert.Single(g.DrawStringCalls);
-            Assert.Equal("123Abc", draw.Text);
+            Assert.Equal("123abc (Abc", draw.Text);
         }
 
         [Fact]

@@ -151,4 +151,39 @@ public sealed class CliTests : IDisposable
         Assert.Contains("floors written", updated);
         Assert.Equal(1, JsonDocument.Parse(File.ReadAllText(floors)).RootElement.GetProperty("floors").GetProperty("css-lists").GetInt32());
     }
+
+    private string ExpectedFailures(params string[] paths)
+    {
+        var file = Path.Combine(_root, "expected.json");
+        File.WriteAllText(file, JsonSerializer.Serialize(new { formatVersion = 1, tests = paths.ToDictionary(p => p, _ => "the reference cannot be matched") }));
+        return file;
+    }
+
+    [Fact]
+    public async Task AnExpectedFailureThatFails_IsFine()
+    {
+        var (exit, _, err) = await RunAsync("run", "--wpt", _root, "--module", "css-lists", "--expected-failures", ExpectedFailures("css/css-lists/fail.html"));
+
+        Assert.Equal(0, exit);
+        Assert.DoesNotContain("UNEXPECTED PASS", err);
+    }
+
+    [Fact]
+    public async Task AnExpectedFailureThatPasses_FailsTheRun()
+    {
+        var (exit, _, err) = await RunAsync("run", "--wpt", _root, "--module", "css-lists", "--expected-failures", ExpectedFailures("css/css-lists/pass.html"));
+
+        Assert.Equal(1, exit);
+        Assert.Contains("UNEXPECTED PASS: css/css-lists/pass.html", err);
+        Assert.Contains("the reference cannot be matched", err);
+    }
+
+    [Fact]
+    public async Task AnExpectedFailureNoModuleRuns_IsStale_InAFullRun()
+    {
+        var (exit, _, err) = await RunAsync("run", "--wpt", _root, "--expected-failures", ExpectedFailures("css/css-lists/gone.html"));
+
+        Assert.Equal(1, exit);
+        Assert.Contains("STALE: css/css-lists/gone.html", err);
+    }
 }

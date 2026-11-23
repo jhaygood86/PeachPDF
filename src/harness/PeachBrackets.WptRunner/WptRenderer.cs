@@ -25,6 +25,12 @@ internal sealed partial class WptRenderer(string wptRoot) : IReftestRenderer
     [GeneratedRegex(@"^\s*(<!--.*?-->\s*)*<!DOCTYPE[^>]*>", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Singleline)]
     private static partial Regex Doctype();
 
+    private string? AhemPath()
+    {
+        var path = Path.Combine(wptRoot, "fonts", "Ahem.ttf");
+        return File.Exists(path) ? path : null;
+    }
+
     public string FullPath(string wptPath) => Path.Combine(wptRoot, wptPath.Replace('/', Path.DirectorySeparatorChar));
 
     public async Task<RgbaImage> RenderAsync(string wptPath)
@@ -39,6 +45,15 @@ internal sealed partial class WptRenderer(string wptRoot) : IReftestRenderer
         foreach (var (keyword, generic) in FontDefaults.GenericFamilies)
             if (fontSet.ResolveGeneric(generic, context.IsFontExists) is { } family)
                 context.AddFontFamilyMapping(keyword, family);
+
+        // The WPT harness installs the Ahem font (every glyph an em square, metrics known exactly) on the machine, and a test that sets
+        // `font-family: Ahem` without an @font-face rule relies on that.
+        if (AhemPath() is { } ahem)
+        {
+            await using var stream = File.OpenRead(ahem);
+            await context.AddFont(stream, "Ahem");
+        }
+
         var options = new HtmlDocumentOptions
         {
             MediaType = MediaType.Screen,

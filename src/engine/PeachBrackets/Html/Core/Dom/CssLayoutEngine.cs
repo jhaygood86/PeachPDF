@@ -5894,6 +5894,32 @@ namespace PeachBrackets.Html.Dom
                 () => growLineToItsExtent(word));
 
         /// <summary>
+        /// The width of the words of <paramref name="box"/> after the one at <paramref name="wordIndex"/> that a line may not end before,
+        /// so they stay on the line the word does (the fragments one word is cut into when its characters come from different fonts, the
+        /// words the Unicode line breaking algorithm glues together).
+        /// </summary>
+        private static double GluedRunWidthAfter(Canvas g, CssBox box, int wordIndex)
+        {
+            var width = 0d;
+
+            for (var i = wordIndex + 1; i < box.Words.Count; i++)
+            {
+                var next = box.Words[i];
+                // An ideographic space is a word of its own that the algorithm keeps with the character before it; the part of it that
+                // hangs is not measured.
+                var isIdeographicSpace = next is CssRectWord { Text: { Length: > 0 } text } && text.All(HtmlUtils.IsHangingSpaceSeparator);
+                // A preserved space that does not hang (break-spaces) stays with the word it follows, so it counts.
+                var staysOnTheLine = next.IsSpaces && next.OwnerBox.WhiteSpaceCollapse.Value == PeachBrackets.Css.WhiteSpaceCollapse.BreakSpaces;
+                if ((next.IsSpaces && !isIdeographicSpace && !staysOnTheLine) || next.IsLineBreak
+                    || (!next.SuppressWrapBefore && HasOrdinaryWrapOpportunityBefore(box.Words[i - 1], next))) break;
+
+                width += next.Width - MeasureTrailingHangingSpace(g, next);
+            }
+
+            return width;
+        }
+
+        /// <summary>
         /// How wide what has to stay on one line is, starting at <paramref name="word"/>: its own width, or for the word of a
         /// <c>white-space: nowrap</c> run that is not wrapped away from the rest, the run from it to its end.
         /// </summary>
@@ -7913,12 +7939,14 @@ namespace PeachBrackets.Html.Dom
                     // before it twice (see the accepted gap on nowrap lines).
                     var shiftsWordsThatCannotWrap = blockBox.HtmlContainer is not { CurrentFragmentainer: { HasOwnBand: true } };
 
-                    if (blockBoxPermitsWrap && b.IsNoWrapRun && coordinates.CurrentX > lineStartX)
-                    {
-                        var boxRight = coordinates.CurrentX;
+                    // The run is the outermost nowrap inline box b sits in: a nowrap span whose text is split around an inner span is one run, and
+                    // the decision to move it is made where it starts, for all of it, not again for each piece of it.
+                    var noWrapRunRoot = NoWrapRunRoot(b, blockBox);
+                    var continuesNoWrapRun = coordinates.Line.Words.Count > 0 && IsWithin(coordinates.Line.Words[^1].OwnerBox, noWrapRunRoot);
 
-                        foreach (var word in b.Words)
-                            boxRight += word.FullWidth;
+                    if (blockBoxPermitsWrap && b.IsNoWrapRun && coordinates.CurrentX > lineStartX && !continuesNoWrapRun)
+                    {
+                        var boxRight = coordinates.CurrentX + WidthOfWordsWithin(noWrapRunRoot);
 
                         var noWrapLimitRight = isRtl
                             ? coordinates.Line.ContentRight - GetLineTextIndent(blockBox, coordinates.Line.Equals(blockBox.LineBoxes[0]), coordinates.Line.FollowsForcedBreak)
@@ -7998,7 +8026,7 @@ namespace PeachBrackets.Html.Dom
                         }
 
                         var overflows = b.WhiteSpacePermitsWrapping
-                                         && coordinates.CurrentX + word.Width + rightSpacing + clonedTrailing > actualLimitRight + LineFitTolerance
+                                         && coordinates.CurrentX + word.Width - TrailingLetterSpacing(word) + rightSpacing + clonedTrailing > actualLimitRight + LineFitTolerance
                                          && (!b.PreservedSpacesHang || !word.IsSpaces);
 
                         // hanging-punctuation: allow-end / force-end (CSS Text 3 §8.1): a stop or comma that
@@ -8013,6 +8041,16 @@ namespace PeachBrackets.Html.Dom
                         {
                             overflows = false;
                             word.HungEndWidth = endHang;
+                        }
+
+                        // An ideographic space that ends the word hangs instead of overflowing the line (css-text-3 section 4.1.3).
+                        // So does a word of nothing else that follows one that hung: the run hangs as a whole.
+                        if (overflows && !isRtl && !word.IsLineBreak && MeasureTrailingHangingSpace(g, word) is > 0d and var spaceHang
+                            && (coordinates.CurrentX + word.Width - spaceHang + rightSpacing + clonedTrailing <= actualLimitRight + LineFitTolerance
+                                || (spaceHang >= word.Width - 0.01d && coordinates.Line.Words.Count > 0 && coordinates.Line.Words[^1].HungEndWidth > 0d)))
+                        {
+                            overflows = false;
+                            word.HungEndWidth = spaceHang;
                         }
 
                         // hyphens:auto/manual: before giving up and wrapping the whole word, see if a
@@ -8072,8 +8110,16 @@ namespace PeachBrackets.Html.Dom
                         var emergencyBoundaryWrap = overflows && !IsAtLineStart(coordinates)
                             && !hasOrdinaryWrapBefore && isGraphemeBoundary
                             && AllowsOverflowWrapAtBoundary(previousWord, word);
+                        // A word the line may end before takes with it the words after it that the line may not end before (css-text-3 section 5: a
+                        // line breaks only at a soft wrap opportunity), so `中⦘`, where the ⦘ cannot start a line, wraps as a pair when the pair does
+                        // not fit, rather than the ⦘ overflowing the line it was glued to.
+                        var gluedRunOverflows = !overflows && hasOrdinaryWrapBefore && b.WhiteSpacePermitsWrapping && !word.IsLineBreak
+                            && !word.IsSpaces && word.HungEndWidth == 0d && !IsAtLineStart(coordinates) && !word.SuppressWrapBefore
+                            && GluedRunWidthAfter(g, b, wordIndex) is > 0d and var gluedRunWidth
+                            && coordinates.CurrentX + word.Width + gluedRunWidth + rightSpacing + clonedTrailing
+                                > actualLimitRight + LineFitTolerance;
                         var wrapping = (!word.SuppressWrapBefore
-                                && (word.IsLineBreak || wrapNoWrapBox || (overflows && hasOrdinaryWrapBefore)))
+                                && (word.IsLineBreak || wrapNoWrapBox || ((overflows || gluedRunOverflows) && hasOrdinaryWrapBefore)))
                             || emergencyBoundaryWrap;
 
                         if (wrapping && coordinates.SuppressLeadingWrap && IsAtLineStart(coordinates))
@@ -11812,6 +11858,66 @@ namespace PeachBrackets.Html.Dom
             return isFirstLine ? indent - blockBox.HangingFirstWidth : indent;
         }
 
+        /// <summary>The outermost inline box above <paramref name="box"/> (or itself) that is a nowrap run, below <paramref name="blockBox"/>.</summary>
+        private static CssBox NoWrapRunRoot(CssBox box, CssBox blockBox)
+        {
+            var root = box;
+            while (root.ParentBox is { IsInline: true, IsNoWrapRun: true } parent && !ReferenceEquals(parent, blockBox))
+                root = parent;
+
+            return root;
+        }
+
+        /// <summary>The full width of every word of <paramref name="root"/> and of the in-flow boxes inside it.</summary>
+        private static double WidthOfWordsWithin(CssBox root)
+        {
+            var width = 0d;
+            foreach (var word in root.Words)
+                width += word.FullWidth;
+
+            foreach (var child in root.Boxes)
+            {
+                if (!child.IsOutOfFlow && child.DerivedStyle.ActualDisplay != Keywords.None)
+                    width += WidthOfWordsWithin(child);
+            }
+
+            return width;
+        }
+
+        /// <summary>
+        /// The letter-spacing a word carries after its last character, or 0. The spacing goes between adjacent characters (css-text-4 section
+        /// 7.2), so the one after the last character of a line is not applied: a word that ends a line leaves it out of the line's width.
+        /// </summary>
+        internal static double TrailingLetterSpacing(CssRect word)
+        {
+            if (word is not CssRectWord { Text.Length: > 0 }) return 0d;
+
+            var spacing = word.OwnerBox.ActualLetterSpacing;
+            return double.IsNaN(spacing) || spacing <= 0d ? 0d : spacing;
+        }
+
+        /// <summary>What a word that ends a line leaves out of the line's width: the space separators that hang, or else its trailing letter-spacing.</summary>
+        internal static double MeasureLineEndOverhang(Canvas g, CssRect word) =>
+            MeasureTrailingHangingSpace(g, word) is > 0d and var hang ? hang : TrailingLetterSpacing(word);
+
+        /// <summary>
+        /// The width of the space separators (the ideographic space and its kin, see <see cref="HtmlUtils.IsHangingSpaceSeparator"/>) that
+        /// end <paramref name="word"/>, or 0. css-text-3 section 4.1.3 has such a space at the end of a line hang, as a preserved space
+        /// does, so it is neither measured for the line's fit nor counted in its content width. A space that wraps (<c>break-spaces</c>) or sits in a box that does not wrap does not hang.
+        /// </summary>
+        internal static double MeasureTrailingHangingSpace(Canvas g, CssRect word)
+        {
+            if (word is not CssRectWord { Text: { Length: > 0 } text } || !HtmlUtils.IsHangingSpaceSeparator(text[^1])) return 0d;
+
+            var owner = word.OwnerBox;
+            if (!owner.WhiteSpacePermitsWrapping || owner.WhiteSpaceCollapse.Value == PeachBrackets.Css.WhiteSpaceCollapse.BreakSpaces) return 0d;
+
+            var runStart = text.Length - 1;
+            while (runStart > 0 && HtmlUtils.IsHangingSpaceSeparator(text[runStart - 1])) runStart--;
+
+            return g.MeasureString(text.Substring(runStart), owner.ActualFont, owner.ActualTextShapingFeatures).Width;
+        }
+
         /// <summary>
         /// The advance of the last character of <paramref name="word"/> when it is one that
         /// <c>hanging-punctuation</c> may hang at a line's end edge for <paramref name="wanted"/> (CSS Text 3
@@ -11864,8 +11970,44 @@ namespace PeachBrackets.Html.Dom
         /// </summary>
         private static void ApplyEndHang(Canvas g, CssBox blockBox, CssLineBox lineBox, bool blockFinished)
         {
-            if (blockBox.HangingPunctuation is not { Length: > 0 } || lineBox.Words.Count == 0) return;
-            if (blockBox.Direction.Value == DirectionMode.Rtl) return;
+            if (lineBox.Words.Count == 0 || blockBox.Direction.Value == DirectionMode.Rtl) return;
+
+            // The line's last word, the break marker of a forced break aside: an ideographic space that ends it hangs (css-text-3 section 4.1.3).
+            var closing = lineBox.Words[^1];
+            if (closing.IsLineBreak && lineBox.Words.Count > 1) closing = lineBox.Words[^2];
+            if (!closing.IsLineBreak && MeasureTrailingHangingSpace(g, closing) is > 0d and var spaceHang)
+            {
+                // The run reaches back over the words before it that are nothing but ideographic spaces (the white space between them
+                // collapsed away), up to the first one's start.
+                var start = closing.Right - spaceHang;
+                var wordAt = lineBox.Words.IndexOf(closing);
+                for (var i = wordAt; i > 0 && MeasureTrailingHangingSpace(g, lineBox.Words[i]) >= lineBox.Words[i].Width - 0.01d
+                    && (lineBox.Words[i - 1] is { IsLineBreak: false } before) && MeasureTrailingHangingSpace(g, before) > 0d; i--)
+                {
+                    start = before.Right - MeasureTrailingHangingSpace(g, before);
+                }
+
+                closing.HungEndWidth = closing.Right - start;
+            }
+
+            // Preserved white space at the end of a wrapping line hangs (css-text-3 section 4.1.3): the spaces that end it do not count
+            // toward the content the line aligns. Before a forced break, or at the end of the block, they hang only conditionally, when they
+            // would overflow, so they still count here (which keeps the end of the line symmetric with its start).
+            if (!lineBox.PrecedesForcedBreak && !(blockFinished && lineBox.Equals(blockBox.LineBoxes[^1])) && !closing.IsLineBreak && closing.IsSpaces && HangsAtLineEnd(closing.OwnerBox))
+            {
+                var hangStart = closing.Left;
+                for (var i = lineBox.Words.IndexOf(closing) - 1;
+                     i >= 0 && lineBox.Words[i] is { IsSpaces: true, IsLineBreak: false } earlier && HangsAtLineEnd(earlier.OwnerBox); i--)
+                {
+                    hangStart = earlier.Left;
+                }
+
+                closing.HungEndWidth = Math.Max(closing.HungEndWidth, closing.Right - hangStart);
+            }
+
+            if (!closing.IsLineBreak && closing.HungEndWidth == 0d) closing.HungEndWidth = TrailingLetterSpacing(closing);
+
+            if (blockBox.HangingPunctuation is not { Length: > 0 }) return;
 
             var word = lineBox.Words[^1];
             if (word.IsSpaces || word.IsLineBreak || word.HungEndWidth > 0d) return;
@@ -11875,6 +12017,9 @@ namespace PeachBrackets.Html.Dom
 
             word.HungEndWidth = MeasureEndHang(g, blockBox, word, wanted);
         }
+
+        /// <summary>Whether the preserved spaces of <paramref name="box"/> hang at the end of a line: they are kept and the box wraps (<c>pre-wrap</c>).</summary>
+        private static bool HangsAtLineEnd(CssBox box) => box.PreservedSpacesHang && box.WhiteSpacePermitsWrapping;
 
         /// <summary>
         /// The advance of the opening punctuation <c>hanging-punctuation: first</c> hangs outside the start

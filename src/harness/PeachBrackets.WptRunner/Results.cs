@@ -119,3 +119,17 @@ internal sealed class Floors
 
     public void Save(string file) => File.WriteAllText(file, JsonSerializer.Serialize(this, Options) + "\n");
 }
+
+/// <summary>
+/// The tests that are expected to fail, each with the reason, because the test contradicts the specification it cites or its
+/// reference cannot be matched by any engine that follows it. The gate treats one that passes as a failure: a pass means the engine
+/// moved off what the specification asks for, or the test changed, and either way the entry has to be looked at and removed.
+/// </summary>
+internal sealed class ExpectedFailures
+{
+    [JsonPropertyName("formatVersion")] public int FormatVersion { get; set; } = 1;
+    [JsonPropertyName("tests")] public SortedDictionary<string, string> Tests { get; set; } = new(StringComparer.Ordinal);
+
+    public static ExpectedFailures Load(string file) =>
+        File.Exists(file) ? JsonSerializer.Deserialize<ExpectedFailures>(File.ReadAllText(file))! : new ExpectedFailures();
+}

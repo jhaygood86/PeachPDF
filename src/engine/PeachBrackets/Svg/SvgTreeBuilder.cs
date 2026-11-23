@@ -2938,7 +2938,7 @@ namespace PeachBrackets.Svg
             {
                 if (content.IsText)
                 {
-                    var transformed = ApplyTextTransform(content.Text ?? "", runFont.TextTransform, state);
+                    var transformed = ApplyTextTransform(content.Text ?? "", runFont.TextTransform, state, runFont.Language);
                     var text = state.Collapse(transformed, runFont.PreservedTabSpaces, KeepsLineBreaks(runFont.WhiteSpace));
                     if (text.Length > 0)
                         run.Content.Add(new SvgTextFragment { Text = text });
@@ -2980,7 +2980,7 @@ namespace PeachBrackets.Svg
                             // text-transform still applies using the <tref>'s own resolved font context.
                             trefRun.Content.Clear();
                             var trefFont = ComputeFontContext(child, childFontContext);
-                            var transformed = ApplyTextTransform(target.GetTextContent(), trefFont.TextTransform, state);
+                            var transformed = ApplyTextTransform(target.GetTextContent(), trefFont.TextTransform, state, trefFont.Language);
                             var text = state.Collapse(transformed, trefFont.PreservedTabSpaces, KeepsLineBreaks(trefFont.WhiteSpace));
                             if (text.Length > 0)
                                 trefRun.Content.Add(new SvgTextFragment { Text = text });
@@ -3076,10 +3076,18 @@ namespace PeachBrackets.Svg
         /// whitespace seen so far across the whole subtree, independent of which run is currently
         /// applying <c>capitalize</c>).
         /// </summary>
-        private static string ApplyTextTransform(string raw, TextTransform transform, TextWhitespaceState state) =>
-            transform == TextTransform.Capitalize
-                ? TextTransformer.ApplyCapitalize(raw, ref state.CapitalizeAtWordStart)
-                : TextTransformer.Apply(raw, transform);
+        private static string ApplyTextTransform(string raw, TextTransform transform, TextWhitespaceState state, string? language)
+        {
+            if (transform != TextTransform.Capitalize)
+                return TextTransformer.ApplyFull(raw, transform, language, false, false, string.Empty, out _);
+
+            // The word that ended the previous fragment continues into this one: a letter stands in for it, which is all the word
+            // boundary rules need to know.
+            var result = TextTransformer.ApplyFull(raw, transform, language, false, false, state.CapitalizeAtWordStart ? string.Empty : "x", out _);
+            if (raw.Any(static c => !char.IsWhiteSpace(c)))
+                state.CapitalizeAtWordStart = char.IsWhiteSpace(raw[^1]);
+            return result;
+        }
 
         /// <summary>
         /// Parses a <c>&lt;textPath&gt;</c> <c>startOffset</c>: a length (user units) or a percentage of

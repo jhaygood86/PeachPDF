@@ -327,6 +327,13 @@ namespace PeachBrackets.Html.Utils
         }
 
         /// <summary>
+        /// Whether <paramref name="c"/> is a space separator other than the collapsible ones and the no-break space: the en and em
+        /// spaces and their kin (U+2000-200A), the narrow no-break space, the medium mathematical space and the ideographic space.
+        /// They keep their width, but at the end of a line they hang (css-text-3 section 4.1.3).
+        /// </summary>
+        public static bool IsHangingSpaceSeparator(char c) => c is >= '\u2000' and <= '\u200A' or '\u202F' or '\u205F' or '\u3000';
+
+        /// <summary>
         /// Is the given character CSS-collapsible/breakable whitespace. Unlike <see cref="char.IsWhiteSpace(char)"/>,
         /// this excludes U+00A0 (non-breaking space) - per CSS, nbsp is significant, non-collapsible content and
         /// never a line-break opportunity, even though Unicode classifies it as whitespace for general text
@@ -334,7 +341,10 @@ namespace PeachBrackets.Html.Utils
         /// </summary>
         public static bool IsCollapsibleWhitespace(char c)
         {
-            return char.IsWhiteSpace(c) && c != ' ';
+            // css-text-3 section 4.1.1: only the space, the tab and the segment break (with the carriage return and form feed that
+            // HTML normalizes to one) collapse, and so does the ogham space mark, which the tests treat as a space. The other Unicode space
+            // separators (U+3000, U+2000-200A, U+202F ...) are ordinary characters that keep their width.
+            return c is ' ' or '\t' or '\n' or '\r' or '\f' or '\v' or '\u0085' or '\u1680' or '\u2028' or '\u2029';
         }
 
         /// <summary>

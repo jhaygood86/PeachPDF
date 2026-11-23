@@ -2062,7 +2062,15 @@ namespace PeachBrackets.Html.Dom
         /// </remarks>
         private void AppendWordsFromText(string sourceText)
         {
-            var text = TextSecurityMasker.Apply(ApplyTextTransform(sourceText, TextTransform), TextSecurity.Value);
+            // The transform can change the text's length (the sharp s uppercases to two letters), and everything resolved per character of
+            // this box's own text (bidi levels, scripts, joining forms, the original text) is indexed by where the character stood
+            // before it: SourceIndexAt reads it through the map the transform returns.
+            var transformed = TextTransformer.ApplyFull(sourceText, TextTransform.Value, Language, !PreservesSpaces, !PreservesBreaks,
+                TextTransform.Value == PeachBrackets.Css.TextTransform.Capitalize ? PrecedingWordText(this) : string.Empty, out var sourceMap);
+            var text = TextSecurityMasker.Apply(transformed, TextSecurity.Value);
+            if (sourceMap is not null && text.Length != transformed.Length) sourceMap = null;
+            _transformSourceMap = sourceMap;
+            int SourceIndexAt(int index) => sourceMap is null ? index : sourceMap[Math.Min(index, sourceMap.Length - 1)];
             var startIdx = 0;
             var preserveSpaces = PreservesSpaces;
             var respectNewLines = PreservesBreaks || IsBrElement;
@@ -2109,8 +2117,8 @@ namespace PeachBrackets.Html.Dom
                             {
                                 Words.Add(new CssRectWord(this, text.Substring(spaceAt, 1), false, false)
                                 {
-                                    BidiLevel = BidiLevels is { } spaceLevels ? spaceLevels[spaceAt] : fallbackLevel,
-                                    SourceStart = ReferenceEquals(sourceText, _text) ? spaceAt : -1,
+                                    BidiLevel = BidiLevels is { } spaceLevels ? spaceLevels[SourceIndexAt(spaceAt)] : fallbackLevel,
+                                    SourceStart = ReferenceEquals(sourceText, _text) && sourceMap is null ? spaceAt : -1,
                                     SourceLength = 1,
                                     UnicodeBreakBefore = spaceAt > startIdx || breakOpportunities[spaceAt] != LineBreakOpportunity.Prohibited,
                                 });
@@ -2120,8 +2128,8 @@ namespace PeachBrackets.Html.Dom
                         {
                             Words.Add(new CssRectWord(this, text.Substring(startIdx, endIdx - startIdx), false, false)
                             {
-                                BidiLevel = BidiLevels is { } wsLevels ? wsLevels[startIdx] : fallbackLevel,
-                                SourceStart = ReferenceEquals(sourceText, _text) ? startIdx : -1,
+                                BidiLevel = BidiLevels is { } wsLevels ? wsLevels[SourceIndexAt(startIdx)] : fallbackLevel,
+                                SourceStart = ReferenceEquals(sourceText, _text) && sourceMap is null ? startIdx : -1,
                                 SourceLength = endIdx - startIdx,
                             });
                         }
@@ -2184,16 +2192,16 @@ namespace PeachBrackets.Html.Dom
 
                         if (BidiLevels is { } levels && endIdx > startIdx)
                         {
-                            var boundaryLevel = levels[startIdx];
+                            var boundaryLevel = levels[SourceIndexAt(startIdx)];
                             var boundary = startIdx + 1;
-                            while (boundary < endIdx && levels[boundary] == boundaryLevel)
+                            while (boundary < endIdx && levels[SourceIndexAt(boundary)] == boundaryLevel)
                                 boundary++;
                             endIdx = boundary;
                         }
 
                         if (endIdx > startIdx)
                         {
-                            var wordBidiLevel = BidiLevels is { } wordLevels ? wordLevels[startIdx] : fallbackLevel;
+                            var wordBidiLevel = BidiLevels is { } wordLevels ? wordLevels[SourceIndexAt(startIdx)] : fallbackLevel;
                             // No dedicated script-boundary word split (unlike the bidi-level one above) -
                             // a script change with no adjacent whitespace/hyphen/CJK/bidi-level boundary
                             // (e.g. Katakana directly followed by Latin) is rare in practice and, unlike a
@@ -2206,7 +2214,7 @@ namespace PeachBrackets.Html.Dom
                             // reasonable approximation for the rare mixed-script-with-no-boundary case,
                             // and still strictly better than GsubShaper's prior always-"latn"/"DFLT"
                             // behavior for every other (script-homogeneous) word.
-                            var wordScriptTag = CharScripts is { } wordScripts ? OpenTypeTags.ForScript(wordScripts[startIdx]) : null;
+                            var wordScriptTag = CharScripts is { } wordScripts ? OpenTypeTags.ForScript(wordScripts[SourceIndexAt(startIdx)]) : null;
                             var hasSpaceBefore = !preserveSpaces && (startIdx > 0 && Words.Count == 0 && HtmlUtils.IsCollapsibleWhitespace(text[startIdx - 1]));
                             var hasSpaceAfter = !preserveSpaces && (endIdx < text.Length && HtmlUtils.IsCollapsibleWhitespace(text[endIdx]));
                             var rawWord = text.Substring(startIdx, endIdx - startIdx);
@@ -2216,7 +2224,9 @@ namespace PeachBrackets.Html.Dom
                             // kept alongside so a ::first-line rule's own text-transform (if different
                             // from this box's) can be re-derived later without the information a transform
                             // like uppercase would otherwise destroy. See CssRect.OriginalText.
-                            var rawOriginalWord = ReferenceEquals(text, sourceText) ? rawWord : sourceText.Substring(startIdx, endIdx - startIdx);
+                            var rawOriginalWord = ReferenceEquals(text, sourceText) ? rawWord
+                                : sourceMap is null ? sourceText.Substring(startIdx, endIdx - startIdx)
+                                : sourceText.Substring(SourceIndexAt(startIdx), SourceIndexAt(endIdx) - SourceIndexAt(startIdx));
 
                             List<int>? hyphenationCandidates = null;
                             string cleanWord;
@@ -2260,7 +2270,7 @@ namespace PeachBrackets.Html.Dom
                             // Where each fragment starts in this box's own text, for mapping an edit back to it. Only when the
                             // fragments add up to the source span (an uppercased small-caps run can lengthen, a soft hyphen
                             // shortens what the fragments hold): otherwise they are left unmappable rather than wrong.
-                            var mappable = ReferenceEquals(sourceText, _text);
+                            var mappable = ReferenceEquals(sourceText, _text) && sourceMap is null;
                             var fragmentTotal = 0;
                             for (var wi = wordsBefore; wi < Words.Count; wi++)
                                 fragmentTotal += Words[wi].Text?.Length ?? 0;
@@ -2285,15 +2295,15 @@ namespace PeachBrackets.Html.Dom
                     // create new-line word so it will effect the layout
                     if (endIdx < text.Length && text[endIdx] == '\n')
                     {
-                        var newlineBidiLevel = BidiLevels is { } newlineLevels && endIdx < newlineLevels.Length
-                            ? newlineLevels[endIdx]
+                        var newlineBidiLevel = BidiLevels is { } newlineLevels && SourceIndexAt(endIdx) < newlineLevels.Length
+                            ? newlineLevels[SourceIndexAt(endIdx)]
                             : fallbackLevel;
                         endIdx++;
                         if (respectNewLines)
                             Words.Add(new CssRectWord(this, "\n", false, false)
                             {
                                 BidiLevel = newlineBidiLevel,
-                                SourceStart = ReferenceEquals(sourceText, _text) ? endIdx - 1 : -1,
+                                SourceStart = ReferenceEquals(sourceText, _text) && sourceMap is null ? endIdx - 1 : -1,
                                 SourceLength = 1,
                             });
                         else if (preserveSpaces)
@@ -2302,7 +2312,7 @@ namespace PeachBrackets.Html.Dom
                             Words.Add(new CssRectWord(this, " ", false, false)
                             {
                                 BidiLevel = newlineBidiLevel,
-                                SourceStart = ReferenceEquals(sourceText, _text) ? endIdx - 1 : -1,
+                                SourceStart = ReferenceEquals(sourceText, _text) && sourceMap is null ? endIdx - 1 : -1,
                                 SourceLength = 1,
                             });
                     }
@@ -2339,6 +2349,53 @@ namespace PeachBrackets.Html.Dom
             };
             Words.RemoveRange(firstWord, Words.Count - firstWord);
             Words.Add(merged);
+        }
+
+        /// <summary>
+        /// The end of the in-flow text before <paramref name="box"/>'s that has no white space in it: the part of a word an earlier inline box
+        /// began, which this box's text continues. css-text-3 section 2.1.1: out-of-flow boxes and inline box boundaries do not introduce a
+        /// word boundary and are ignored when finding them.
+        /// </summary>
+        private static string PrecedingWordText(CssBox box)
+        {
+            const int Limit = 128;
+            var pieces = new List<string>();
+            var length = 0;
+
+            for (var previous = DomUtils.PrecedingBoxAcrossFirstChildChain(box); previous is not null;
+                 previous = DomUtils.PrecedingBoxAcrossFirstChildChain(previous))
+            {
+                if (previous.IsOutOfFlow || previous.DerivedStyle.ActualDisplay == Keywords.None) continue;
+                if (previous.DerivedStyle.ActualDisplay != Keywords.Inline) break;
+                if (!PrependWordTailOf(previous, pieces, ref length) || length >= Limit) break;
+            }
+
+            pieces.Reverse();
+            return string.Concat(pieces);
+        }
+
+        private static bool PrependWordTailOf(CssBox box, List<string> pieces, ref int length)
+        {
+            for (var i = box.Boxes.Count - 1; i >= 0; i--)
+            {
+                var child = box.Boxes[i];
+                if (child.IsOutOfFlow || child.DerivedStyle.ActualDisplay == Keywords.None) continue;
+                if (!PrependWordTailOf(child, pieces, ref length)) return false;
+            }
+
+            if (box.Boxes.Count > 0 || box.Text is not { Length: > 0 } text)
+                return true;
+
+            var lastSpace = -1;
+            for (var i = text.Length - 1; i >= 0; i--)
+            {
+                if (char.IsWhiteSpace(text[i])) { lastSpace = i; break; }
+            }
+
+            var tail = text.Substring(lastSpace + 1);
+            pieces.Add(tail);
+            length += tail.Length;
+            return lastSpace < 0;
         }
 
         private static int CountPrecedingRegionalIndicators(CssBox box)
@@ -2408,6 +2465,12 @@ namespace PeachBrackets.Html.Dom
             }
         }
 
+        /// <summary>For the word being cut, where each character of the transformed text stood in this box's own text (see <see cref="TextTransformer.ApplyFull"/>), or null when the transform kept every character where it was.</summary>
+        private int[]? _transformSourceMap;
+
+        private int SourceIndexOfTransformed(int index) =>
+            _transformSourceMap is { } map ? map[Math.Min(index, map.Length - 1)] : index;
+
         /// <summary>
         /// Adds one word to <see cref="Words"/> — or, when <see cref="FontVariantCaps"/> is
         /// <c>small-caps</c>/<c>all-small-caps</c> and the resolved font lacks real GSUB support for it
@@ -2431,6 +2494,9 @@ namespace PeachBrackets.Html.Dom
             // content - see the ParseToWords call site comment - but not guaranteed if HTML-entity
             // decoding happened to produce a different length for the two). Fall back to treating text
             // itself as its own original in that rare case rather than slicing out of bounds.
+            // A word of a different length than its source (a full case mapping lengthened it) still keeps that source as its original,
+            // which a ::first-line text-transform re-derives from; only the paths that slice it by position fall back to the text.
+            var wholeOriginalText = originalText ?? text;
             if (originalText is null || originalText.Length != text.Length)
                 originalText = text;
 
@@ -2467,7 +2533,7 @@ namespace PeachBrackets.Html.Dom
 
                 if (!needsPerCodepoint && !needsOrientationSplit)
                 {
-                    Words.Add(new CssRectWord(this, text, hasSpaceBefore, hasSpaceAfter, originalText, ToRuneIndexedJoiningForms(wordStart, text), ToRuneIndexedUseCategories(wordStart, text), ToRuneIndexedKhmerCategories(wordStart, text))
+                    Words.Add(new CssRectWord(this, text, hasSpaceBefore, hasSpaceAfter, wholeOriginalText, ToRuneIndexedJoiningForms(wordStart, text), ToRuneIndexedUseCategories(wordStart, text), ToRuneIndexedKhmerCategories(wordStart, text))
                     {
                         HyphenationCandidates = hyphenationCandidates,
                         IsUprightOrientation = WholeTextOrientationIsUpright(text),
@@ -2552,7 +2618,7 @@ namespace PeachBrackets.Html.Dom
             var any = false;
             for (var c = textStart; c < textStart + fragmentText.Length; c++)
             {
-                if (charIndexed[c] != ArabicJoiningForm.None)
+                if (charIndexed[SourceIndexOfTransformed(c)] != ArabicJoiningForm.None)
                 {
                     any = true;
                     break;
@@ -2575,7 +2641,7 @@ namespace PeachBrackets.Html.Dom
             for (var i = 0; i < fragmentText.Length;)
             {
                 Rune.DecodeFromUtf16(fragmentText.AsSpan(i), out _, out var consumed);
-                result[r++] = charIndexed[textStart + i];
+                result[r++] = charIndexed[SourceIndexOfTransformed(textStart + i)];
                 i += consumed;
             }
 
@@ -2602,7 +2668,7 @@ namespace PeachBrackets.Html.Dom
         /// specific span resolved to <see cref="UseCategory.O"/>.
         /// </summary>
         private UseCategory[]? ToRuneIndexedUseCategories(int textStart, string fragmentText) =>
-            ToRuneIndexedCategories(UseCategories, UseCategory.O, textStart, fragmentText);
+            ToRuneIndexedCategories(UseCategories, UseCategory.O, textStart, fragmentText, _transformSourceMap);
 
         /// <summary>
         /// Slices <see cref="KhmerCategories"/> (this box's own UTF-16-char-indexed, paragraph-resolved
@@ -2615,7 +2681,7 @@ namespace PeachBrackets.Html.Dom
         /// every character in this specific span resolved to <see cref="KhmerCategory.Other"/>.
         /// </summary>
         private KhmerCategory[]? ToRuneIndexedKhmerCategories(int textStart, string fragmentText) =>
-            ToRuneIndexedCategories(KhmerCategories, KhmerCategory.Other, textStart, fragmentText);
+            ToRuneIndexedCategories(KhmerCategories, KhmerCategory.Other, textStart, fragmentText, _transformSourceMap);
 
         /// <summary>
         /// The shared implementation behind <see cref="ToRuneIndexedUseCategories"/> and
@@ -2635,7 +2701,7 @@ namespace PeachBrackets.Html.Dom
         /// post-change review pass against the first, USE-only version of this method, not by any test
         /// that shipped with it).
         /// </summary>
-        private static T[]? ToRuneIndexedCategories<T>(T[]? charIndexed, T inertValue, int textStart, string fragmentText) where T : struct, Enum
+        private static T[]? ToRuneIndexedCategories<T>(T[]? charIndexed, T inertValue, int textStart, string fragmentText, int[]? sourceMap) where T : struct, Enum
         {
             if (charIndexed is null || fragmentText.Length == 0)
                 return null;
@@ -2644,7 +2710,7 @@ namespace PeachBrackets.Html.Dom
             var any = false;
             for (var c = textStart; c < textStart + fragmentText.Length; c++)
             {
-                if (!comparer.Equals(charIndexed[c], inertValue))
+                if (!comparer.Equals(charIndexed[sourceMap is null ? c : sourceMap[Math.Min(c, sourceMap.Length - 1)]], inertValue))
                 {
                     any = true;
                     break;
@@ -2667,7 +2733,8 @@ namespace PeachBrackets.Html.Dom
             for (var i = 0; i < fragmentText.Length;)
             {
                 Rune.DecodeFromUtf16(fragmentText.AsSpan(i), out _, out var consumed);
-                result[r++] = charIndexed[textStart + i];
+                var at = textStart + i;
+                result[r++] = charIndexed[sourceMap is null ? at : sourceMap[Math.Min(at, sourceMap.Length - 1)]];
                 i += consumed;
             }
 
@@ -2863,8 +2930,9 @@ namespace PeachBrackets.Html.Dom
         /// about which face a word is drawn in.
         /// </summary>
         /// <remarks>
-        /// Reads the representative codepoint from <see cref="CssRect.OriginalText"/>, not
-        /// <see cref="CssRect.Text"/>: an RTL run's words are reordered/mirrored in place after
+        /// Reads the representative codepoint from <see cref="CssRectWord.PreMirrorText"/> (the text as transformed, in logical order),
+        /// not from <see cref="CssRect.OriginalText"/> (the source, which a <see cref="TextTransform"/> can change into a character the
+        /// face does not have) and not from <see cref="CssRect.Text"/>: an RTL run's words are reordered/mirrored in place after
         /// measurement (<c>CssLayoutEngine.PlaceBidiRunWord</c> calls <see cref="CssRectWord.ReplaceText"/>,
         /// which only ever changes <c>Text</c>), and <see cref="DerivedStyle.ActualFontForCodepoint"/>'s
         /// cache is keyed by the literal codepoint value, not the resolved face - reading a *different*
@@ -2873,13 +2941,12 @@ namespace PeachBrackets.Html.Dom
         /// their uninitialized sentinel), corrupting the baseline alignment <c>FragmentPainter.Text.cs</c>
         /// derives from them - even though every codepoint in one per-codepoint fragment resolves to the
         /// same face by construction (<see cref="EmitPerCodepointFragments"/>), so which one is read does
-        /// not change *which font* is selected. <c>OriginalText</c> is never touched by mirroring, only by
-        /// <see cref="TextTransform"/> (itself always length-and-position-preserving), so it names the same
+        /// not change *which font* is selected. <c>PreMirrorText</c> is never touched by mirroring, so it names the same
         /// representative character at measurement and at paint alike.
         /// </remarks>
         internal static Font ResolveWordFont(CssRect word, CssBox styleSource)
         {
-            if (word.UsesPerCodepointFont && (word.OriginalText ?? word.Text) is { Length: > 0 } text)
+            if (word.UsesPerCodepointFont && ((word as CssRectWord)?.PreMirrorText ?? word.OriginalText ?? word.Text) is { Length: > 0 } text)
             {
                 Rune.DecodeFromUtf16(text, out var rune, out _);
                 // The presentation is re-derived from the word's own first character and the selector
@@ -2934,16 +3001,6 @@ namespace PeachBrackets.Html.Dom
 
             return (sb.ToString(), candidates);
         }
-
-        /// <summary>
-        /// Applies the box's <see cref="TextTransform"/> to <paramref name="text"/>.
-        /// Operates character-by-character (not via <see cref="string.ToUpperInvariant()"/>/
-        /// <see cref="string.ToLowerInvariant()"/>) so the result is always the same length as the
-        /// input - callers rely on word/whitespace boundary indices computed against the transformed
-        /// text remaining valid.
-        /// </summary>
-        private static string ApplyTextTransform(string text, CssProperty<TextTransform> transform) =>
-            TextTransformer.Apply(text, transform.Value);
 
         /// <summary>
         /// Performs application-defined tasks associated with freeing, releasing, or resetting unmanaged resources.
@@ -9160,7 +9217,7 @@ namespace PeachBrackets.Html.Dom
                 boxWord.FirstLineText = firstLineStyle.TextTransform != TextTransform && boxWord.Text != "\n"
                     ? Bidi.Mirror(
                         TextSecurityMasker.Apply(
-                            ApplyTextTransform(boxWord.OriginalText ?? boxWord.Text!, firstLineStyle.TextTransform), TextSecurity.Value),
+                            TextTransformer.ApplyFull(boxWord.OriginalText ?? boxWord.Text!, firstLineStyle.TextTransform.Value, Language, false, false, string.Empty, out _), TextSecurity.Value),
                         boxWord.BidiLevel)
                     : null;
                 // When FirstLineText is null (this box's own TextTransform already matches the
@@ -10317,12 +10374,14 @@ namespace PeachBrackets.Html.Dom
                             precedingGraphemeContext: trailingGraphemeContext)
                             && !HasNoWrapOpportunityAroundQuirkyImage(previousWord, word)))
                     {
-                        UpdateMinWidth(ref min, ref minDecoration, unbreakableRunWidth, paddingSum);
+                        // The run ends here, so the space separator that ends it hangs (css-text-3 section 4.1.3) and is not counted.
+                        UpdateMinWidth(ref min, ref minDecoration,
+                            unbreakableRunWidth - (previousWord is null ? 0d : CssLayoutEngine.MeasureLineEndOverhang(g, previousWord)), paddingSum);
                         unbreakableRunWidth = 0;
                     }
 
                     unbreakableRunWidth += wordMinWidth;
-                    UpdateMinWidth(ref min, ref minDecoration, unbreakableRunWidth, paddingSum);
+                    UpdateMinWidth(ref min, ref minDecoration, unbreakableRunWidth - CssLayoutEngine.MeasureLineEndOverhang(g, word), paddingSum);
                     previousWord = word;
                     if (word is CssRectWord textWord && !string.IsNullOrEmpty(textWord.Text))
                     {
@@ -10336,7 +10395,10 @@ namespace PeachBrackets.Html.Dom
                         trailingRegionalIndicatorCount = 0;
                         trailingGraphemeContext = string.Empty;
                     }
-                    trailingSpace = word.ActualWordSpacing;
+                    // An ideographic space that ends the word hangs with the white space after it; a word of nothing else adds the run before it.
+                    var ideographicHang = CssLayoutEngine.MeasureTrailingHangingSpace(g, word);
+                    var runBefore = ideographicHang >= word.Width - 0.01d && ideographicHang > 0d ? trailingSpace : 0d;
+                    trailingSpace = word.ActualWordSpacing + CssLayoutEngine.MeasureLineEndOverhang(g, word) + runBefore;
                     atLineStart = false;
                 }
 

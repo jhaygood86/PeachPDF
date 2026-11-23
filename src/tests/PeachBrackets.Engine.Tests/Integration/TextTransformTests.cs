@@ -67,10 +67,10 @@ namespace PeachBrackets.Engine.Tests.Integration
         }
 
         [Fact]
-        public async Task Capitalize_OnlyCapitalizesFirstLetterOfWhitespaceDelimitedWord()
+        public async Task Capitalize_StartsANewWordAfterAHyphen()
         {
-            // "editor-in-chief" is one whitespace-delimited word; capitalize should only affect
-            // its leading letter, not each fragment the line-breaker later splits it into at hyphens.
+            // css-text-3 section 2.1.1 suggests UAX #29 for what a word is, which breaks at a hyphen: "editor-in-chief" is three words,
+            // however the line breaker later splits it.
             var html = """
                 <!DOCTYPE html><html><body>
                 <div id="el" style="text-transform: capitalize">editor-in-chief</div>
@@ -82,7 +82,7 @@ namespace PeachBrackets.Engine.Tests.Integration
 
             Assert.NotNull(el);
             var combined = string.Concat(AllWords(el!).Select(w => w.Text));
-            Assert.Equal("Editor-in-chief", combined);
+            Assert.Equal("Editor-In-Chief", combined);
         }
 
         [Fact]

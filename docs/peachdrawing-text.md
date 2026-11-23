@@ -587,6 +587,17 @@ for empty text; the pieces are the text between neighboring boundaries.
 int[] clusters = Segmenter.FindGraphemeBoundaries("e\u0301\U0001F1FA\U0001F1F8");   // [0, 2, 6]
 ```
 
+### Case conversion
+
+`CaseMapper.ToUpper`, `CaseMapper.ToLower` and `CaseMapper.ToTitle` apply Unicode's default case conversion (section 3.13 of the Unicode Standard) with the full mappings of `SpecialCasing.txt`: the German sharp s uppercases to `SS` (and title-cases to `Ss`), the `fi` ligature to `FI`, a Greek capital sigma lowercases to a final `ς` or a medial `σ` by its context, and the language tailorings apply: Turkish and Azerbaijani (a `language` of `tr` or `az`, unless a script subtag such as `Cyrl` says it is not Latin) get the dotted and dotless i, and Lithuanian keeps the dot above an `i` that carries an accent. A mapping can change the text's length, so each method has a form that also returns, for each UTF-16 index of the result, the index of the character it came from. The data is Unicode 18.0.0, read from the Unicode Character Database files by a generator script, so the mappings do not depend on the Unicode version of the .NET runtime. `ToTitle` maps every character it is given, so a host that capitalizes words picks the first letter of each word and passes that.
+
+```csharp
+string upper = CaseMapper.ToUpper("straße");                    // "STRASSE"
+string turkish = CaseMapper.ToUpper("istanbul", "tr");          // "İSTANBUL"
+string title = CaseMapper.ToTitle("ß");                         // "Ss"
+string text = CaseMapper.ToUpper("aß", null, out int[]? from);  // "ASS", from = [0, 1, 1, 2]
+```
+
 ### Bidirectional text
 
 [UAX #9](https://www.unicode.org/reports/tr9/) works in two steps, and so does the API. `Bidi.Analyze` resolves an

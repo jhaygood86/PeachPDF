@@ -26,6 +26,7 @@ namespace PeachBrackets.WptRunner
                   --dump <dir>         write PNGs of every image compared
                   --floors <file>      fail (exit 1) when a full module run has fewer passes than its committed floor
                   --update-floors      raise the floors in --floors to this run's pass counts (never lowers; --allow-lower overrides)
+                  --expected-failures <file>  tests that must fail (each with its reason); fail (exit 1) when one passes, or is not found in a full run
             """;
 
         public static async Task<int> RunAsync(string[] args)
@@ -147,6 +148,7 @@ namespace PeachBrackets.WptRunner
             var dump = o.GetValueOrDefault("dump") ?? (single is null ? "" : "dumps");
             var outDir = o.GetValueOrDefault("out");
             var floorsFile = o.GetValueOrDefault("floors");
+            var expectedFile = o.GetValueOrDefault("expected-failures");
 
             var modules = Modules.Load(Path.Combine(AppContext.BaseDirectory, "modules.json"));
             if (o.GetValueOrDefault("module") is { } id)
@@ -157,6 +159,8 @@ namespace PeachBrackets.WptRunner
             var renderer = new WptRenderer(wpt);
             var evaluator = new ReftestEvaluator(renderer, dump);
             var floors = floorsFile is null ? new Floors() : Floors.Load(floorsFile);
+            var expected = expectedFile is null ? new ExpectedFailures() : ExpectedFailures.Load(expectedFile);
+            var seenExpected = new HashSet<string>(StringComparer.Ordinal);
             var gateable = single is null && filter is null && stride == 1;
             var regressions = 0;
             var total = Stopwatch.StartNew();
@@ -187,6 +191,18 @@ namespace PeachBrackets.WptRunner
                 if (outDir is not null)
                     ResultsWriter.Write(outDir, result);
 
+                foreach (var (path, reason) in expected.Tests)
+                {
+                    if (!results.TryGetValue(path, out var outcome)) continue;
+
+                    seenExpected.Add(path);
+                    if (outcome.Outcome == Outcome.Pass)
+                    {
+                        regressions++;
+                        Console.Error.WriteLine($"UNEXPECTED PASS: {path} is listed as an expected failure ({reason}) and now passes. Look at why, then remove it from {expectedFile} and raise the floor.");
+                    }
+                }
+
                 if (gateable && floorsFile is not null)
                 {
                     floors.Modules.TryGetValue(module.Id, out var floor);
@@ -202,6 +218,15 @@ namespace PeachBrackets.WptRunner
 
                     if (o.ContainsKey("update-floors") && (result.Counts.Pass > floor || o.ContainsKey("allow-lower")))
                         floors.Modules[module.Id] = result.Counts.Pass;
+                }
+            }
+
+            if (gateable && o.GetValueOrDefault("module") is null)
+            {
+                foreach (var path in expected.Tests.Keys.Where(p => !seenExpected.Contains(p)))
+                {
+                    regressions++;
+                    Console.Error.WriteLine($"STALE: {path} is listed as an expected failure in {expectedFile} but no module runs it.");
                 }
             }
 
