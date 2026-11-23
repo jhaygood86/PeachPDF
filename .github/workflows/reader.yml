@@ -78,7 +78,7 @@ jobs:
       run: dotnet build src/reader/PeachReader/PeachReader.csproj -f net11.0-android --configuration Release -p:TreatWarningsAsErrors=true
 
   apple:
-    runs-on: macos-latest
+    runs-on: xcode-27
     timeout-minutes: 45
     defaults:
       run:
@@ -91,14 +91,6 @@ jobs:
 
     - name: Install the Apple workloads
       run: dotnet workload install macos ios maccatalyst maui-ios maui-maccatalyst
-
-    # The workload wants the newest iOS SDK (MT180 otherwise), so the newest Xcode on the runner is selected.
-    - name: Select the newest Xcode
-      run: |
-        newest=$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)
-        echo "Using $newest"
-        sudo xcode-select -s "$newest"
-        xcodebuild -version
 
     - name: Build the app for iOS
       run: dotnet build src/reader/PeachReader/PeachReader.csproj -f net11.0-ios -p:ValidateXcodeVersion=false -p:TreatWarningsAsErrors=true
