@@ -50,6 +50,24 @@ jobs:
     - name: Install fonts
       run: sudo apt-get update && sudo apt-get install -y fontconfig fonts-liberation fonts-dejavu-core fonts-noto-core fonts-noto-cjk
 
+    # Noto outranks DejaVu for the generic families in fontconfig's defaults, which moves the metrics of every test that says `serif`, `sans-serif`
+    # or `monospace` (the CSS2 fixed-table-layout tests lost 50 passes to it). Pin the three generics to DejaVu, as they were before Noto was
+    # installed, so Noto only supplies the scripts DejaVu and Liberation lack.
+    - name: Pin the generic font families
+      run: |
+        New-Item -ItemType Directory -Force "$HOME/.config/fontconfig" | Out-Null
+        @'
+        <?xml version="1.0"?>
+        <!DOCTYPE fontconfig SYSTEM "fonts.dtd">
+        <fontconfig>
+          <alias binding="same"><family>serif</family><prefer><family>DejaVu Serif</family></prefer></alias>
+          <alias binding="same"><family>sans-serif</family><prefer><family>DejaVu Sans</family></prefer></alias>
+          <alias binding="same"><family>monospace</family><prefer><family>DejaVu Sans Mono</family></prefer></alias>
+        </fontconfig>
+        '@ | Set-Content "$HOME/.config/fontconfig/fonts.conf"
+        fc-cache -f
+        fc-match serif; fc-match sans-serif; fc-match monospace
+
     - name: Cache the WPT checkout
       id: wpt-cache
       uses: actions/cache@v4
