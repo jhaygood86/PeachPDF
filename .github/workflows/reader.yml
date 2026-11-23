@@ -92,17 +92,18 @@ jobs:
     - name: Install the Apple workloads
       run: dotnet workload install macos ios maccatalyst maui-ios maui-maccatalyst
 
+    # Debug builds do not link the framework, which the runner's Xcode (older than the workload's SDK) cannot do (MT180).
     - name: Build the app for iOS
-      run: dotnet build src/reader/PeachReader/PeachReader.csproj -f net11.0-ios --configuration Release -p:ValidateXcodeVersion=false -p:TreatWarningsAsErrors=true
+      run: dotnet build src/reader/PeachReader/PeachReader.csproj -f net11.0-ios -p:ValidateXcodeVersion=false -p:TreatWarningsAsErrors=true
 
     - name: Build the app for Mac Catalyst
-      run: dotnet build src/reader/PeachReader/PeachReader.csproj -f net11.0-maccatalyst --configuration Release -p:ValidateXcodeVersion=false -p:TreatWarningsAsErrors=true
+      run: dotnet build src/reader/PeachReader/PeachReader.csproj -f net11.0-maccatalyst -p:ValidateXcodeVersion=false -p:TreatWarningsAsErrors=true
 
     # The app opens PEACHREADER_OPEN and, with PEACHREADER_SMOKE set, logs when the first page tile has been painted.
     - name: Open a document and check that a page is painted
       run: |
         dotnet run --project src/PeachPDF.Cli -f net11.0 --configuration Release -- docs/index.html -o "$RUNNER_TEMP/smoke.pdf"
-        app=$(find src/reader/PeachReader/bin/Release/net11.0-maccatalyst -name PeachReader.app | head -1)
+        app=$(find src/reader/PeachReader/bin/Debug/net11.0-maccatalyst -name PeachReader.app | head -1)
         PEACHREADER_OPEN="$RUNNER_TEMP/smoke.pdf" PEACHREADER_SMOKE=1 "$app/Contents/MacOS/PeachReader" > "$RUNNER_TEMP/smoke.log" 2>&1 &
         pid=$!
         for i in $(seq 1 60); do grep -q PEACH_SMOKE "$RUNNER_TEMP/smoke.log" && break; sleep 1; done
