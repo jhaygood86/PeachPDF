@@ -1,10 +1,12 @@
 // Derived from PDFsharp (MIT) - see LICENSE.md
 
 using PeachDrawing.Text;
+using PeachDrawing.Text.Export;
 using PeachDrawing.Text.Shaping;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 using System.Text;
 
 namespace PeachDrawing.PDF.Engine.Advanced;
@@ -84,16 +86,17 @@ internal class CharacterMapInfo
     /// (no real script in current use) reversed via <c>ReverseRunes</c> stays alignment-correct since
     /// that reversal is itself already Rune-based (surrogate pairs move as one unit).
     /// </summary>
-    public void AddShapedText(string text, ShapeSettings features, string? logicalText = null)
+    public int[]? AddShapedText(string text, ShapeSettings features, string? logicalText = null)
     {
         if (text is null)
-            return;
+            return null;
 
         var source = logicalText is not null && logicalText.Length == text.Length && logicalText != text
             ? logicalText
             : text;
 
         var glyphs = Shaper.Shape(_typeface, text, features).Glyphs;
+        int[]? cids = null;
 
         for (var i = 0; i < glyphs.Count; i++)
         {
@@ -111,11 +114,23 @@ internal class CharacterMapInfo
             {
                 if (!LigatureGlyphToText.ContainsKey(glyph.GlyphIndex))
                     LigatureGlyphToText[glyph.GlyphIndex] = NoText;
+                if (cids is not null)
+                    cids[i] = glyph.GlyphIndex;
                 continue;
             }
 
-            MapGlyphToText(glyph.GlyphIndex, source, glyph.ClusterStart, glyph.ClusterLength);
+            var cid = MapGlyphToText(glyph.GlyphIndex, source, glyph.ClusterStart, glyph.ClusterLength);
+            if (cid != glyph.GlyphIndex && cids is null)
+            {
+                cids = new int[glyphs.Count];
+                for (var k = 0; k < i; k++)
+                    cids[k] = glyphs[k].GlyphIndex;
+            }
+            if (cids is not null)
+                cids[i] = cid;
         }
+
+        return cids;
     }
 
     /// <summary>
@@ -123,7 +138,7 @@ internal class CharacterMapInfo
     /// unless it is going to be kept. A word drawn again maps every one of its glyphs to the text they already map to, so
     /// comparing in place spares a string per glyph of every word drawn.
     /// </summary>
-    private void MapGlyphToText(int glyphIndex, string source, int start, int length)
+    private int MapGlyphToText(int glyphIndex, string source, int start, int length)
     {
         var piece = source.AsSpan(start, length);
         var isSpace = piece.Length == 1 && piece[0] == ' ';
@@ -131,15 +146,77 @@ internal class CharacterMapInfo
         if (LigatureGlyphToText.TryGetValue(glyphIndex, out var existing))
         {
             if (!isSpace && existing == " ")
-                return;
+                return glyphIndex;
 
             // Already mapped to exactly this text: setting it again changes nothing.
             if (existing.AsSpan().SequenceEqual(piece))
-                return;
+                return glyphIndex;
+
+            // Two different letters drawn with one glyph (an Arabic letter's body glyph is shared by the letters
+            // that differ only in their dots): one ToUnicode destination per code cannot be right for both, so the
+            // later one is drawn with a code of its own that maps to the same glyph.
+            if (!isSpace && existing != NoText && TryGetVariantCid(glyphIndex, piece.ToString(), out var variant))
+                return variant;
         }
 
         LigatureGlyphToText[glyphIndex] = isSpace ? " " : piece.ToString();
+        return glyphIndex;
     }
+
+    /// <summary>
+    /// The code (CID) that stands for <paramref name="glyphIndex"/> drawn as <paramref name="text"/> when the glyph itself already
+    /// stands for other text. Codes are taken from the top of the 16-bit range down, clear of every glyph index, and the descendant
+    /// font maps them back to the glyph with a <c>/CIDToGIDMap</c> stream. False when the font cannot carry such a map or the
+    /// range is used up, which leaves the glyph with the text drawn last, as before.
+    /// </summary>
+    private bool TryGetVariantCid(int glyphIndex, string text, out int cid)
+    {
+        if (VariantCidByGlyphAndText.TryGetValue((glyphIndex, text), out cid))
+            return true;
+
+        if (!VariantsAllowed || _nextVariantCid <= (GlyphIndices.Count == 0 ? 0 : GlyphIndices.Max()))
+        {
+            cid = 0;
+            return false;
+        }
+
+        cid = _nextVariantCid--;
+        VariantCidByGlyphAndText[(glyphIndex, text)] = cid;
+        VariantCidToGlyph[cid] = glyphIndex;
+        VariantCidToText[cid] = text;
+        return true;
+    }
+
+    /// <summary>
+    /// Whether the embedded subset of this font is a TrueType or whole-face program, which a <c>/CIDToGIDMap</c> can remap, rather than
+    /// a compact CFF program, whose CIDs are its charset's and cannot. Decided once, with a trial export of the glyphs drawn so far.
+    /// </summary>
+    private bool VariantsAllowed => _variantsAllowed ??= CanRemapCids();
+
+    private bool CanRemapCids()
+    {
+        try
+        {
+            var trial = TypefaceExporter.ExportSubset(_typeface, new HashSet<int>(GlyphIndices) { 0 }, keepCharacterMap: false);
+            return !(trial.HasCffOutlines && trial.Format == ExportedFontFormat.CompactFontFormat);
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+    }
+
+    private bool? _variantsAllowed;
+    private int _nextVariantCid = 0xFFFF;
+
+    /// <summary>The variant code for a glyph drawn as some text its own code does not stand for.</summary>
+    internal Dictionary<(int Glyph, string Text), int> VariantCidByGlyphAndText { get; } = [];
+
+    /// <summary>Each variant code and the glyph it draws.</summary>
+    internal Dictionary<int, int> VariantCidToGlyph { get; } = [];
+
+    /// <summary>Each variant code and the text it stands for.</summary>
+    internal Dictionary<int, string> VariantCidToText { get; } = [];
 
     /// <summary>
     /// Records <paramref name="sourceText"/> as the ToUnicode destination of

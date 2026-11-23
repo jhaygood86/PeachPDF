@@ -180,7 +180,7 @@ internal sealed partial class PdfGraphicsRenderer
         {
             PdfFont? realizedFont = _gfxState._realizedFont;
             Debug.Assert(realizedFont is not null);
-            realizedFont.AddShapedText(s, features, logicalText);
+            int[]? codes = realizedFont.AddShapedText(s, features, logicalText);
 
             IReadOnlyList<PlacedGlyph>? shapedGlyphs = null;
             bool hasGposDeltas = false;
@@ -198,7 +198,7 @@ internal sealed partial class PdfGraphicsRenderer
             // A run is a handful of glyphs, so the literal is built on the stack and appended from there rather than as a string.
             int literalLength = PdfEncoders.GlyphIdsHexLiteralLength(shapedGlyphs.Count);
             Span<char> literal = literalLength <= 512 ? stackalloc char[512] : new char[literalLength];
-            PdfEncoders.WriteGlyphIdsAsHexLiteral(shapedGlyphs, literal);
+            PdfEncoders.WriteGlyphIdsAsHexLiteral(shapedGlyphs, literal, codes);
             ReadOnlySpan<char> text = literal[..literalLength];
 
             // Map absolute position to PDF world space.
@@ -216,6 +216,25 @@ internal sealed partial class PdfGraphicsRenderer
             double laidOutEndX = x + width + (shapedGlyphs?.Count ?? 0) * letterSpacing;
             bool shownAtPen = isOnlySpaces
                 && TryShowAtPen(x, y + verticalOffset, text, font, contentLengthAtEntry);
+
+            // A glyph with no cluster of its own (an Arabic letter's dots) means the run's letters do not map one
+            // to one onto glyphs, and the body glyph can be shared by sibling letters that differ only in those
+            // dots: one ToUnicode destination per glyph cannot be right for all of them. The run's exact text
+            // goes in per-occurrence /ActualText instead.
+            string? actualText = null;
+            if (!shownAtPen)
+            {
+                for (var i = 0; i < shapedGlyphs!.Count; i++)
+                {
+                    if (shapedGlyphs![i].ClusterLength <= 0)
+                    {
+                        actualText = logicalText is not null && logicalText.Length == s.Length ? logicalText : s;
+                        break;
+                    }
+                }
+            }
+            if (actualText is not null)
+                BeginActualText(actualText);
             if (!shownAtPen)
             {
             // A declared "oblique <angle>" (see TypefaceFont.ObliqueSkewSinus) drives the exact shear amount;
@@ -263,7 +282,7 @@ internal sealed partial class PdfGraphicsRenderer
                     // individually positioned Td+Tj instead of one Tj over the whole run - the
                     // common case (no GPOS deltas) never reaches this branch, so existing output is
                     // otherwise byte-for-byte unchanged.
-                    DrawPositionedGlyphs(shapedGlyphs!, font, new PaintPoint(x, y + verticalOffset), laidOutEndX);
+                    DrawPositionedGlyphs(shapedGlyphs!, font, new PaintPoint(x, y + verticalOffset), laidOutEndX, codes);
                 }
                 else
                 {
@@ -273,6 +292,8 @@ internal sealed partial class PdfGraphicsRenderer
                 }
             }
             }
+            if (actualText is not null)
+                EndMarkedContent();
         }
 
     }
@@ -350,7 +371,7 @@ internal sealed partial class PdfGraphicsRenderer
     /// writing mode's own advance axis) is intentionally not applied here - this renderer draws
     /// horizontal text only.
     /// </summary>
-    void DrawPositionedGlyphs(IReadOnlyList<PlacedGlyph> glyphs, TypefaceFont font, PaintPoint startPos, double laidOutEndX)
+    void DrawPositionedGlyphs(IReadOnlyList<PlacedGlyph> glyphs, TypefaceFont font, PaintPoint startPos, double laidOutEndX, int[]? codes = null)
     {
         const string format2 = PdfNumberFormats.FourDecimals;
         double scale = font.Size / font.Typeface.Metrics.UnitsPerEm;
@@ -359,8 +380,9 @@ internal sealed partial class PdfGraphicsRenderer
         double penY = startPos.Y;
         double lastGlyphX = penX, lastGlyphY = penY;
 
-        foreach (PlacedGlyph glyph in glyphs)
+        for (int glyphNumber = 0; glyphNumber < glyphs.Count; glyphNumber++)
         {
+            PlacedGlyph glyph = glyphs[glyphNumber];
             double glyphX = penX + glyph.XOffset * scale;
             // Font em-square is y-up; a downwards page is y-down, so a positive OpenType YOffset
             // (moves a glyph up in font space) subtracts in downwards-page Y, adds otherwise -
@@ -371,7 +393,7 @@ internal sealed partial class PdfGraphicsRenderer
             AdjustTdOffset(ref glyphPos, 0, null);
 
             _content.Append(glyphPos.X, format2).Append(' ').Append(glyphPos.Y, format2).Append(" Td <");
-            AppendHexCodeUnit((char)glyph.GlyphIndex);
+            AppendHexCodeUnit((char)(codes?[glyphNumber] ?? glyph.GlyphIndex));
             _content.Append("> Tj\n");
 
             // XOffset is a placement-only shift (doesn't move where the next glyph starts) - the

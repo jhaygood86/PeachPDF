@@ -261,6 +261,37 @@ namespace PeachBrackets.Engine.Tests.Integration
         }
 
         [Fact]
+        public async Task SpaceBetweenARightToLeftWordAndANumber_SitsBetweenThem()
+        {
+            // The number after right-to-left text is level 2 inside the text's level-1 run (UAX #9 N1 gives the
+            // space that run's level), so it is drawn to the left of the word, and the gap the layout reserved
+            // is there too - not at the far end of the run, just before the full stop.
+            var ops = await PaintTextAsync("<p>مرحبا رقم 42.</p>");
+
+            var texts = ops.Select(o => o.Text).ToList();
+            var word = ops[texts.IndexOf("رقم")];
+            var number = ops[texts.IndexOf("42")];
+            var space = ops[texts.IndexOf("42") - 1];
+            Assert.Equal(" ", space.Text);
+            Assert.Equal(number.Bounds.Right, space.Bounds.Left, 3);
+            Assert.Equal(word.Bounds.Left, space.Bounds.Right, 3);
+        }
+
+        [Fact]
+        public async Task SpaceBetweenARightToLeftWordAndANumber_InARightToLeftParagraph_SitsBetweenThem()
+        {
+            var ops = await PaintTextAsync("<p dir=\"rtl\">مرحبا رقم 42.</p>");
+
+            var texts = ops.Select(o => o.Text).ToList();
+            var word = ops[texts.IndexOf("رقم")];
+            var number = ops[texts.IndexOf("42")];
+            var space = ops[texts.IndexOf("42") - 1];
+            Assert.Equal(" ", space.Text);
+            Assert.Equal(number.Bounds.Right, space.Bounds.Left, 3);
+            Assert.Equal(word.Bounds.Left, space.Bounds.Right, 3);
+        }
+
+        [Fact]
         public async Task SidewaysVerticalWords_PaintTheSpaceInTheGapDownTheColumn()
         {
             // vertical-rl with the default text-orientation:mixed draws Latin words rotated 90°, each

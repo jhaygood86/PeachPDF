@@ -47,6 +47,30 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task ArabicLetterDrawnWithSeparateDotGlyphs_CarriesItsExactTextAsActualText()
+        {
+            // BEH, YEH and TEH share one body glyph and differ in their dot glyphs, so one ToUnicode destination
+            // per glyph cannot tell them apart; each run says what it is instead.
+            var pdf = await RenderAsync("<p dir=\"rtl\">بيت</p><p>abc</p>", BundledFonts.Arabic);
+            var content = Content(pdf);
+
+            Assert.Contains("/Span<</ActualText <FEFF0628064A062A>>>BDC\n", content);
+            Assert.Equal(1, Count(content, "/ActualText"));
+            Assert.Equal(1, Count(content, "EMC\n"));
+        }
+
+        [Fact]
+        public async Task ArabicLettersSharingABodyGlyph_AreDrawnWithACodeEachAndMappedBackThroughCidToGidMap()
+        {
+            // BEH, YEH and TEH can share one body glyph; with one ToUnicode destination per code, extraction swapped them. The
+            // later ones are written with codes of their own, which the descendant font maps back to the glyph.
+            var pdf = await RenderAsync("<p dir=\"rtl\">\u0628 \u0628\u0644 \u0644\u0628\u0644 \u0644\u0628</p><p dir=\"rtl\">\u062A \u062A\u0644 \u0644\u062A\u0644 \u0644\u062A</p><p dir=\"rtl\">\u062B \u062B\u0644 \u0644\u062B\u0644 \u0644\u062B</p><p dir=\"rtl\">\u0646 \u0646\u0644 \u0644\u0646\u0644 \u0644\u0646</p><p dir=\"rtl\">\u064A \u064A\u0644 \u0644\u064A\u0644 \u0644\u064A</p>", BundledFonts.Arabic);
+
+            Assert.Matches(@"/CIDToGIDMap \d+ 0 R", pdf);
+            Assert.Matches(@"<FFFF><FFFF><[0-9A-F]{4}>", pdf);
+        }
+
+        [Fact]
         public async Task SeparatorAfterAnInlineBackground_IsPositionedOnItsOwn()
         {
             // The span's background is drawn between "a" and the separator in front of "b", so the

@@ -43,11 +43,8 @@ internal class PdfFont : PdfDictionary
             _characterMapInfo.AddChars(text);
     }
 
-    internal void AddShapedText(string text, ShapeSettings features, string? logicalText = null)
-    {
-        if (_characterMapInfo is not null)
-            _characterMapInfo.AddShapedText(text, features, logicalText);
-    }
+    internal int[]? AddShapedText(string text, ShapeSettings features, string? logicalText = null) =>
+        _characterMapInfo?.AddShapedText(text, features, logicalText);
 
     internal void AddGlyphIndices(string glyphIndices)
     {
