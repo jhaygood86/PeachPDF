@@ -7,9 +7,10 @@ using System.Text;
 namespace PeachDrawing.Text.Unicode
 {
     /// <summary>
-    /// Unicode's default case conversion (section 3.13 of the Unicode Standard): text to upper or lower case, with the full mappings
-    /// of <c>SpecialCasing.txt</c> (the German sharp s becomes <c>SS</c>, the <c>fi</c> ligature <c>FI</c>), the context a Greek
-    /// capital sigma needs to become a final or a medial small one, and the tailorings of Turkish and Azerbaijani.
+    /// Unicode's default case conversion (section 3.13 of the Unicode Standard): text to upper, lower or title case, with the full
+    /// mappings of <c>SpecialCasing.txt</c> (the German sharp s becomes <c>SS</c>, or <c>Ss</c> in title case, the <c>fi</c> ligature
+    /// <c>FI</c>), the context a Greek capital sigma needs to become a final or a medial small one, and the tailorings of Turkish,
+    /// Azerbaijani and Lithuanian.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -22,14 +23,52 @@ namespace PeachDrawing.Text.Unicode
     /// </remarks>
     public static class CaseMapper
     {
-        private static readonly Lazy<Dictionary<int, string>> UpperMappings = new(() => Build(CaseMappingData.Upper));
-        private static readonly Lazy<Dictionary<int, string>> LowerMappings = new(() => Build(CaseMappingData.Lower));
+        private static readonly Lazy<Dictionary<int, string>> FullUpper = new(() => Build(CaseMappingData.FullUpper));
+        private static readonly Lazy<Dictionary<int, string>> FullLower = new(() => Build(CaseMappingData.FullLower));
+        private static readonly Lazy<Dictionary<int, string>> TitleMappings = new(() => Build(CaseMappingData.Title));
+        private static readonly Lazy<HashSet<int>> SoftDotted = new(() => [.. CaseMappingData.SoftDotted]);
 
         private static Dictionary<int, string> Build((int CodePoint, string Mapping)[] data)
         {
             var map = new Dictionary<int, string>(data.Length);
             foreach (var (codePoint, mapping) in data) map[codePoint] = mapping;
             return map;
+        }
+
+        /// <summary>The value paired with <paramref name="codePoint"/> in a sorted flat array of (code point, value) pairs, or the code point itself.</summary>
+        private static int SimpleMapping(int[] pairs, int codePoint)
+        {
+            var low = 0;
+            var high = pairs.Length / 2 - 1;
+            while (low <= high)
+            {
+                var mid = (low + high) / 2;
+                var key = pairs[mid * 2];
+                if (codePoint < key) high = mid - 1;
+                else if (codePoint > key) low = mid + 1;
+                else return pairs[mid * 2 + 1];
+            }
+
+            return codePoint;
+        }
+
+        private static string SimpleUpperOf(Rune rune) => new Rune(SimpleMapping(CaseMappingData.SimpleUpper, rune.Value)).ToString();
+
+        private static string SimpleLowerOf(Rune rune) => new Rune(SimpleMapping(CaseMappingData.SimpleLower, rune.Value)).ToString();
+
+        private static bool InRanges((int First, int Last)[] ranges, int codePoint)
+        {
+            var low = 0;
+            var high = ranges.Length - 1;
+            while (low <= high)
+            {
+                var mid = (low + high) / 2;
+                if (codePoint < ranges[mid].First) high = mid - 1;
+                else if (codePoint > ranges[mid].Last) low = mid + 1;
+                else return true;
+            }
+
+            return false;
         }
 
         /// <summary>Maps <paramref name="text"/> to upper case.</summary>
@@ -50,13 +89,34 @@ namespace PeachDrawing.Text.Unicode
         public static string ToUpper(string text, string? language, out int[]? sourceIndices)
         {
             ArgumentNullException.ThrowIfNull(text);
-            var turkic = IsTurkic(language);
-            return Map(text, sourceIndices: out sourceIndices, (string t, int index, Rune rune) =>
-            {
-                if (turkic && rune.Value == 'i') return "İ";
-                if (rune.Value == 0x0131) return "I";
-                return UpperMappings.Value.TryGetValue(rune.Value, out var full) ? full : Rune.ToUpperInvariant(rune).ToString();
-            });
+            var (turkic, lithuanian) = Tailoring(language);
+            return Map(text, out sourceIndices, (t, index, rune) => UpperOf(t, index, rune, turkic, lithuanian));
+        }
+
+        private static string UpperOf(string text, int index, Rune rune, bool turkic, bool lithuanian)
+        {
+            if (turkic && rune.Value == 'i') return "\u0130";
+            if (lithuanian && rune.Value == 0x0307 && IsAfterSoftDotted(text, index)) return string.Empty;
+            return FullUpper.Value.TryGetValue(rune.Value, out var full) ? full : SimpleUpperOf(rune);
+        }
+
+        /// <summary>Maps each character of <paramref name="text"/> to title case: the form a letter takes at the start of a word.</summary>
+        /// <param name="text">The text.</param>
+        /// <param name="language">The BCP 47 language of the text, or <see langword="null"/> when it has none.</param>
+        /// <returns>The title case text, which can be longer than <paramref name="text"/>.</returns>
+        public static string ToTitle(string text, string? language = null) => ToTitle(text, language, out _);
+
+        /// <summary>Maps each character of <paramref name="text"/> to title case and says where each character of the result came from.</summary>
+        /// <param name="text">The text.</param>
+        /// <param name="language">The BCP 47 language of the text, or <see langword="null"/> when it has none.</param>
+        /// <param name="sourceIndices">See <see cref="ToUpper(string, string, out int[])"/>.</param>
+        /// <returns>The title case text.</returns>
+        public static string ToTitle(string text, string? language, out int[]? sourceIndices)
+        {
+            ArgumentNullException.ThrowIfNull(text);
+            var (turkic, lithuanian) = Tailoring(language);
+            return Map(text, out sourceIndices, (t, index, rune) =>
+                TitleMappings.Value.TryGetValue(rune.Value, out var title) && !(turkic && rune.Value == 'i') ? title : UpperOf(t, index, rune, turkic, lithuanian));
         }
 
         /// <summary>Maps <paramref name="text"/> to lower case.</summary>
@@ -73,17 +133,30 @@ namespace PeachDrawing.Text.Unicode
         public static string ToLower(string text, string? language, out int[]? sourceIndices)
         {
             ArgumentNullException.ThrowIfNull(text);
-            var turkic = IsTurkic(language);
-            return Map(text, sourceIndices: out sourceIndices, (string t, int index, Rune rune) =>
+            var (turkic, lithuanian) = Tailoring(language);
+            return Map(text, out sourceIndices, (t, index, rune) =>
             {
-                if (rune.Value == 0x03A3) return IsFinalSigma(t, index) ? "ς" : "σ";
+                if (rune.Value == 0x03A3) return IsFinalSigma(t, index) ? "\u03C2" : "\u03C3";
                 if (turkic)
                 {
-                    if (rune.Value == 'I') return "ı";
                     if (rune.Value == 0x0130) return "i";
+                    if (rune.Value == 0x0307 && IsAfterI(t, index)) return string.Empty;     // the dot an I carried is absorbed by the i
+                    if (rune.Value == 'I') return IsBeforeDot(t, index) ? "i" : "\u0131";
                 }
 
-                return LowerMappings.Value.TryGetValue(rune.Value, out var full) ? full : Rune.ToLowerInvariant(rune).ToString();
+                if (lithuanian)
+                {
+                    switch (rune.Value)
+                    {
+                        case 0x00CC: return "i\u0307\u0300";
+                        case 0x00CD: return "i\u0307\u0301";
+                        case 0x0128: return "i\u0307\u0303";
+                        case 'I' or 'J' or 0x012E when IsMoreAbove(t, index):
+                            return SimpleLowerOf(rune) + "\u0307";
+                    }
+                }
+
+                return FullLower.Value.TryGetValue(rune.Value, out var full) ? full : SimpleLowerOf(rune);
             });
         }
 
@@ -131,18 +204,90 @@ namespace PeachDrawing.Text.Unicode
         }
 
         /// <summary>
-        /// Whether the language is Turkish or Azerbaijani written in Latin script: a script subtag other than <c>Latn</c> (as in
-        /// <c>tr-Cyrl</c>) overrides the language, since the tailoring is about the Latin letter i.
+        /// Which tailoring a language asks for: Turkish and Azerbaijani (written in Latin script: a script subtag other than <c>Latn</c>, as
+        /// in <c>tr-Cyrl</c>, overrides the language, since the tailoring is about the Latin letter i) or Lithuanian.
         /// </summary>
-        private static bool IsTurkic(string? language)
+        private static (bool Turkic, bool Lithuanian) Tailoring(string? language)
         {
-            if (string.IsNullOrEmpty(language)) return false;
+            if (string.IsNullOrEmpty(language)) return (false, false);
 
             var subtags = language.Split('-', '_');
-            if (!subtags[0].Equals("tr", StringComparison.OrdinalIgnoreCase) && !subtags[0].Equals("az", StringComparison.OrdinalIgnoreCase))
-                return false;
+            var latin = subtags.Length < 2 || subtags[1].Length != 4 || subtags[1].Equals("Latn", StringComparison.OrdinalIgnoreCase);
+            var primary = subtags[0];
+            return (latin && (primary.Equals("tr", StringComparison.OrdinalIgnoreCase) || primary.Equals("az", StringComparison.OrdinalIgnoreCase)),
+                latin && primary.Equals("lt", StringComparison.OrdinalIgnoreCase));
+        }
 
-            return subtags.Length < 2 || subtags[1].Length != 4 || subtags[1].Equals("Latn", StringComparison.OrdinalIgnoreCase);
+        private static int CombiningClassOf(int codePoint)
+        {
+            var ranges = CaseMappingData.CombiningClasses;
+            var low = 0;
+            var high = ranges.Length - 1;
+            while (low <= high)
+            {
+                var mid = (low + high) / 2;
+                if (codePoint < ranges[mid].First) high = mid - 1;
+                else if (codePoint > ranges[mid].Last) low = mid + 1;
+                else return ranges[mid].Class;
+            }
+
+            return 0;
+        }
+
+        /// <summary>The After_Soft_Dotted context: a soft-dotted letter before the character, with nothing of class 0 or 230 (above) between.</summary>
+        private static bool IsAfterSoftDotted(string text, int index)
+        {
+            for (var i = index; i > 0;)
+            {
+                var rune = PreviousRune(text, ref i);
+                var combiningClass = CombiningClassOf(rune.Value);
+                if (combiningClass is 0 or 230) return SoftDotted.Value.Contains(rune.Value);
+            }
+
+            return false;
+        }
+
+        /// <summary>The More_Above context: the next character that is not a mark of some other class is a mark above.</summary>
+        private static bool IsMoreAbove(string text, int index)
+        {
+            Rune.DecodeFromUtf16(text.AsSpan(index), out _, out var own);
+            for (var i = index + own; i < text.Length;)
+            {
+                Rune.DecodeFromUtf16(text.AsSpan(i), out var rune, out var length);
+                i += length;
+                var combiningClass = CombiningClassOf(rune.Value);
+                if (combiningClass is 0 or 230) return combiningClass == 230;
+            }
+
+            return false;
+        }
+
+        /// <summary>The After_I context: a capital I before the character, with no mark of class 0 or 230 (above) between.</summary>
+        private static bool IsAfterI(string text, int index)
+        {
+            for (var i = index; i > 0;)
+            {
+                var rune = PreviousRune(text, ref i);
+                var combiningClass = CombiningClassOf(rune.Value);
+                if (combiningClass is 0 or 230) return rune.Value == 'I';
+            }
+
+            return false;
+        }
+
+        /// <summary>The negation of Not_Before_Dot: the next character that is not a mark of another class is a combining dot above.</summary>
+        private static bool IsBeforeDot(string text, int index)
+        {
+            for (var i = index + 1; i < text.Length;)
+            {
+                Rune.DecodeFromUtf16(text.AsSpan(i), out var rune, out var length);
+                i += length;
+                var combiningClass = CombiningClassOf(rune.Value);
+                if (rune.Value == 0x0307) return true;
+                if (combiningClass is 0 or 230) return false;
+            }
+
+            return false;
         }
 
         /// <summary>
@@ -185,16 +330,8 @@ namespace PeachDrawing.Text.Unicode
             return Rune.TryCreate(text[index], out var rune) ? rune : Rune.ReplacementChar;
         }
 
-        private static bool IsCased(Rune rune) =>
-            Rune.GetUnicodeCategory(rune) is UnicodeCategory.UppercaseLetter or UnicodeCategory.LowercaseLetter or UnicodeCategory.TitlecaseLetter;
+        private static bool IsCased(Rune rune) => InRanges(CaseMappingData.CasedRanges, rune.Value);
 
-        private static bool IsCaseIgnorable(Rune rune)
-        {
-            if (rune.Value is '\'' or '.' or ':' or '·' or '’' or '‘' or '․' or '‧' or '︓' or '﹒' or '﹕' or '＇' or '．' or '：')
-                return true;
-
-            return Rune.GetUnicodeCategory(rune) is UnicodeCategory.NonSpacingMark or UnicodeCategory.EnclosingMark or UnicodeCategory.Format
-                or UnicodeCategory.ModifierLetter or UnicodeCategory.ModifierSymbol;
-        }
+        private static bool IsCaseIgnorable(Rune rune) => InRanges(CaseMappingData.CaseIgnorableRanges, rune.Value);
     }
 }

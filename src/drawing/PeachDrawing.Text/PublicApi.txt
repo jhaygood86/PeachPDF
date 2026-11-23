@@ -882,6 +882,8 @@ PeachDrawing.Text.Unicode.BidiRun : struct
 PeachDrawing.Text.Unicode.CaseMapper : static class
   method static String ToLower(String text, String language = null)
   method static String ToLower(String text, String language, out Int32[] sourceIndices)
+  method static String ToTitle(String text, String language = null)
+  method static String ToTitle(String text, String language, out Int32[] sourceIndices)
   method static String ToUpper(String text, String language = null)
   method static String ToUpper(String text, String language, out Int32[] sourceIndices)
 PeachDrawing.Text.Unicode.ComplexContextBreaking : enum Int32

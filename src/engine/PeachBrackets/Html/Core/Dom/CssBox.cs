@@ -2065,7 +2065,7 @@ namespace PeachBrackets.Html.Dom
             // The transform can change the text's length (the sharp s uppercases to two letters), and everything resolved per character of
             // this box's own text (bidi levels, scripts, joining forms, the original text) is indexed by where the character stood
             // before it: SourceIndexAt reads it through the map the transform returns.
-            var transformed = TextTransformer.ApplyFull(sourceText, TextTransform.Value, Language, out var sourceMap);
+            var transformed = TextTransformer.ApplyFull(sourceText, TextTransform.Value, Language, !PreservesSpaces, !PreservesBreaks, out var sourceMap);
             var text = TextSecurityMasker.Apply(transformed, TextSecurity.Value);
             if (sourceMap is not null && text.Length != transformed.Length) sourceMap = null;
             _transformSourceMap = sourceMap;
@@ -2446,6 +2446,9 @@ namespace PeachBrackets.Html.Dom
             // content - see the ParseToWords call site comment - but not guaranteed if HTML-entity
             // decoding happened to produce a different length for the two). Fall back to treating text
             // itself as its own original in that rare case rather than slicing out of bounds.
+            // A word of a different length than its source (a full case mapping lengthened it) still keeps that source as its original,
+            // which a ::first-line text-transform re-derives from; only the paths that slice it by position fall back to the text.
+            var wholeOriginalText = originalText ?? text;
             if (originalText is null || originalText.Length != text.Length)
                 originalText = text;
 
@@ -2482,7 +2485,7 @@ namespace PeachBrackets.Html.Dom
 
                 if (!needsPerCodepoint && !needsOrientationSplit)
                 {
-                    Words.Add(new CssRectWord(this, text, hasSpaceBefore, hasSpaceAfter, originalText, ToRuneIndexedJoiningForms(wordStart, text), ToRuneIndexedUseCategories(wordStart, text), ToRuneIndexedKhmerCategories(wordStart, text))
+                    Words.Add(new CssRectWord(this, text, hasSpaceBefore, hasSpaceAfter, wholeOriginalText, ToRuneIndexedJoiningForms(wordStart, text), ToRuneIndexedUseCategories(wordStart, text), ToRuneIndexedKhmerCategories(wordStart, text))
                     {
                         HyphenationCandidates = hyphenationCandidates,
                         IsUprightOrientation = WholeTextOrientationIsUpright(text),
@@ -9166,7 +9169,7 @@ namespace PeachBrackets.Html.Dom
                 boxWord.FirstLineText = firstLineStyle.TextTransform != TextTransform && boxWord.Text != "\n"
                     ? Bidi.Mirror(
                         TextSecurityMasker.Apply(
-                            TextTransformer.ApplyFull(boxWord.OriginalText ?? boxWord.Text!, firstLineStyle.TextTransform.Value, Language, out _), TextSecurity.Value),
+                            TextTransformer.ApplyFull(boxWord.OriginalText ?? boxWord.Text!, firstLineStyle.TextTransform.Value, Language, false, false, out _), TextSecurity.Value),
                         boxWord.BidiLevel)
                     : null;
                 // When FirstLineText is null (this box's own TextTransform already matches the

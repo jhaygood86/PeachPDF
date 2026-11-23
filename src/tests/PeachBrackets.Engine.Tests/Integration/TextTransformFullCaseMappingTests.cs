@@ -50,5 +50,55 @@ namespace PeachBrackets.Engine.Tests.Integration
             Assert.Equal(["ıi"], await WordTexts("<p id='p' lang='tr' style='text-transform:lowercase'>Iİ</p>"));
             Assert.Equal(["II"], await WordTexts("<p id='p' lang='en' style='text-transform:uppercase'>iı</p>"));
         }
+
+        [Fact]
+        public async Task Capitalize_UsesTheTitleCaseOfTheFirstLetterOfEachWord()
+        {
+            Assert.Equal(["Straße", "Ssx", "\u01C5a"], await WordTexts("<p id='p' style='text-transform:capitalize'>straße ßx \u01C6a</p>"));
+        }
+
+        [Fact]
+        public async Task Capitalize_SkipsLeadingPunctuationAndKeepsTheRestOfTheWord() =>
+            Assert.Equal(["(Hello", "WORLD"], await WordTexts("<p id='p' style='text-transform:capitalize'>(hello wORLD</p>"));
+
+        [Fact]
+        public async Task Lithuanian_DropsTheDotAboveAnIWhenItUppercases() =>
+            Assert.Equal(["I\u0300"], await WordTexts("<p id='p' lang='lt' style='text-transform:uppercase'>i\u0307\u0300</p>"));
+
+        [Fact]
+        public async Task FullWidth_CollapsesWhiteSpaceBeforeItBecomesIdeographicSpaces()
+        {
+            // Three spaces collapse to one (css-text-3 section 4.1), and the one that survives is the ideographic space.
+            var words = await WordTexts("<p id='p' style='text-transform:full-width'>a   b</p>");
+            Assert.Equal("\uFF41\u3000\uFF42", string.Concat(words));
+        }
+
+        [Fact]
+        public async Task FullWidth_KeepsEverySpaceOfPreservedWhiteSpace()
+        {
+            var words = await WordTexts("<p id='p' style='text-transform:full-width; white-space:pre'>a  b</p>");
+            Assert.Equal("\uFF41\u3000\u3000\uFF42", string.Concat(words));
+        }
+
+        [Fact]
+        public async Task AWordThatChangedLength_KeepsItsSourceAsItsOriginalText()
+        {
+            var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap("<p id='p' style='text-transform:uppercase'>stra\u00DFe</p>"));
+            var word = LayoutHarness.Descendants(LayoutHarness.FindById(root, "p")!).SelectMany(b => b.Words).Single(w => !string.IsNullOrEmpty(w.Text));
+
+            Assert.Equal("STRASSE", word.Text);
+            Assert.Equal("stra\u00DFe", word.OriginalText);
+        }
+
+        [Fact]
+        public async Task FirstLineTransform_IsDerivedFromTheSourceOfAWordThatChangedLength()
+        {
+            var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                "<style>#p::first-line{text-transform:lowercase}</style><p id='p' style='text-transform:uppercase'>STRA\u00DFE</p>"));
+            var word = LayoutHarness.Descendants(LayoutHarness.FindById(root, "p")!).SelectMany(b => b.Words).Single(w => !string.IsNullOrEmpty(w.Text));
+
+            Assert.Equal("STRASSE", word.Text);
+            Assert.Equal("stra\u00DFe", ((PeachBrackets.Html.Dom.CssRect)word).FirstLineText);
+        }
     }
 }

@@ -1,3 +1,5 @@
+using System;
+using System.Collections.Generic;
 using System.Text;
 using PeachBrackets.Css;
 
@@ -59,24 +61,123 @@ namespace PeachBrackets.Html.Utils
         }
 
         /// <summary>
-        /// Applies <paramref name="transform"/> to <paramref name="text"/> as <see cref="Apply"/> does, except that <c>uppercase</c> and
-        /// <c>lowercase</c> use Unicode's full case mappings for <paramref name="language"/> (the German sharp s becomes <c>SS</c>, a
-        /// Greek final sigma is chosen from its context, Turkish dotted and dotless i), which can change the text's length.
+        /// Applies <paramref name="transform"/> to <paramref name="text"/> as <see cref="Apply"/> does, except that <c>uppercase</c>,
+        /// <c>lowercase</c> and <c>capitalize</c> use Unicode's full case mappings for <paramref name="language"/> (the German sharp s
+        /// becomes <c>SS</c>, or <c>Ss</c> at the start of a word; a Greek final sigma is chosen from its context; Turkish dotted and dotless
+        /// i), and <c>full-width</c> first collapses the white space the box collapses, as css-text-3 section 4.1 does before it applies
+        /// the transform, so each run that survives becomes one ideographic space. Both can change the text's length;
         /// <paramref name="sourceIndices"/> then says, for each UTF-16 index of the result and for its end, the index of the character of
-        /// <paramref name="text"/> it came from; it is <see langword="null"/> when the length did not change.
+        /// <paramref name="text"/> it came from, and is <see langword="null"/> when the length did not change.
         /// </summary>
-        public static string ApplyFull(string text, TextTransform transform, string? language, out int[]? sourceIndices)
+        /// <param name="text">The text.</param>
+        /// <param name="transform">The transform.</param>
+        /// <param name="language">The BCP 47 language of the text, or <see langword="null"/> when it has none.</param>
+        /// <param name="collapseSpaces">Whether runs of spaces and tabs collapse (<c>white-space-collapse</c> is not a preserving value).</param>
+        /// <param name="collapseBreaks">Whether segment breaks collapse with them.</param>
+        /// <param name="sourceIndices">Where each character of the result came from, or <see langword="null"/>.</param>
+        public static string ApplyFull(string text, TextTransform transform, string? language, bool collapseSpaces, bool collapseBreaks,
+            out int[]? sourceIndices)
         {
             sourceIndices = null;
             if (string.IsNullOrEmpty(text))
                 return text;
 
-            return transform switch
+            switch (transform)
             {
-                TextTransform.Uppercase => PeachDrawing.Text.Unicode.CaseMapper.ToUpper(text, language, out sourceIndices),
-                TextTransform.Lowercase => PeachDrawing.Text.Unicode.CaseMapper.ToLower(text, language, out sourceIndices),
-                _ => Apply(text, transform),
-            };
+                case TextTransform.Uppercase:
+                    return PeachDrawing.Text.Unicode.CaseMapper.ToUpper(text, language, out sourceIndices);
+                case TextTransform.Lowercase:
+                    return PeachDrawing.Text.Unicode.CaseMapper.ToLower(text, language, out sourceIndices);
+                case TextTransform.Capitalize:
+                {
+                    var atWordStart = true;
+                    return ApplyCapitalizeFull(text, language, ref atWordStart, out sourceIndices);
+                }
+                case TextTransform.FullWidth when collapseSpaces:
+                    return ApplyFullWidthCollapsing(text, collapseBreaks, out sourceIndices);
+                default:
+                    return Apply(text, transform);
+            }
+        }
+
+        /// <summary>
+        /// <c>capitalize</c> with Unicode's full title case mappings: the first letter of each word is mapped to title case, which can be
+        /// longer than the letter (<c>ß</c> becomes <c>Ss</c>) and is not always its uppercase (<c>ǆ</c> becomes <c>ǅ</c>).
+        /// </summary>
+        public static string ApplyCapitalizeFull(string text, string? language, ref bool atWordStart, out int[]? sourceIndices)
+        {
+            var result = new StringBuilder(text.Length);
+            List<int>? sources = null;
+
+            for (var i = 0; i < text.Length;)
+            {
+                Rune.DecodeFromUtf16(text.AsSpan(i), out var rune, out var length);
+                var piece = text.Substring(i, length);
+
+                if (Rune.IsWhiteSpace(rune))
+                {
+                    atWordStart = true;
+                }
+                else if (atWordStart && Rune.IsLetter(rune))
+                {
+                    piece = PeachDrawing.Text.Unicode.CaseMapper.ToTitle(piece, language);
+                    atWordStart = false;
+                }
+
+                AppendMapped(result, ref sources, piece, i, length);
+                i += length;
+            }
+
+            sourceIndices = FinishMap(sources, text.Length);
+            return result.ToString();
+        }
+
+        private static string ApplyFullWidthCollapsing(string text, bool collapseBreaks, out int[]? sourceIndices)
+        {
+            var result = new StringBuilder(text.Length);
+            List<int>? sources = null;
+
+            for (var i = 0; i < text.Length;)
+            {
+                if (IsCollapsible(text[i], collapseBreaks))
+                {
+                    var runStart = i;
+                    while (i < text.Length && IsCollapsible(text[i], collapseBreaks)) i++;
+                    AppendMapped(result, ref sources, "\u3000", runStart, i - runStart);
+                }
+                else
+                {
+                    result.Append(ToFullWidth(text[i]));
+                    if (sources is not null) sources.Add(i);
+                    i++;
+                }
+            }
+
+            sourceIndices = FinishMap(sources, text.Length);
+            return result.ToString();
+        }
+
+        private static bool IsCollapsible(char c, bool collapseBreaks) => c is ' ' or '\t' or '\r' or '\f' || (collapseBreaks && c == '\n');
+
+        /// <summary>Appends <paramref name="piece"/>, the mapping of the <paramref name="sourceLength"/> characters at <paramref name="sourceIndex"/>, keeping the source map once a length has changed.</summary>
+        private static void AppendMapped(StringBuilder result, ref List<int>? sources, string piece, int sourceIndex, int sourceLength)
+        {
+            if (sources is null && piece.Length != sourceLength)
+            {
+                sources = new List<int>(result.Length + piece.Length + 16);
+                for (var before = 0; before < result.Length; before++) sources.Add(before);
+            }
+
+            result.Append(piece);
+            if (sources is not null)
+                for (var c = 0; c < piece.Length; c++) sources.Add(sourceIndex);
+        }
+
+        private static int[]? FinishMap(List<int>? sources, int sourceLength)
+        {
+            if (sources is null) return null;
+            sources.Add(sourceLength);
+            return [.. sources];
         }
 
         /// <summary>
