@@ -60,7 +60,7 @@ internal sealed class CoreGraphicsEffects : IDisposable
                 switch (effect)
                 {
                     case BlurEffect blur:
-                        image = Blur(image, extent, (blur.SigmaX + blur.SigmaY) / 2 * pixelsPerUnit, blur.ClampEdges);
+                        image = Blur(image, extent, blur.SigmaX * pixelsPerUnit, blur.SigmaY * pixelsPerUnit, blur.ClampEdges);
                         break;
 
                     case DropShadowEffect shadow:
@@ -85,14 +85,37 @@ internal sealed class CoreGraphicsEffects : IDisposable
         }
     }
 
-    private static CIImage Blur(CIImage image, CGRect extent, double sigma, bool clampEdges)
+    /// <summary>The smallest share of the larger deviation the other axis is scaled to; an axis blurred by 0 stands in as this much blur.</summary>
+    private const double MinAxisRatio = 1.0 / 64;
+
+    private static CIImage Blur(CIImage image, CGRect extent, double sigmaX, double sigmaY, bool clampEdges)
     {
-        if (!(sigma > 0))
+        if (!(sigmaX > 0) && !(sigmaY > 0))
             return image;
 
         // Edges are blurred into transparency unless the layer asks for them held (a backdrop that continues past its bounds).
         var source = clampEdges ? image.CreateByClampingToExtent() : image;
-        return source.CreateByApplyingGaussianBlur(sigma).ImageByCroppingToRect(extent);
+        return BlurPerAxis(source, sigmaX, sigmaY).ImageByCroppingToRect(extent);
+    }
+
+    /// <summary>
+    /// Core Image's Gaussian blur takes one radius, so an unequal pair is made equal by squeezing the axis with the larger deviation by the ratio
+    /// of the two, blurring by the smaller one, and stretching it back: a Gaussian of deviation s is one of deviation s * k after scaling by k.
+    /// </summary>
+    private static CIImage BlurPerAxis(CIImage image, double sigmaX, double sigmaY)
+    {
+        sigmaX = Math.Max(sigmaX, 0);
+        sigmaY = Math.Max(sigmaY, 0);
+        var large = Math.Max(sigmaX, sigmaY);
+        var small = Math.Max(Math.Min(sigmaX, sigmaY), large * MinAxisRatio);
+        var ratio = small / large;
+        if (ratio >= 1 - 1e-6)
+            return image.CreateByApplyingGaussianBlur(large);
+
+        var squeezeX = sigmaX > sigmaY;
+        var squeeze = CGAffineTransform.MakeScale((nfloat)(squeezeX ? ratio : 1), (nfloat)(squeezeX ? 1 : ratio));
+        var restore = CGAffineTransform.MakeScale((nfloat)(squeezeX ? 1 / ratio : 1), (nfloat)(squeezeX ? 1 : 1 / ratio));
+        return image.ImageByApplyingTransform(squeeze).CreateByApplyingGaussianBlur(small).ImageByApplyingTransform(restore);
     }
 
     private static CIImage Shadow(CIImage image, CGRect extent, DropShadowEffect shadow, double pixelsPerUnit)
@@ -109,9 +132,8 @@ internal sealed class CoreGraphicsEffects : IDisposable
         };
 
         var shade = tint.OutputImage!;
-        var sigma = (shadow.SigmaX + shadow.SigmaY) / 2 * pixelsPerUnit;
-        if (sigma > 0)
-            shade = shade.CreateByApplyingGaussianBlur(sigma);
+        if (shadow.SigmaX > 0 || shadow.SigmaY > 0)
+            shade = BlurPerAxis(shade, shadow.SigmaX * pixelsPerUnit, shadow.SigmaY * pixelsPerUnit);
 
         // Core Image's y axis points up, the canvas's down.
         shade = shade.ImageByApplyingTransform(CGAffineTransform.MakeTranslation((nfloat)(shadow.OffsetX * pixelsPerUnit), (nfloat)(-shadow.OffsetY * pixelsPerUnit)));
