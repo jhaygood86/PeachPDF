@@ -53,6 +53,16 @@ public sealed class PdfSourceSignature
     /// <summary>Why <see cref="IsIntact"/> is <see langword="false"/>, or <see langword="null"/>.</summary>
     public string? Problem { get; init; }
 
+    /// <summary>
+    /// What changed in the document after this signature, judged from the file's objects: <see cref="PdfSignatureChanges.None"/> for a
+    /// signature that covers the whole file, <see cref="PdfSignatureChanges.SignaturesAndTimestamps"/> when only later signatures,
+    /// timestamps and validation data were added, up to <see cref="PdfSignatureChanges.Other"/> when something the signature covered was
+    /// altered. <see cref="PdfSignatureChanges.Unknown"/> when the signature is not intact or the file as it was signed cannot be read back.
+    /// This is the object-level comparison a validator makes, not a decision about what the signer permitted: a file can be marked
+    /// <see cref="PdfSignatureChanges.Other"/> and still be a change its signer allowed, and the reverse.
+    /// </summary>
+    public PdfSignatureChanges ChangesAfter { get; init; } = PdfSignatureChanges.Unknown;
+
     /// <summary>The certificate that signed, when the signature embeds it.</summary>
     public X509Certificate2? SignerCertificate { get; init; }
 

@@ -64,6 +64,9 @@ internal sealed class PdfSourceSignatures(PdfSourceDocument doc)
         bool timestamp = doc.NameOf(value.GetRaw("Type")) == "/DocTimeStamp" || subFilter == "ETSI.RFC3161";
 
         string? Text(string key) => doc.Resolve(value.GetRaw(key)) is PdfString s ? PdfSourceNavigation.TextOf(s.Value) : null;
+
+        // Where the signed range ends, once it is known to fit the file: what a signature that does not reach the end of the file is compared at.
+        long signedEnd = -1;
         PdfSourceSignature Result(bool covers, bool intact, string? problem, X509Certificate2? signer = null, DateTimeOffset? time = null,
             bool? timeValid = null, X509Certificate2? timeCertificate = null) => new()
         {
@@ -76,6 +79,9 @@ internal sealed class PdfSourceSignatures(PdfSourceDocument doc)
             ContactInfo = Text("ContactInfo"),
             ClaimedTime = ParseDate(Text("M")),
             CoversWholeFile = covers,
+            ChangesAfter = covers ? PdfSignatureChanges.None
+                : intact && signedEnd > 0 ? PdfRevisionComparer.Compare(doc, signedEnd)
+                : PdfSignatureChanges.Unknown,
             IsIntact = intact,
             Problem = problem,
             SignerCertificate = signer,
@@ -100,6 +106,7 @@ internal sealed class PdfSourceSignatures(PdfSourceDocument doc)
             return Result(false, false, "The signature's /ByteRange does not match the file.");
 
         bool covers = range[2] + range[3] == data.Length;
+        signedEnd = range[2] + range[3];
         var covered = new byte[range[1] + range[3]];
         Buffer.BlockCopy(data, 0, covered, 0, (int)range[1]);
         Buffer.BlockCopy(data, (int)range[2], covered, (int)range[1], (int)range[3]);

@@ -57,6 +57,15 @@ internal sealed class PdfSourceDocument
     /// <summary>Whether the file is encrypted (and was opened with a password it accepted).</summary>
     public bool IsEncrypted => _decryptor is not null;
 
+    /// <summary>The password the file was opened with.</summary>
+    public string Password => _password;
+
+    /// <summary>The numbers of the objects the cross-reference data names (free entries included).</summary>
+    public IEnumerable<int> ObjectNumbers => _xref.Keys.ToArray();
+
+    /// <summary>The object numbered <paramref name="number"/>, or null when there is none (a missing or free object).</summary>
+    public PdfItem? ObjectAt(int number) => LoadObject(number) is PdfNull ? null : LoadObject(number);
+
     /// <summary>What encrypts and decrypts the file's strings and streams, or null for a file that is not encrypted.</summary>
     public PdfDecryptor? Decryptor => _decryptor;
 

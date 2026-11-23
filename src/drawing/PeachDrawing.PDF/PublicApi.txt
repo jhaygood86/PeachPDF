@@ -432,6 +432,13 @@ PeachDrawing.PDF.PdfSignatureBox : sealed class
   property Int32 PageNumber { get; set; }
   property Rect Bounds { get; set; }
   property String Text { get; set; }
+PeachDrawing.PDF.PdfSignatureChanges : enum Int32
+  Annotations = 3
+  FormFilling = 2
+  None = 0
+  Other = 4
+  SignaturesAndTimestamps = 1
+  Unknown = 5
 PeachDrawing.PDF.PdfSignatureFormat : enum Int32
   CadesDetached = 1
   Pkcs7Detached = 0
@@ -519,6 +526,7 @@ PeachDrawing.PDF.PdfSourceSignature : sealed class
   property Boolean? TimestampIsValid { get; init; }
   property DateTimeOffset? ClaimedTime { get; init; }
   property DateTimeOffset? TimestampTime { get; init; }
+  property PdfSignatureChanges ChangesAfter { get; init; }
   property String ContactInfo { get; init; }
   property String FieldName { get; init; }
   property String Location { get; init; }
