@@ -1,0 +1,7 @@
+# Only the space, tab, segment break and ogham space mark collapse
+
+`HtmlUtils.IsCollapsibleWhitespace` was `char.IsWhiteSpace(c)` minus U+00A0, so every Unicode space separator (U+3000, U+2000-200A, U+202F, U+205F) collapsed and was trimmed like a space. css-text-3 section 4.1.1 collapses only the space, tab and segment break; the WPT `trailing-ogham-*` tests additionally treat U+1680 as collapsible. It is now exactly that set (plus the form feed, carriage return, vertical tab, NEL and line/paragraph separators the old definition also covered).
+
+**Evidence:** css-text 821 -> 841 and css2-flow 1844 -> 1847 on a Mac (floors raised by +20 and +3 less a margin: 795 -> 815, 1816 -> 1819, since CI fonts differ); `PeachBrackets.Engine.Tests` and `PeachPDF.Tests` pass.
+
+**Not done, and what it costs:** 15 css-text tests that passed before now fail (`trailing-ideographic-space-013/014/026-028`, `break-spaces-with-ideographic-space-001/005/010`, `full-width-leading-spaces-004`, two `text-transform-fullwidth`, ...). They passed because U+3000 was collapsed away; the tests want it kept **and hanging** at the end of a line (it must not widen a `max-content` box or wrap). A U+3000 now sits inside a word (UAX #14 gives it break-after), so hanging it means trimming its width from a word's end the way `HungEndWidth` does for hanging punctuation. That is the next step; the 20-test net gain stands without it.

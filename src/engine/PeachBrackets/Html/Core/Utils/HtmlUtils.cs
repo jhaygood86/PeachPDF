@@ -334,7 +334,10 @@ namespace PeachBrackets.Html.Utils
         /// </summary>
         public static bool IsCollapsibleWhitespace(char c)
         {
-            return char.IsWhiteSpace(c) && c != ' ';
+            // css-text-3 section 4.1.1: only the space, the tab and the segment break (with the carriage return and form feed that
+            // HTML normalizes to one) collapse, and so does the ogham space mark, which the tests treat as a space. The other Unicode space
+            // separators (U+3000, U+2000-200A, U+202F ...) are ordinary characters that keep their width.
+            return c is ' ' or '\t' or '\n' or '\r' or '\f' or '\v' or '\u0085' or '\u1680' or '\u2028' or '\u2029';
         }
 
         /// <summary>
