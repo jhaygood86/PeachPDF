@@ -7,7 +7,7 @@ layout: default
 
 PeachReader is a PDF reader built on PeachPDF's own libraries. It opens a PDF with `PeachDrawing.PDF`, reads its pages, table of contents,
 links and text, and draws each page with the native, hardware-accelerated drawing backend of the platform it runs on: **Win2D** on Windows,
-**Skia** on Android and **CoreGraphics** on iOS and Mac Catalyst (the app runs on Windows and Android today; the Apple heads are still to come). It is a
+**Skia** on Android and **CoreGraphics** on iOS and Mac Catalyst (the app runs on Windows, Android, iOS and Mac Catalyst). It is a
 .NET MAUI app, and the window is laid out the way GNOME Papers lays out its own: a sidebar on the left and the pages on the right.
 
 ## What it does
@@ -23,7 +23,7 @@ links and text, and draws each page with the native, hardware-accelerated drawin
 | **Find** | Ctrl+F finds text in the whole document, with a match count, next and previous (F3, Shift+F3), match case and whole word. Every match is highlighted and the current one is a different color. |
 | **Protected files** | A file with a password asks for it. |
 
-### Touch (Android)
+### Touch (Android, iOS and Mac Catalyst)
 
 | Gesture | |
 |---|---|
@@ -60,7 +60,11 @@ links and text, and draws each page with the native, hardware-accelerated drawin
   control above it for the selection and search highlights, which move with the pointer and so must not repaint the pages. The Android one is a Skia
   GL surface (`SkiaSharp.Views`' `SKGLSurfaceView`, not the MAUI wrapper) that keeps each page as 1024 px tiles in graphics memory, painting a tile
   with `PdfPageSource.Paint` through `SkiaCanvas` the first time it comes into view (two a frame at most) and drawing the paper, the highlights and
-  the tiles on every frame; scrolling, fling and pinch are its own, over the same `ViewportController`.
+  the tiles on every frame; scrolling, fling and pinch are its own, over the same `ViewportController`. The iOS and Mac Catalyst one is a single UIKit
+  view (`UIScrollView`) over a content view that holds one `CALayer` sheet per visible page and, on it, 1024 px tile layers painted through
+  `CoreGraphicsCanvas` the first time they come into view (three a pass at most), so Core Animation composites scrolling and nothing repaints while
+  a finger moves; tap, double tap, long press and pinch are its own, and on a Mac the pointer drags to select, hovers and shows the text cursor.
+  PDFs the system opens (Files, Finder, Open In) arrive through the document type the app registers for PDF.
 
 A page is painted by `PdfPageSource.Paint` onto a `PeachDrawing.Core` canvas under the zoom, so the same call serves every backend.
 
@@ -82,6 +86,15 @@ it). To run on an emulator or device:
 dotnet build src/reader/PeachReader/PeachReader.csproj -f net11.0-android -p:RuntimeIdentifier=android-x64 -p:EmbedAssembliesIntoApk=true -p:AndroidPackageFormat=apk -t:Install
 ```
 
+For iOS and Mac Catalyst a Mac with the `ios`, `maccatalyst` and MAUI workloads is needed (`-p:ValidateXcodeVersion=false` when Xcode is newer than the workload). The Android head is left out of the target list on a Mac unless `-p:ReaderIncludeAndroid=true` is given:
+
+```bash
+dotnet build src/reader/PeachReader/PeachReader.csproj -f net11.0-maccatalyst -p:ValidateXcodeVersion=false
+PEACHREADER_OPEN=report.pdf src/reader/PeachReader/bin/Debug/net11.0-maccatalyst/maccatalyst-arm64/PeachReader.app/Contents/MacOS/PeachReader
+```
+
+With `PEACHREADER_SMOKE` set, the Apple view logs `PEACH_SMOKE` lines (the first tile painted and its size), which the CI check reads.
+
 ## Limits
 
 - Text can be selected and searched only where the file says what a glyph stands for (a `ToUnicode` map or a standard encoding). The reading
@@ -93,5 +106,5 @@ dotnet build src/reader/PeachReader/PeachReader.csproj -f net11.0-android -p:Run
 - Files encrypted with RC4 are not opened.
 - Form fields are not interactive. Layers the file turns off are hidden, and pages show their labels ("iv", "A-3") where the file defines them; the page box accepts a label or a number.
 - Only links to a place in the document and to web, mail and telephone addresses are followed.
-- Windows and Android have a view so far; a page tile is painted on the graphics thread, so the first look at a page at a new zoom can pause a
+- Pinch zoom on iOS and Mac Catalyst applies when the fingers lift (no live preview), the Mac pointer shows the text cursor but not a hand over links, and the macOS menu bar and keyboard shortcuts are not wired up yet. A page tile is painted on the graphics thread, so the first look at a page at a new zoom can pause a
   frame.

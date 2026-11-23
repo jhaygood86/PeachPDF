@@ -1,7 +1,7 @@
 name: Reader
 
 # PeachReader, the MAUI PDF reader, needs the MAUI workloads, so the main test workflow does not build it (its platform-free core and tests run there,
-# in the `small` leg). This workflow builds the app for each platform head that exists (Windows and Android). It is not part of the required `test-gate`.
+# in the `small` leg). This workflow builds the app for each platform head that exists (Windows, Android, iOS and Mac Catalyst). It is not part of the required `test-gate`.
 
 on:
   pull_request:
@@ -11,6 +11,7 @@ on:
       - 'src/drawing/PeachDrawing.PDF/**'
       - 'src/drawing/PeachDrawing.Win2D/**'
       - 'src/drawing/PeachDrawing.Skia/**'
+      - 'src/drawing/PeachDrawing.CoreGraphics/**'
       - 'src/drawing/PeachDrawing.Core/**'
       - 'src/Directory.Packages.props'
       - '.github/workflows/reader.yml'
@@ -75,3 +76,42 @@ jobs:
 
     - name: Build the app for Android
       run: dotnet build src/reader/PeachReader/PeachReader.csproj -f net11.0-android --configuration Release -p:TreatWarningsAsErrors=true
+
+  apple:
+    runs-on: xcode-27
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: bash
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up .NET
+      uses: ./.github/actions/setup-dotnet
+
+    - name: Install the Apple workloads
+      run: dotnet workload install macos ios maccatalyst maui-ios maui-maccatalyst
+
+    - name: Select Xcode 27.2
+      run: sudo xcode-select -s /Applications/Xcode_27.2.app/Contents/Developer
+
+    - name: Verify Xcode version
+      run: xcodebuild -version
+
+    - name: Build the app for iOS
+      run: dotnet build src/reader/PeachReader/PeachReader.csproj -f net11.0-ios -p:ValidateXcodeVersion=false -p:TreatWarningsAsErrors=true
+
+    - name: Build the app for Mac Catalyst
+      run: dotnet build src/reader/PeachReader/PeachReader.csproj -f net11.0-maccatalyst -p:ValidateXcodeVersion=false -p:TreatWarningsAsErrors=true
+
+    # The app opens PEACHREADER_OPEN and, with PEACHREADER_SMOKE set, logs when the first page tile has been painted.
+    - name: Open a document and check that a page is painted
+      run: |
+        dotnet run --project src/PeachPDF.Cli -f net11.0 --configuration Release -- docs/index.html -o "$RUNNER_TEMP/smoke.pdf"
+        app=$(find src/reader/PeachReader/bin/Debug/net11.0-maccatalyst -name PeachReader.app | head -1)
+        PEACHREADER_OPEN="$RUNNER_TEMP/smoke.pdf" PEACHREADER_SMOKE=1 "$app/Contents/MacOS/PeachReader" > "$RUNNER_TEMP/smoke.log" 2>&1 &
+        pid=$!
+        for i in $(seq 1 60); do grep -q PEACH_SMOKE "$RUNNER_TEMP/smoke.log" && break; sleep 1; done
+        kill $pid || true
+        cat "$RUNNER_TEMP/smoke.log"
+        grep -q "PEACH_SMOKE first tile painted" "$RUNNER_TEMP/smoke.log"
