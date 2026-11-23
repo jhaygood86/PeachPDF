@@ -373,6 +373,52 @@ namespace PeachDrawing.PDF.Tests
             Assert.Contains(OperatingSystem.IsWindows() ? "did not accept the PIN" : "Windows CNG", error.Message);
         }
 
+        [Theory]
+        [InlineData(PdfAConformance.PdfA1B)]
+        [InlineData(PdfAConformance.PdfA2B)]
+        [InlineData(PdfAConformance.PdfA3B)]
+        [InlineData(PdfAConformance.PdfA4)]
+        public void AnArchivalFile_CanBeSigned_AndTheSignatureFieldMeetsTheAnnotationRules(PdfAConformance level)
+        {
+            using var certificate = NewCertificate();
+            var options = Signed(certificate, s => s.Format = PdfSignatureFormat.CadesDetached);
+            options.Conformance = level;
+            options.Title = "Archived";
+            options.CreationDate = new DateTimeOffset(2026, 11, 23, 9, 0, 0, TimeSpan.Zero);
+
+            var file = Save(options);
+            var text = Encoding.Latin1.GetString(file);
+
+            // The signature still verifies, and the file still claims its level.
+            var (covered, signature, _) = Read(file);
+            var cms = new SignedCms(new ContentInfo(covered), detached: true);
+            cms.Decode(signature);
+            cms.CheckSignature(verifySignatureOnly: true);
+            Assert.Contains("pdfaid:part", text);
+            Assert.Equal(level, PdfPageSource.Open(file).GetConformance().PdfA);
+
+            // ISO 19005 6.3.2 (6.5.3 in part 1): a widget has the Print flag and none of Invisible, Hidden, NoView; with a zero-size /Rect it
+            // needs no appearance stream. The form must not ask the viewer to make appearances.
+            Assert.Contains("/F 132", text);            // Print (4) + Locked (128)
+            Assert.Contains("/Rect [0 0 0 0]", text);
+            Assert.DoesNotContain("/NeedAppearances", text);
+            Assert.DoesNotContain("/AA ", text);        // no actions on the field
+        }
+
+        [Fact]
+        public void AnArchivalFile_CanBeSignedInPlace_AndKeepsItsClaimedLevel()
+        {
+            using var certificate = NewCertificate();
+            var original = Save(new PdfComposerOptions { Conformance = PdfAConformance.PdfA2B, Title = "Archived", CreationDate = new DateTimeOffset(2026, 11, 23, 9, 0, 0, TimeSpan.Zero) });
+
+            var signed = PdfFileSigner.Sign(original, new PdfSigningOptions { Certificate = certificate, Format = PdfSignatureFormat.CadesDetached });
+
+            Assert.Equal(PdfAConformance.PdfA2B, PdfPageSource.Open(signed).GetConformance().PdfA);
+            Assert.Equal(original, signed[..original.Length]);
+            Assert.True(PdfPageSource.Open(signed).GetSignatures()[0].IsIntact);
+            Assert.Contains("/F 132", Encoding.Latin1.GetString(signed));
+        }
+
         [Fact]
         public void AnUnsignedFile_HasNoSignatureField()
         {

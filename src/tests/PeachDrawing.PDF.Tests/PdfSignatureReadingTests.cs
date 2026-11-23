@@ -328,6 +328,42 @@ namespace PeachDrawing.PDF.Tests
         }
 
         [Fact]
+        public void ASignatureWhoseDictionaryDoesNotDeclareTheSignedHole_IsReported()
+        {
+            using var certificate = NewCertificate();
+            var file = Signed(certificate);
+            var text = Encoding.Latin1.GetString(file);
+
+            // The dictionary's key no longer says /Contents, so a reader taking it from the dictionary would find none.
+            var renamed = text.Replace("/Contents <", "/Contentz <", StringComparison.Ordinal);
+            var signature = Assert.Single(Read(Encoding.Latin1.GetBytes(renamed)));
+
+            Assert.False(signature.IsIntact);
+            Assert.Contains("/Contents", signature.Problem);
+        }
+
+        /// <summary>A file whose /ByteRange names a real <c>&lt;...&gt;</c> (a valid empty sequence) that is not the signature value's own /Contents.</summary>
+        [Fact]
+        public void AByteRangeThatNamesSomethingElse_IsReported()
+        {
+            string Build(string range) => string.Format(ValueWith, "/ByteRange " + range);
+            string Pad(long n) => n.ToString("D10");
+
+            byte[] Make(long a, long b, long c) => TestPdf.Build("", catalogExtras: "/AcroForm 5 0 R /Marker <3000>", extraObjects:
+                ["<< /Fields [6 0 R] >>", "<< /FT /Sig /T (Sig) /V 7 0 R >>", Build($"[0 {Pad(a)} {Pad(b)} {Pad(c)}]")]);
+
+            // Two passes: the numbers have a fixed width, so the first build says where <AABB> is.
+            var first = Make(0, 0, 0);
+            var at = Encoding.Latin1.GetString(first).IndexOf("<3000>", StringComparison.Ordinal);
+            var file = Make(at, at + 6, first.Length - (at + 6));
+
+            var signature = Assert.Single(Read(file));
+
+            Assert.False(signature.IsIntact);
+            Assert.Contains("leaves out", signature.Problem);
+        }
+
+        [Fact]
         public void TheClaimedTime_IsParsedFromAPdfDate()
         {
             var signature = Assert.Single(Read(Hand(string.Format(ValueWith, ""))));

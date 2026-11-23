@@ -104,17 +104,24 @@ internal sealed class PdfSourceSignatures(PdfSourceDocument doc)
         Buffer.BlockCopy(data, 0, covered, 0, (int)range[1]);
         Buffer.BlockCopy(data, (int)range[2], covered, (int)range[1], (int)range[3]);
 
-        byte[] contents;
+        byte[] contents, hole;
         try
         {
             // PDF allows white space between the hexadecimal digits.
             var hex = new string(Encoding.ASCII.GetString(data, (int)range[1] + 1, (int)(range[2] - range[1] - 2)).Where(c => !char.IsWhiteSpace(c)).ToArray());
-            contents = TrimStructure(Convert.FromHexString(hex));
+            hole = Convert.FromHexString(hex);
+            contents = TrimStructure(hole);
         }
         catch (Exception error) when (error is FormatException or ArgumentException or InvalidOperationException)
         {
             return Result(covers, false, "The signature's /Contents is not readable.");
         }
+
+        // What is checked is the part of the file the range leaves out, so it must be the signature the dictionary itself declares: a reader
+        // that takes /Contents from the dictionary would otherwise check something other than what was verified here. An encrypted file's
+        // strings are decrypted when read, which /Contents never is, so this comparison cannot be made there.
+        if (!doc.IsEncrypted && (doc.Resolve(value.GetRaw("Contents")) is not PdfString declared || !Encoding.Latin1.GetBytes(declared.Value).AsSpan().SequenceEqual(hole)))
+            return Result(covers, false, "The signature's /Contents is not the part of the file its /ByteRange leaves out.");
 
         return timestamp ? CheckTimestamp(covered, contents, covers, Result) : CheckSignature(covered, contents, covers, Result);
     }
