@@ -264,6 +264,16 @@ public sealed class PdfPageSource
         lock (_sync) return new PdfSourceSignatures(_document).Read();
     }
 
+    /// <summary>
+    /// The validation data the file carries in its document security store: the certificates, OCSP responses and CRLs a signature's checker
+    /// can use without reaching the network. See <see cref="PdfFileSigner.AddValidationData"/>.
+    /// </summary>
+    /// <returns>the data, empty when the file has no store</returns>
+    public PdfValidationData GetValidationData()
+    {
+        lock (_sync) return new PdfSourceSignatures(_document).ReadValidationData();
+    }
+
     /// <summary>The PDF/A and PDF/X levels the file claims for itself.</summary>
     /// <returns>the levels, <c>None</c> where it claims none</returns>
     public PdfSourceConformance GetConformance()

@@ -4,6 +4,7 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Numerics;
+using System.Security.Cryptography;
 using System.Text;
 using PeachDrawing.Core;
 using PeachDrawing.PDF.Engine.Advanced;
@@ -149,6 +150,112 @@ internal static class PdfIncrementalUpdate
             throw new InvalidDataException("The PDF's cross-reference data is damaged, so it cannot be extended; repair the file first.");
 
         return Append(source, objects, next);
+    }
+
+    /// <summary>
+    /// The file with validation data appended to its document security store (<c>/DSS</c>, ISO 32000-2 12.8.4.3): one stream per
+    /// certificate, OCSP response and CRL that the store does not already hold, and the catalog (and the store) pointing at them. A file
+    /// older than PDF 2.0 also gets the extension entry that says it uses the store.
+    /// </summary>
+    /// <exception cref="PdfPasswordException">the file needs a password that was not given or is wrong</exception>
+    /// <exception cref="InvalidDataException">the file's cross-reference data is damaged</exception>
+    public static byte[] AppendValidationData(byte[] original, PdfValidationData data, string? password)
+    {
+        var source = PdfSourceDocument.Open(original, password);
+        var decryptor = source.Decryptor;
+        Func<byte[], byte[]>? EncryptStrings(int number) => decryptor is { EncryptsStrings: true }
+            ? bytes => decryptor.EncryptString(bytes, number, source.GenerationOf(number))
+            : null;
+
+        var rootItem = source.Trailer.GetRaw("Root") as PdfReference ?? throw new InvalidDataException("The PDF has no document catalog.");
+        var root = source.Resolve(rootItem) as PdfDictionary ?? throw new InvalidDataException("The PDF's document catalog is unreadable.");
+
+        long highest = Math.Max(source.HighestObjectNumber, source.IntOf(source.Trailer.GetRaw("Size")) - 1L);
+        if (highest > int.MaxValue - 16)
+            throw new InvalidDataException("The PDF's object numbers are too large to add objects to.");
+        int next = (int)highest + 1;
+        var objects = new SortedDictionary<int, string>();
+
+        // What the store already holds, so that data added twice is stored once.
+        var dssBefore = source.DictOf(root, "DSS");
+        var overrides = new Dictionary<string, string>();
+        var changed = false;
+        foreach (var (key, blobs) in new[] { ("/Certs", data.Certificates), ("/OCSPs", data.OcspResponses), ("/CRLs", data.Crls) })
+        {
+            var references = new List<string>();
+            var seen = new HashSet<string>(StringComparer.Ordinal);
+            if (dssBefore is not null && source.ArrayOf(dssBefore, key) is { } existing)
+            {
+                foreach (var element in existing.Elements)
+                {
+                    references.Add(Serialize(element, NoOverrides));
+                    if (source.Resolve(element) is PdfDictionary { Stream: not null } stream)
+                        seen.Add(Convert.ToHexString(SHA256.HashData(source.DecodeStream(stream).Data)));
+                }
+            }
+
+            foreach (var blob in blobs)
+            {
+                if (!seen.Add(Convert.ToHexString(SHA256.HashData(blob)))) continue;
+
+                // Each entry is a stream; in an encrypted file it is stored under its own object's key.
+                int number = next++;
+                var stored = decryptor is { EncryptsStreams: true } ? decryptor.EncryptStream(blob, number, 0) : blob;
+                objects[number] = $"<< /Length {stored.Length} >>\nstream\n{Encoding.Latin1.GetString(stored)}\nendstream";
+                references.Add($"{number} 0 R");
+                changed = true;
+            }
+
+            if (references.Count > 0)
+                overrides[key] = "[" + string.Join(' ', references) + "]";
+        }
+
+        if (!changed)
+            return (byte[])original.Clone();
+
+        var rootOverrides = new Dictionary<string, string>();
+        if (dssBefore is not null && root.GetRaw("DSS") is PdfReference dssReference)
+        {
+            objects[dssReference.ObjectNumber] = Serialize(dssBefore, overrides, encrypt: EncryptStrings(dssReference.ObjectNumber));
+        }
+        else if (dssBefore is not null)
+        {
+            rootOverrides["/DSS"] = Serialize(dssBefore, overrides, encrypt: EncryptStrings(rootItem.ObjectNumber));
+        }
+        else
+        {
+            int dssNumber = next++;
+            objects[dssNumber] = "<< " + string.Join(' ', overrides.Select(o => $"{o.Key} {o.Value}")) + " >>";
+            rootOverrides["/DSS"] = $"{dssNumber} 0 R";
+        }
+
+        // Before PDF 2.0 a file that uses the store says so with an extension entry (ESIC, level 1 over PDF 1.7).
+        if (HeaderMajorVersion(original) < 2 && !(source.DictOf(root, "Extensions") is { } extensions && extensions.ContainsKeyRaw("ESIC")))
+        {
+            const string esic = "<< /BaseVersion /1.7 /ExtensionLevel 1 >>";
+            var extensionOverrides = new Dictionary<string, string> { ["/ESIC"] = esic };
+            if (source.DictOf(root, "Extensions") is { } present && root.GetRaw("Extensions") is PdfReference extensionsReference)
+                objects[extensionsReference.ObjectNumber] = Serialize(present, extensionOverrides, encrypt: EncryptStrings(extensionsReference.ObjectNumber));
+            else if (source.DictOf(root, "Extensions") is { } direct)
+                rootOverrides["/Extensions"] = Serialize(direct, extensionOverrides, encrypt: EncryptStrings(rootItem.ObjectNumber));
+            else
+                rootOverrides["/Extensions"] = $"<< /ESIC {esic} >>";
+        }
+
+        objects[rootItem.ObjectNumber] = Serialize(root, rootOverrides, encrypt: EncryptStrings(rootItem.ObjectNumber));
+
+        if (source.WasRebuilt)
+            throw new InvalidDataException("The PDF's cross-reference data is damaged, so it cannot be extended; repair the file first.");
+
+        return Append(source, objects, next);
+    }
+
+    /// <summary>The major version in the file's <c>%PDF-x.y</c> header (1 when it cannot be read).</summary>
+    static int HeaderMajorVersion(byte[] data)
+    {
+        var head = Encoding.Latin1.GetString(data, 0, Math.Min(data.Length, 1024));
+        var at = head.IndexOf("%PDF-", StringComparison.Ordinal);
+        return at >= 0 && at + 5 < head.Length && char.IsAsciiDigit(head[at + 5]) ? head[at + 5] - '0' : 1;
     }
 
     /// <summary>A signature drawn as a box: the page it goes on, where (points from the top-left of the page as shown), and what it says.</summary>

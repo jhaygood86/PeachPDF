@@ -58,6 +58,32 @@ internal sealed class PdfSourceSignatures(PdfSourceDocument doc)
         return found;
     }
 
+    /// <summary>The certificates, OCSP responses and CRLs in the document security store (<c>/DSS</c>).</summary>
+    public PdfValidationData ReadValidationData()
+    {
+        var found = new PdfValidationData();
+        if (doc.Resolve(doc.Trailer.GetRaw("Root")) is not PdfDictionary root || doc.DictOf(root, "DSS") is not { } store)
+            return found;
+
+        void Read(string key, IList<byte[]> into)
+        {
+            if (doc.ArrayOf(store, key) is not { } array) return;
+            for (int i = 0; i < array.Elements.Count && i < MaxStoreEntries; i++)
+            {
+                if (doc.Resolve(array.Elements[i]) is PdfDictionary { Stream: not null } stream)
+                    into.Add(doc.DecodeStream(stream).Data);
+            }
+        }
+
+        Read("Certs", found.Certificates);
+        Read("OCSPs", found.OcspResponses);
+        Read("CRLs", found.Crls);
+        return found;
+    }
+
+    /// <summary>The most entries read from one list of the security store: a hostile file could name millions.</summary>
+    const int MaxStoreEntries = 10_000;
+
     PdfSourceSignature Check(string fieldName, PdfDictionary value)
     {
         var subFilter = doc.NameOf(value.GetRaw("SubFilter"))?.TrimStart('/');

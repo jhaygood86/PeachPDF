@@ -276,6 +276,7 @@ PeachDrawing.PDF.PdfFileAttachment : sealed class
   property String Key { get; set; }
   property String MimeType { get; set; }
 PeachDrawing.PDF.PdfFileSigner : static class
+  method static Byte[] AddValidationData(Byte[] pdf, PdfValidationData data, String password = null)
   method static Byte[] Sign(Byte[] pdf, PdfSigningOptions options, String password = null)
   method static Task<Byte[]> AddDocumentTimestampAsync(Byte[] pdf, PdfTimestampOptions options, Int32 reservedBytes = 16384, String password = null, CancellationToken cancellationToken = null)
   method static Task<Byte[]> SignAsync(Byte[] pdf, PdfSigningOptions options, String password = null, CancellationToken cancellationToken = null)
@@ -386,6 +387,7 @@ PeachDrawing.PDF.PdfPageSource : sealed class
   method PdfSourceMetadata GetMetadata()
   method PdfSourceOutputIntent GetOutputIntent()
   method PdfTagSession CreateTagSession(PdfTagRecorder recorder)
+  method PdfValidationData GetValidationData()
   method ValueTuple<Double, Double> GetPageSize(Int32 pageIndex)
   method Void TieLinkToStructure(PdfTagSession tags, PdfSourceLink link, PdfLink added)
   method static PdfPageSource Open(Byte[] pdf)
@@ -603,6 +605,14 @@ PeachDrawing.PDF.PdfUAConformance : enum Int32
   None = 0
   UA1 = 1
   UA2 = 2
+PeachDrawing.PDF.PdfValidationData : sealed class
+  ctor()
+  method static Task<PdfValidationData> CollectAsync(X509Certificate2 certificate, IEnumerable<X509Certificate2> additionalCertificates, HttpClient client, CancellationToken cancellationToken = null)
+  property Boolean IsEmpty { get; }
+  property IList<Byte[]> Certificates { get; }
+  property IList<Byte[]> Crls { get; }
+  property IList<Byte[]> OcspResponses { get; }
+  property IReadOnlyList<String> Problems { get; }
 PeachDrawing.PDF.PdfVersion : enum Int32
   Pdf17 = 0
   Pdf20 = 1

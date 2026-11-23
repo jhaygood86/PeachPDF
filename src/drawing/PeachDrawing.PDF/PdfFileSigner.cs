@@ -88,6 +88,29 @@ public static class PdfFileSigner
         return file;
     }
 
+    /// <summary>
+    /// Adds validation data (certificates, OCSP responses, CRLs) to the file's document security store, as an incremental update, so a
+    /// signature can be checked long after it was made. Data the store already holds is not stored twice. Add a document timestamp after it
+    /// (<see cref="AddDocumentTimestampAsync"/>) to cover the store as well, which is the PAdES B-LTA form.
+    /// </summary>
+    /// <param name="pdf">the bytes of the file</param>
+    /// <param name="data">what to add; see <see cref="PdfValidationData.CollectAsync"/></param>
+    /// <param name="password">the password of an encrypted file, or <see langword="null"/> for a file that opens without one</param>
+    /// <returns>the file with the data appended</returns>
+    /// <exception cref="InvalidOperationException">there is nothing to add</exception>
+    /// <exception cref="PdfPasswordException">the file needs a password that was not given or is wrong</exception>
+    /// <exception cref="NotSupportedException">the file is encrypted with RC4 or a security handler this does not know</exception>
+    /// <exception cref="InvalidDataException">the file is not a readable PDF, or its cross-reference data is damaged</exception>
+    public static byte[] AddValidationData(byte[] pdf, PdfValidationData data, string? password = null)
+    {
+        ArgumentNullException.ThrowIfNull(pdf);
+        ArgumentNullException.ThrowIfNull(data);
+        if (data.IsEmpty)
+            throw new InvalidOperationException("There is no validation data to add.");
+
+        return PdfIncrementalUpdate.AppendValidationData(pdf, data, password);
+    }
+
     private static PdfIncrementalUpdate.VisibleSignature? Visible(PdfSigningOptions options) =>
         options.Box is { } a
             ? new PdfIncrementalUpdate.VisibleSignature(a.PageNumber, a.Bounds, PdfSignatureBoxContent.Lines(options, PeachDrawing.PDF.Engine.Internal.PdfEntropy.UtcNow()), a.FontSize)

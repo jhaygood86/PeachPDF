@@ -180,7 +180,7 @@ Signing = new PdfSigningOptions { Certificate = certificateFromTheCard, KeyPin =
 
 `PrivateKey` replaces the certificate's own key, so the certificate can be the public one; the key belongs to you and is not disposed. `KeyPin` hands the PIN to a key held by Windows CNG and works nowhere else: on other platforms use `PrivateKey`. The PIN stays in memory as a string for as long as the options do.
 
-Only the signing certificate and the ones in `AdditionalCertificates` are embedded; the chain is neither built nor fetched. A signed file must not be changed afterwards, and a `PdfOperation` that draws or copies a signed source writes an unsigned file and says so in `Warnings`. Long-term validation data is not written yet. To check a file's signatures, see [Reading signatures](#reading-signatures).
+Only the signing certificate and the ones in `AdditionalCertificates` are embedded; the chain is neither built nor fetched. A signed file must not be changed afterwards, and a `PdfOperation` that draws or copies a signed source writes an unsigned file and says so in `Warnings`. To keep a signature checkable after its certificates expire, see [Long-term validation](#long-term-validation); to check a file's signatures, see [Reading signatures](#reading-signatures).
 
 ### Visible signatures
 
@@ -216,6 +216,18 @@ byte[] stamped = await PdfFileSigner.AddDocumentTimestampAsync(signed, PdfTimest
 ```
 
 `PdfFileSigner` signs or timestamps a PDF you did not write with this package, as an incremental update: every byte of the original stays exactly as it was, so signatures the file already carries stay valid, and only the catalog, the form, the first page and the lists that name the new field are written again, followed by a new cross-reference section (a classic table, or a stream when the file uses one). `Sign` and `SignAsync` add one signature field (invisible on the first page, unless the options draw it: see [Visible signatures](#visible-signatures)), numbered after the fields the file already has (`Signature1`, `Signature2`...); `AddDocumentTimestampAsync` adds a document timestamp instead (a `DocTimeStamp` field whose token covers the whole file, signatures included), which is how a signed file is kept trustworthy after its certificate expires. Call them again on the result to add more. The input array is not modified. An encrypted file is signed when you give its password (`PdfFileSigner.Sign(bytes, options, password)`, the user password, or for an AES-256 file the owner password too): the objects appended are encrypted with the file's own key, each under its own object number, and the update's trailer names the file's encryption dictionary, so the result is still a file the same readers open with the same password. A file encrypted with RC4 is refused (.NET has no RC4), and so is one whose cross-reference data is damaged and had to be rebuilt; a missing or wrong password throws `PdfPasswordException`.
+
+### Long-term validation
+
+```csharp
+var data = await PdfValidationData.CollectAsync(certificate, [intermediate], httpClient);
+var lt  = PdfFileSigner.AddValidationData(signedBytes, data);                       // PAdES B-LT
+var lta = await PdfFileSigner.AddDocumentTimestampAsync(lt, timestampOptions);       // PAdES B-LTA
+```
+
+A signature stays checkable for years only if a reader can see, without the network, the chain of certificates and the proof that none had been revoked when the signature was made. A file carries that in its document security store (`/DSS`). `PdfValidationData` holds the three kinds of thing the store keeps (`Certificates`, `OcspResponses` and `Crls`, each as DER bytes), and `PdfFileSigner.AddValidationData` appends them as an incremental update, so signatures already in the file stay valid; data the store already holds is stored once, and a file older than PDF 2.0 gets the extension entry that says it uses the store. `PdfPageSource.GetValidationData` reads the store back. A document timestamp added after it covers the store too: that is the long-term, archival form (B-LTA).
+
+`PdfValidationData.CollectAsync` builds the data for you: the certificate's chain (give it the intermediates the certificate does not carry), the revocation lists its certificates name, and an OCSP response from each responder they name, fetched over HTTP with the `HttpClient` you give it. What it cannot get is listed in `Problems` instead of failing the call, so one responder that is down leaves the rest usable (an incomplete chain, an address that is not `http` or `https`, a refused request), and cancelling the token stops it. Nothing checks that a response is genuine or current: collect it close to signing, and add it to the file before the certificates expire. The store is not tied to one signature (there is no per-signature VRI entry): a reader looks everything up in the file-wide lists.
 
 ### Reading signatures
 
