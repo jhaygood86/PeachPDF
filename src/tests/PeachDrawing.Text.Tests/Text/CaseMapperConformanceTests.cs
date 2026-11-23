@@ -19,6 +19,13 @@ namespace PeachDrawing.Text.Tests.Text
         private static string Decode(string codePoints) =>
             string.Concat(codePoints.Split(' ', StringSplitOptions.RemoveEmptyEntries).Select(cp => char.ConvertFromUtf32(Convert.ToInt32(cp, 16))));
 
+        private static bool Equivalent(string expected, string actual) =>
+            expected.Normalize(NormalizationForm.FormD) == actual.Normalize(NormalizationForm.FormD);
+
+        [Fact]
+        public void TheGreekCapitalsWithAToneAreComposed() =>
+            Assert.Equal("\u03AA\u0301", CaseMapper.ToUpper("\u0390"));       // not the iota, the diaeresis and the acute apart
+
         [Fact]
         public void UnconditionalSpecialCasingEntries_AreReproduced()
         {
@@ -32,9 +39,10 @@ namespace PeachDrawing.Text.Tests.Text
                 if (fields.Length > 4 && fields[4].Length > 0) continue;     // a context rule, covered by the language tests
 
                 var text = char.ConvertFromUtf32(Convert.ToInt32(fields[0], 16));
-                Assert.True(Decode(fields[1]) == CaseMapper.ToLower(text), $"lower of U+{fields[0]}");
-                Assert.True(Decode(fields[2]) == CaseMapper.ToTitle(text), $"title of U+{fields[0]}");
-                Assert.True(Decode(fields[3]) == CaseMapper.ToUpper(text), $"upper of U+{fields[0]}");
+                // SpecialCasing writes its mappings decomposed; CaseMapper composes them, which is the same text canonically.
+                Assert.True(Equivalent(Decode(fields[1]), CaseMapper.ToLower(text)), $"lower of U+{fields[0]}");
+                Assert.True(Equivalent(Decode(fields[2]), CaseMapper.ToTitle(text)), $"title of U+{fields[0]}");
+                Assert.True(Equivalent(Decode(fields[3]), CaseMapper.ToUpper(text)), $"upper of U+{fields[0]}");
                 checkedEntries++;
             }
 

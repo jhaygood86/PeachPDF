@@ -1,12 +1,15 @@
 #!/usr/bin/env python3
 """Generates src/drawing/PeachDrawing.Text/Internal/Text/CaseMappingData.g.cs from the Unicode Character Database
-(Unicode 18.0.0, matching the version already checked in for Scripts.txt): UnicodeData.txt, SpecialCasing.txt, PropList.txt
-and DerivedCoreProperties.txt.
+(Unicode 18.0.0, matching the version already checked in for Scripts.txt): UnicodeData.txt, SpecialCasing.txt, PropList.txt,
+DerivedCoreProperties.txt and DerivedNormalizationProps.txt.
 
 Tables, all sorted so they can be binary-searched:
 
 * SimpleUpper / SimpleLower - the one-to-one mappings of UnicodeData.txt (fields 12 and 13), as flat (code point, mapping) pairs.
-* FullUpper / FullLower - the unconditional mappings of SpecialCasing.txt that map to more than one code point.
+* FullUpper / FullLower - the unconditional mappings of SpecialCasing.txt that map to more than one code point. SpecialCasing
+  writes them decomposed (the Greek capital iota with a diaeresis and an acute is three code points); they are canonically composed
+  here (UAX #15: UnicodeData.txt's canonical decompositions less DerivedNormalizationProps.txt's Full_Composition_Exclusion), so a
+  renderer that does not compose draws the same letter as one that does.
 * Title - the titlecase mapping of every code point whose titlecase is not its simple uppercase: SpecialCasing.txt's full
   mappings (the German sharp s is "Ss") and UnicodeData.txt's field 14 (the digraph letters).
 * CombiningClasses - the ranges of non-zero canonical combining class (UnicodeData.txt field 3), for the Lithuanian and
@@ -74,6 +77,56 @@ def read_special_casing():
     return entries
 
 
+def read_composition():
+    """Returns (pairs, classes): (first, second) -> composite for the canonical decompositions that compose, and the combining classes."""
+    excluded = set()
+    with open(os.path.join(SCRIPT_DIR, "DerivedNormalizationProps.txt"), encoding="utf-8") as f:
+        for line in f:
+            if line.startswith("#"):
+                continue
+            m = RANGE_RE.match(line)
+            if m and m.group(3) == "Full_Composition_Exclusion":
+                start = int(m.group(1), 16)
+                excluded.update(range(start, (int(m.group(2), 16) if m.group(2) else start) + 1))
+
+    pairs, classes = {}, {}
+    with open(os.path.join(SCRIPT_DIR, "UnicodeData.txt"), encoding="utf-8") as f:
+        for line in f:
+            fields = line.rstrip("\n").split(";")
+            if len(fields) < 15:
+                continue
+            cp = int(fields[0], 16)
+            if int(fields[3]) != 0:
+                classes[cp] = int(fields[3])
+            decomposition = fields[5].split()
+            if len(decomposition) == 2 and not decomposition[0].startswith("<") and cp not in excluded:
+                pairs[(int(decomposition[0], 16), int(decomposition[1], 16))] = cp
+    return pairs, classes
+
+
+def compose(text, pairs, classes):
+    """Canonical composition (UAX #15 section 1.3) of a short string that is already in canonical order."""
+    chars = [ord(c) for c in text]
+    if len(chars) < 2:
+        return text
+    result = [chars[0]]
+    starter = 0 if classes.get(chars[0], 0) == 0 else None
+    last_class = 0
+    for c in chars[1:]:
+        cc = classes.get(c, 0)
+        composite = pairs.get((result[starter], c)) if starter is not None else None
+        if composite is not None and (last_class == 0 or last_class < cc) and not (last_class != 0 and cc == 0):
+            result[starter] = composite
+            continue
+        if cc == 0:
+            starter = len(result)
+            last_class = 0
+        else:
+            last_class = cc
+        result.append(c)
+    return "".join(chr(c) for c in result)
+
+
 def read_ranges(file_name, prop):
     cps = []
     with open(os.path.join(SCRIPT_DIR, file_name), encoding="utf-8") as f:
@@ -105,6 +158,8 @@ def lit(s):
 def main():
     upper, lower, title, combining = read_unicode_data()
     special = read_special_casing()
+    pairs, classes = read_composition()
+    special = {cp: tuple(compose(m, pairs, classes) for m in v) for cp, v in special.items()}
 
     full_upper = sorted((cp, v[2]) for cp, v in special.items() if len(v[2]) > 1)
     full_lower = sorted((cp, v[0]) for cp, v in special.items() if len(v[0]) > 1)
