@@ -5908,7 +5908,9 @@ namespace PeachBrackets.Html.Dom
                 // An ideographic space is a word of its own that the algorithm keeps with the character before it; the part of it that
                 // hangs is not measured.
                 var isIdeographicSpace = next is CssRectWord { Text: { Length: > 0 } text } && text.All(HtmlUtils.IsHangingSpaceSeparator);
-                if ((next.IsSpaces && !isIdeographicSpace) || next.IsLineBreak
+                // A preserved space that does not hang (break-spaces) stays with the word it follows, so it counts.
+                var staysOnTheLine = next.IsSpaces && next.OwnerBox.WhiteSpaceCollapse.Value == PeachBrackets.Css.WhiteSpaceCollapse.BreakSpaces;
+                if ((next.IsSpaces && !isIdeographicSpace && !staysOnTheLine) || next.IsLineBreak
                     || (!next.SuppressWrapBefore && HasOrdinaryWrapOpportunityBefore(box.Words[i - 1], next))) break;
 
                 width += next.Width - MeasureTrailingHangingSpace(g, next);

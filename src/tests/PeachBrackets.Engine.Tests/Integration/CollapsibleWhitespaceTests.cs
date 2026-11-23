@@ -83,5 +83,25 @@ namespace PeachBrackets.Engine.Tests.Integration
 
             Assert.Equal(16d, box.ActualRight - box.Location.X, 1);       // one em, not two
         }
+
+        /// <summary>
+        /// <c>white-space: break-spaces</c>: a line may end only after a preserved space, so the space after a word is not a place to break
+        /// and does not hang: the word and its space move to the next line together, rather than the space overflowing the line.
+        /// </summary>
+        [Fact]
+        public async Task BreakSpaces_MovesAWordAndItsSpaceToTheNextLineTogether()
+        {
+            const string Style = "font-size:16pt; white-space:break-spaces; ";
+
+            // Measure the words and the space on a line wide enough for everything.
+            var (wideRoot, _) = await LayoutHarness.LayoutAsync(Page($"<p id='p' style='{Style}'>x yy x</p>"));
+            var words = LayoutHarness.Descendants(LayoutHarness.FindById(wideRoot, "p")!).SelectMany(b => b.Words).ToList();
+            double x = words.First(w => w.Text == "x").Width, yy = words.First(w => w.Text == "yy").Width, space = words.First(w => w.Text == " ").Width;
+
+            // Room for "x yy" but not for the space after it: that space belongs to "yy ", which does not fit after "x ".
+            var lines = await Lines($"<p id='p' style='{Style}width:{x + space + yy + space / 2}pt'>x yy x</p>");
+
+            Assert.Equal(["x ", "yy x"], lines);
+        }
     }
 }

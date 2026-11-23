@@ -147,5 +147,6 @@ namespace PeachBrackets.Engine.Tests.Integration
             foreach (var line in box.LineBoxes.Select(l => string.Concat(l.Words.Select(w => w.Text))).Where(t => t.Length > 0))
                 Assert.True(line.Length % 2 == 0, $"a pair was split across lines: '{line}'");
         }
+
     }
 }
