@@ -37,6 +37,13 @@ public sealed partial class PdfComposer
         if (options.Signing is { } signing)
         {
             signing.Validate();
+            if (signing.Box is not null && (options.Conformance != PdfAConformance.None || options.XConformance != PdfXConformance.None))
+            {
+                throw new InvalidOperationException(
+                    "A visible signature is drawn in a standard font that is not embedded, which PDF/A and PDF/X do not allow: " +
+                    "leave PdfSigningOptions.Box unset (an invisible signature is allowed) or drop the conformance level.");
+            }
+
             _signing = signing.Clone();
         }
 

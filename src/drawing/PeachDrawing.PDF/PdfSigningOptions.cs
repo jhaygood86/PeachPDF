@@ -80,6 +80,12 @@ public sealed class PdfSigningOptions
     /// </summary>
     public PdfTimestampOptions? Timestamp { get; set; }
 
+    /// <summary>
+    /// Draws the signature as a box on a page, or <see langword="null"/> (the default) to make it an invisible field on the first page.
+    /// Not available for a file that claims PDF/A or PDF/X, or on a rotated page. See <see cref="PdfSignatureBox"/>.
+    /// </summary>
+    public PdfSignatureBox? Box { get; set; }
+
     /// <summary>The signer's name as the signature field shows it, or <see langword="null"/> to leave it out.</summary>
     public string? SignerName { get; set; }
 
@@ -114,6 +120,7 @@ public sealed class PdfSigningOptions
             ContactInfo = ContactInfo,
             ReservedSignatureBytes = ReservedSignatureBytes,
             Timestamp = Timestamp?.Clone(),
+            Box = Box?.Clone(),
         };
         foreach (var certificate in AdditionalCertificates)
             copy.AdditionalCertificates.Add(certificate);
@@ -137,6 +144,7 @@ public sealed class PdfSigningOptions
         if (!Enum.IsDefined(Format))
             throw new InvalidOperationException("PdfSigningOptions.Format is not a defined format.");
         Timestamp?.Validate();
+        Box?.Validate();
         if (ReservedSignatureBytes is < 2048 or > 1_000_000)
             throw new InvalidOperationException("PdfSigningOptions.ReservedSignatureBytes must be from 2048 to 1000000.");
     }

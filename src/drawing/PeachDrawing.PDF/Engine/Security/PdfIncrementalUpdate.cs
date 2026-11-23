@@ -3,7 +3,9 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Numerics;
 using System.Text;
+using PeachDrawing.Core;
 using PeachDrawing.PDF.Engine.Advanced;
 using PeachDrawing.PDF.Import;
 
@@ -26,9 +28,10 @@ internal static class PdfIncrementalUpdate
     /// <param name="original">the bytes of the file</param>
     /// <param name="valueDictionary">the signature value dictionary, as PDF syntax</param>
     /// <param name="fieldNamePrefix">what an unused field name starts with: the first free "prefix1", "prefix2"... is taken</param>
+    /// <param name="visible">the box to draw the signature as, or <see langword="null"/> for an invisible field on the first page</param>
     /// <exception cref="NotSupportedException">the file is encrypted</exception>
     /// <exception cref="InvalidDataException">the file's cross-reference data is damaged, or it has no page to put the field on</exception>
-    public static byte[] AppendSignatureField(byte[] original, string valueDictionary, string fieldNamePrefix)
+    public static byte[] AppendSignatureField(byte[] original, string valueDictionary, string fieldNamePrefix, VisibleSignature? visible = null)
     {
         PdfSourceDocument source;
         try
@@ -45,9 +48,33 @@ internal static class PdfIncrementalUpdate
 
         var rootItem = source.Trailer.GetRaw("Root") as PdfReference ?? throw new InvalidDataException("The PDF has no document catalog.");
         var root = source.Resolve(rootItem) as PdfDictionary ?? throw new InvalidDataException("The PDF's document catalog is unreadable.");
-        if (source.Pages.Count == 0 || source.Pages[0].Reference is not { } pageReference)
+        var pageNumber = visible?.PageNumber ?? 1;
+        if (source.Pages.Count == 0)
             throw new InvalidDataException("The PDF has no page to put a signature on.");
-        var page = source.Pages[0];
+        if (pageNumber > source.Pages.Count)
+            throw new InvalidOperationException($"PdfSignatureBox.PageNumber is {pageNumber}, but the PDF has {source.Pages.Count} page(s).");
+        var page = source.Pages[pageNumber - 1];
+        if (page.Reference is not { } pageReference)
+            throw new InvalidDataException("The PDF's page is not an indirect object.");
+
+        // The widget's rectangle is in the page's own space; for a visible signature it is found from the box in page-as-shown points.
+        string rect = "[0 0 0 0]";
+        double boxWidth = 0, boxHeight = 0;
+        if (visible is not null)
+        {
+            if (new PdfSourceNavigation(source).Conformance() is { } level && (level.PdfA != PdfAConformance.None || level.PdfX != PdfXConformance.None))
+                throw new InvalidOperationException("A visible signature is drawn in a standard font that is not embedded, which PDF/A and PDF/X do not allow.");
+            if (source.IntOf(source.InheritedAttribute(page, "Rotate")) % 360 != 0)
+                throw new NotSupportedException("A visible signature cannot be placed on a rotated page.");
+
+            Matrix3x2.Invert(PdfPagePainter.PageToCanvas(source, page), out var toPage);
+            var a = Vector2.Transform(new Vector2((float)visible.Bounds.X, (float)visible.Bounds.Y), toPage);
+            var b = Vector2.Transform(new Vector2((float)(visible.Bounds.X + visible.Bounds.Width), (float)(visible.Bounds.Y + visible.Bounds.Height)), toPage);
+            double x0 = Math.Min(a.X, b.X), y0 = Math.Min(a.Y, b.Y), x1 = Math.Max(a.X, b.X), y1 = Math.Max(a.Y, b.Y);
+            boxWidth = x1 - x0;
+            boxHeight = y1 - y0;
+            rect = string.Create(CultureInfo.InvariantCulture, $"[{x0:0.####} {y0:0.####} {x1:0.####} {y1:0.####}]");
+        }
 
         // A hostile /Size or object number near the limit would wrap the numbers given to the new objects.
         long highest = Math.Max(source.HighestObjectNumber, source.IntOf(source.Trailer.GetRaw("Size")) - 1L);
@@ -98,9 +125,21 @@ internal static class PdfIncrementalUpdate
             pageOverrides["/Annots"] = annotations is null ? $"[{fieldRef}]" : Serialize(annotations, NoOverrides, extraElement: fieldRef);
         objects[pageReference.ObjectNumber] = Serialize(page, pageOverrides);
 
+        string appearanceEntry = "";
+        if (visible is not null)
+        {
+            int fontNumber = next++, formNumber = next++;
+            var content = PdfSignatureBoxContent.Content(boxWidth, boxHeight, visible.Lines, visible.FontSize);
+            objects[fontNumber] = PdfSignatureBoxContent.FontObjectText;
+            objects[formNumber] =
+                string.Create(CultureInfo.InvariantCulture, $"<< /Type /XObject /Subtype /Form /BBox [0 0 {boxWidth:0.####} {boxHeight:0.####}] ") +
+                $"/Resources << /Font << /Helv {fontNumber} 0 R >> >> /Length {content.Length} >>\nstream\n{content}endstream";
+            appearanceEntry = $" /AP << /N {formNumber} 0 R >>";
+        }
+
         objects[valueNumber] = valueDictionary;
         objects[fieldNumber] =
-            $"<< /Type /Annot /Subtype /Widget /FT /Sig /T <{Convert.ToHexString(Encoding.Latin1.GetBytes(fieldName))}> /F 132 /Rect [0 0 0 0] " +
+            $"<< /Type /Annot /Subtype /Widget /FT /Sig /T <{Convert.ToHexString(Encoding.Latin1.GetBytes(fieldName))}> /F 132 /Rect {rect}{appearanceEntry} " +
             $"/P {pageReference.ObjectNumber} {pageReference.GenerationNumber} R /V {valueNumber} 0 R >>";
 
         if (source.WasRebuilt)
@@ -108,6 +147,9 @@ internal static class PdfIncrementalUpdate
 
         return Append(source, objects, next);
     }
+
+    /// <summary>A signature drawn as a box: the page it goes on, where (points from the top-left of the page as shown), and what it says.</summary>
+    internal sealed record VisibleSignature(int PageNumber, Rect Bounds, string[] Lines, double FontSize);
 
     /// <summary>The first "prefixN" that no field of the form already has.</summary>
     static string FreeName(PdfSourceDocument source, PdfArray? fields, string prefix)

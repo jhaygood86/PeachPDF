@@ -41,18 +41,67 @@ internal static class PdfDocumentSigner
         SetText(value, "/ContactInfo", options.ContactInfo);
 
         var form = document.Catalog.AcroForm;
+        var appearance = options.Box;
+        var pageNumber = appearance?.PageNumber ?? 1;
+        if (pageNumber > document.PageCount)
+        {
+            throw new InvalidOperationException(
+                $"PdfSignatureBox.PageNumber is {pageNumber}, but the document has {document.PageCount} page(s).");
+        }
+
+        var page = document.Pages[pageNumber - 1];
+        double top = page.Height;
         var field = new PdfSignatureField(document)
         {
             PartialFieldName = FreeFieldName(form),
-            Rectangle = new PdfRectangle(0, 0, 0, 0),
+            Rectangle = appearance is { } a
+                ? new PdfRectangle(a.Bounds.X, top - a.Bounds.Y - a.Bounds.Height, a.Bounds.X + a.Bounds.Width, top - a.Bounds.Y)
+                : new PdfRectangle(0, 0, 0, 0),
             Flags = (PdfAnnotationFlags)(4 | 128), // print + locked
         };
         field.Elements.SetReference("/V", value);
 
-        document.Pages[0].Annotations.Add(field);
+        if (appearance is not null)
+            AttachAppearance(document, field, options, appearance);
+
+        page.Annotations.Add(field);
         form.AddField(field);
         form.Elements.SetInteger(PdfAcroForm.Keys.SigFlags, 3); // signatures exist, and the file is only appended to from here
         return field;
+    }
+
+    /// <summary>Gives the widget an appearance stream: a border and the text, in the standard Helvetica font.</summary>
+    static void AttachAppearance(PdfDocument document, PdfSignatureField field, PdfSigningOptions options, PdfSignatureBox appearance)
+    {
+        var width = appearance.Bounds.Width;
+        var height = appearance.Bounds.Height;
+        var content = Encoding.ASCII.GetBytes(PdfSignatureBoxContent.Content(
+            width, height, PdfSignatureBoxContent.Lines(options, PdfEntropy.UtcNow()), appearance.FontSize));
+
+        var font = new PdfDictionary(document);
+        document.Internals.AddObject(font);
+        font.Elements.SetName("/Type", "/Font");
+        font.Elements.SetName("/Subtype", "/Type1");
+        font.Elements.SetName("/BaseFont", "/Helvetica");
+        font.Elements.SetName("/Encoding", "/WinAnsiEncoding");
+
+        var fonts = new PdfDictionary(document);
+        fonts.Elements.SetReference("/Helv", font);
+        var resources = new PdfDictionary(document);
+        resources.Elements.SetObject("/Font", fonts);
+
+        var form = new PdfDictionary(document);
+        document.Internals.AddObject(form);
+        form.Elements.SetName("/Type", "/XObject");
+        form.Elements.SetName("/Subtype", "/Form");
+        form.Elements.SetRectangle("/BBox", new PdfRectangle(0, 0, width, height));
+        form.Elements.SetObject("/Resources", resources);
+        form.Stream = new PdfDictionary.PdfStream(content, form);
+        form.Elements[PdfDictionary.PdfStream.Keys.Length] = new PdfInteger(content.Length);
+
+        var ap = new PdfDictionary(document);
+        ap.Elements.SetReference("/N", form);
+        field.Elements.SetObject("/AP", ap);
     }
 
     /// <summary>The first "SignatureN" that no field already in the form (a form control the document drew, say) has.</summary>

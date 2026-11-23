@@ -426,6 +426,12 @@ PeachDrawing.PDF.PdfRenderContext : class
   method virtual String GetCssMediaType(IEnumerable<String> mediaTypesAvailable)
   property Double LayoutUnitsPerPoint { get; }
   property Double PixelsPerPoint { get; set; }
+PeachDrawing.PDF.PdfSignatureBox : sealed class
+  ctor()
+  property Double FontSize { get; set; }
+  property Int32 PageNumber { get; set; }
+  property Rect Bounds { get; set; }
+  property String Text { get; set; }
 PeachDrawing.PDF.PdfSignatureFormat : enum Int32
   CadesDetached = 1
   Pkcs7Detached = 0
@@ -439,6 +445,7 @@ PeachDrawing.PDF.PdfSigningOptions : sealed class
   property HashAlgorithmName HashAlgorithm { get; set; }
   property IList<X509Certificate2> AdditionalCertificates { get; }
   property Int32 ReservedSignatureBytes { get; set; }
+  property PdfSignatureBox Box { get; set; }
   property PdfSignatureFormat Format { get; set; }
   property PdfTimestampOptions Timestamp { get; set; }
   property String ContactInfo { get; set; }

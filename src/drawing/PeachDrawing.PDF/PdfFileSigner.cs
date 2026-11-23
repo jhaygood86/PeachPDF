@@ -31,7 +31,7 @@ public static class PdfFileSigner
         if (copy.Timestamp is not null)
             throw new InvalidOperationException("The signature asks for a timestamp, whose authority is asked asynchronously: call SignAsync.");
 
-        var file = PdfIncrementalUpdate.AppendSignatureField(pdf, PdfDocumentSigner.SignatureValueText(copy), "Signature");
+        var file = PdfIncrementalUpdate.AppendSignatureField(pdf, PdfDocumentSigner.SignatureValueText(copy), "Signature", Visible(copy));
         PdfDocumentSigner.Seal(file, copy);
         return file;
     }
@@ -50,7 +50,7 @@ public static class PdfFileSigner
         ArgumentNullException.ThrowIfNull(options);
         var copy = Prepare(options);
 
-        var file = PdfIncrementalUpdate.AppendSignatureField(pdf, PdfDocumentSigner.SignatureValueText(copy), "Signature");
+        var file = PdfIncrementalUpdate.AppendSignatureField(pdf, PdfDocumentSigner.SignatureValueText(copy), "Signature", Visible(copy));
         await PdfDocumentSigner.SealAsync(file, copy, cancellationToken).ConfigureAwait(false);
         return file;
     }
@@ -80,6 +80,11 @@ public static class PdfFileSigner
         await PdfDocumentSigner.SealTimestampAsync(file, copy, reservedBytes, cancellationToken).ConfigureAwait(false);
         return file;
     }
+
+    private static PdfIncrementalUpdate.VisibleSignature? Visible(PdfSigningOptions options) =>
+        options.Box is { } a
+            ? new PdfIncrementalUpdate.VisibleSignature(a.PageNumber, a.Bounds, PdfSignatureBoxContent.Lines(options, PeachDrawing.PDF.Engine.Internal.PdfEntropy.UtcNow()), a.FontSize)
+            : null;
 
     private static PdfSigningOptions Prepare(PdfSigningOptions options)
     {
