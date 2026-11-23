@@ -59,6 +59,27 @@ namespace PeachBrackets.Html.Utils
         }
 
         /// <summary>
+        /// Applies <paramref name="transform"/> to <paramref name="text"/> as <see cref="Apply"/> does, except that <c>uppercase</c> and
+        /// <c>lowercase</c> use Unicode's full case mappings for <paramref name="language"/> (the German sharp s becomes <c>SS</c>, a
+        /// Greek final sigma is chosen from its context, Turkish dotted and dotless i), which can change the text's length.
+        /// <paramref name="sourceIndices"/> then says, for each UTF-16 index of the result and for its end, the index of the character of
+        /// <paramref name="text"/> it came from; it is <see langword="null"/> when the length did not change.
+        /// </summary>
+        public static string ApplyFull(string text, TextTransform transform, string? language, out int[]? sourceIndices)
+        {
+            sourceIndices = null;
+            if (string.IsNullOrEmpty(text))
+                return text;
+
+            return transform switch
+            {
+                TextTransform.Uppercase => PeachDrawing.Text.Unicode.CaseMapper.ToUpper(text, language, out sourceIndices),
+                TextTransform.Lowercase => PeachDrawing.Text.Unicode.CaseMapper.ToLower(text, language, out sourceIndices),
+                _ => Apply(text, transform),
+            };
+        }
+
+        /// <summary>
         /// Maps <paramref name="text"/> to upper or lower case one code point at a time, so a letter outside the Basic Multilingual Plane
         /// (Deseret, Osage, Adlam ...) maps as a whole rather than as two lone surrogates. The mapping is Unicode's simple case mapping, so
         /// the text keeps its length; the dotless i, which .NET's invariant mapping leaves alone, becomes <c>I</c>.
