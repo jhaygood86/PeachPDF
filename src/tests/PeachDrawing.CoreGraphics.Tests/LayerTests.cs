@@ -64,6 +64,19 @@ public class LayerTests
     }
 
     [Fact]
+    public void An_anisotropic_blur_spreads_further_along_the_larger_axis()
+    {
+        using var scene = Scene.Create(80, 80);
+        using (var layer = scene.Canvas.BeginLayer(new LayerOptions(Opacity: 1, Effects: [new BlurEffect(6, 1)])))
+            layer!.Canvas.DrawRectangle(scene.Solid(255, 0, 0), 30, 30, 20, 20);
+
+        // Eight pixels outside the edge: the wide (horizontal) deviation reaches it, the narrow (vertical) one does not.
+        var sideways = scene.Px(22, 40).A;
+        var upDown = scene.Px(40, 22).A;
+        Assert.True(sideways > upDown + 10, $"sideways {sideways}, up/down {upDown}");
+    }
+
+    [Fact]
     public void A_drop_shadow_appears_offset_beneath_the_content()
     {
         using var scene = Scene.Create(60, 60);
