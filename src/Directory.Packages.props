@@ -47,10 +47,15 @@
   </ItemGroup>
   <ItemGroup Condition="'$(TargetFramework)' == 'net11.0'">
     <PackageVersion Include="System.Text.Json" Version="11.0.0" />
-    <PackageVersion Include="System.Security.Cryptography.Pkcs" Version="11.0.0" />
   </ItemGroup>
   <ItemGroup Condition="'$(TargetFramework)' != 'net11.0'">
     <PackageVersion Include="System.Text.Json" Version="10.0.14" />
+  </ItemGroup>
+  <!-- Keyed on the framework version, not the exact name: the platform TFMs (net11.0-android, net11.0-windows...) are .NET 11 too. -->
+  <ItemGroup Condition="$([MSBuild]::VersionGreaterThanOrEquals($([MSBuild]::GetTargetFrameworkVersion('$(TargetFramework)')), 11.0))">
+    <PackageVersion Include="System.Security.Cryptography.Pkcs" Version="11.0.0" />
+  </ItemGroup>
+  <ItemGroup Condition="!$([MSBuild]::VersionGreaterThanOrEquals($([MSBuild]::GetTargetFrameworkVersion('$(TargetFramework)')), 11.0))">
     <PackageVersion Include="System.Security.Cryptography.Pkcs" Version="10.0.14" />
   </ItemGroup>
 </Project>
