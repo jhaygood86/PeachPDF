@@ -129,6 +129,12 @@ A long option takes its value as `--option=VALUE` or as the next argument (`--op
 | `--user-password-env=VAR`, `--owner-password-env=VAR` | Read the password from an environment variable; it must be set. |
 | `--permissions=LIST` | What a reader allows without the owner password, as a comma-separated list of `print`, `print-low`, `copy`, `modify`, `annotate`, `fill-forms`, `accessibility` and `assemble`, or one of the shorthands `read-only`, `all` and `none`. Default `all`. Giving it encrypts the PDF even without a password. |
 | `--no-encrypt-metadata` | Leave the XMP metadata stream unencrypted. |
+| `--sign-cert=FILE` | Sign the PDF with the certificate and private key in a PKCS#12 (`.pfx`/`.p12`) file. See [Digitally signing PDF output](usage-examples.md#digitally-signing-pdf-output). |
+| `--sign-password=PASS` | The certificate file's password. As with the encryption passwords, prefer the `--sign-password-file=FILE` or `--sign-password-env=VAR` forms. |
+| `--sign-format=NAME` | `pkcs7` (default) or `cades` (the PAdES baseline form). |
+| `--timestamp-url=URL` | Timestamp the signature with the RFC 3161 authority at this `http` or `https` address. |
+| `--sign-name=TEXT`, `--sign-reason=TEXT`, `--sign-location=TEXT`, `--sign-contact=TEXT` | Details a reader shows for the signature. |
+| `--sign-box=PAGE,X,Y,W,H` | Draw a visible signature: a page counted from 1, then a rectangle in points from the page's top-left corner. Default: an invisible signature. Not with `--pdfa`. |
 | `--tagged-pdf` | Emit a tagged (PDF/UA) structure tree. |
 | `--snap-box-decorations-to-css-pixels` | Snap box backgrounds, borders and outlines to whole CSS pixels, like a browser, so a 1px border covers one device pixel at 100% zoom. |
 | `--snap-border-widths-to-css-pixels` | Snap length-valued border widths to whole CSS pixels, like a browser: a width between 0 and 1px becomes 1px, larger widths round down. Unlike the option above this changes box sizes. |

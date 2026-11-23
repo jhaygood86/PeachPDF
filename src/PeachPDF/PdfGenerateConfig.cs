@@ -590,6 +590,14 @@ namespace PeachPDF
         public PdfEncryptionOptions? Encryption { get; set; }
 
         /// <summary>
+        /// Signs the generated PDF with a certificate, and optionally timestamps it. <see langword="null"/> (the default) leaves it
+        /// unsigned. A whole-document property, like <see cref="Encryption"/>. A document with a
+        /// <see cref="PdfSigningOptions.TimestampAuthority"/> must be written with <see cref="PeachPdfDocument.SaveAsync"/>. See
+        /// <see cref="PdfSigningOptions"/>.
+        /// </summary>
+        public PdfSigningOptions? Signing { get; set; }
+
+        /// <summary>
         /// Print color-management options - ICC output intent, black generation, and real ICC
         /// device-to-device color conversion (<see cref="ColorOptions.ConversionMode"/> - see
         /// <see cref="PeachPDF.ColorOptions"/>'s remarks). <see langword="null"/> (the default) behaves as

@@ -181,6 +181,11 @@ internal static class CliRunner
             };
         }
 
+        if (options.WantsSigning)
+        {
+            config.Signing = BuildSigning(options);
+        }
+
         // PDF/A always writes an XMP stream, which needs a creation date - and the library throws when it
         // has none, rather than inventing one. So no date is made up here either: an explicit
         // --pdf-creation-date is used as given, otherwise the document's own date (<meta name="date">) is.
@@ -375,12 +380,38 @@ internal static class CliRunner
         return new Uri(fullPath);
     }
 
+    private static PdfSigningOptions BuildSigning(CliOptions options)
+    {
+        System.Security.Cryptography.X509Certificates.X509Certificate2 certificate;
+        try
+        {
+            certificate = System.Security.Cryptography.X509Certificates.X509CertificateLoader.LoadPkcs12FromFile(options.SignCertificatePath!, options.SignPassword);
+        }
+        catch (Exception ex) when (ex is IOException or System.Security.Cryptography.CryptographicException or UnauthorizedAccessException)
+        {
+            throw new InvalidOperationException($"cannot read the --sign-cert file '{options.SignCertificatePath}' (check the path and the password): {ex.Message}", ex);
+        }
+
+        return new PdfSigningOptions
+        {
+            Certificate = certificate,
+            Format = options.SignFormat ?? PdfSignatureFormat.Pkcs7Detached,
+            TimestampAuthority = options.TimestampUrl,
+            TimestampClient = options.TimestampUrl is null ? null : BuildHttpClient(options) ?? new HttpClient(),
+            Box = options.SignBox,
+            SignerName = options.SignName,
+            Reason = options.SignReason,
+            Location = options.SignLocation,
+            ContactInfo = options.SignContact,
+        };
+    }
+
     private static async Task WriteOutputAsync(PeachPdfDocument document, CliOptions options, Stream stdout, CliLogger logger)
     {
         if (options.OutputKind == CliOutputKind.Stdout)
         {
             using var buffer = new MemoryStream();
-            document.Save(buffer);
+            await document.SaveAsync(buffer);
             buffer.Position = 0;
             await buffer.CopyToAsync(stdout);
             await stdout.FlushAsync();
@@ -393,7 +424,7 @@ internal static class CliRunner
             : Path.ChangeExtension(options.Inputs[0].Value, ".pdf");
 
         await using var file = File.Create(outputPath);
-        document.Save(file);
+        await document.SaveAsync(file);
         logger.Info($"Wrote {outputPath} ({document.PageCount} page(s)).");
     }
 

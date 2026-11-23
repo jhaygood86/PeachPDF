@@ -53,6 +53,16 @@ public class PeachPdfDocument
     }
 
     /// <summary>
+    /// Writes the completed PDF to the given stream, asking the timestamp authority when the document is signed with a
+    /// <see cref="PdfSigningOptions.TimestampAuthority"/>. Use this instead of <see cref="Save"/> for such a document, which
+    /// <see cref="Save"/> refuses.
+    /// </summary>
+    /// <param name="stream">The destination stream. The caller owns the stream and is responsible for disposing it.</param>
+    /// <param name="cancellationToken">Cancels the wait for the authority.</param>
+    public System.Threading.Tasks.Task SaveAsync(Stream stream, System.Threading.CancellationToken cancellationToken = default) =>
+        _composer.SaveAsync(stream, cancellationToken);
+
+    /// <summary>
     /// Merges embedded raster images that encode to byte-identical PDF image objects, keeping one copy
     /// and repointing every other reference at it. Call this after all pages have been added, and before
     /// <see cref="Save"/> - a page's resources are rewritten in place, but the size reduction only takes

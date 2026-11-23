@@ -31,6 +31,43 @@ namespace PeachPDF.Rendering
                 EncryptMetadata = value.EncryptMetadata,
             };
 
+        public static PeachDrawing.PDF.PdfSigningOptions? ToEngine(this PeachPDF.PdfSigningOptions? value)
+        {
+            if (value is null)
+                return null;
+
+            var signing = new PeachDrawing.PDF.PdfSigningOptions
+            {
+                Certificate = value.Certificate,
+                PrivateKey = value.PrivateKey,
+                KeyPin = value.KeyPin,
+                AllowKeyPrompt = value.AllowKeyPrompt,
+                HashAlgorithm = value.HashAlgorithm,
+                Format = (PeachDrawing.PDF.PdfSignatureFormat)(int)value.Format,
+                Timestamp = value.TimestampAuthority is null
+                    ? null
+                    : PeachDrawing.PDF.PdfTimestampOptions.FromHttpAuthority(value.TimestampAuthority, value.TimestampClient ?? new System.Net.Http.HttpClient()),
+                Box = value.Box is null
+                    ? null
+                    : new PeachDrawing.PDF.PdfSignatureBox
+                    {
+                        PageNumber = value.Box.PageNumber,
+                        Bounds = new PeachDrawing.Core.Rect(value.Box.X, value.Box.Y, value.Box.Width, value.Box.Height),
+                        Text = value.Box.Text,
+                        FontSize = value.Box.FontSize,
+                    },
+                SignerName = value.SignerName,
+                Reason = value.Reason,
+                Location = value.Location,
+                ContactInfo = value.ContactInfo,
+            };
+
+            foreach (var certificate in value.AdditionalCertificates)
+                signing.AdditionalCertificates.Add(certificate);
+
+            return signing;
+        }
+
         public static PeachDrawing.PDF.PdfEmbeddedFile ToEngine(this PeachPDF.PdfAttachment value) => new()
         {
             FileName = value.FileName,
