@@ -44,9 +44,11 @@ jobs:
     - name: Setup .NET
       uses: ./.github/actions/setup-dotnet
 
-    # The same font set the test workflow installs, so text metrics do not depend on whatever the runner image ships.
+    # The font set the test workflow installs, plus Noto for the scripts the css-text tests set in system fonts (CJK, Greek, Georgian,
+    # Armenian, Cyrillic extensions, ...): without them those tests fall back to whatever the runner image ships, or to nothing, and the
+    # floors would say more about the image than about the engine. The floors in wpt/wpt-floors.json are measured with exactly this set.
     - name: Install fonts
-      run: sudo apt-get update && sudo apt-get install -y fontconfig fonts-liberation fonts-dejavu-core
+      run: sudo apt-get update && sudo apt-get install -y fontconfig fonts-liberation fonts-dejavu-core fonts-noto-core fonts-noto-cjk
 
     - name: Cache the WPT checkout
       id: wpt-cache
