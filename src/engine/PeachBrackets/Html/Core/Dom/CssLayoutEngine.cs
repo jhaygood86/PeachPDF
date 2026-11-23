@@ -8026,7 +8026,7 @@ namespace PeachBrackets.Html.Dom
                         }
 
                         var overflows = b.WhiteSpacePermitsWrapping
-                                         && coordinates.CurrentX + word.Width + rightSpacing + clonedTrailing > actualLimitRight + LineFitTolerance
+                                         && coordinates.CurrentX + word.Width - TrailingLetterSpacing(word) + rightSpacing + clonedTrailing > actualLimitRight + LineFitTolerance
                                          && (!b.PreservedSpacesHang || !word.IsSpaces);
 
                         // hanging-punctuation: allow-end / force-end (CSS Text 3 §8.1): a stop or comma that
@@ -11885,6 +11885,22 @@ namespace PeachBrackets.Html.Dom
         }
 
         /// <summary>
+        /// The letter-spacing a word carries after its last character, or 0. The spacing goes between adjacent characters (css-text-4 section
+        /// 7.2), so the one after the last character of a line is not applied: a word that ends a line leaves it out of the line's width.
+        /// </summary>
+        internal static double TrailingLetterSpacing(CssRect word)
+        {
+            if (word is not CssRectWord { Text.Length: > 0 }) return 0d;
+
+            var spacing = word.OwnerBox.ActualLetterSpacing;
+            return double.IsNaN(spacing) || spacing <= 0d ? 0d : spacing;
+        }
+
+        /// <summary>What a word that ends a line leaves out of the line's width: the space separators that hang, or else its trailing letter-spacing.</summary>
+        internal static double MeasureLineEndOverhang(Canvas g, CssRect word) =>
+            MeasureTrailingHangingSpace(g, word) is > 0d and var hang ? hang : TrailingLetterSpacing(word);
+
+        /// <summary>
         /// The width of the space separators (the ideographic space and its kin, see <see cref="HtmlUtils.IsHangingSpaceSeparator"/>) that
         /// end <paramref name="word"/>, or 0. css-text-3 section 4.1.3 has such a space at the end of a line hang, as a preserved space
         /// does, so it is neither measured for the line's fit nor counted in its content width. A space that wraps (<c>break-spaces</c>) or sits in a box that does not wrap does not hang.
@@ -11988,6 +12004,8 @@ namespace PeachBrackets.Html.Dom
 
                 closing.HungEndWidth = Math.Max(closing.HungEndWidth, closing.Right - hangStart);
             }
+
+            if (!closing.IsLineBreak && closing.HungEndWidth == 0d) closing.HungEndWidth = TrailingLetterSpacing(closing);
 
             if (blockBox.HangingPunctuation is not { Length: > 0 }) return;
 

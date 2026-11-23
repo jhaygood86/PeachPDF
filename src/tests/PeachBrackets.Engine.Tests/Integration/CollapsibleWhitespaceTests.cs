@@ -133,5 +133,18 @@ namespace PeachBrackets.Engine.Tests.Integration
             var only = LayoutHarness.Descendants(LayoutHarness.FindById(single, "p")!).SelectMany(x => x.Words).First(w => w.Text == "aaaa");
             Assert.Equal(LayoutHarness.FindById(single, "p")!.ActualRight - space, only.Right, 1);
         }
+
+        /// <summary>The letter-spacing goes between characters, so the one after the last character of a line is not applied: right-aligned text ends flush.</summary>
+        [Fact]
+        public async Task LetterSpacing_IsNotAppliedAfterTheLastCharacterOfALine()
+        {
+            var (root, _) = await LayoutHarness.LayoutAsync(Page("<p id='p' style='font-size:16pt; letter-spacing:10pt; text-align:right; width:200pt'>abc</p>"));
+            var box = LayoutHarness.FindById(root, "p")!;
+            var word = LayoutHarness.Descendants(box).SelectMany(b => b.Words).Single(w => w.Text == "abc");
+
+            // The word's box still carries the spacing after its last letter, which hangs past the edge.
+            Assert.Equal(box.ActualRight + 10, word.Right, 1);
+            Assert.Equal(10, word.HungEndWidth, 1);
+        }
     }
 }

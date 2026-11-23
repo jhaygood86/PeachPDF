@@ -10376,12 +10376,12 @@ namespace PeachBrackets.Html.Dom
                     {
                         // The run ends here, so the space separator that ends it hangs (css-text-3 section 4.1.3) and is not counted.
                         UpdateMinWidth(ref min, ref minDecoration,
-                            unbreakableRunWidth - (previousWord is null ? 0d : CssLayoutEngine.MeasureTrailingHangingSpace(g, previousWord)), paddingSum);
+                            unbreakableRunWidth - (previousWord is null ? 0d : CssLayoutEngine.MeasureLineEndOverhang(g, previousWord)), paddingSum);
                         unbreakableRunWidth = 0;
                     }
 
                     unbreakableRunWidth += wordMinWidth;
-                    UpdateMinWidth(ref min, ref minDecoration, unbreakableRunWidth - CssLayoutEngine.MeasureTrailingHangingSpace(g, word), paddingSum);
+                    UpdateMinWidth(ref min, ref minDecoration, unbreakableRunWidth - CssLayoutEngine.MeasureLineEndOverhang(g, word), paddingSum);
                     previousWord = word;
                     if (word is CssRectWord textWord && !string.IsNullOrEmpty(textWord.Text))
                     {
@@ -10398,7 +10398,7 @@ namespace PeachBrackets.Html.Dom
                     // An ideographic space that ends the word hangs with the white space after it; a word of nothing else adds the run before it.
                     var ideographicHang = CssLayoutEngine.MeasureTrailingHangingSpace(g, word);
                     var runBefore = ideographicHang >= word.Width - 0.01d && ideographicHang > 0d ? trailingSpace : 0d;
-                    trailingSpace = word.ActualWordSpacing + ideographicHang + runBefore;
+                    trailingSpace = word.ActualWordSpacing + CssLayoutEngine.MeasureLineEndOverhang(g, word) + runBefore;
                     atLineStart = false;
                 }
 
