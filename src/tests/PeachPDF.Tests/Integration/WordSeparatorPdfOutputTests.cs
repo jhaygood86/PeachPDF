@@ -47,6 +47,19 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task ArabicLetterDrawnWithSeparateDotGlyphs_CarriesItsExactTextAsActualText()
+        {
+            // BEH, YEH and TEH share one body glyph and differ in their dot glyphs, so one ToUnicode destination
+            // per glyph cannot tell them apart; each run says what it is instead.
+            var pdf = await RenderAsync("<p dir=\"rtl\">بيت</p><p>abc</p>", BundledFonts.Arabic);
+            var content = Content(pdf);
+
+            Assert.Contains("/Span<</ActualText <FEFF0628064A062A>>>BDC\n", content);
+            Assert.Equal(1, Count(content, "/ActualText"));
+            Assert.Equal(1, Count(content, "EMC\n"));
+        }
+
+        [Fact]
         public async Task SeparatorAfterAnInlineBackground_IsPositionedOnItsOwn()
         {
             // The span's background is drawn between "a" and the separator in front of "b", so the

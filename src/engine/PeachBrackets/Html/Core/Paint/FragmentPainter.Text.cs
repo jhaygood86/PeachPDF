@@ -198,6 +198,13 @@ namespace PeachBrackets.Html.Paint
             // the line runs toward. Anchored against the word instead, it would land at the far end of the
             // run that word starts - the space between a number and the Arabic that follows it drawn after
             // the Arabic, so the extracted text read "42مقر".
+            // When the word sits right against its predecessor, the gap is on the side the word is on: a number after
+            // right-to-left text takes the text's direction (N1), whatever the paragraph's, and is drawn at its left.
+            if (rect.Right <= last.Rect.Left + tolerance && rect.Right >= last.Rect.Left - last.Word.Height)
+                return new SeparatorAnchor(last.Rect.Left, true);
+            if (rect.X >= last.Rect.Right - tolerance && rect.X <= last.Rect.Right + last.Word.Height && (last.Word.BidiLevel & 1) == 0)
+                return new SeparatorAnchor(last.Rect.Right, false);
+
             var lineRightToLeft = word.OwnerBox.ContainingBlock.Direction.Value == DirectionMode.Rtl;
             return lineRightToLeft
                 ? new SeparatorAnchor(last.Rect.Left, true)

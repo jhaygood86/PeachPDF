@@ -10483,6 +10483,8 @@ namespace PeachBrackets.Html.Dom
             MeasureInlineEdgeSpacing(lineBox, slots, lead, trail);
 
             var runNewStart = slots[0] - lead[0];
+            var gapAfterRun = PlaceGapsBetweenRuns(lineBox, runs, slots, lead, trail);
+            var runNumber = 0;
 
             foreach (var run in runs)
             {
@@ -10503,10 +10505,7 @@ namespace PeachBrackets.Html.Dom
                 // RTL run and erasing it on the other.
                 var runContentEnd = slots[lastIndexInRun] + lineBox.Words[lastIndexInRun].Width + trail[lastIndexInRun];
                 var runContentWidth = runContentEnd - runOldStart;
-                var boundaryAfterRun = lastIndexInRun + 1 < lineBox.Words.Count
-                    ? slots[lastIndexInRun + 1] - lead[lastIndexInRun + 1]
-                    : slots[lastIndexInRun] + lineBox.Words[lastIndexInRun].FullWidth;
-                var trailingGap = Math.Max(0, boundaryAfterRun - runContentEnd);
+                var trailingGap = gapAfterRun[runNumber++];
 
                 // Within an RTL run both the word order and each word's own text reverse (mirroring
                 // characters where they have a mirror image), matching how Bidi's own
@@ -10527,6 +10526,48 @@ namespace PeachBrackets.Html.Dom
 
                 runNewStart += runContentWidth + trailingGap;
             }
+        }
+
+        /// <summary>
+        /// The gap to leave after each run of a reordered line (indexed like <paramref name="runs"/>, in visual order). A gap is the space the flow
+        /// reserved between two words that are neighbours in reading order but in different runs. It stays between those two words when reordering
+        /// leaves them side by side - the space between a right-to-left word and the number after it, which UAX #9 N1 gives the level of the words
+        /// around it - and otherwise goes after the run of the word before it, as it always has.
+        /// </summary>
+        private static double[] PlaceGapsBetweenRuns(CssLineBox lineBox, IReadOnlyList<BidiRun> runs, double[] slots, double[] lead, double[] trail)
+        {
+            var gaps = new double[runs.Count];
+            var runOfWord = new int[lineBox.Words.Count];
+            for (var v = 0; v < runs.Count; v++)
+            {
+                for (var k = 0; k < runs[v].Length; k++) runOfWord[runs[v].Start + k] = v;
+            }
+
+            for (var v = 0; v < runs.Count; v++)
+            {
+                var last = runs[v].Start + runs[v].Length - 1;
+                var runContentEnd = slots[last] + lineBox.Words[last].Width + trail[last];
+                var boundaryAfterRun = last + 1 < lineBox.Words.Count
+                    ? slots[last + 1] - lead[last + 1]
+                    : slots[last] + lineBox.Words[last].FullWidth;
+                var gap = Math.Max(0, boundaryAfterRun - runContentEnd);
+                if (gap == 0) continue;
+
+                var target = v;
+                if (last + 1 < lineBox.Words.Count)
+                {
+                    var w = runOfWord[last + 1];
+                    // Visually before: this run's last word (the reading-order end) is its left end, and the next word is the right end of the run before it.
+                    var nextRunVisualLast = runs[w].IsRtl ? runs[w].Start : runs[w].Start + runs[w].Length - 1;
+                    var visualFirst = runs[v].IsRtl ? last : runs[v].Start;
+                    if (w == v - 1 && visualFirst == last && nextRunVisualLast == last + 1)
+                        target = w;
+                }
+
+                gaps[target] += gap;
+            }
+
+            return gaps;
         }
 
         /// <summary>

@@ -216,6 +216,25 @@ internal sealed partial class PdfGraphicsRenderer
             double laidOutEndX = x + width + (shapedGlyphs?.Count ?? 0) * letterSpacing;
             bool shownAtPen = isOnlySpaces
                 && TryShowAtPen(x, y + verticalOffset, text, font, contentLengthAtEntry);
+
+            // A glyph with no cluster of its own (an Arabic letter's dots) means the run's letters do not map one
+            // to one onto glyphs, and the body glyph can be shared by sibling letters that differ only in those
+            // dots: one ToUnicode destination per glyph cannot be right for all of them. The run's exact text
+            // goes in per-occurrence /ActualText instead.
+            string? actualText = null;
+            if (!shownAtPen)
+            {
+                for (var i = 0; i < shapedGlyphs!.Count; i++)
+                {
+                    if (shapedGlyphs![i].ClusterLength <= 0)
+                    {
+                        actualText = logicalText is not null && logicalText.Length == s.Length ? logicalText : s;
+                        break;
+                    }
+                }
+            }
+            if (actualText is not null)
+                BeginActualText(actualText);
             if (!shownAtPen)
             {
             // A declared "oblique <angle>" (see TypefaceFont.ObliqueSkewSinus) drives the exact shear amount;
@@ -273,6 +292,8 @@ internal sealed partial class PdfGraphicsRenderer
                 }
             }
             }
+            if (actualText is not null)
+                EndMarkedContent();
         }
 
     }
