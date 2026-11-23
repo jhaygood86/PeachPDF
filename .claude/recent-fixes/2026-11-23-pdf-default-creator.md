@@ -10,14 +10,16 @@ said `PDFsharp 1.50.4000-netstandard (https://github.com/ststeiger/PdfSharpCore)
 are applied*, when `/Creator` was still empty, so it got no `CreatorTool`. PDF/A-1 wants the two equal when both exist; the later parts relax it,
 which is why 2b, 3b and 4 passed.
 
-**Fix:** `PdfProductInfo.Producer` is now `PdfComposerProductInfo.Generator` (`PeachDrawing.PDF {version}`, the string `/Producer` already used),
+**Fix:** `PdfProductInfo.Producer` is now `PdfComposerProductInfo.Generator` (`PeachPDF {version}`: the product name, and the one string `/Producer` also uses),
 and `ApplyInformation` gives a document with no creator that default *when the options are applied*, so the XMP built from the Info sees it: one
 source, one value, both places. A named `Creator` still wins, and applying options again keeps the default unless a creator is named. The
-standalone package says `PeachDrawing.PDF` rather than `PeachPDF` because it is usable without PeachPDF; documents made through the PeachPDF
+first version of this fix said `PeachDrawing.PDF {version}` (the package's own name, which `/Producer` had used since October); the product is PeachPDF,
+so the one generated string now says `PeachPDF {version}` and **`/Producer` changed with it**: the composer's default Producer was
+`PeachDrawing.PDF {version}` before (see [the October entry](2026-10-19-pdf-writer-public-api.md)). Documents made through the PeachPDF
 library already said `PeachPDF {version}` (`PdfGenerator` names both fields itself), unchanged. The engine's unused `PdfProductInfo.Version`
 constant went with the old string.
 
-**Evidence:** `PdfCreatorTests` (8): the default is `PeachDrawing.PDF` and `x.y.z` and equals the producer, no `PDFsharp`/`PdfSharpCore` anywhere in the
+**Evidence:** `PdfCreatorTests` (8): the default is `PeachPDF` and `x.y.z` and equals the producer, no `PDFsharp`/`PdfSharpCore` anywhere in the
 bytes (also as hex UTF-16), a named creator is kept in Info and XMP, PDF/A-1b/2b/3b/4 with no creator carry an equal `CreatorTool`, applying options
 twice. veraPDF 1.30.4 passes 12 PDF/A files with **no** `Creator` set (unsigned, composer-signed, signed in place at 1b, 2b, 3b and 4). No pinned
 baseline moved: the corpus names its creator.

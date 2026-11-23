@@ -86,7 +86,7 @@ rather than producing a file whose header disagrees with how its pages were writ
 
 | Option | Meaning |
 |---|---|
-| `Title`, `Author`, `Subject`, `Keywords`, `Creator` | The document information shown in a reader's properties dialog. Non-ASCII text is written correctly. A document that names no `Creator` (or `Producer`) says `PeachDrawing.PDF {version}`, in its XMP packet too, so a PDF/A file's two descriptions of its creator agree. |
+| `Title`, `Author`, `Subject`, `Keywords`, `Creator` | The document information shown in a reader's properties dialog. Non-ASCII text is written correctly. A document that names no `Creator` (or `Producer`) says `PeachPDF {version}`, in its XMP packet too, so a PDF/A file's two descriptions of its creator agree. |
 | `CreationDate` | When the document was made. Leave it unset for a file that is byte-for-byte the same every time you write it. |
 | `Language` | The document's natural language (BCP 47, such as `en-US`), which the accessible PDF/A levels (PDF/A-1A, 2A and 3A) require. |
 | `Producer` | The software that wrote the file. Defaults to this package. |

@@ -4,7 +4,7 @@ using PeachDrawing.Core;
 
 namespace PeachDrawing.PDF.Tests
 {
-    /// <summary>A document that names no creator is created by this package, and says so the same way in its Info and its XMP.</summary>
+    /// <summary>A document that names no creator is created by PeachPDF, and says so the same way in its Info and its XMP.</summary>
     public partial class PdfCreatorTests
     {
         static readonly DateTimeOffset Created = new(2026, 11, 23, 9, 0, 0, TimeSpan.Zero);
@@ -23,13 +23,13 @@ namespace PeachDrawing.PDF.Tests
         }
 
         [Fact]
-        public void ADocumentThatNamesNoCreator_IsCreatedByThisPackage_NotByAnOldEngine()
+        public void ADocumentThatNamesNoCreator_IsCreatedByPeachPdf_NotByAnOldEngine()
         {
             var file = Save(new PdfComposerOptions());
 
             var metadata = PdfPageSource.Open(file).GetMetadata();
 
-            Assert.Matches(@"^PeachDrawing\.PDF \d+\.\d+\.\d+", metadata.Creator);
+            Assert.Matches(@"^PeachPDF \d+\.\d+\.\d+", metadata.Creator);
             Assert.Equal(metadata.Producer, metadata.Creator);                        // the same package made it, and says so once
             var text = Encoding.Latin1.GetString(file);
             Assert.DoesNotContain("PDFsharp", text, StringComparison.OrdinalIgnoreCase);
@@ -58,10 +58,10 @@ namespace PeachDrawing.PDF.Tests
             var text = Encoding.Latin1.GetString(file);
 
             // ISO 19005-1 6.7.3: the XMP CreatorTool and the Info /Creator are equivalent. PDF/A-4 has no Info dictionary, so there the
-            // XMP is the only place, and it names the package.
+            // XMP is the only place, and it names the product.
             var tool = CreatorToolPattern().Match(text);
             Assert.True(tool.Success, "the XMP names a CreatorTool");
-            Assert.Matches(@"^PeachDrawing\.PDF \d+\.\d+\.\d+", tool.Groups[1].Value);
+            Assert.Matches(@"^PeachPDF \d+\.\d+\.\d+", tool.Groups[1].Value);
             if (level != PdfAConformance.PdfA4)
                 Assert.Equal(PdfPageSource.Open(file).GetMetadata().Creator, tool.Groups[1].Value);
         }
@@ -83,7 +83,7 @@ namespace PeachDrawing.PDF.Tests
             composer.Configure(new PdfComposerOptions { Title = "second" });
             using var kept = new MemoryStream();
             composer.Save(kept);
-            Assert.Matches(@"^PeachDrawing\.PDF ", PdfPageSource.Open(kept.ToArray()).GetMetadata().Creator);
+            Assert.Matches(@"^PeachPDF ", PdfPageSource.Open(kept.ToArray()).GetMetadata().Creator);
 
             composer.Configure(new PdfComposerOptions { Creator = "Named later" });
             using var replaced = new MemoryStream();

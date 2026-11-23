@@ -154,7 +154,7 @@ namespace PeachDrawing.PDF.Tests
             Assert.Contains("/Keywords <" + Utf16Hex("alpha beta") + ">", pdf);
             Assert.Contains("/Creator <" + Utf16Hex("A Creator") + ">", pdf);
             Assert.Contains("/CreationDate (D:2024", pdf);
-            Assert.Contains("/Producer (PeachDrawing.PDF ", pdf);
+            Assert.Contains("/Producer (PeachPDF ", pdf);
         }
 
         [Theory]

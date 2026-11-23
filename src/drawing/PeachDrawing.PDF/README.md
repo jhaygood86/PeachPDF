@@ -92,7 +92,7 @@ composer.AddBookmarks([new PdfBookmark(level: 1, title: "Chapter one", isOpen: t
 
 | Option | Meaning |
 |---|---|
-| `Title`, `Author`, `Subject`, `Keywords`, `Creator`, `Producer`, `Language` | Document information. `Creator` and `Producer` default to `PeachDrawing.PDF {version}`. `Language` is a BCP 47 tag, required by the accessible PDF/A levels and PDF/UA. |
+| `Title`, `Author`, `Subject`, `Keywords`, `Creator`, `Producer`, `Language` | Document information. `Creator` and `Producer` default to `PeachPDF {version}`. `Language` is a BCP 47 tag, required by the accessible PDF/A levels and PDF/UA. |
 | `CreationDate` | Leave it unset for output that is byte-for-byte reproducible. |
 | `Version` | `PdfVersion.Pdf20` (default) or `Pdf17`. |
 | `Linearize` | Write the file for "fast web view". |
