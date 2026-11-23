@@ -1,0 +1,7 @@
+# Preserved spaces at a soft wrap do not count for alignment
+
+css-text-3 section 4.1.3: in `pre-wrap`, preserved white space at the end of a line hangs unconditionally at a soft wrap, and only *conditionally* (when it would overflow) before a forced break or at the end of the block. The engine already let the spaces overflow without wrapping, but still counted them in the content a line aligns, so `text-align: center`/`right`/`end` put a wrapped line half a space (or a whole one) too far left (WPT `pre-wrap-align-*`).
+
+`ApplyEndHang` (the line-close pass that sets `HungEndWidth`, which `LineContentEnd` subtracts) now sets it over the run of trailing preserved-space words (`HangsAtLineEnd`: `PreservedSpacesHang` and the box wraps) - **only when the line does not precede a forced break (`CssLineBox.PrecedesForcedBreak`) and is not the block's last line.** Two things found by running it: the forced-break marker word sits on the line it *opens* (see the invariant on that), so `Words[^1].IsLineBreak` is not how to tell a forced break - `PrecedesForcedBreak` is; and a one-line block (`pre-wrap-018`, ` 0 ` centered) is a "last line", whose fitting trailing space must keep counting or the text is not symmetric.
+
+**Measured:** css-text 911 -> 918 on a Mac (floor 885 -> 892): `pre-wrap-align-{center,end,right}-001`, `pre-wrap-012/013/019`, `hanging-whitespace-004`. **Not done:** the `-002` variants (`dir=rtl`; `ApplyEndHang` returns early for right-to-left lines, where the hung side is the physical left) and `-003`, and `trailing-space-and-text-alignment-*`.

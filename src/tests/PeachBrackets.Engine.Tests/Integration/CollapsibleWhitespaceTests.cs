@@ -103,5 +103,35 @@ namespace PeachBrackets.Engine.Tests.Integration
 
             Assert.Equal(["x ", "yy x"], lines);
         }
+
+        /// <summary>
+        /// Preserved white space at a soft wrap hangs (css-text-3 section 4.1.3), so it is not part of the content a line aligns: with
+        /// <c>text-align: right</c> the word ends at the edge. Before a forced break, or at the end of the block, it hangs only when it
+        /// would overflow, so it still counts.
+        /// </summary>
+        [Fact]
+        public async Task PreWrap_TrailingSpaceAtASoftWrap_DoesNotCountForAlignment()
+        {
+            const string Style = "font-size:16pt; white-space:pre-wrap; text-align:right; ";
+            var (wideRoot, _) = await LayoutHarness.LayoutAsync(Page($"<p id='p' style='{Style}'>aaaa bbbb</p>"));
+            var words = LayoutHarness.Descendants(LayoutHarness.FindById(wideRoot, "p")!).SelectMany(b => b.Words).ToList();
+            double a = words.First(w => w.Text == "aaaa").Width, b = words.First(w => w.Text == "bbbb").Width, space = words.First(w => w.Text == " ").Width;
+
+            // "aaaa " fits, "bbbb" does not fit after it.
+            var width = a + space + b / 2;
+            var (root, _) = await LayoutHarness.LayoutAsync(Page($"<p id='p' style='{Style}width:{width}pt'>aaaa bbbb</p>"));
+            var wrapped = LayoutHarness.Descendants(LayoutHarness.FindById(root, "p")!).SelectMany(x => x.Words).ToList();
+            var first = wrapped.First(w => w.Text == "aaaa");
+            var last = wrapped.First(w => w.Text == "bbbb");
+
+            Assert.True(last.Top > first.Top, "the second word wrapped");
+            var edge = LayoutHarness.FindById(root, "p")!.ActualRight;
+            Assert.Equal(edge, first.Right, 1);                           // flush right: the space after it hangs
+
+            // The same text as the last line of the block: its trailing space fits and counts, so the word is a space short of the edge.
+            var (single, _) = await LayoutHarness.LayoutAsync(Page($"<p id='p' style='{Style}width:{width}pt'>aaaa </p>"));
+            var only = LayoutHarness.Descendants(LayoutHarness.FindById(single, "p")!).SelectMany(x => x.Words).First(w => w.Text == "aaaa");
+            Assert.Equal(LayoutHarness.FindById(single, "p")!.ActualRight - space, only.Right, 1);
+        }
     }
 }

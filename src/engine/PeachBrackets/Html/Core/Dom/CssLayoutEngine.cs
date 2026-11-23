@@ -11974,6 +11974,21 @@ namespace PeachBrackets.Html.Dom
                 closing.HungEndWidth = closing.Right - start;
             }
 
+            // Preserved white space at the end of a wrapping line hangs (css-text-3 section 4.1.3): the spaces that end it do not count
+            // toward the content the line aligns. Before a forced break, or at the end of the block, they hang only conditionally, when they
+            // would overflow, so they still count here (which keeps the end of the line symmetric with its start).
+            if (!lineBox.PrecedesForcedBreak && !(blockFinished && lineBox.Equals(blockBox.LineBoxes[^1])) && !closing.IsLineBreak && closing.IsSpaces && HangsAtLineEnd(closing.OwnerBox))
+            {
+                var hangStart = closing.Left;
+                for (var i = lineBox.Words.IndexOf(closing) - 1;
+                     i >= 0 && lineBox.Words[i] is { IsSpaces: true, IsLineBreak: false } earlier && HangsAtLineEnd(earlier.OwnerBox); i--)
+                {
+                    hangStart = earlier.Left;
+                }
+
+                closing.HungEndWidth = Math.Max(closing.HungEndWidth, closing.Right - hangStart);
+            }
+
             if (blockBox.HangingPunctuation is not { Length: > 0 }) return;
 
             var word = lineBox.Words[^1];
@@ -11984,6 +11999,9 @@ namespace PeachBrackets.Html.Dom
 
             word.HungEndWidth = MeasureEndHang(g, blockBox, word, wanted);
         }
+
+        /// <summary>Whether the preserved spaces of <paramref name="box"/> hang at the end of a line: they are kept and the box wraps (<c>pre-wrap</c>).</summary>
+        private static bool HangsAtLineEnd(CssBox box) => box.PreservedSpacesHang && box.WhiteSpacePermitsWrapping;
 
         /// <summary>
         /// The advance of the opening punctuation <c>hanging-punctuation: first</c> hangs outside the start
