@@ -16,6 +16,9 @@ public static class MauiProgram
 #elif ANDROID
             handlers.AddHandler<Views.PageViewport, Droid.PageViewportHandler>();
             Thumbnails.Renderer = new Droid.ThumbnailRenderer();
+#elif IOS || MACCATALYST
+            handlers.AddHandler<Views.PageViewport, Apple.PageViewportHandler>();
+            Thumbnails.Renderer = new Apple.ThumbnailRenderer();
 #endif
         });
         return builder.Build();

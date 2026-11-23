@@ -6,8 +6,10 @@
 	  maui workloads, so it is not in PeachPDF.slnx; build the project itself.
 	-->
 	<PropertyGroup>
-		<TargetFrameworks>net11.0-android</TargetFrameworks>
+		<!-- Android is left out on a Mac unless asked for (-p:ReaderIncludeAndroid=true), since a Mac set up for the Apple heads rarely has the android workload and restore needs every target's workload. -->
+		<TargetFrameworks Condition="!$([MSBuild]::IsOSPlatform('osx')) Or '$(ReaderIncludeAndroid)' == 'true'">net11.0-android</TargetFrameworks>
 		<TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('windows'))">$(TargetFrameworks);net11.0-windows10.0.19041.0</TargetFrameworks>
+		<TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('osx'))">$(TargetFrameworks);net11.0-ios;net11.0-maccatalyst</TargetFrameworks>
 		<OutputType>Exe</OutputType>
 		<RootNamespace>PeachReader</RootNamespace>
 		<AssemblyName>PeachReader</AssemblyName>
@@ -21,6 +23,8 @@
 		<ApplicationVersion>1</ApplicationVersion>
 		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.17763.0</SupportedOSPlatformVersion>
 		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">24.0</SupportedOSPlatformVersion>
+		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios'">16.0</SupportedOSPlatformVersion>
+		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst'">17.0</SupportedOSPlatformVersion>
 		<WindowsPackageType>None</WindowsPackageType>
 		<TargetPlatformMinVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.17763.0</TargetPlatformMinVersion>
 		<Win2DWarnNoPlatform>false</Win2DWarnNoPlatform>
@@ -41,9 +45,21 @@
 		<PackageReference Include="SkiaSharp.Views" />
 	</ItemGroup>
 
+	<!-- iOS and Mac Catalyst draw with CoreGraphics into tile layers; the one UIKit view is shared (Platforms/Apple). -->
+	<ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios' Or $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst'">
+		<ProjectReference Include="..\..\drawing\PeachDrawing.CoreGraphics\PeachDrawing.CoreGraphics.csproj" />
+	</ItemGroup>
+
 	<ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">
 		<ProjectReference Include="..\..\drawing\PeachDrawing.Win2D\PeachDrawing.Win2D.csproj" />
 		<PackageReference Include="Microsoft.Graphics.Win2D" />
 	</ItemGroup>
+
+	<!-- The MAUI SDK drops every Platforms folder that is not named for the head being built, so the folder the two Apple heads share is added just before compiling. -->
+	<Target Name="AddSharedAppleSources" BeforeTargets="CoreCompile" Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios' Or $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst'">
+		<ItemGroup>
+			<Compile Include="Platforms\Apple\**\*.cs" />
+		</ItemGroup>
+	</Target>
 
 </Project>
