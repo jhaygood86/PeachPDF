@@ -308,7 +308,7 @@ namespace PeachDrawing.PDF.Tests
             using var key = new ForwardingRsa(certificate.GetRSAPrivateKey()!);
             var file = Save(new PdfComposerOptions());
 
-            var signed = await PdfFileSigner.SignAsync(file, new PdfSigningOptions { Certificate = publicOnly, PrivateKey = key }, TestContext.Current.CancellationToken);
+            var signed = await PdfFileSigner.SignAsync(file, new PdfSigningOptions { Certificate = publicOnly, PrivateKey = key }, cancellationToken: TestContext.Current.CancellationToken);
 
             Assert.True(key.Signed > 0);
             Assert.True(PdfPageSource.Open(signed).GetSignatures()[0].IsIntact);

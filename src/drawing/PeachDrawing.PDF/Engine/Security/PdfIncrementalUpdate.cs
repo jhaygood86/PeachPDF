@@ -26,25 +26,23 @@ internal static class PdfIncrementalUpdate
     /// fills in).
     /// </summary>
     /// <param name="original">the bytes of the file</param>
-    /// <param name="valueDictionary">the signature value dictionary, as PDF syntax</param>
+    /// <param name="valueDictionary">makes the signature value dictionary as PDF syntax; it is given what encrypts a string of that object (null for an unencrypted file)</param>
     /// <param name="fieldNamePrefix">what an unused field name starts with: the first free "prefix1", "prefix2"... is taken</param>
     /// <param name="visible">the box to draw the signature as, or <see langword="null"/> for an invisible field on the first page</param>
-    /// <exception cref="NotSupportedException">the file is encrypted</exception>
+    /// <param name="password">the password of an encrypted file, or <see langword="null"/></param>
+    /// <exception cref="PdfPasswordException">the file needs a password that was not given or is wrong</exception>
+    /// <exception cref="NotSupportedException">the file is encrypted with RC4 or an unknown handler</exception>
     /// <exception cref="InvalidDataException">the file's cross-reference data is damaged, or it has no page to put the field on</exception>
-    public static byte[] AppendSignatureField(byte[] original, string valueDictionary, string fieldNamePrefix, VisibleSignature? visible = null)
+    public static byte[] AppendSignatureField(byte[] original, Func<Func<byte[], byte[]>?, string> valueDictionary, string fieldNamePrefix, VisibleSignature? visible = null, string? password = null)
     {
-        PdfSourceDocument source;
-        try
-        {
-            source = PdfSourceDocument.Open(original);
-        }
-        catch (PdfPasswordException)
-        {
-            throw new NotSupportedException("An encrypted PDF cannot be signed in place: its objects would have to be written encrypted.");
-        }
+        var source = PdfSourceDocument.Open(original, password);
 
-        if (source.IsEncrypted)
-            throw new NotSupportedException("An encrypted PDF cannot be signed in place: its objects would have to be written encrypted.");
+        // In an encrypted file every string and stream of an object is stored under that object's own key, so each object written here
+        // is encrypted by number; the new objects have generation 0 and a rewritten one keeps its own.
+        var decryptor = source.Decryptor;
+        Func<byte[], byte[]>? Encrypt(int number) => decryptor is { EncryptsStrings: true }
+            ? bytes => decryptor.EncryptString(bytes, number, source.GenerationOf(number))
+            : null;
 
         var rootItem = source.Trailer.GetRaw("Root") as PdfReference ?? throw new InvalidDataException("The PDF has no document catalog.");
         var root = source.Resolve(rootItem) as PdfDictionary ?? throw new InvalidDataException("The PDF's document catalog is unreadable.");
@@ -91,9 +89,9 @@ internal static class PdfIncrementalUpdate
         if (root.GetRaw("AcroForm") is not { } formItem)
         {
             fieldName = fieldNamePrefix + "1";
-            int formNumber = next++;
-            objects[formNumber] = $"<< /Fields [{fieldRef}] /SigFlags 3 >>";
-            rootOverrides["/AcroForm"] = $"{formNumber} 0 R";
+            int newFormNumber = next++;
+            objects[newFormNumber] = $"<< /Fields [{fieldRef}] /SigFlags 3 >>";
+            rootOverrides["/AcroForm"] = $"{newFormNumber} 0 R";
         }
         else
         {
@@ -102,44 +100,49 @@ internal static class PdfIncrementalUpdate
             fieldName = FreeName(source, fields, fieldNamePrefix);
 
             var formOverrides = new Dictionary<string, string> { ["/SigFlags"] = (source.IntOf(form.GetRaw("SigFlags")) | 3).ToString(CultureInfo.InvariantCulture) };
+            // A dictionary or array that is direct belongs to the indirect object that holds it, and is encrypted under that object's key.
+            var formOwner = formItem is PdfReference formOwnerReference ? formOwnerReference.ObjectNumber : rootItem.ObjectNumber;
             if (form.GetRaw("Fields") is PdfReference fieldsReference && fields is not null)
-                objects[fieldsReference.ObjectNumber] = Serialize(fields, NoOverrides, extraElement: fieldRef);
+                objects[fieldsReference.ObjectNumber] = Serialize(fields, NoOverrides, extraElement: fieldRef, encrypt: Encrypt(fieldsReference.ObjectNumber));
             else
-                formOverrides["/Fields"] = fields is null ? $"[{fieldRef}]" : Serialize(fields, NoOverrides, extraElement: fieldRef);
+                formOverrides["/Fields"] = fields is null ? $"[{fieldRef}]" : Serialize(fields, NoOverrides, extraElement: fieldRef, encrypt: Encrypt(formOwner));
 
-            var formText = Serialize(form, formOverrides);
+            var formText = Serialize(form, formOverrides, encrypt: Encrypt(formOwner));
             if (formItem is PdfReference formReference)
                 objects[formReference.ObjectNumber] = formText;
             else
                 rootOverrides["/AcroForm"] = formText;
         }
 
-        objects[rootItem.ObjectNumber] = Serialize(root, rootOverrides);
+        objects[rootItem.ObjectNumber] = Serialize(root, rootOverrides, encrypt: Encrypt(rootItem.ObjectNumber));
 
         // The first page: the field's widget is one of its annotations.
         var pageOverrides = new Dictionary<string, string>();
         var annotations = source.Resolve(page.GetRaw("Annots")) as PdfArray;
         if (page.GetRaw("Annots") is PdfReference annotationsReference && annotations is not null)
-            objects[annotationsReference.ObjectNumber] = Serialize(annotations, NoOverrides, extraElement: fieldRef);
+            objects[annotationsReference.ObjectNumber] = Serialize(annotations, NoOverrides, extraElement: fieldRef, encrypt: Encrypt(annotationsReference.ObjectNumber));
         else
-            pageOverrides["/Annots"] = annotations is null ? $"[{fieldRef}]" : Serialize(annotations, NoOverrides, extraElement: fieldRef);
-        objects[pageReference.ObjectNumber] = Serialize(page, pageOverrides);
+            pageOverrides["/Annots"] = annotations is null ? $"[{fieldRef}]" : Serialize(annotations, NoOverrides, extraElement: fieldRef, encrypt: Encrypt(pageReference.ObjectNumber));
+        objects[pageReference.ObjectNumber] = Serialize(page, pageOverrides, encrypt: Encrypt(pageReference.ObjectNumber));
 
         string appearanceEntry = "";
         if (visible is not null)
         {
             int fontNumber = next++, formNumber = next++;
-            var content = PdfSignatureBoxContent.Content(boxWidth, boxHeight, visible.Lines, visible.FontSize);
+            // The stream is stored under its own object's key in an encrypted file; the bytes are then binary, which the file is written as Latin-1 for.
+            var plain = Encoding.Latin1.GetBytes(PdfSignatureBoxContent.Content(boxWidth, boxHeight, visible.Lines, visible.FontSize));
+            var content = decryptor is { EncryptsStreams: true } ? decryptor.EncryptStream(plain, formNumber, 0) : plain;
             objects[fontNumber] = PdfSignatureBoxContent.FontObjectText;
             objects[formNumber] =
                 string.Create(CultureInfo.InvariantCulture, $"<< /Type /XObject /Subtype /Form /BBox [0 0 {boxWidth:0.####} {boxHeight:0.####}] ") +
-                $"/Resources << /Font << /Helv {fontNumber} 0 R >> >> /Length {content.Length} >>\nstream\n{content}endstream";
+                $"/Resources << /Font << /Helv {fontNumber} 0 R >> >> /Length {content.Length} >>\nstream\n{Encoding.Latin1.GetString(content)}\nendstream";
             appearanceEntry = $" /AP << /N {formNumber} 0 R >>";
         }
 
-        objects[valueNumber] = valueDictionary;
+        objects[valueNumber] = valueDictionary(Encrypt(valueNumber));
+        var nameBytes = Encoding.Latin1.GetBytes(fieldName);
         objects[fieldNumber] =
-            $"<< /Type /Annot /Subtype /Widget /FT /Sig /T <{Convert.ToHexString(Encoding.Latin1.GetBytes(fieldName))}> /F 132 /Rect {rect}{appearanceEntry} " +
+            $"<< /Type /Annot /Subtype /Widget /FT /Sig /T <{Convert.ToHexString(Encrypt(fieldNumber)?.Invoke(nameBytes) ?? nameBytes)}> /F 132 /Rect {rect}{appearanceEntry} " +
             $"/P {pageReference.ObjectNumber} {pageReference.GenerationNumber} R /V {valueNumber} 0 R >>";
 
         if (source.WasRebuilt)
@@ -195,6 +198,10 @@ internal static class PdfIncrementalUpdate
             trailer.Append(" /Info ").Append(info.ObjectNumber).Append(' ').Append(info.GenerationNumber).Append(" R");
         if (source.Trailer.GetRaw("ID") is { } id)
             trailer.Append(" /ID ").Append(Serialize(id, NoOverrides));
+
+        // Every trailer of an encrypted file names its encryption dictionary, the update's too (its strings are stored as they are).
+        if (source.Trailer.GetRaw("Encrypt") is { } encrypt)
+            trailer.Append(" /Encrypt ").Append(Serialize(encrypt, NoOverrides));
         trailer.Append(" /Prev ").Append(source.LastStartXref.ToString(CultureInfo.InvariantCulture));
 
         long xrefPosition = output.Position;
@@ -259,7 +266,8 @@ internal static class PdfIncrementalUpdate
         return runs;
     }
 
-    static void WriteAscii(Stream stream, string text) => stream.Write(Encoding.ASCII.GetBytes(text));
+    /// <summary>Writes text one byte per character: ASCII syntax, plus the binary bytes of an encrypted stream, which are held as Latin-1.</summary>
+    static void WriteAscii(Stream stream, string text) => stream.Write(Encoding.Latin1.GetBytes(text));
 
     // ---------------------------------------------------------------- writing objects the reader parsed
 
@@ -267,14 +275,14 @@ internal static class PdfIncrementalUpdate
     /// A dictionary or array as PDF syntax. <paramref name="overrides"/> replaces (or adds) the text of a dictionary entry;
     /// <paramref name="extraElement"/> is one more element at the end of an array.
     /// </summary>
-    static string Serialize(PdfItem item, IReadOnlyDictionary<string, string> overrides, string? extraElement = null)
+    static string Serialize(PdfItem item, IReadOnlyDictionary<string, string> overrides, string? extraElement = null, Func<byte[], byte[]>? encrypt = null)
     {
         var text = new StringBuilder();
-        Write(text, item, overrides, extraElement);
+        Write(text, item, overrides, extraElement, encrypt);
         return text.ToString();
     }
 
-    static void Write(StringBuilder text, PdfItem? item, IReadOnlyDictionary<string, string> overrides, string? extraElement)
+    static void Write(StringBuilder text, PdfItem? item, IReadOnlyDictionary<string, string> overrides, string? extraElement, Func<byte[], byte[]>? encrypt)
     {
         switch (item)
         {
@@ -294,7 +302,8 @@ internal static class PdfIncrementalUpdate
                 WriteName(text, name.Value);
                 break;
             case PdfString @string:
-                text.Append('<').Append(Convert.ToHexString(Encoding.Latin1.GetBytes(@string.Value))).Append('>');
+                var bytes = Encoding.Latin1.GetBytes(@string.Value);
+                text.Append('<').Append(Convert.ToHexString(encrypt?.Invoke(bytes) ?? bytes)).Append('>');
                 break;
             case PdfReference reference:
                 text.Append(reference.ObjectNumber).Append(' ').Append(reference.GenerationNumber).Append(" R");
@@ -306,7 +315,7 @@ internal static class PdfIncrementalUpdate
                 {
                     if (!first) text.Append(' ');
                     first = false;
-                    Write(text, element, NoOverrides, null);
+                    Write(text, element, NoOverrides, null, encrypt);
                 }
 
                 if (extraElement is not null)
@@ -323,7 +332,7 @@ internal static class PdfIncrementalUpdate
                     text.Append(' ');
                     WriteName(text, key);
                     text.Append(' ');
-                    Write(text, value, NoOverrides, null);
+                    Write(text, value, NoOverrides, null, encrypt);
                 }
 
                 foreach (var (key, replacement) in overrides)

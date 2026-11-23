@@ -173,17 +173,19 @@ internal static class PdfDocumentSigner
     }
 
     /// <summary>The text of a signature value dictionary with its placeholders, for a signature appended to an existing file.</summary>
-    public static string SignatureValueText(PdfSigningOptions options)
+    public static string SignatureValueText(PdfSigningOptions options, Func<byte[], byte[]>? encrypt = null)
     {
         var text = new StringBuilder("<< /Type /Sig /Filter /Adobe.PPKLite /SubFilter ");
         text.Append(options.Format == PdfSignatureFormat.CadesDetached ? "/ETSI.CAdES.detached" : "/adbe.pkcs7.detached");
         text.Append(" /ByteRange ").Append(ByteRangePlaceholder);
         text.Append(" /Contents <").Append('0', options.ReservedSignatureBytes * 2).Append('>');
-        text.Append(" /M (D:").Append(PdfEntropy.UtcNow().ToString("yyyyMMddHHmmss", System.Globalization.CultureInfo.InvariantCulture)).Append("Z)");
-        AppendText(text, "/Name", options.SignerName);
-        AppendText(text, "/Reason", options.Reason);
-        AppendText(text, "/Location", options.Location);
-        AppendText(text, "/ContactInfo", options.ContactInfo);
+        // The strings go in as hexadecimal so an encrypted file can store them encrypted; /Contents is never encrypted.
+        var date = Encoding.Latin1.GetBytes("D:" + PdfEntropy.UtcNow().ToString("yyyyMMddHHmmss", System.Globalization.CultureInfo.InvariantCulture) + "Z");
+        text.Append(" /M <").Append(Convert.ToHexString(encrypt?.Invoke(date) ?? date)).Append('>');
+        AppendText(text, "/Name", options.SignerName, encrypt);
+        AppendText(text, "/Reason", options.Reason, encrypt);
+        AppendText(text, "/Location", options.Location, encrypt);
+        AppendText(text, "/ContactInfo", options.ContactInfo, encrypt);
         return text.Append(" >>").ToString();
     }
 
@@ -192,10 +194,13 @@ internal static class PdfDocumentSigner
         "<< /Type /DocTimeStamp /Filter /Adobe.PPKLite /SubFilter /ETSI.RFC3161 /ByteRange " + ByteRangePlaceholder
         + " /Contents <" + new string('0', reservedBytes * 2) + "> >>";
 
-    static void AppendText(StringBuilder text, string key, string? value)
+    static void AppendText(StringBuilder text, string key, string? value, Func<byte[], byte[]>? encrypt)
     {
-        if (!string.IsNullOrEmpty(value))
-            text.Append(' ').Append(key).Append(" <FEFF").Append(Convert.ToHexString(Encoding.BigEndianUnicode.GetBytes(value))).Append('>');
+        if (string.IsNullOrEmpty(value)) return;
+
+        // A text string in UTF-16BE with its byte order mark; encrypted, the mark is part of what is encrypted.
+        byte[] bytes = [0xFE, 0xFF, .. Encoding.BigEndianUnicode.GetBytes(value)];
+        text.Append(' ').Append(key).Append(" <").Append(Convert.ToHexString(encrypt?.Invoke(bytes) ?? bytes)).Append('>');
     }
 
     static (byte[] Covered, int ContentsStart) PatchByteRange(byte[] file, int reservedBytes)

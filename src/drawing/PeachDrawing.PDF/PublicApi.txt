@@ -276,9 +276,9 @@ PeachDrawing.PDF.PdfFileAttachment : sealed class
   property String Key { get; set; }
   property String MimeType { get; set; }
 PeachDrawing.PDF.PdfFileSigner : static class
-  method static Byte[] Sign(Byte[] pdf, PdfSigningOptions options)
-  method static Task<Byte[]> AddDocumentTimestampAsync(Byte[] pdf, PdfTimestampOptions options, Int32 reservedBytes = 16384, CancellationToken cancellationToken = null)
-  method static Task<Byte[]> SignAsync(Byte[] pdf, PdfSigningOptions options, CancellationToken cancellationToken = null)
+  method static Byte[] Sign(Byte[] pdf, PdfSigningOptions options, String password = null)
+  method static Task<Byte[]> AddDocumentTimestampAsync(Byte[] pdf, PdfTimestampOptions options, Int32 reservedBytes = 16384, String password = null, CancellationToken cancellationToken = null)
+  method static Task<Byte[]> SignAsync(Byte[] pdf, PdfSigningOptions options, String password = null, CancellationToken cancellationToken = null)
 PeachDrawing.PDF.PdfFormBuilder : sealed class
   method ValueTask AddDisclosureAsync(PdfComposerPage page, PdfDisclosureDefinition disclosure)
   method Void AddField(PdfComposerPage page, PdfFormFieldDefinition field)

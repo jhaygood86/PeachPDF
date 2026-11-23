@@ -202,6 +202,33 @@ internal sealed class PdfDecryptor
     PdfString Reencode(PdfString s, int number, int generation) =>
         new(Encoding.Latin1.GetString(Decrypt(Encoding.Latin1.GetBytes(s.Value), _strings, number, generation)), PdfStringEncoding.LatinOneByteEncoding);
 
+    // ------------------------------------------------------------ encrypting (for objects appended to an encrypted file)
+
+    /// <summary>Whether the file's strings are encrypted (the string crypt filter is not Identity).</summary>
+    public bool EncryptsStrings => _strings != Method.None;
+
+    /// <summary>Whether the file's streams are encrypted.</summary>
+    public bool EncryptsStreams => _streams != Method.None;
+
+    /// <summary>The bytes of a string as they are stored in the file for object <paramref name="number"/>: encrypted when the file encrypts strings.</summary>
+    public byte[] EncryptString(byte[] plain, int number, int generation) => Encrypt(plain, _strings, number, generation);
+
+    /// <summary>The bytes of a stream as they are stored in the file for object <paramref name="number"/>: encrypted when the file encrypts streams.</summary>
+    public byte[] EncryptStream(byte[] plain, int number, int generation) => Encrypt(plain, _streams, number, generation);
+
+    byte[] Encrypt(byte[] data, Method method, int number, int generation)
+    {
+        if (method == Method.None)
+            return data;
+
+        // AES-CBC with a fresh IV in front and PKCS#7 padding, the same shape the decryption above takes apart.
+        using var aes = Aes.Create();
+        aes.Key = ObjectKey(method, number, generation);
+        var iv = PeachDrawing.PDF.Engine.Internal.PdfEntropy.GetBytes(16);
+        var cipher = aes.EncryptCbc(data, iv, PaddingMode.PKCS7);
+        return [.. iv, .. cipher];
+    }
+
     byte[] Decrypt(byte[] data, Method method, int number, int generation)
     {
         byte[] key = ObjectKey(method, number, generation);

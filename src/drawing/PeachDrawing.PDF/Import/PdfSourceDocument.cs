@@ -57,6 +57,9 @@ internal sealed class PdfSourceDocument
     /// <summary>Whether the file is encrypted (and was opened with a password it accepted).</summary>
     public bool IsEncrypted => _decryptor is not null;
 
+    /// <summary>What encrypts and decrypts the file's strings and streams, or null for a file that is not encrypted.</summary>
+    public PdfDecryptor? Decryptor => _decryptor;
+
     /// <summary>The offset the file's last <c>startxref</c> names: where its newest cross-reference section starts, or -1.</summary>
     public long LastStartXref { get; private set; } = -1;
 

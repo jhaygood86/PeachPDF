@@ -225,24 +225,6 @@ namespace PeachDrawing.PDF.Tests
         }
 
         [Fact]
-        public void AnEncryptedFile_IsRefused()
-        {
-            using var certificate = NewCertificate();
-            var file = Compose(new PdfComposerOptions { Encryption = new PdfEncryptionOptions { OwnerPassword = "owner" } });
-
-            Assert.Throws<NotSupportedException>(() => PdfFileSigner.Sign(file, Options(certificate)));
-        }
-
-        [Fact]
-        public void AFileThatNeedsAPassword_IsRefusedAsEncrypted()
-        {
-            using var certificate = NewCertificate();
-            var file = Compose(new PdfComposerOptions { Encryption = new PdfEncryptionOptions { UserPassword = "secret", OwnerPassword = "owner" } });
-
-            Assert.Throws<NotSupportedException>(() => PdfFileSigner.Sign(file, Options(certificate)));
-        }
-
-        [Fact]
         public void BytesThatAreNotAPdf_AreRefused()
         {
             using var certificate = NewCertificate();
@@ -268,7 +250,7 @@ namespace PeachDrawing.PDF.Tests
 
             Assert.Throws<InvalidOperationException>(() => PdfFileSigner.Sign(file, options));
 
-            var signed = await PdfFileSigner.SignAsync(file, options, TestContext.Current.CancellationToken);
+            var signed = await PdfFileSigner.SignAsync(file, options, cancellationToken: TestContext.Current.CancellationToken);
             var signature = Assert.Single(ReadAll(signed));
             var cms = new SignedCms(new ContentInfo(signature.Covered), detached: true);
             cms.Decode(signature.Contents);
@@ -309,7 +291,7 @@ namespace PeachDrawing.PDF.Tests
             await Assert.ThrowsAsync<ArgumentNullException>(() => PdfFileSigner.AddDocumentTimestampAsync(null!, good, cancellationToken: TestContext.Current.CancellationToken));
             await Assert.ThrowsAsync<ArgumentNullException>(() => PdfFileSigner.AddDocumentTimestampAsync([], null!, cancellationToken: TestContext.Current.CancellationToken));
             await Assert.ThrowsAsync<InvalidOperationException>(() => PdfFileSigner.AddDocumentTimestampAsync(Compose(), new PdfTimestampOptions(), cancellationToken: TestContext.Current.CancellationToken));
-            await Assert.ThrowsAsync<InvalidOperationException>(() => PdfFileSigner.AddDocumentTimestampAsync(Compose(), good, 10, TestContext.Current.CancellationToken));
+            await Assert.ThrowsAsync<InvalidOperationException>(() => PdfFileSigner.AddDocumentTimestampAsync(Compose(), good, 10, cancellationToken: TestContext.Current.CancellationToken));
         }
 
         [Fact]

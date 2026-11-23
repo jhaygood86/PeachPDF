@@ -118,7 +118,7 @@ namespace PeachDrawing.PDF.Tests
             using var certificate = NewCertificate();
             var original = Compose(new PdfComposerOptions());
 
-            var signed = await PdfFileSigner.SignAsync(original, Visible(certificate, page: 2), TestContext.Current.CancellationToken);
+            var signed = await PdfFileSigner.SignAsync(original, Visible(certificate, page: 2), cancellationToken: TestContext.Current.CancellationToken);
 
             Assert.Equal(original, signed[..original.Length]);
             Assert.Contains("/Rect [20 30 120 70]", Encoding.Latin1.GetString(signed));
