@@ -173,6 +173,7 @@ PeachDrawing.PDF.PdfComposer : sealed class
   method PdfComposerPage AddPage(Double widthPoints, Double heightPoints)
   method PdfFormBuilder CreateFormBuilder(PdfRenderContext renderContext, String generatedNamePrefix = Field)
   method PdfTagRecorder CreateTagRecorder(Boolean requireAlternateText = False)
+  method Task SaveAsync(Stream stream, CancellationToken cancellationToken = null)
   method Void AddBookmarks(IEnumerable<PdfBookmark> bookmarks)
   method Void AddNamedDestination(String name, Int32 pageIndex, Double topPoints)
   method Void AddPageLabels(IEnumerable<PdfPageLabelRange> ranges)
@@ -203,6 +204,7 @@ PeachDrawing.PDF.PdfComposerOptions : sealed class
   property PdfAConformance Conformance { get; set; }
   property PdfEncryptionOptions Encryption { get; set; }
   property PdfFacturXInfo FacturX { get; set; }
+  property PdfSigningOptions Signing { get; set; }
   property PdfUAConformance UAConformance { get; set; }
   property PdfVersion? Version { get; set; }
   property PdfXConformance XConformance { get; set; }
@@ -273,6 +275,11 @@ PeachDrawing.PDF.PdfFileAttachment : sealed class
   property String FilePath { get; set; }
   property String Key { get; set; }
   property String MimeType { get; set; }
+PeachDrawing.PDF.PdfFileSigner : static class
+  method static Byte[] AddValidationData(Byte[] pdf, PdfValidationData data, String password = null, String signatureFieldName = null)
+  method static Byte[] Sign(Byte[] pdf, PdfSigningOptions options, String password = null)
+  method static Task<Byte[]> AddDocumentTimestampAsync(Byte[] pdf, PdfTimestampOptions options, Int32 reservedBytes = 16384, String password = null, CancellationToken cancellationToken = null)
+  method static Task<Byte[]> SignAsync(Byte[] pdf, PdfSigningOptions options, String password = null, CancellationToken cancellationToken = null)
 PeachDrawing.PDF.PdfFormBuilder : sealed class
   method ValueTask AddDisclosureAsync(PdfComposerPage page, PdfDisclosureDefinition disclosure)
   method Void AddField(PdfComposerPage page, PdfFormFieldDefinition field)
@@ -338,6 +345,7 @@ PeachDrawing.PDF.PdfOperation : sealed class
   method PdfOperation TakePages(String pageSelector)
   method PdfOperation UnderlayFile(PdfLayerConfiguration layer)
   method PdfOperation WithCopyMode(PdfCopyMode mode)
+  method PdfOperation WithSignedSourcePolicy(PdfSignedSourcePolicy policy)
   method Void AppendTo(PdfComposer composer, PdfRenderContext context, PdfCopyMode? copyMode = null)
   method Void Save(Stream stream)
   method Void Save(String filePath)
@@ -372,18 +380,21 @@ PeachDrawing.PDF.PdfPageSource : sealed class
   method IReadOnlyList<PdfEmbeddedFile> GetAttachments()
   method IReadOnlyList<PdfFormFieldDefinition> GetFormFields(Int32 pageIndex, Double pixelsPerPoint = 1, Func<String, String> rename = null)
   method IReadOnlyList<PdfSourceLink> GetLinks(Int32 pageIndex)
+  method IReadOnlyList<PdfSourceSignature> GetSignatures()
   method IReadOnlyList<String> GetPageLabels()
   method PdfPageText GetText(Int32 pageIndex)
   method PdfSourceConformance GetConformance()
   method PdfSourceMetadata GetMetadata()
   method PdfSourceOutputIntent GetOutputIntent()
   method PdfTagSession CreateTagSession(PdfTagRecorder recorder)
+  method PdfValidationData GetValidationData()
   method ValueTuple<Double, Double> GetPageSize(Int32 pageIndex)
   method Void TieLinkToStructure(PdfTagSession tags, PdfSourceLink link, PdfLink added)
   method static PdfPageSource Open(Byte[] pdf)
   method static PdfPageSource Open(Byte[] pdf, String password)
   method static PdfPageSource Open(Stream stream)
   method static PdfPageSource Open(Stream stream, String password)
+  property Boolean HasSignatures { get; }
   property Int32 PageCount { get; }
 PeachDrawing.PDF.PdfPageText : sealed class
   method IReadOnlyList<PdfTextRange> Find(String query, PdfTextSearchOptions options = None)
@@ -417,6 +428,41 @@ PeachDrawing.PDF.PdfRenderContext : class
   method virtual String GetCssMediaType(IEnumerable<String> mediaTypesAvailable)
   property Double LayoutUnitsPerPoint { get; }
   property Double PixelsPerPoint { get; set; }
+PeachDrawing.PDF.PdfSignatureBox : sealed class
+  ctor()
+  property Double FontSize { get; set; }
+  property Int32 PageNumber { get; set; }
+  property Rect Bounds { get; set; }
+  property String Text { get; set; }
+PeachDrawing.PDF.PdfSignatureChanges : enum Int32
+  Annotations = 3
+  FormFilling = 2
+  None = 0
+  Other = 4
+  SignaturesAndTimestamps = 1
+  Unknown = 5
+PeachDrawing.PDF.PdfSignatureFormat : enum Int32
+  CadesDetached = 1
+  Pkcs7Detached = 0
+PeachDrawing.PDF.PdfSignedSourcePolicy : enum Int32
+  Reject = 1
+  Warn = 0
+PeachDrawing.PDF.PdfSigningOptions : sealed class
+  ctor()
+  property AsymmetricAlgorithm PrivateKey { get; set; }
+  property Boolean AllowKeyPrompt { get; set; }
+  property HashAlgorithmName HashAlgorithm { get; set; }
+  property IList<X509Certificate2> AdditionalCertificates { get; }
+  property Int32 ReservedSignatureBytes { get; set; }
+  property PdfSignatureBox Box { get; set; }
+  property PdfSignatureFormat Format { get; set; }
+  property PdfTimestampOptions Timestamp { get; set; }
+  property String ContactInfo { get; set; }
+  property String KeyPin { get; set; }
+  property String Location { get; set; }
+  property String Reason { get; set; }
+  property String SignerName { get; set; }
+  property X509Certificate2 Certificate { get; set; }
 PeachDrawing.PDF.PdfSourceConformance : sealed class
   ctor(PdfAConformance PdfA, PdfXConformance PdfX)
   method PdfSourceConformance <Clone>$()
@@ -474,6 +520,24 @@ PeachDrawing.PDF.PdfSourceOutputIntent : sealed class
   property Byte[] Profile { get; init; }
   property String Identifier { get; init; }
   property String Info { get; init; }
+PeachDrawing.PDF.PdfSourceSignature : sealed class
+  ctor()
+  property Boolean CoversWholeFile { get; init; }
+  property Boolean IsDocumentTimestamp { get; init; }
+  property Boolean IsIntact { get; init; }
+  property Boolean? TimestampIsValid { get; init; }
+  property DateTimeOffset? ClaimedTime { get; init; }
+  property DateTimeOffset? TimestampTime { get; init; }
+  property PdfSignatureChanges ChangesAfter { get; init; }
+  property String ContactInfo { get; init; }
+  property String FieldName { get; init; }
+  property String Location { get; init; }
+  property String Problem { get; init; }
+  property String Reason { get; init; }
+  property String SignerName { get; init; }
+  property String SubFilter { get; init; }
+  property X509Certificate2 SignerCertificate { get; init; }
+  property X509Certificate2 TimestampCertificate { get; init; }
 PeachDrawing.PDF.PdfStructureAttributeValue : sealed class
   method static PdfStructureAttributeValue FromBoolean(Boolean flag)
   method static PdfStructureAttributeValue FromList(IEnumerable<PdfStructureAttributeValue> items)
@@ -532,10 +596,23 @@ PeachDrawing.PDF.PdfTextSearchOptions : enum Int32
   MatchCase = 1
   None = 0
   WholeWord = 2
+PeachDrawing.PDF.PdfTimestampOptions : sealed class
+  ctor()
+  method static PdfTimestampOptions FromHttpAuthority(Uri authority, HttpClient client)
+  property Func<ReadOnlyMemory<Byte>, CancellationToken, Task<Byte[]>> Exchange { get; set; }
+  property HashAlgorithmName HashAlgorithm { get; set; }
 PeachDrawing.PDF.PdfUAConformance : enum Int32
   None = 0
   UA1 = 1
   UA2 = 2
+PeachDrawing.PDF.PdfValidationData : sealed class
+  ctor()
+  method static Task<PdfValidationData> CollectAsync(X509Certificate2 certificate, IEnumerable<X509Certificate2> additionalCertificates, HttpClient client, CancellationToken cancellationToken = null)
+  property Boolean IsEmpty { get; }
+  property IList<Byte[]> Certificates { get; }
+  property IList<Byte[]> Crls { get; }
+  property IList<Byte[]> OcspResponses { get; }
+  property IReadOnlyList<String> Problems { get; }
 PeachDrawing.PDF.PdfVersion : enum Int32
   Pdf17 = 0
   Pdf20 = 1

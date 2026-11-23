@@ -122,6 +122,18 @@ internal static class CliProgram
                                      assemble, or the shorthands read-only, all, none.
                                      Default: all.
               --no-encrypt-metadata  Leave the XMP metadata unencrypted.
+              --sign-cert=FILE       Sign the PDF with the certificate and key in a PKCS#12
+                                     (.pfx/.p12) file.
+              --sign-password=PASS, --sign-password-file=FILE, --sign-password-env=VAR
+                                     The certificate file's password.
+              --sign-format=NAME     pkcs7 (default) or cades (the PAdES baseline form).
+              --timestamp-url=URL    Timestamp the signature with an RFC 3161 authority.
+              --sign-name=TEXT, --sign-reason=TEXT, --sign-location=TEXT, --sign-contact=TEXT
+                                     Details a reader shows for the signature.
+              --sign-box=PAGE,X,Y,W,H
+                                     Draw a visible signature: a page from 1, then a
+                                     rectangle in points from the top-left corner.
+                                     Default: an invisible signature.
               --tagged-pdf           Emit a tagged (PDF/UA) structure tree.
               --snap-box-decorations-to-css-pixels
                                      Snap box backgrounds and borders to whole CSS pixels,

@@ -244,6 +244,36 @@ public sealed class PdfPageSource
         lock (_sync) return _forms.Fields(Page(pageIndex), pixelsPerPoint, rename);
     }
 
+    /// <summary>
+    /// Whether the file is digitally signed or carries a document timestamp. A signature covers the exact bytes of the file, so a
+    /// <see cref="PdfOperation"/> that draws or copies its pages writes a new file in which the signature is not carried.
+    /// </summary>
+    public bool HasSignatures
+    {
+        get { lock (_sync) return _forms.HasSignatures(); }
+    }
+
+    /// <summary>
+    /// The digital signatures and document timestamps the file carries, in the order its form lists them, each checked against the bytes
+    /// it covers. Nothing here decides whether a certificate is trusted: see <see cref="PdfSourceSignature"/>. At most 256 are read, so a
+    /// file built to list thousands cannot make the check cost more than that.
+    /// </summary>
+    /// <returns>the signatures, or an empty list for an unsigned file</returns>
+    public IReadOnlyList<PdfSourceSignature> GetSignatures()
+    {
+        lock (_sync) return new PdfSourceSignatures(_document).Read();
+    }
+
+    /// <summary>
+    /// The validation data the file carries in its document security store: the certificates, OCSP responses and CRLs a signature's checker
+    /// can use without reaching the network. See <see cref="PdfFileSigner.AddValidationData"/>.
+    /// </summary>
+    /// <returns>the data, empty when the file has no store</returns>
+    public PdfValidationData GetValidationData()
+    {
+        lock (_sync) return new PdfSourceSignatures(_document).ReadValidationData();
+    }
+
     /// <summary>The PDF/A and PDF/X levels the file claims for itself.</summary>
     /// <returns>the levels, <c>None</c> where it claims none</returns>
     public PdfSourceConformance GetConformance()

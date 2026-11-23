@@ -12,6 +12,9 @@ namespace PeachDrawing.PDF;
 /// <summary>Draws the pages of a <see cref="PdfOperation"/> into a new file, with the navigation of the files they came from.</summary>
 internal static class PdfOperationWriter
 {
+    /// <summary>The warning an operation reports when a source it draws or copies was signed.</summary>
+    internal const string SignatureWarning = "digital signature not carried: the output is a new file, so a signature of a source no longer applies";
+
     public static void Write(PdfOperation operation, Stream stream)
     {
         var pages = operation.OutputPages;
@@ -50,6 +53,18 @@ internal static class PdfOperationWriter
         var call = state.Calls++;
         var first = composer.PageCount;
         var warnings = new SortedSet<string>(StringComparer.Ordinal);
+        if (sources.Any(s => s.HasSignatures))
+        {
+            // Checked before anything is drawn or copied, so a refused operation leaves the composer as it was.
+            if (operation.SignedSources == PdfSignedSourcePolicy.Reject)
+            {
+                throw new InvalidOperationException(
+                    "A source file is digitally signed, and a signature cannot be carried into a new file. Use PdfFileSigner to sign the output, " +
+                    "or set the operation's signed-source policy to Warn to write it without the signature.");
+            }
+
+            warnings.Add(SignatureWarning);
+        }
 
         // Where each page of each file was put; the first place wins, so a link to it has one place to lead to.
         var drawnAt = new Dictionary<(PdfPageSource, int), int>();

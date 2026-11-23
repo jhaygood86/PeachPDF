@@ -86,7 +86,7 @@ rather than producing a file whose header disagrees with how its pages were writ
 
 | Option | Meaning |
 |---|---|
-| `Title`, `Author`, `Subject`, `Keywords`, `Creator` | The document information shown in a reader's properties dialog. Non-ASCII text is written correctly. |
+| `Title`, `Author`, `Subject`, `Keywords`, `Creator` | The document information shown in a reader's properties dialog. Non-ASCII text is written correctly. A document that names no `Creator` (or `Producer`) says `PeachPDF {version}`, in its XMP packet too, so a PDF/A file's two descriptions of its creator agree. |
 | `CreationDate` | When the document was made. Leave it unset for a file that is byte-for-byte the same every time you write it. |
 | `Language` | The document's natural language (BCP 47, such as `en-US`), which the accessible PDF/A levels (PDF/A-1A, 2A and 3A) require. |
 | `Producer` | The software that wrote the file. Defaults to this package. |
@@ -100,6 +100,7 @@ rather than producing a file whose header disagrees with how its pages were writ
 | `ImageCompression`, `DownscaleImages`, `DownscaleQuality`, `MaximumDownscaleMultiplier`, `JxlPassthrough` | How images are embedded and how large they may be. |
 | `FlattenTransparency`, `PortableColorFilters` | Draw transparency and color filters as plain content, for readers that handle them poorly. |
 | `Encryption` | A `PdfEncryptionOptions`: AES-256 password protection with a user password, an owner password and a `PdfPermissions` set. |
+| `Signing` | A `PdfSigningOptions`: signs the file with a certificate's private key - see [Digital signatures](#digital-signatures). |
 
 The options are read when they are applied: a later change to the object does not reach a document already configured.
 
@@ -147,9 +148,99 @@ var options = new PdfComposerOptions
 
 The file is written with the PDF standard security handler using AES-256 (revision 6 of ISO 32000-2); older handlers (RC4, AES-128) depend
 on deprecated algorithms and are not offered. A reader enforces `Permissions` voluntarily: they are a request made of well-behaved
-software, not a cryptographic barrier. An encrypted file has a header of at least 1.7. With no `UserPassword` the document opens without
+software, not a cryptographic barrier. An encrypted file has a header of at least 1.7, and its encryption dictionary is an indirect object (stored with its entries in the clear, as a reader needs them to derive the key), which is the form every reader accepts; in a linearized file it sits with the catalog, ahead of the first page. With no `UserPassword` the document opens without
 a password and the permissions still apply; with no `OwnerPassword` a random one is generated and discarded, so the restrictions can
 never be lifted. The options are copied when the composer is created, so changing them afterwards does not affect a document in progress.
+
+## Digital signatures
+
+```csharp
+var options = new PdfComposerOptions
+{
+    Signing = new PdfSigningOptions
+    {
+        Certificate = certificate,                       // an X509Certificate2 with its private key
+        Format = PdfSignatureFormat.CadesDetached,       // or Pkcs7Detached (the default)
+        Reason = "Approved",
+    },
+};
+```
+
+The saved file has a signature field (an invisible one on the first page, unless you draw it: see [Visible signatures](#visible-signatures)) whose value is a detached CMS signature over every byte of the file except the signature itself, so a reader reports any later change. The composer reserves room for the signature (`ReservedSignatureBytes`, 16 KB by default), writes the file, then fills the room in without moving any byte, which is why signing works with encryption and with `Linearize`. `Pkcs7Detached` writes `adbe.pkcs7.detached` with the signing time as a signed attribute and is read by the most software; `CadesDetached` writes `ETSI.CAdES.detached`, the form the PAdES baseline profiles build on, binding the signing certificate with a signed attribute. The digest is SHA-256, SHA-384 or SHA-512 (`HashAlgorithm`), and RSA and ECDSA keys are both supported.
+
+By default signing never waits for anyone: a key that needs a PIN or another prompt makes the save fail with an exception that says what to set, instead of blocking a service that has no one to answer. A desktop application that wants the prompt sets `AllowKeyPrompt = true`. To sign with a key that asks for nothing, give it what it needs up front:
+
+```csharp
+// A key you opened yourself, already holding its PIN (or any RSA/ECDSA object that forwards signing to a hardware module or a key service).
+Signing = new PdfSigningOptions { Certificate = publicCertificate, PrivateKey = myKey },
+
+// Or, for a smart card or token behind Windows CNG, the PIN itself.
+Signing = new PdfSigningOptions { Certificate = certificateFromTheCard, KeyPin = pin },
+```
+
+`PrivateKey` replaces the certificate's own key, so the certificate can be the public one; the key belongs to you and is not disposed. `KeyPin` hands the PIN to a key held by Windows CNG and works nowhere else: on other platforms use `PrivateKey`. The PIN stays in memory as a string for as long as the options do.
+
+Only the signing certificate and the ones in `AdditionalCertificates` are embedded; the chain is neither built nor fetched. An invisible signature still carries an empty appearance stream, because PDF/A-1 asks every form field for one (the later parts do not). A signed file must not be changed afterwards, and a `PdfOperation` that draws or copies a signed source writes an unsigned file and says so in `Warnings`. To keep a signature checkable after its certificates expire, see [Long-term validation](#long-term-validation); to check a file's signatures, see [Reading signatures](#reading-signatures).
+
+### Visible signatures
+
+```csharp
+Signing = new PdfSigningOptions
+{
+    Certificate = certificate,
+    Reason = "I approve this document",
+    Box = new PdfSignatureBox { PageNumber = 2, Bounds = new Rect(40, 40, 230, 62) },
+},
+```
+
+With a `Box` the signature is a box a reader draws on the page: a thin border and the signer's name, the reason, the place and the time of signing (or your own `Text`, lines separated by a line feed, at your `FontSize`). `Bounds` is in points from the top-left corner of the page as it is shown, the way a composer canvas is laid out, and `PageNumber` counts from 1; `PdfFileSigner` moves the box into the page's own space, so a page whose media box does not start at the origin is handled. The text is Helvetica, a standard font every reader has, so no font is embedded: for that reason a file that claims PDF/A or PDF/X cannot have a visible signature (an invisible one is fine), and neither can a rotated page. For a logo or a handwritten image, draw it as ordinary page content in the box's place.
+
+### Timestamps
+
+```csharp
+Signing = new PdfSigningOptions
+{
+    Certificate = certificate,
+    Format = PdfSignatureFormat.CadesDetached,
+    Timestamp = PdfTimestampOptions.FromHttpAuthority(new Uri("https://tsa.example/"), httpClient),
+},
+```
+
+A time stamping authority (RFC 3161) can vouch for when the signature was made: the composer builds the request for the signature value, checks the authority's answer (the digest and nonce must match) and embeds the token in the signature, so a reader can show a signing time the signer could not have chosen. The package makes no network request of its own. `PdfTimestampOptions.FromHttpAuthority` posts the request with the `HttpClient` you give it (so credentials, proxies and timeouts are yours); a host with its own transport sets `Exchange`, a function from the request's bytes to the response's bytes, instead. Because the exchange is asynchronous, a timestamped document is written with `PdfComposer.SaveAsync`; `Save` refuses it. The token adds several kilobytes, so raise `ReservedSignatureBytes` when a save reports that the signature does not fit.
+
+### Signing a file that already exists
+
+```csharp
+byte[] signed = PdfFileSigner.Sign(File.ReadAllBytes("contract.pdf"), new PdfSigningOptions { Certificate = certificate });
+byte[] stamped = await PdfFileSigner.AddDocumentTimestampAsync(signed, PdfTimestampOptions.FromHttpAuthority(authority, httpClient));
+```
+
+`PdfFileSigner` signs or timestamps a PDF you did not write with this package, as an incremental update: every byte of the original stays exactly as it was, so signatures the file already carries stay valid, and only the catalog, the form, the first page and the lists that name the new field are written again, followed by a new cross-reference section (a classic table, or a stream when the file uses one). `Sign` and `SignAsync` add one signature field (invisible on the first page, unless the options draw it: see [Visible signatures](#visible-signatures)), numbered after the fields the file already has (`Signature1`, `Signature2`...); `AddDocumentTimestampAsync` adds a document timestamp instead (a `DocTimeStamp` field whose token covers the whole file, signatures included), which is how a signed file is kept trustworthy after its certificate expires. Call them again on the result to add more. The input array is not modified. An encrypted file is signed when you give its password (`PdfFileSigner.Sign(bytes, options, password)`, the user password, or for an AES-256 file the owner password too): the objects appended are encrypted with the file's own key, each under its own object number, and the update's trailer names the file's encryption dictionary, so the result is still a file the same readers open with the same password. A file encrypted with RC4 is refused (.NET has no RC4), and so is one whose cross-reference data is damaged and had to be rebuilt; a missing or wrong password throws `PdfPasswordException`.
+
+### Long-term validation
+
+```csharp
+var data = await PdfValidationData.CollectAsync(certificate, [intermediate], httpClient);
+var lt  = PdfFileSigner.AddValidationData(signedBytes, data);                       // PAdES B-LT
+var lta = await PdfFileSigner.AddDocumentTimestampAsync(lt, timestampOptions);       // PAdES B-LTA
+```
+
+A signature stays checkable for years only if a reader can see, without the network, the chain of certificates and the proof that none had been revoked when the signature was made. A file carries that in its document security store (`/DSS`). `PdfValidationData` holds the three kinds of thing the store keeps (`Certificates`, `OcspResponses` and `Crls`, each as DER bytes), and `PdfFileSigner.AddValidationData` appends them as an incremental update, so signatures already in the file stay valid; data the store already holds is stored once, and a file older than PDF 2.0 gets the extension entry that says it uses the store. `PdfPageSource.GetValidationData` reads the store back. A document timestamp added after it covers the store too: that is the long-term, archival form (B-LTA).
+
+`PdfValidationData.CollectAsync` builds the data for you: the certificate's chain (give it the intermediates the certificate does not carry), the revocation lists its certificates name, and an OCSP response from each responder they name, fetched over HTTP with the `HttpClient` you give it. What it cannot get is listed in `Problems` instead of failing the call, so one responder that is down leaves the rest usable (an incomplete chain, an address that is not `http` or `https`, a refused request), and cancelling the token stops it. Nothing checks that a response is genuine or current: collect it close to signing, and add it to the file before the certificates expire. Besides the file-wide lists, each signature the data is for gets its own `/VRI` entry, which lists the certificates, OCSP responses and CRLs that belong to it and when they were last brought up to date. By default that is every signature in the file (a document timestamp is not given one); `PdfFileSigner.AddValidationData(bytes, data, signatureFieldName: "Signature2")` names one, and a later call with more data for the same signature adds to its entry, while the entries of the other signatures stay as they were. The entry's key is the SHA-1 of the hexadecimal text of the signature's `/Contents` as the file stores it, padding included, in capitals: the rule other open implementations use; a reader that finds no entry for a signature falls back to the file-wide lists, so the entries only narrow what it looks at.
+
+### Reading signatures
+
+```csharp
+foreach (var signature in PdfPageSource.Open(bytes).GetSignatures())
+    Console.WriteLine($"{signature.FieldName}: intact={signature.IsIntact}, whole file={signature.CoversWholeFile}, signer={signature.SignerCertificate?.Subject}");
+```
+
+`PdfPageSource.GetSignatures` lists each signature and document timestamp in the order the form lists them, as `PdfSourceSignature` values: what the signature states (`SignerName`, `Reason`, `Location`, `ContactInfo`, the signer's own `ClaimedTime`), the certificate it embeds, and what checking found. `IsIntact` is true when the CMS signature (or the timestamp token) is well formed and matches the bytes its byte range names; when it is false, `Problem` says why. `CoversWholeFile` is false when bytes follow the signed range, which is the normal state of every signature but the last in a file that was extended; this does not tell a harmless later signature from a change. An embedded timestamp is reported as `TimestampTime`, `TimestampCertificate` and `TimestampIsValid` (whether the token vouches for this signature's value). A signature is read from the file's own bytes, so an encrypted file works, and a byte range or length that does not fit the file is reported as a problem rather than throwing. At most 256 signatures are read from one file.
+
+`ChangesAfter` says what happened to the document after the signature, as a `PdfSignatureChanges`: `None` (the signature covers the whole file, or nothing the signature covered differs), `SignaturesAndTimestamps` (only later signatures, document timestamps and validation data were added: the normal state of every signature but the last in a file that was signed more than once), `FormFilling`, `Annotations`, or `Other` (a page, its content, a font, an image, the page tree or metadata was altered, or something the checks do not recognize), and `Unknown` when the signature is not intact or the file as it was signed cannot be read back. It is worked out by reading the file as the signature covered it and as it is now and comparing their objects; it is conservative, and it describes the objects, not what the signer allowed, so a change a signer permitted can still read as `Other`.
+
+Whether to trust what is reported is yours to decide: nothing here builds a certificate chain, checks revocation, or compares the signing time with the certificate's validity. Build an `X509Chain` from `SignerCertificate` (or `TimestampCertificate`) with the policy you need. Signatures made with the legacy sub-filters (`adbe.x509.rsa_sha1`) are reported as not intact rather than checked.
 
 ## Archival and print conformance
 
@@ -335,7 +426,7 @@ PdfOperation
 - `ExtendMetadata` adds XML elements, each in its own schema's namespace, inside the XMP packet's `rdf:Description`.
 - `Linearize` writes the output in the linearized ("fast web view") layout; see `PdfComposerOptions.Linearize` in the options table above.
 - `Encrypt` protects the output with AES-256. `Decrypt` (and `RemoveRestrictions`, the same step) writes it with no protection even though the pages came from a protected file: a file is read with its password when it is loaded, so there is nothing else to remove.
-- `Save` writes a file or a stream; `ToArray` returns the bytes. `Warnings` names what the importer could not draw, after a save.
+- `Save` writes a file or a stream; `ToArray` returns the bytes. `Warnings` names what the importer could not draw, after a save. It also reports a source that was digitally signed (or carries a document timestamp): a signature covers the exact bytes of its file, so it is not carried into the new file in either copy mode. `PdfPageSource.HasSignatures` tells you beforehand, and `WithSignedSourcePolicy(PdfSignedSourcePolicy.Reject)` makes the operation refuse a signed source (the save throws and writes nothing) instead of warning; an overlay or underlay is not checked, since drawing over a page is what it is for.
 
 A selector, which `PdfPageSelector.Select` also reads for you, is a comma-separated list read left to right:
 

@@ -64,7 +64,11 @@ internal static class PdfLinearizer
         // What each page reaches, and what the document itself (outlines, form, names...) reaches; neither follows a link to another page.
         var reach = pageObjects.Select(p => Reach(p, pageSet, skipKey: null)).ToList();
         var documentReach = Reach(root, pageSet, skipKey: "/Pages");
-        var sections = Classify(all, root, pageObjects, reach, documentReach, OutlinesShownAtOpen(root, pageSet), OpenDocumentObjects(root, pageSet));
+        // The encryption dictionary is needed before anything can be decrypted, so it is with the catalog in the open-document section.
+        var openDocument = OpenDocumentObjects(root, pageSet);
+        if (document.EncryptionDictionary?.Reference is { } encryptReference)
+            openDocument.Add(encryptReference);
+        var sections = Classify(all, root, pageObjects, reach, documentReach, OutlinesShownAtOpen(root, pageSet), openDocument);
 
         var originalIds = all.ToDictionary(r => r, r => r.ObjectId);
         try

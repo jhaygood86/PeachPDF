@@ -572,6 +572,7 @@ PeachPDF.PdfGenerateConfig : sealed class
   property PdfDocumentMode DocumentMode { get; set; }
   property PdfDocumentSyntax DocumentSyntax { get; set; }
   property PdfEncryptionOptions Encryption { get; set; }
+  property PdfSigningOptions Signing { get; set; }
   property PdfUAConformance PdfUAConformance { get; set; }
   property PdfVersion PdfVersion { get; set; }
   property PdfXConformance PdfXConformance { get; set; }
@@ -635,6 +636,34 @@ PeachPDF.PdfPermissions : enum Int32
   AllowPrint = 4
   None = 0
   ReadOnly = 2580
+PeachPDF.PdfSignatureBox : sealed class
+  ctor()
+  property Double FontSize { get; set; }
+  property Double Height { get; set; }
+  property Double Width { get; set; }
+  property Double X { get; set; }
+  property Double Y { get; set; }
+  property Int32 PageNumber { get; set; }
+  property String Text { get; set; }
+PeachPDF.PdfSignatureFormat : enum Int32
+  CadesDetached = 1
+  Pkcs7Detached = 0
+PeachPDF.PdfSigningOptions : sealed class
+  ctor()
+  property AsymmetricAlgorithm PrivateKey { get; set; }
+  property Boolean AllowKeyPrompt { get; set; }
+  property HashAlgorithmName HashAlgorithm { get; set; }
+  property HttpClient TimestampClient { get; set; }
+  property IList<X509Certificate2> AdditionalCertificates { get; }
+  property PdfSignatureBox Box { get; set; }
+  property PdfSignatureFormat Format { get; set; }
+  property String ContactInfo { get; set; }
+  property String KeyPin { get; set; }
+  property String Location { get; set; }
+  property String Reason { get; set; }
+  property String SignerName { get; set; }
+  property Uri TimestampAuthority { get; set; }
+  property X509Certificate2 Certificate { get; set; }
 PeachPDF.PdfSize : struct
   ctor(Double width, Double height)
   method virtual String ToString()
@@ -657,6 +686,7 @@ PeachPDF.PeachPdfCssContent : class
   method Task AddStyleSheet(ReadOnlyMemory<Char> stylesheet)
   method Task AddStyleSheet(String stylesheet)
 PeachPDF.PeachPdfDocument : class
+  method Task SaveAsync(Stream stream, CancellationToken cancellationToken = null)
   method Void ConsolidateImages()
   method Void Save(Stream stream)
   property ClipReport ClipReport { get; }

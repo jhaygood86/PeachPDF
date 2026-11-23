@@ -34,6 +34,19 @@ public sealed partial class PdfComposer
     {
         ArgumentNullException.ThrowIfNull(options);
         EstablishFormat(options);
+        if (options.Signing is { } signing)
+        {
+            signing.Validate();
+            if (signing.Box is not null && (options.Conformance != PdfAConformance.None || options.XConformance != PdfXConformance.None))
+            {
+                throw new InvalidOperationException(
+                    "A visible signature is drawn in a standard font that is not embedded, which PDF/A and PDF/X do not allow: " +
+                    "leave PdfSigningOptions.Box unset (an invisible signature is allowed) or drop the conformance level.");
+            }
+
+            _signing = signing.Clone();
+        }
+
         ApplyInformation(options);
         _configured = true;
     }
@@ -269,8 +282,11 @@ public sealed partial class PdfComposer
         var info = _document.Info;
         info.Producer = options.Producer ?? PdfComposerProductInfo.Generator;
 
-        // A non-empty value replaces what an earlier call wrote; an empty one leaves it.
+        // A non-empty value replaces what an earlier call wrote; an empty one leaves it. A document that never names a creator is
+        // created by this package, and says so now rather than at save time: the XMP packet of a PDF/A file is written from this
+        // information, and ISO 19005-1 6.7.3 asks its CreatorTool to be the same as the /Creator written here.
         if (!string.IsNullOrEmpty(options.Creator)) info.Creator = options.Creator;
+        else if (string.IsNullOrEmpty(info.Creator)) info.Creator = PdfComposerProductInfo.Generator;
         if (!string.IsNullOrEmpty(options.Title)) info.Title = options.Title;
         if (!string.IsNullOrEmpty(options.Author)) info.Author = options.Author;
         if (!string.IsNullOrEmpty(options.Subject)) info.Subject = options.Subject;

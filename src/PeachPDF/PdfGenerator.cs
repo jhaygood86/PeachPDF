@@ -910,6 +910,7 @@ namespace PeachPDF
                 WriteXmpMetadata = config.EnableXmpMetadata,
                 FacturX = embeddings.FacturX,
                 Encryption = config.Encryption.ToEngine(),
+                Signing = config.Signing.ToEngine(),
                 CompressContentStreams = config.CompressContentStreams,
                 Linearize = config.Linearize,
                 BrotliCompression = config.BrotliCompression,

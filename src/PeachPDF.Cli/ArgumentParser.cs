@@ -155,6 +155,17 @@ internal static class ArgumentParser
                 case "owner-password-env": _options.OwnerPassword = ReadPasswordEnvironment(_options, name, RequireValue(name, inlineValue)) ?? _options.OwnerPassword; break;
                 case "permissions": ParsePermissions(_options, RequireValue(name, inlineValue)); break;
                 case "no-encrypt-metadata": _options.NoEncryptMetadata = true; break;
+                case "sign-cert": _options.SignCertificatePath = RequireValue(name, inlineValue) ?? _options.SignCertificatePath; break;
+                case "sign-password": _options.SignPassword = RequireValue(name, inlineValue) ?? _options.SignPassword; break;
+                case "sign-password-file": _options.SignPassword = ReadPasswordFile(_options, name, RequireValue(name, inlineValue)) ?? _options.SignPassword; break;
+                case "sign-password-env": _options.SignPassword = ReadPasswordEnvironment(_options, name, RequireValue(name, inlineValue)) ?? _options.SignPassword; break;
+                case "sign-format": ParseSignFormat(_options, RequireValue(name, inlineValue)); break;
+                case "timestamp-url": ParseTimestampUrl(_options, RequireValue(name, inlineValue)); break;
+                case "sign-name": _options.SignName = RequireValue(name, inlineValue) ?? _options.SignName; break;
+                case "sign-reason": _options.SignReason = RequireValue(name, inlineValue) ?? _options.SignReason; break;
+                case "sign-location": _options.SignLocation = RequireValue(name, inlineValue) ?? _options.SignLocation; break;
+                case "sign-contact": _options.SignContact = RequireValue(name, inlineValue) ?? _options.SignContact; break;
+                case "sign-box": ParseSignBox(_options, RequireValue(name, inlineValue)); break;
 
                 case "http-timeout": SetTimeout(_options, RequireValue(name, inlineValue)); break;
                 case "http-header": AddHeader(_options, RequireValue(name, inlineValue)); break;
@@ -431,6 +442,64 @@ internal static class ArgumentParser
         }
 
         options.Permissions = permissions;
+    }
+
+    private static void ParseSignFormat(CliOptions options, string? value)
+    {
+        if (value is null)
+        {
+            return;
+        }
+
+        switch (value.Replace("-", "").ToLowerInvariant())
+        {
+            case "pkcs7": options.SignFormat = PdfSignatureFormat.Pkcs7Detached; break;
+            case "cades": case "pades": options.SignFormat = PdfSignatureFormat.CadesDetached; break;
+            default: options.Errors.Add($"invalid --sign-format value '{value}' (expected pkcs7 or cades)"); break;
+        }
+    }
+
+    private static void ParseTimestampUrl(CliOptions options, string? value)
+    {
+        if (value is null)
+        {
+            return;
+        }
+
+        if (Uri.TryCreate(value, UriKind.Absolute, out var uri) && uri.Scheme is "http" or "https")
+        {
+            options.TimestampUrl = uri;
+        }
+        else
+        {
+            options.Errors.Add($"invalid --timestamp-url value '{value}' (expected an http or https address)");
+        }
+    }
+
+    // PAGE,X,Y,WIDTH,HEIGHT in points from the page's top-left corner.
+    private static void ParseSignBox(CliOptions options, string? value)
+    {
+        if (value is null)
+        {
+            return;
+        }
+
+        var parts = value.Split(',');
+        var numbers = new double[4];
+        var page = 0;
+        var valid = parts.Length == 5 && int.TryParse(parts[0], System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out page) && page >= 1;
+        for (var i = 0; valid && i < 4; i++)
+        {
+            valid = double.TryParse(parts[i + 1], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out numbers[i]) && double.IsFinite(numbers[i]);
+        }
+
+        if (!valid || numbers[2] <= 0 || numbers[3] <= 0)
+        {
+            options.Errors.Add($"invalid --sign-box value '{value}' (expected PAGE,X,Y,WIDTH,HEIGHT: a page from 1, then points from the top-left corner)");
+            return;
+        }
+
+        options.SignBox = new PdfSignatureBox { PageNumber = page, X = numbers[0], Y = numbers[1], Width = numbers[2], Height = numbers[3] };
     }
 
     // A password file holds just the password; the line ending an editor adds is not part of it.
@@ -792,6 +861,16 @@ internal static class ArgumentParser
         if (options.WantsEncryption && options.PdfA is not null)
         {
             options.Errors.Add("PDF encryption cannot be combined with --pdfa: PDF/A documents must not be encrypted");
+        }
+
+        if (options.HasSigningDetail && !options.WantsSigning)
+        {
+            options.Errors.Add("the --sign-* and --timestamp-url options have no effect without --sign-cert");
+        }
+
+        if (options.WantsSigning && options.PdfA is not null && options.SignBox is not null)
+        {
+            options.Errors.Add("a PDF/A document cannot carry a visible signature: drop --sign-box, or drop --pdfa");
         }
 
         // Without an explicit -o, the output name is derived from the first input's file name, which

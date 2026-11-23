@@ -48,6 +48,36 @@ internal sealed class PdfSourceDocument
     /// <summary>The merged trailer dictionary (newest entries win).</summary>
     public PdfDictionary Trailer { get; }
 
+    /// <summary>The file's bytes, as they were read.</summary>
+    public byte[] Data => _data;
+
+    /// <summary>Whether the cross-reference data was missing or damaged and the object table was reconstructed by scanning.</summary>
+    public bool WasRebuilt => _rebuilt;
+
+    /// <summary>Whether the file is encrypted (and was opened with a password it accepted).</summary>
+    public bool IsEncrypted => _decryptor is not null;
+
+    /// <summary>The password the file was opened with.</summary>
+    public string Password => _password;
+
+    /// <summary>The numbers of the objects the cross-reference data names (free entries included).</summary>
+    public IEnumerable<int> ObjectNumbers => _xref.Keys.ToArray();
+
+    /// <summary>The object numbered <paramref name="number"/>, or null when there is none (a missing or free object).</summary>
+    public PdfItem? ObjectAt(int number) => LoadObject(number) is PdfNull ? null : LoadObject(number);
+
+    /// <summary>What encrypts and decrypts the file's strings and streams, or null for a file that is not encrypted.</summary>
+    public PdfDecryptor? Decryptor => _decryptor;
+
+    /// <summary>The offset the file's last <c>startxref</c> names: where its newest cross-reference section starts, or -1.</summary>
+    public long LastStartXref { get; private set; } = -1;
+
+    /// <summary>The highest object number the cross-reference data defines.</summary>
+    public int HighestObjectNumber => _xref.Count == 0 ? 0 : _xref.Keys.Max();
+
+    /// <summary>The generation number the cross-reference data gives object <paramref name="number"/>, or 0.</summary>
+    public int GenerationOf(int number) => _xref.TryGetValue(number, out var entry) && entry.Kind == EntryKind.InFile ? entry.B : 0;
+
     PdfOptionalContent? _optionalContent;
 
     /// <summary>The layers of the document and which of them are shown.</summary>
@@ -126,6 +156,7 @@ internal sealed class PdfSourceDocument
         var t = lx.Next();
         if (t.Kind != PdfTokenKind.Integer) return false;
         long offset = t.Integer;
+        LastStartXref = offset;
         var seen = new HashSet<long>();
         var queue = new Queue<long>();
         queue.Enqueue(offset);

@@ -32,9 +32,21 @@ namespace PeachPDF.Tests.Integration
 
         static byte[] Hex(string text) => Convert.FromHexString(Regex.Replace(text, @"\s+", ""));
 
+        /// <summary>The encryption dictionary: the object the trailer's <c>/Encrypt N 0 R</c> names (the form the writer produces), or a direct one.</summary>
+        static string EncryptionDictionary(string pdf)
+        {
+            var reference = Regex.Match(pdf, @"/Encrypt\s+(\d+)\s+0\s+R");
+            if (!reference.Success)
+                return pdf;
+
+            var body = Regex.Match(pdf, $@"(?<=\n){reference.Groups[1].Value} 0 obj\n(.*?)\nendobj", RegexOptions.Singleline);
+            Assert.True(body.Success, "the object /Encrypt names was not found");
+            return body.Groups[1].Value;
+        }
+
         static byte[] EncryptEntry(string pdf, string key)
         {
-            var match = Regex.Match(pdf, $@"/Encrypt\s*<<.*?{key}\s*<([0-9A-Fa-f\s]+)>", RegexOptions.Singleline);
+            var match = Regex.Match(EncryptionDictionary(pdf), $@"{key}\s*<([0-9A-Fa-f\s]+)>", RegexOptions.Singleline);
             Assert.True(match.Success, $"{key} not found in /Encrypt");
             return Hex(match.Groups[1].Value);
         }

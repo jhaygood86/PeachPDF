@@ -32,6 +32,7 @@ using PeachPDF.Network;
 - [Generating PDF/UA (accessible) output](#generating-pdfua-accessible-output)
 - [PDF 2.0 output](#pdf-20-output)
 - [Encrypting and password-protecting PDF output](#encrypting-and-password-protecting-pdf-output)
+- [Digitally signing PDF output](#digitally-signing-pdf-output)
 - [Enabling interactive PDF forms](#enabling-interactive-pdf-forms)
 - [Generating PDF/A-conformant output](#generating-pdfa-conformant-output)
 - [Authoring colors in CMYK](#authoring-colors-in-cmyk)
@@ -662,6 +663,53 @@ Things to know:
 - **Runtime support.** Encryption needs the platform's AES and SHA-2 implementations. A host that has none (browser WebAssembly may be one) throws `PlatformNotSupportedException` when the document is saved.
 
 The [`peachpdf`](cli.md) tool exposes this as `--user-password`, `--owner-password`, `--permissions` and `--no-encrypt-metadata`.
+
+## Digitally signing PDF output
+
+Set `PdfGenerateConfig.Signing` to sign the generated PDF with a certificate and its private key, and optionally to timestamp the signature with an [RFC 3161](https://www.rfc-editor.org/rfc/rfc3161) authority. The signature covers every byte of the file, so a reader shows the document as signed and reports any later change. All the cryptography comes from .NET's own `System.Security.Cryptography`.
+
+```csharp
+using System.Security.Cryptography.X509Certificates;
+
+var certificate = X509CertificateLoader.LoadPkcs12FromFile("signer.pfx", "pfx password");
+
+var config = new PdfGenerateConfig
+{
+    PageSize = PageSize.A4,
+    Signing = new PdfSigningOptions
+    {
+        Certificate = certificate,
+        Reason = "I approve this document",
+        Location = "Atlanta",
+    }
+};
+
+var document = await generator.GeneratePdf(html, config);
+
+using var file = File.Create("signed.pdf");
+await document.SaveAsync(file);
+```
+
+| Option | Meaning |
+|---|---|
+| `Certificate` | The signing certificate. It needs its private key, unless `PrivateKey` supplies one (a key on a smart card or token). |
+| `KeyPin`, `AllowKeyPrompt` | The PIN of a token key. Signing never waits for a person: a key that needs a PIN fails with an explanation unless `KeyPin` is given, or `AllowKeyPrompt` lets the operating system ask. |
+| `Format` | `Pkcs7Detached` (default, the widest-supported form) or `CadesDetached` (the PAdES baseline form). |
+| `HashAlgorithm` | SHA-256 (default), SHA-384 or SHA-512. |
+| `TimestampAuthority`, `TimestampClient` | An RFC 3161 authority's address, and the `HttpClient` that reaches it (for a proxy or credentials). The timestamp proves the signature existed at that time. |
+| `AdditionalCertificates` | Issuer certificates to embed, so a reader can build the chain. |
+| `Box` | A rectangle on a page (points from the top-left corner) where the signature is drawn. Without it the signature is invisible. |
+| `SignerName`, `Reason`, `Location`, `ContactInfo` | Details a reader shows. |
+
+Things to know:
+
+- **Save with `SaveAsync` when timestamping.** Asking the authority is a network call, so `Save` refuses a document that has a `TimestampAuthority`.
+- **A signed file must not be changed afterwards.** Opening and re-saving it with another tool breaks the signature. To sign or timestamp a PDF that already exists, or to add long-term validation data, use `PdfFileSigner` from the [`PeachDrawing.PDF`](peachdrawing-pdf.md#digital-signatures) package.
+- **PDF/A.** A signed PDF/A file is written, but one cannot carry a visible `Box`.
+- **Encryption and linearization** work with signing.
+- **Trust is the reader's.** The file carries the certificates you give it; whether a reader trusts a self-signed or private-CA certificate is up to the reader's trust store.
+
+The [`peachpdf`](cli.md) tool exposes this as `--sign-cert`, `--sign-password`, `--sign-format`, `--timestamp-url`, `--sign-box` and the name, reason, location and contact options.
 
 ## Enabling interactive PDF forms
 

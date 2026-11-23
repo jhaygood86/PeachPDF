@@ -36,6 +36,8 @@
 		<ProjectReference Include="..\PeachDrawing.Core\PeachDrawing.Core.csproj" />
 		<ProjectReference Include="..\PeachDrawing.Text\PeachDrawing.Text.csproj" />
 		<PackageReference Include="PeachImage" />
+		<!-- CMS signatures and RFC 3161 timestamps for signed PDFs (Microsoft, MIT). -->
+		<PackageReference Include="System.Security.Cryptography.Pkcs" />
 	</ItemGroup>
 	<ItemGroup>
 		<None Remove="Engine\Resources\ColorProfiles\sRGB2014.icc" />
@@ -51,9 +53,9 @@
 			grants nothing but PeachDrawing.PDF.Tests.
 		-->
 	</ItemGroup>
-	<!-- The producer string the composer writes into the document information, from the one version every package carries. -->
+	<!-- The name and version the composer writes as /Producer, and as /Creator when a document names none: the product, PeachPDF, at the one version every package carries. -->
 	<Target Name="GeneratePdfComposerProductInfo" BeforeTargets="BeforeBuild">
-		<WriteLinesToFile File="$(IntermediateOutputPath)PdfComposerProductInfo.g.cs" Lines="namespace PeachDrawing.PDF { internal static class PdfComposerProductInfo { public const string Generator = &quot;PeachDrawing.PDF $(PackageVersion)&quot;%3B } }" Overwrite="true" />
+		<WriteLinesToFile File="$(IntermediateOutputPath)PdfComposerProductInfo.g.cs" Lines="namespace PeachDrawing.PDF { internal static class PdfComposerProductInfo { public const string Generator = &quot;PeachPDF $(PackageVersion)&quot;%3B } }" Overwrite="true" />
 		<ItemGroup>
 			<Compile Include="$(IntermediateOutputPath)PdfComposerProductInfo.g.cs" />
 		</ItemGroup>

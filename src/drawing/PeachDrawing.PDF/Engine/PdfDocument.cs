@@ -193,6 +193,9 @@ internal sealed class PdfDocument : PdfObject, IDisposable
         Save(stream, false);
     }
 
+    /// <summary>The encryption dictionary of the last save that encrypted, an indirect object the trailer refers to; null when it did not.</summary>
+    internal PdfDictionary? EncryptionDictionary { get; private set; }
+
     /// <summary>
     /// Implements saving a PDF file.
     /// </summary>
@@ -212,13 +215,21 @@ internal sealed class PdfDocument : PdfObject, IDisposable
         {
             _trailer.Elements.Remove(PdfTrailer.Keys.Encrypt);
 
+            // The previous save's encryption dictionary is an object of its own; a second save makes a new one (new key, new salts).
+            if (EncryptionDictionary?.Reference is { } previousEncrypt)
+                _irefTable.Remove(previousEncrypt);
+            EncryptionDictionary = null;
+
             // A fresh handler per save: its file key and salts are drawn anew, so two saves never share a key.
             PdfAes256SecurityHandler? security = Options.Encryption is { } encryptionOptions
                 ? new PdfAes256SecurityHandler(encryptionOptions)
                 : null;
             if (security is not null)
             {
-                _trailer.Elements[PdfTrailer.Keys.Encrypt] = security.CreateEncryptDictionary(this);
+                var encrypt = security.CreateEncryptDictionary(this);
+                Internals.AddObject(encrypt);
+                EncryptionDictionary = encrypt;
+                _trailer.Elements.SetReference(PdfTrailer.Keys.Encrypt, encrypt);
                 writer.Encryption = security;
                 if (_version < 20)
                 {

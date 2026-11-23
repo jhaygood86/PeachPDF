@@ -150,6 +150,40 @@ internal sealed class CliOptions
     /// <summary>Whether any option asks for an encrypted PDF.</summary>
     public bool WantsEncryption => UserPassword is not null || OwnerPassword is not null || Permissions is not null || NoEncryptMetadata;
 
+    /// <summary>The PKCS#12 (.pfx/.p12) file holding the signing certificate and key (<c>--sign-cert</c>); null leaves the PDF unsigned.</summary>
+    public string? SignCertificatePath { get; set; }
+
+    /// <summary>The password of the certificate file (<c>--sign-password</c>, <c>-file</c> or <c>-env</c>).</summary>
+    public string? SignPassword { get; set; }
+
+    /// <summary>The signature format (<c>--sign-format</c>); null is the default PKCS#7.</summary>
+    public PdfSignatureFormat? SignFormat { get; set; }
+
+    /// <summary>The address of an RFC 3161 timestamp authority (<c>--timestamp-url</c>).</summary>
+    public Uri? TimestampUrl { get; set; }
+
+    /// <summary>The signer name (<c>--sign-name</c>).</summary>
+    public string? SignName { get; set; }
+
+    /// <summary>Why the document is signed (<c>--sign-reason</c>).</summary>
+    public string? SignReason { get; set; }
+
+    /// <summary>Where the document is signed (<c>--sign-location</c>).</summary>
+    public string? SignLocation { get; set; }
+
+    /// <summary>How to reach the signer (<c>--sign-contact</c>).</summary>
+    public string? SignContact { get; set; }
+
+    /// <summary>Where a visible signature is drawn (<c>--sign-box</c>); null is an invisible signature.</summary>
+    public PdfSignatureBox? SignBox { get; set; }
+
+    /// <summary>Whether any option asks for a signed PDF.</summary>
+    public bool WantsSigning => SignCertificatePath is not null;
+
+    /// <summary>Whether a signing detail was given, which only means something with <c>--sign-cert</c>.</summary>
+    public bool HasSigningDetail => SignPassword is not null || SignFormat is not null || TimestampUrl is not null || SignName is not null
+        || SignReason is not null || SignLocation is not null || SignContact is not null || SignBox is not null;
+
     // --- Network ---
     public int? HttpTimeoutSeconds { get; set; }
     public List<string> HttpHeaders { get; } = [];

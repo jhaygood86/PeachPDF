@@ -21,6 +21,13 @@ namespace PeachDrawing.PDF.Engine;
 /// </summary>
 internal partial class PdfDictionary : PdfObject, IEnumerable<KeyValuePair<string, PdfItem>>, IPdfDictionaryValue<PdfDictionary>
 {
+    /// <summary>
+    /// Whether this object is written with its strings as they are, in a file that encrypts the strings of every other object. True for the
+    /// encryption dictionary only: its <c>/O</c>, <c>/U</c> and the like are what the file key is derived from, so a reader needs them in the
+    /// clear before it can decrypt anything (ISO 32000-2 7.6.1).
+    /// </summary>
+    internal bool WrittenUnencrypted { get; set; }
+
     static PdfDictionary IPdfDictionaryValue<PdfDictionary>.Create(PdfDocument document) => new(document);
     static PdfDictionary IPdfDictionaryValue<PdfDictionary>.Wrap(PdfDictionary existing) => existing;
 
