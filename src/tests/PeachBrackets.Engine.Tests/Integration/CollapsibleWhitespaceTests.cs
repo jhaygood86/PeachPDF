@@ -36,5 +36,32 @@ namespace PeachBrackets.Engine.Tests.Integration
             Assert.Equal("a　　b", kept);
             Assert.DoesNotContain("  ", collapsed);
         }
+
+        private static string Page(string body) =>
+            "<!DOCTYPE html><html><head><style>" + BundledFonts.FontFaceRule(BundledFonts.LineBreak, "LineBreakTest", "font/truetype")
+            + "</style></head><body style='margin:0'>" + body + "</body></html>";
+
+        private static async Task<string[]> Lines(string body)
+        {
+            var (root, _) = await LayoutHarness.LayoutAsync(Page(body));
+            var box = LayoutHarness.FindById(root, "p")!;
+            return [.. box.LineBoxes.Select(l => string.Concat(l.Words.Select(w => w.Text))).Where(t => t.Length > 0)];
+        }
+
+        /// <summary>css-text-3 section 4.1.3: an ideographic space at the end of a line hangs, so it stays on the line it overflows instead of wrapping.</summary>
+        [Fact]
+        public async Task TrailingIdeographicSpace_HangsInsteadOfWrapping()
+        {
+            // Three ems of 16pt fit the 50pt line; the space after them overflows it, and hangs.
+            var lines = await Lines("<p id='p' style='font-family:LineBreakTest; font-size:16pt; width:50pt'>あいう\u3000え</p>");
+            Assert.Equal(["あいう\u3000", "え"], lines);
+        }
+
+        [Fact]
+        public async Task TrailingIdeographicSpace_DoesNotHang_UnderBreakSpaces()
+        {
+            var lines = await Lines("<p id='p' style='font-family:LineBreakTest; font-size:16pt; width:50pt; white-space:break-spaces'>あいう\u3000え</p>");
+            Assert.Equal(["あい", "う\u3000え"], lines);
+        }
     }
 }

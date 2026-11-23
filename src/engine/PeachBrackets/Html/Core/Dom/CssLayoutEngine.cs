@@ -5898,16 +5898,20 @@ namespace PeachBrackets.Html.Dom
         /// so they stay on the line the word does (the fragments one word is cut into when its characters come from different fonts, the
         /// words the Unicode line breaking algorithm glues together).
         /// </summary>
-        private static double GluedRunWidthAfter(CssBox box, int wordIndex)
+        private static double GluedRunWidthAfter(Canvas g, CssBox box, int wordIndex)
         {
             var width = 0d;
 
             for (var i = wordIndex + 1; i < box.Words.Count; i++)
             {
                 var next = box.Words[i];
-                if (next.IsSpaces || next.IsLineBreak || (!next.SuppressWrapBefore && HasOrdinaryWrapOpportunityBefore(box.Words[i - 1], next))) break;
+                // An ideographic space is a word of its own that the algorithm keeps with the character before it; the part of it that
+                // hangs is not measured.
+                var isIdeographicSpace = next is CssRectWord { Text: { Length: > 0 } text } && text.All(static c => c == '\u3000');
+                if ((next.IsSpaces && !isIdeographicSpace) || next.IsLineBreak
+                    || (!next.SuppressWrapBefore && HasOrdinaryWrapOpportunityBefore(box.Words[i - 1], next))) break;
 
-                width += next.Width;
+                width += next.Width - MeasureTrailingIdeographicSpace(g, next);
             }
 
             return width;
@@ -8035,6 +8039,16 @@ namespace PeachBrackets.Html.Dom
                             word.HungEndWidth = endHang;
                         }
 
+                        // An ideographic space that ends the word hangs instead of overflowing the line (css-text-3 section 4.1.3).
+                        // So does a word of nothing else that follows one that hung: the run hangs as a whole.
+                        if (overflows && !isRtl && !word.IsLineBreak && MeasureTrailingIdeographicSpace(g, word) is > 0d and var spaceHang
+                            && (coordinates.CurrentX + word.Width - spaceHang + rightSpacing + clonedTrailing <= actualLimitRight + LineFitTolerance
+                                || (spaceHang >= word.Width - 0.01d && coordinates.Line.Words.Count > 0 && coordinates.Line.Words[^1].HungEndWidth > 0d)))
+                        {
+                            overflows = false;
+                            word.HungEndWidth = spaceHang;
+                        }
+
                         // hyphens:auto/manual: before giving up and wrapping the whole word, see if a
                         // cached candidate break point (from ParseToWords - either an explicit soft
                         // hyphen or an automatic Hyphenator suggestion) lets a hyphenated prefix
@@ -8097,7 +8111,7 @@ namespace PeachBrackets.Html.Dom
                         // not fit, rather than the ⦘ overflowing the line it was glued to.
                         var gluedRunOverflows = !overflows && hasOrdinaryWrapBefore && b.WhiteSpacePermitsWrapping && !word.IsLineBreak
                             && !word.IsSpaces && word.HungEndWidth == 0d && !IsAtLineStart(coordinates) && !word.SuppressWrapBefore
-                            && GluedRunWidthAfter(b, wordIndex) is > 0d and var gluedRunWidth
+                            && GluedRunWidthAfter(g, b, wordIndex) is > 0d and var gluedRunWidth
                             && coordinates.CurrentX + word.Width + gluedRunWidth + rightSpacing + clonedTrailing
                                 > actualLimitRight + LineFitTolerance;
                         var wrapping = (!word.SuppressWrapBefore
@@ -11841,6 +11855,25 @@ namespace PeachBrackets.Html.Dom
         }
 
         /// <summary>
+        /// The width of the ideographic spaces (U+3000) that end <paramref name="word"/>, or 0. css-text-3 section 4.1.3 has an
+        /// ideographic space at the end of a line hang, as a preserved space does, so it is neither measured for the line's fit nor
+        /// counted in its content width. A space that wraps (<c>break-spaces</c>) or sits in a box that does not wrap does not hang.
+        /// </summary>
+        internal static double MeasureTrailingIdeographicSpace(Canvas g, CssRect word)
+        {
+            if (word is not CssRectWord { Text: { Length: > 0 } text } || text[^1] != '\u3000') return 0d;
+
+            var owner = word.OwnerBox;
+            if (!owner.WhiteSpacePermitsWrapping || owner.WhiteSpaceCollapse.Value == PeachBrackets.Css.WhiteSpaceCollapse.BreakSpaces) return 0d;
+
+            var runStart = text.Length - 1;
+            while (runStart > 0 && text[runStart - 1] == '\u3000') runStart--;
+            if (runStart == 0 && word.IsSpaces) { /* a word of nothing else hangs whole */ }
+
+            return g.MeasureString(text.Substring(runStart), owner.ActualFont, owner.ActualTextShapingFeatures).Width;
+        }
+
+        /// <summary>
         /// The advance of the last character of <paramref name="word"/> when it is one that
         /// <c>hanging-punctuation</c> may hang at a line's end edge for <paramref name="wanted"/> (CSS Text 3
         /// §8.1), or 0. <see cref="HangingPunctuationFlags.AllowEnd"/>/<see cref="HangingPunctuationFlags.ForceEnd"/>
@@ -11892,8 +11925,27 @@ namespace PeachBrackets.Html.Dom
         /// </summary>
         private static void ApplyEndHang(Canvas g, CssBox blockBox, CssLineBox lineBox, bool blockFinished)
         {
-            if (blockBox.HangingPunctuation is not { Length: > 0 } || lineBox.Words.Count == 0) return;
-            if (blockBox.Direction.Value == DirectionMode.Rtl) return;
+            if (lineBox.Words.Count == 0 || blockBox.Direction.Value == DirectionMode.Rtl) return;
+
+            // The line's last word, the break marker of a forced break aside: an ideographic space that ends it hangs (css-text-3 section 4.1.3).
+            var closing = lineBox.Words[^1];
+            if (closing.IsLineBreak && lineBox.Words.Count > 1) closing = lineBox.Words[^2];
+            if (!closing.IsLineBreak && MeasureTrailingIdeographicSpace(g, closing) is > 0d and var spaceHang)
+            {
+                // The run reaches back over the words before it that are nothing but ideographic spaces (the white space between them
+                // collapsed away), up to the first one's start.
+                var start = closing.Right - spaceHang;
+                var wordAt = lineBox.Words.IndexOf(closing);
+                for (var i = wordAt; i > 0 && MeasureTrailingIdeographicSpace(g, lineBox.Words[i]) >= lineBox.Words[i].Width - 0.01d
+                    && (lineBox.Words[i - 1] is { IsLineBreak: false } before) && MeasureTrailingIdeographicSpace(g, before) > 0d; i--)
+                {
+                    start = before.Right - MeasureTrailingIdeographicSpace(g, before);
+                }
+
+                closing.HungEndWidth = closing.Right - start;
+            }
+
+            if (blockBox.HangingPunctuation is not { Length: > 0 }) return;
 
             var word = lineBox.Words[^1];
             if (word.IsSpaces || word.IsLineBreak || word.HungEndWidth > 0d) return;
