@@ -57,6 +57,15 @@ namespace PeachBrackets.Engine.Tests.Integration
             Assert.Equal(["あいう\u3000", "え"], lines);
         }
 
+        [Theory]
+        [InlineData('\u2003')]
+        [InlineData('\u205F')]
+        public async Task TrailingSpaceSeparator_HangsLikeTheIdeographicSpace(char space)
+        {
+            var lines = await Lines($"<p id='p' style='font-family:LineBreakTest; font-size:16pt; width:50pt'>あいう{space}え</p>");
+            Assert.NotEqual(["あい", $"う{space}え"], lines);
+        }
+
         [Fact]
         public async Task TrailingIdeographicSpace_DoesNotHang_UnderBreakSpaces()
         {

@@ -10337,7 +10337,7 @@ namespace PeachBrackets.Html.Dom
                         trailingGraphemeContext = string.Empty;
                     }
                     // An ideographic space that ends the word hangs with the white space after it; a word of nothing else adds the run before it.
-                    var ideographicHang = CssLayoutEngine.MeasureTrailingIdeographicSpace(g, word);
+                    var ideographicHang = CssLayoutEngine.MeasureTrailingHangingSpace(g, word);
                     var runBefore = ideographicHang >= word.Width - 0.01d && ideographicHang > 0d ? trailingSpace : 0d;
                     trailingSpace = word.ActualWordSpacing + ideographicHang + runBefore;
                     atLineStart = false;
