@@ -128,5 +128,24 @@ namespace PeachBrackets.Engine.Tests.Integration
         [Fact]
         public async Task Capitalize_LeavesAWordThatStartsWithADigitAlone() =>
             Assert.Equal("1st(Abc", string.Concat(await WordTexts("<p id='p' style='text-transform:capitalize'>1st (abc</p>")));
+
+        /// <summary>
+        /// A <c>nowrap</c> span whose text is split around an inner span is one run: it moves to the next line as a whole, and a later piece of it
+        /// is not judged on its own (which wrapped the second character of each pair away from the first).
+        /// </summary>
+        [Theory]
+        [InlineData("none")]
+        [InlineData("full-size-kana")]
+        public async Task ANoWrapRunSplitAroundAnInnerSpan_StaysTogether(string transform)
+        {
+            var pair = $"<span style='margin-right:1em;white-space:nowrap'><span style='text-transform:{transform}'>あ</span> あ</span>\n";
+            var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                $"<div id='p' style='width:100pt;font-size:20pt'>{pair}{pair}{pair}{pair}{pair}{pair}</div>"));
+            var box = LayoutHarness.FindById(root, "p")!;
+
+            // Each pair is two characters, and no line ends between them: every line holds a whole number of pairs.
+            foreach (var line in box.LineBoxes.Select(l => string.Concat(l.Words.Select(w => w.Text))).Where(t => t.Length > 0))
+                Assert.True(line.Length % 2 == 0, $"a pair was split across lines: '{line}'");
+        }
     }
 }

@@ -7937,12 +7937,14 @@ namespace PeachBrackets.Html.Dom
                     // before it twice (see the accepted gap on nowrap lines).
                     var shiftsWordsThatCannotWrap = blockBox.HtmlContainer is not { CurrentFragmentainer: { HasOwnBand: true } };
 
-                    if (blockBoxPermitsWrap && b.IsNoWrapRun && coordinates.CurrentX > lineStartX)
-                    {
-                        var boxRight = coordinates.CurrentX;
+                    // The run is the outermost nowrap inline box b sits in: a nowrap span whose text is split around an inner span is one run, and
+                    // the decision to move it is made where it starts, for all of it, not again for each piece of it.
+                    var noWrapRunRoot = NoWrapRunRoot(b, blockBox);
+                    var continuesNoWrapRun = coordinates.Line.Words.Count > 0 && IsWithin(coordinates.Line.Words[^1].OwnerBox, noWrapRunRoot);
 
-                        foreach (var word in b.Words)
-                            boxRight += word.FullWidth;
+                    if (blockBoxPermitsWrap && b.IsNoWrapRun && coordinates.CurrentX > lineStartX && !continuesNoWrapRun)
+                    {
+                        var boxRight = coordinates.CurrentX + WidthOfWordsWithin(noWrapRunRoot);
 
                         var noWrapLimitRight = isRtl
                             ? coordinates.Line.ContentRight - GetLineTextIndent(blockBox, coordinates.Line.Equals(blockBox.LineBoxes[0]), coordinates.Line.FollowsForcedBreak)
@@ -11852,6 +11854,32 @@ namespace PeachBrackets.Html.Dom
             // advance does - the line begins that far outside the content box and gains the same width.
             // Only the block's true first line, so a resumed fragment's opening line does not hang again.
             return isFirstLine ? indent - blockBox.HangingFirstWidth : indent;
+        }
+
+        /// <summary>The outermost inline box above <paramref name="box"/> (or itself) that is a nowrap run, below <paramref name="blockBox"/>.</summary>
+        private static CssBox NoWrapRunRoot(CssBox box, CssBox blockBox)
+        {
+            var root = box;
+            while (root.ParentBox is { IsInline: true, IsNoWrapRun: true } parent && !ReferenceEquals(parent, blockBox))
+                root = parent;
+
+            return root;
+        }
+
+        /// <summary>The full width of every word of <paramref name="root"/> and of the in-flow boxes inside it.</summary>
+        private static double WidthOfWordsWithin(CssBox root)
+        {
+            var width = 0d;
+            foreach (var word in root.Words)
+                width += word.FullWidth;
+
+            foreach (var child in root.Boxes)
+            {
+                if (!child.IsOutOfFlow && child.DerivedStyle.ActualDisplay != Keywords.None)
+                    width += WidthOfWordsWithin(child);
+            }
+
+            return width;
         }
 
         /// <summary>
