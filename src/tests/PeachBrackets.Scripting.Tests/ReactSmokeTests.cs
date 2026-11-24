@@ -55,8 +55,8 @@ public class ReactSmokeTests
                 ? new RNetworkResponse(new MemoryStream(bytes), new() { ["Content-Type"] = ["text/javascript"] })
                 : null);
 
-        var errors = new List<string>();
-        var host = new JintScriptHost(new JintScriptOptions { ScriptError = errors.Add, ScriptTimeout = TimeSpan.FromSeconds(20) });
+        var logger = new CollectingLogger();
+        var host = new JintScriptHost(new JintScriptOptions { Logger = logger, ScriptTimeout = TimeSpan.FromSeconds(20) });
         var html = "<!DOCTYPE html><html><head><base href=\"http://react.test/\"><style>* { font-family: " + TestDocument.Family + " }</style></head><body>"
             + "<div id=root></div><script src=\"react.js\"></script><script src=\"react-dom.js\"></script>" + body + "</body></html>";
 
@@ -71,7 +71,7 @@ public class ReactSmokeTests
         using (var measuring = context.CreateCanvas(1, 1))
             await document.LayoutAsync(measuring);
 
-        return (errors, document, context);
+        return (logger.Errors, document, context);
     }
 
     [Fact]

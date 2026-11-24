@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -97,12 +98,7 @@ internal sealed partial class TestharnessEvaluator(string wptRoot) : IWptEvaluat
                 ScriptTimeout = TimeSpan.FromSeconds(20),
                 MaxVirtualTime = TimeSpan.FromSeconds(60),
                 MaxCallbacks = 100_000,
-                Console = (_, text) =>
-                {
-                    if (text.StartsWith(ResultPrefix, StringComparison.Ordinal))
-                        lock (lines) lines.Add(text[ResultPrefix.Length..]);
-                },
-                ScriptError = message => { lock (errors) errors.Add(message); },
+                Logger = new CollectingLogger(lines, errors),
             }),
             MeasuringCanvasFactory = () => context.CreateCanvas(1, 1),
         };
@@ -162,6 +158,23 @@ internal sealed partial class TestharnessEvaluator(string wptRoot) : IWptEvaluat
         if (firstFailure is not null)
             return new TestResult(Outcome.Fail, Trim($"{tests.Count - passed} of {tests.Count} failed; first {firstFailure}"), subtests);
         return new TestResult(Outcome.Pass, null, subtests);
+    }
+
+    // Reads the harness's result line out of what the scripts log, and keeps the script errors for the reason a test gives when it never reports.
+    private sealed class CollectingLogger(List<string> lines, List<string> errors) : ILogger
+    {
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+        {
+            var text = formatter(state, exception);
+            if (eventId == ScriptLogEvents.ScriptFailed || eventId == ScriptLogEvents.ScriptLoadFailed)
+                lock (errors) errors.Add(text);
+            else if (text.StartsWith(ResultPrefix, StringComparison.Ordinal))
+                lock (lines) lines.Add(text[ResultPrefix.Length..]);
+        }
     }
 
     private static string Trim(string text)

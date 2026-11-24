@@ -71,6 +71,40 @@ public class CliRunnerIntegrationTests
     }
 
     [Fact]
+    public async Task AScriptFile_RunsInTheDocument_AndItsLogGoesToTheLogFile()
+    {
+        var dir = CreateTempDir();
+        try
+        {
+            var script = Path.Combine(dir, "user.js");
+            var log = Path.Combine(dir, "run.log");
+            File.WriteAllText(script, "document.getElementById('p').textContent = 'a much longer paragraph written by the user script'; Log.info('user script ran'); Log.data('answer', 42);");
+            const string html = "<!DOCTYPE html><html><body><p id=p>plain</p><script>Log.info('author script ran');</script></body></html>";
+
+            async Task<byte[]> RenderAsync(params string[] args)
+            {
+                using var stdout = new MemoryStream();
+                var exit = await CliRunner.RunAsync(ArgumentParser.Parse([.. args, "--no-compress", "-", "-o", "-"]), new StringReader(html), stdout);
+                Assert.Equal(0, exit);
+                return stdout.ToArray();
+            }
+
+            var off = await RenderAsync();
+            var on = await RenderAsync("--script", script, "--log", log);
+
+            Assert.True(on.Length > off.Length);
+            var written = await File.ReadAllTextAsync(log, TestContext.Current.CancellationToken);
+            Assert.Contains("user script ran", written, StringComparison.Ordinal);
+            Assert.Contains("answer=42", written, StringComparison.Ordinal);
+            Assert.DoesNotContain("author script ran", written, StringComparison.Ordinal);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task FileInput_DefaultOutput_DerivesPdfName()
     {
         var dir = CreateTempDir();

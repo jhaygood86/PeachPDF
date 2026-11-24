@@ -6,16 +6,15 @@ public class DomStandardTests
     // Runs the script in a document and returns what it logged, each console call as its text; a script error fails the test.
     private static async Task<List<string>> LogAsync(string script, string body = "")
     {
-        var errors = new List<string>();
-        var lines = new List<string>();
-        var host = new JintScriptHost(new JintScriptOptions { ScriptError = errors.Add, Console = (_, text) => lines.Add(text) });
+        var logger = new CollectingLogger();
+        var host = new JintScriptHost(new JintScriptOptions { Logger = logger });
         var context = await TestDocument.NewContextAsync();
         using var document = await HtmlDocument.LoadAsync(
             TestDocument.Wrap(body + "<script>" + script + "</script>"),
             context,
             new HtmlDocumentOptions { MediaType = MediaType.Screen, PageWidthPoints = 400, ScriptHost = host, MeasuringCanvasFactory = () => context.CreateCanvas(1, 1) });
-        Assert.True(errors.Count == 0, string.Join(" / ", errors));
-        return lines;
+        Assert.True(logger.Errors.Count == 0, string.Join(" / ", logger.Errors));
+        return logger.Texts;
     }
 
     [Fact]

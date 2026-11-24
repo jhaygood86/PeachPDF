@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using Jint;
 using Jint.Native;
 using Jint.Native.Object;
@@ -123,6 +124,8 @@ internal sealed partial class ScriptRuntime
         Define("location", LocationObject());
         Define("navigator", NavigatorObject());
         Define("console", ConsoleObject());
+        if (_options.PrinceCompatibility)
+            Define("Log", LogObject());
         Define("performance", PerformanceObject());
         Define("history", HistoryObject());
 
@@ -273,6 +276,29 @@ internal sealed partial class ScriptRuntime
         return performance;
     }
 
+    // The Log object: the levels of the logger as methods, and data, which hands a named value to whatever runs the document.
+    private ObjectInstance LogObject()
+    {
+        var log = Js.NewObject(Engine);
+        foreach (var (name, level) in new[] { ("debug", LogLevel.Debug), ("info", LogLevel.Information), ("warning", LogLevel.Warning), ("error", LogLevel.Error) })
+        {
+            var captured = level;
+            Js.Method(Engine, log, name, 1, (_, args) =>
+            {
+                WriteLog(captured, ScriptLogEvents.Message, Js.AsText(Js.Arg(args, 0)));
+                return JsValue.Undefined;
+            });
+        }
+
+        Js.Method(Engine, log, "data", 2, (_, args) =>
+        {
+            var entry = new ScriptDataEntry(Js.AsText(Js.Arg(args, 0)), Js.AsText(Js.Arg(args, 1)));
+            _options.Logger?.Log(LogLevel.Information, ScriptLogEvents.Data, entry, null, static (state, _) => state.ToString());
+            return JsValue.Undefined;
+        });
+        return log;
+    }
+
     private ObjectInstance ConsoleObject()
     {
         var console = Js.NewObject(Engine);
@@ -281,7 +307,13 @@ internal sealed partial class ScriptRuntime
             var captured = level;
             Js.Method(Engine, console, level, 0, (_, args) =>
             {
-                _options.Console?.Invoke(captured, string.Join(' ', args.Select(Js.AsText)));
+                WriteLog(captured switch
+                {
+                    "warn" => LogLevel.Warning,
+                    "error" => LogLevel.Error,
+                    "debug" or "trace" => LogLevel.Debug,
+                    _ => LogLevel.Information,
+                }, ScriptLogEvents.Message, string.Join(' ', args.Select(Js.AsText)));
                 return JsValue.Undefined;
             });
         }
@@ -289,7 +321,7 @@ internal sealed partial class ScriptRuntime
         Js.Method(Engine, console, "assert", 1, (_, args) =>
         {
             if (!TypeConverter.ToBoolean(Js.Arg(args, 0)))
-                _options.Console?.Invoke("error", "Assertion failed: " + string.Join(' ', args.Skip(1).Select(Js.AsText)));
+                WriteLog(LogLevel.Error, ScriptLogEvents.Message, "Assertion failed: " + string.Join(' ', args.Skip(1).Select(Js.AsText)));
 
             return JsValue.Undefined;
         });

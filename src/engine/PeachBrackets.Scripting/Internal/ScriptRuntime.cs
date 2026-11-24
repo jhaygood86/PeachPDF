@@ -4,6 +4,7 @@ using Jint.Native;
 using Jint.Native.Object;
 using Jint.Runtime;
 using Jint.Runtime.Descriptors;
+using Microsoft.Extensions.Logging;
 using PeachBrackets.ScriptHosting;
 using System;
 using System.Collections.Generic;
@@ -78,6 +79,9 @@ internal sealed partial class ScriptRuntime
         return list;
     }
 
+    /// <summary>Writes to the options' logger, if there is one.</summary>
+    public void WriteLog(LogLevel level, EventId id, string text) => _options.Logger?.Log(level, id, text);
+
     public Exception TypeError(string message) => new JavaScriptException(Engine.Intrinsics.TypeError, message);
 
     private static bool IsScriptFailure(Exception error) =>
@@ -93,7 +97,7 @@ internal sealed partial class ScriptRuntime
             _ => error.GetType().Name + ": " + error.Message,
         };
 
-        _options.ScriptError?.Invoke(text);
+        WriteLog(LogLevel.Error, ScriptLogEvents.ScriptFailed, text);
         if (_reporting)
             return;
 
@@ -156,9 +160,16 @@ internal sealed partial class ScriptRuntime
     /// <summary>Runs the document's scripts, fires its load events and plays the timers until the page settles.</summary>
     public async ValueTask RunAsync()
     {
+        // The host's scripts run first, whether or not the document's own do.
+        foreach (var userScript in _options.UserScripts)
+            Execute(userScript.Code, userScript.Name);
+
         // Scripts that are not deferred run in document order; one a script adds is found by looking again each time.
-        await RunPendingScriptsAsync(deferred: false);
-        await RunPendingScriptsAsync(deferred: true);
+        if (_options.RunAuthorScripts)
+        {
+            await RunPendingScriptsAsync(deferred: false);
+            await RunPendingScriptsAsync(deferred: true);
+        }
 
         ReadyState = "interactive";
         FireEvent(DocumentObject, "DOMContentLoaded", bubbles: true, cancelable: false);
@@ -191,7 +202,7 @@ internal sealed partial class ScriptRuntime
                 code = await Document.LoadTextAsync(src);
                 if (code is null)
                 {
-                    _options.ScriptError?.Invoke($"The script '{src}' could not be loaded.");
+                    WriteLog(LogLevel.Error, ScriptLogEvents.ScriptLoadFailed, $"The script '{src}' could not be loaded.");
                     FireEvent(Wrap(next), "error", bubbles: false, cancelable: false);
                     continue;
                 }

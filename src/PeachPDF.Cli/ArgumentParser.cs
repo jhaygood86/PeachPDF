@@ -118,6 +118,10 @@ internal static class ArgumentParser
                 case "no-default-style": _options.NoDefaultStyle = true; break;
                 case "no-author-style": _options.NoAuthorStyle = true; break;
                 case "enable-scripting": _options.EnableScripting = true; break;
+                case "script":
+                    if (RequireValue(name, inlineValue) is { } scriptFile)
+                        _options.UserScripts.Add(scriptFile);
+                    break;
                 case "document-mode": ParseDocumentMode(_options, RequireValue(name, inlineValue)); break;
                 case "document-syntax": ParseDocumentSyntax(_options, RequireValue(name, inlineValue)); break;
                 case "animation-progress": SetAnimationProgress(_options, RequireValue(name, inlineValue)); break;

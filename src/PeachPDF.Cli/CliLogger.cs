@@ -61,3 +61,28 @@ internal sealed class CliLogger : IDisposable
         _file?.Dispose();
     }
 }
+
+/// <summary>Hands what a document's scripts log to the CLI's logger: debug and information as such, warnings and errors as warnings.</summary>
+internal sealed class CliScriptLogger(CliLogger logger) : Microsoft.Extensions.Logging.ILogger
+{
+    public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+    public bool IsEnabled(Microsoft.Extensions.Logging.LogLevel logLevel) => logLevel != Microsoft.Extensions.Logging.LogLevel.None;
+
+    public void Log<TState>(Microsoft.Extensions.Logging.LogLevel logLevel, Microsoft.Extensions.Logging.EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+    {
+        var text = formatter(state, exception);
+        switch (logLevel)
+        {
+            case Microsoft.Extensions.Logging.LogLevel.Trace or Microsoft.Extensions.Logging.LogLevel.Debug:
+                logger.Debug(text);
+                break;
+            case Microsoft.Extensions.Logging.LogLevel.Information:
+                logger.Info(text);
+                break;
+            default:
+                logger.Warn(text);
+                break;
+        }
+    }
+}

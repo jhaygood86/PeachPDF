@@ -13,7 +13,7 @@ namespace PeachBrackets.Scripting;
 /// <remarks>
 /// Each document gets its own JavaScript engine, so one host may be shared by any number of documents, including ones loading at the same time.
 /// The scripts see a window, a document and the DOM of the parsed page; timers and animation frames run on a virtual clock until the page settles
-/// (see <see cref="JintScriptOptions.MaxVirtualTime"/>). A script that throws is reported through <see cref="JintScriptOptions.ScriptError"/> and
+/// (see <see cref="JintScriptOptions.MaxVirtualTime"/>). A script that throws is reported through <see cref="JintScriptOptions.Logger"/> and
 /// does not stop the document from loading.
 /// </remarks>
 /// <param name="options">what scripts may do; null for the defaults</param>

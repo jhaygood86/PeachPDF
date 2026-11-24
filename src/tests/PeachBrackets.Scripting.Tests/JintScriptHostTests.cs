@@ -8,13 +8,15 @@ public class JintScriptHostTests
 {
     private sealed class Reporter
     {
-        public List<string> Errors { get; } = [];
+        public CollectingLogger Logger { get; } = new();
 
-        public List<string> Console { get; } = [];
+        public List<string> Errors => Logger.Errors;
+
+        public List<string> Console => Logger.Messages;
 
         public JintScriptHost Host(Action<JintScriptOptions>? configure = null)
         {
-            var options = new JintScriptOptions { ScriptError = Errors.Add, Console = (level, text) => Console.Add(level + ":" + text) };
+            var options = new JintScriptOptions { Logger = Logger };
             configure?.Invoke(options);
             return new JintScriptHost(options);
         }
@@ -165,7 +167,7 @@ public class JintScriptHostTests
     {
         var (reporter, _, _) = await RunAsync("<script>console.log('a', 1); console.error('b');</script>");
 
-        Assert.Equal(["log:a 1", "error:b"], reporter.Console);
+        Assert.Equal(["Information:a 1", "Error:b"], reporter.Console);
     }
 
     [Fact]

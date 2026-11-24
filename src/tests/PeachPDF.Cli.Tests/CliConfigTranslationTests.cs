@@ -164,6 +164,27 @@ public class CliConfigTranslationTests
     }
 
     [Fact]
+    public void ScriptFiles_TurnScriptingOnWithTheDocumentsOwnScriptsOff()
+    {
+        var file = Path.GetTempFileName();
+        try
+        {
+            File.WriteAllText(file, "Log.info('hi');");
+            var user = (PeachBrackets.Scripting.JintScriptHost)CliRunner.BuildConfig(ArgumentParser.Parse(["--script", file, "doc.html"])).ScriptHost!;
+            Assert.False(user.Options.RunAuthorScripts);
+            Assert.Equal(file, Assert.Single(user.Options.UserScripts).Name);
+
+            var both = (PeachBrackets.Scripting.JintScriptHost)CliRunner.BuildConfig(ArgumentParser.Parse(["--script=" + file, "--enable-scripting", "doc.html"])).ScriptHost!;
+            Assert.True(both.Options.RunAuthorScripts);
+            Assert.Single(both.Options.UserScripts);
+        }
+        finally
+        {
+            File.Delete(file);
+        }
+    }
+
+    [Fact]
     public void RasterDpi_DefaultsToTheLibraryDefault_AndMapsWhenGiven()
     {
         Assert.Equal(new PdfGenerateConfig().RasterizationDpi, CliRunner.BuildConfig(ArgumentParser.Parse(["doc.html"])).RasterizationDpi);

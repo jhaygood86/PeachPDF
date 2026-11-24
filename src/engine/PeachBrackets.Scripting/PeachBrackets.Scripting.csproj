@@ -32,6 +32,7 @@
 	<ItemGroup>
 		<ProjectReference Include="..\PeachBrackets\PeachBrackets.csproj" />
 		<PackageReference Include="Jint" />
+		<PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Condition="'$(TargetFramework)' == 'net10.0'" />
 	</ItemGroup>
 	<ItemGroup>
 		<InternalsVisibleTo Include="PeachBrackets.Scripting.Tests" />

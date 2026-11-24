@@ -1,4 +1,6 @@
+using Microsoft.Extensions.Logging;
 using System;
+using System.Collections.Generic;
 
 namespace PeachBrackets.Scripting;
 
@@ -33,12 +35,29 @@ public sealed class JintScriptOptions
     /// <summary>Whether a script's <c>type="module"</c> elements run (as ordinary scripts, with no <c>import</c>). The default is false: they are skipped.</summary>
     public bool RunModuleScripts { get; set; }
 
-    /// <summary>Called for each <c>console</c> call, with the level (<c>log</c>, <c>info</c>, <c>warn</c>, <c>error</c>, <c>debug</c>) and the text. Null discards them.</summary>
-    public Action<string, string>? Console { get; set; }
+    /// <summary>
+    /// Where everything the scripts say and everything that goes wrong is written: <c>console</c> and <c>Log</c> calls (at the level they name), a script
+    /// that throws, fails to parse or is stopped by a limit (<see cref="LogLevel.Error"/>, <see cref="ScriptLogEvents.ScriptFailed"/>), and
+    /// <c>Log.data</c> (<see cref="ScriptLogEvents.Data"/>, with a <see cref="ScriptDataEntry"/> as the state). Null discards them. The document
+    /// still loads with whatever the scripts did before a failure.
+    /// </summary>
+    public ILogger? Logger { get; set; }
 
     /// <summary>
-    /// Called when a script throws, fails to parse or is stopped by a limit, with a description. The document still loads with whatever the scripts
-    /// did before the failure. Null discards the error.
+    /// Whether the document's own <c>&lt;script&gt;</c> elements run. The default is true. Set it to false to run only <see cref="UserScripts"/>, which is how
+    /// a host adds behavior to a document it does not trust to run its own.
     /// </summary>
-    public Action<string>? ScriptError { get; set; }
+    public bool RunAuthorScripts { get; set; } = true;
+
+    /// <summary>
+    /// Scripts the host supplies, run in order before the document's own scripts and whether or not <see cref="RunAuthorScripts"/> is set. They see the
+    /// parsed document like any script.
+    /// </summary>
+    public IList<UserScript> UserScripts { get; } = [];
+
+    /// <summary>
+    /// Whether the script environment also offers the <c>Log</c> object (<c>Log.debug</c>, <c>Log.info</c>, <c>Log.warning</c>, <c>Log.error</c> and
+    /// <c>Log.data</c>) other print engines give their scripts. The default is true; it costs a script nothing that does not use it.
+    /// </summary>
+    public bool PrinceCompatibility { get; set; } = true;
 }

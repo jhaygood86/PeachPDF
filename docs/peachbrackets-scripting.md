@@ -51,10 +51,18 @@ Each document gets its own JavaScript engine, so one `JintScriptHost` may be sha
 | `MaxCallbacks` | 10,000 | The most timer and frame callbacks one document runs. |
 | `LoadExternalScripts` | true | Fetch and run `<script src>` through the document's resource loader. |
 | `RunModuleScripts` | false | Run `type="module"` scripts as ordinary scripts (there is no `import`). |
-| `Console` | none | Receives each `console` call, with its level. |
-| `ScriptError` | none | Receives a description of each script that throws, fails to parse or is stopped by a limit. |
+| `Logger` | none | An [`ILogger`](https://learn.microsoft.com/en-us/dotnet/api/microsoft.extensions.logging.ilogger) (from `Microsoft.Extensions.Logging.Abstractions`) that receives everything the scripts say and everything that goes wrong; see below. |
+| `RunAuthorScripts` | true | Run the document's own `<script>` elements. Set it to false to run only `UserScripts`. |
+| `UserScripts` | empty | Scripts (`UserScript(name, code)`) the host supplies; they run in order before the document's own scripts, whether or not those run. |
+| `PrinceCompatibility` | true | Also offer the `Log` object (below) that other print engines give their scripts. |
 
-A script that fails is reported and skipped; the document still loads with whatever the scripts did before.
+A script that fails is logged and skipped; the document still loads with whatever the scripts did before.
+
+## Logging
+
+All script output goes to `JintScriptOptions.Logger`; with none set it is discarded. `console.log` and `console.info` are logged at `Information`, `console.warn` at `Warning`, `console.error` and a failed `console.assert` at `Error`, and `console.debug` and `console.trace` at `Debug`. A script that throws, fails to parse, hits a limit or cannot be fetched is logged at `Error` under `ScriptLogEvents.ScriptFailed` or `ScriptLoadFailed`. The `Log` object offers `Log.debug`, `Log.info`, `Log.warning` and `Log.error` at the matching levels, and `Log.data(name, value)`, which passes a named value to the process that runs the document: it is an `Information` entry under `ScriptLogEvents.Data` whose state is a `ScriptDataEntry` (a list of the `name` and `value` pairs a structured logger records).
+
+`peachpdf --script=FILE` (repeatable) runs a file as a user script; used alone it leaves the document's own scripts off, and with `--enable-scripting` both run. The CLI writes script output to its log: standard error with `--verbose` or `--debug` (warnings and errors always), and the `--log` file.
 
 ## The DOM scripts see
 

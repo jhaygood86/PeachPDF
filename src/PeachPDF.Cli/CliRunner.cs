@@ -36,7 +36,7 @@ internal static class CliRunner
             httpClient = BuildHttpClient(options);
 
             var generator = new PdfGenerator();
-            var config = BuildConfig(options);
+            var config = BuildConfig(options, logger);
             var cssData = await BuildCssDataAsync(generator, options);
 
             PeachPdfDocument? document = null;
@@ -98,7 +98,25 @@ internal static class CliRunner
         }
     }
 
-    internal static PdfGenerateConfig BuildConfig(CliOptions options)
+    // Scripting is on for --enable-scripting (the document's own scripts) and for --script (the user's files, with the document's own scripts staying off unless both are given).
+    private static PeachBrackets.Scripting.JintScriptHost? BuildScriptHost(CliOptions options, CliLogger? logger)
+    {
+        if (!options.EnableScripting && options.UserScripts.Count == 0)
+            return null;
+
+        var scriptOptions = new PeachBrackets.Scripting.JintScriptOptions
+        {
+            RunAuthorScripts = options.EnableScripting,
+            Logger = logger is null ? null : new CliScriptLogger(logger),
+        };
+
+        foreach (var file in options.UserScripts)
+            scriptOptions.UserScripts.Add(new PeachBrackets.Scripting.UserScript(file, File.ReadAllText(file)));
+
+        return new PeachBrackets.Scripting.JintScriptHost(scriptOptions);
+    }
+
+    internal static PdfGenerateConfig BuildConfig(CliOptions options, CliLogger? logger = null)
     {
         var config = new PdfGenerateConfig
         {
@@ -113,7 +131,7 @@ internal static class CliRunner
             EnableInteractivePdfForms = options.InteractivePdfForms,
             IgnoreAuthorStyleSheets = options.NoAuthorStyle,
             DocumentMode = options.DocumentMode,
-            ScriptHost = options.EnableScripting ? new PeachBrackets.Scripting.JintScriptHost() : null,
+            ScriptHost = BuildScriptHost(options, logger),
             // Set on the config rather than on the loader, so it holds for every input kind - including
             // MHTML, which is rendered through a bare MimeKitNetworkLoader that never saw this option.
             AllowLocalFileAccess = !options.NoLocalFiles,
