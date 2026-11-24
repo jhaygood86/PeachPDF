@@ -1,3 +1,6 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -49,10 +52,50 @@ public interface IScriptHost
 /// <summary>What a layout of a scripted document came to, as <see cref="IScriptHost.LayoutCompletedAsync"/> and <see cref="IScriptHost.LayoutFinishedAsync"/> are told.</summary>
 public sealed class ScriptLayout
 {
-    internal ScriptLayout(int pageCount, int pass)
+    private readonly Func<IReadOnlyList<BoxReport>>? _collect;
+    private IReadOnlyList<BoxReport>? _pages;
+    private Dictionary<ScriptNode, List<BoxReport>>? _byElement;
+
+    internal ScriptLayout(int pageCount, int pass, Func<IReadOnlyList<BoxReport>>? collect = null)
     {
         PageCount = pageCount;
         Pass = pass;
+        _collect = collect;
+    }
+
+    /// <summary>
+    /// The boxes of the laid-out document, one tree per page: each page's root is a <see cref="BoxReportKind.Page"/> box. Made when first read, from the
+    /// layout as it is; a later layout makes a new <see cref="ScriptLayout"/>. Empty when the document gave no way to read its boxes.
+    /// </summary>
+    public IReadOnlyList<BoxReport> Pages => _pages ??= _collect?.Invoke() ?? [];
+
+    /// <summary>The boxes an element made, one for each page it reaches and one for each piece an inline element is split into.</summary>
+    /// <param name="element">the element</param>
+    /// <returns>its boxes, in page order; empty when it made none (it is not displayed) or is not in the document</returns>
+    public IReadOnlyList<BoxReport> GetBoxes(ScriptNode element)
+    {
+        ArgumentNullException.ThrowIfNull(element);
+        if (_byElement is null)
+        {
+            _byElement = new Dictionary<ScriptNode, List<BoxReport>>(ReferenceEqualityComparer.Instance as IEqualityComparer<ScriptNode>);
+            var pending = new Stack<BoxReport>(Pages.Reverse());
+            while (pending.Count > 0)
+            {
+                var report = pending.Pop();
+                if (report.Element is { } owner)
+                {
+                    if (!_byElement.TryGetValue(owner, out var list))
+                        _byElement[owner] = list = [];
+
+                    list.Add(report);
+                }
+
+                for (var i = report.Children.Count - 1; i >= 0; i--)
+                    pending.Push(report.Children[i]);
+            }
+        }
+
+        return _byElement.TryGetValue(element, out var found) ? found : [];
     }
 
     /// <summary>The number of pages the document came to (a screen document has one continuous sheet).</summary>

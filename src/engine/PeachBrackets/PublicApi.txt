@@ -750,6 +750,43 @@ PeachBrackets.PointerTypes : enum Int32
   Coarse = 1
   Fine = 2
   None = 0
+PeachBrackets.ScriptHosting.BoxEdges : struct
+  ctor(Double Top, Double Right, Double Bottom, Double Left)
+  method Void Deconstruct(out Double Top, out Double Right, out Double Bottom, out Double Left)
+  method virtual Boolean Equals(BoxEdges other)
+  method virtual Boolean Equals(Object obj)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property Double Bottom { get; init; }
+  property Double Left { get; init; }
+  property Double Right { get; init; }
+  property Double Top { get; init; }
+PeachBrackets.ScriptHosting.BoxReport : sealed class
+  property BoxEdges Border { get; }
+  property BoxEdges Margin { get; }
+  property BoxEdges Padding { get; }
+  property BoxReport Parent { get; }
+  property BoxReportKind Kind { get; }
+  property Double Height { get; }
+  property Double PageHeight { get; }
+  property Double PageWidth { get; }
+  property Double Width { get; }
+  property Double X { get; }
+  property Double Y { get; }
+  property IReadOnlyList<BoxReport> Children { get; }
+  property Int32 PageNumber { get; }
+  property ScriptNode Element { get; }
+  property String ImageSource { get; }
+  property String PseudoElement { get; }
+  property String Text { get; }
+PeachBrackets.ScriptHosting.BoxReportKind : enum Int32
+  Box = 2
+  Footnotes = 1
+  Image = 5
+  Page = 0
+  Span = 3
+  Svg = 6
+  Text = 4
 PeachBrackets.ScriptHosting.IScriptHost : interface
   method abstract ValueTask RunAsync(ScriptDocument document, CancellationToken cancellationToken = null)
   method virtual ValueTask LayoutFinishedAsync(ScriptDocument document, ScriptLayout layout, CancellationToken cancellationToken = null)
@@ -812,6 +849,8 @@ PeachBrackets.ScriptHosting.ScriptDocument : sealed class
   property String Title { get; }
   property Uri BaseUri { get; }
 PeachBrackets.ScriptHosting.ScriptLayout : sealed class
+  method IReadOnlyList<BoxReport> GetBoxes(ScriptNode element)
+  property IReadOnlyList<BoxReport> Pages { get; }
   property Int32 PageCount { get; }
   property Int32 Pass { get; }
 PeachBrackets.ScriptHosting.ScriptNode : sealed class

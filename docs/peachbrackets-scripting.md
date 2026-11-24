@@ -44,6 +44,12 @@ A document is laid out after its scripts have run, and a script can ask to be ca
 
 A host built on PeachBrackets gets the same through `IScriptHost.LayoutCompletedAsync` (called after each layout; return true to be called again) and `LayoutFinishedAsync`, with `ScriptDocument.KeepAlive` set from `RunAsync` to ask for them.
 
+## Reading the laid-out boxes
+
+After layout a script can ask where things ended up. Set `Prince.trackBoxes = true`, then in a post-layout function or the `complete` handler call `element.getPrinceBoxes()`: one box for each piece of the element, which is one on each page it reaches (and one for each line an inline element wraps over). A box has `type` (`BODY` for a page's content area, `BOX`, `SPAN`, `TEXT`, `IMAGE`, `SVG`, `FOOTNOTES`), `pageNum` (from 1), `x`, `y`, `w` and `h` in points with the origin at the lower left of the page, the used `marginTop`/`marginRight`/`marginBottom`/`marginLeft`, `padding…` and `border…` widths, `pseudo` (`before`, `after`, `marker`... for generated content, else null), `text` and `src` (for a text run and an image), and `element`, `parent` and `children`, which are read when asked for. A host written in C# reads the same tree from `ScriptLayout.Pages` and `ScriptLayout.GetBoxes(element)` (a `BoxReport` has its position from the top left, as everything else in PeachBrackets does).
+
+`LINE`, `COLUMN`, `FLEXLINE` and `FLOATS` boxes are not reported, and a box has no `baseline`: text sits in the box that owns it, one `TEXT` box for each line of it, and a float or a column is an ordinary box of its element. The text of a box comes before its child boxes whatever their order in the source.
+
 ## Adding your own objects
 
 A host adds JavaScript objects to the scripts without referencing Jint or this package. A `ScriptApi` (in `PeachBrackets`, namespace `PeachBrackets.ScriptHosting`) is a named global with properties, methods and events, built from plain C# delegates and `ScriptValue`s (undefined, null, boolean, number, text, arrays, objects, functions and nodes convert both ways). Put it in `HtmlDocumentOptions.ScriptApis` (PeachPDF: `PdfGenerateConfig.ScriptApis`) and the script host installs it before the scripts run:

@@ -284,6 +284,9 @@ public sealed class ScriptDocument
         return -1;
     }
 
+    /// <summary>The elements of the document in source order, the position of each being its <see cref="OrdinalOf"/>.</summary>
+    internal List<ScriptNode> ElementsInOrder() => [.. Descendants(Root)];
+
     private IEnumerable<ScriptNode> Descendants(ScriptNode node)
     {
         foreach (var child in node.Box.Boxes.ToArray())
