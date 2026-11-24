@@ -164,6 +164,16 @@ public class CliConfigTranslationTests
     }
 
     [Fact]
+    public void MaxPasses_MapsToTheLayoutPassLimit_AndRejectsNonNumbers()
+    {
+        Assert.Equal(new PdfGenerateConfig().MaxLayoutPasses, CliRunner.BuildConfig(ArgumentParser.Parse(["doc.html"])).MaxLayoutPasses);
+        Assert.Equal(3, CliRunner.BuildConfig(ArgumentParser.Parse(["--max-passes", "3", "doc.html"])).MaxLayoutPasses);
+        Assert.Equal(0, CliRunner.BuildConfig(ArgumentParser.Parse(["--max-passes=0", "doc.html"])).MaxLayoutPasses);
+        Assert.Contains(ArgumentParser.Parse(["--max-passes=many", "doc.html"]).Errors, e => e.Contains("--max-passes", StringComparison.Ordinal));
+        Assert.Contains(ArgumentParser.Parse(["--max-passes=-1", "doc.html"]).Errors, e => e.Contains("--max-passes", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void ScriptFiles_TurnScriptingOnWithTheDocumentsOwnScriptsOff()
     {
         var file = Path.GetTempFileName();

@@ -105,6 +105,37 @@ public class CliRunnerIntegrationTests
     }
 
     [Fact]
+    public async Task APostLayoutFunction_ChangesThePdf_AndTheFinalPageCountIsLogged()
+    {
+        var dir = CreateTempDir();
+        try
+        {
+            var script = Path.Combine(dir, "user.js");
+            var log = Path.Combine(dir, "run.log");
+            File.WriteAllText(script, "Prince.registerPostLayoutFunc(function () { document.body.appendChild(document.createTextNode(' added after layout')); }); Prince.addEventListener('complete', function () { Log.data('pages', Prince.pageCount); });");
+
+            async Task<byte[]> RenderAsync(params string[] args)
+            {
+                using var stdout = new MemoryStream();
+                var exit = await CliRunner.RunAsync(ArgumentParser.Parse([.. args, "--no-compress", "-", "-o", "-"]), new StringReader("<html><body><p>base</p></body></html>"), stdout);
+                Assert.Equal(0, exit);
+                return stdout.ToArray();
+            }
+
+            var off = await RenderAsync();
+            var on = await RenderAsync("--script", script, "--log", log);
+
+            // The text added after layout puts more glyphs in the page.
+            Assert.True(on.Length > off.Length);
+            Assert.Contains("pages=1", await File.ReadAllTextAsync(log, TestContext.Current.CancellationToken), StringComparison.Ordinal);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task FileInput_DefaultOutput_DerivesPdfName()
     {
         var dir = CreateTempDir();

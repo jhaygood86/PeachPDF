@@ -130,6 +130,7 @@ public sealed partial class HtmlDocument : IDisposable
             container.DocumentModeOverride = options.DocumentMode;
             container.DocumentSyntax = options.Syntax;
             container.ScriptHost = options.ScriptHost;
+            container.MaxLayoutPasses = options.MaxLayoutPasses;
             if (options.ScriptHost is not null && options.MeasuringCanvasFactory is { } canvasFactory)
             {
                 // What a script's layout reads are answered from: the document as it is then, loaded and laid out once more without the scripts.
@@ -371,6 +372,34 @@ public sealed partial class HtmlDocument : IDisposable
             throw new InvalidOperationException("The document is already laid out.");
 
         await LayOutAsync(measuringCanvas);
+        await RunScriptLayoutPassesAsync(measuringCanvas);
+    }
+
+    // A script host that kept the document live is told it has been laid out. When it changes the document the markup is taken from its tree and the
+    // document is laid out again, until the host is done or the pass limit is reached; then it is told the layout is final.
+    private async ValueTask RunScriptLayoutPassesAsync(Canvas measuringCanvas)
+    {
+        if (_container.ScriptHost is not { } host || _container.LiveScriptDocument is not { } live || _options is null)
+            return;
+
+        var token = _container.ScriptCancellation;
+        var limit = _container.MaxLayoutPasses;
+        for (var pass = 1; ; pass++)
+        {
+            var version = live.Version;
+            var more = await host.LayoutCompletedAsync(live, new PeachBrackets.ScriptHosting.ScriptLayout(_pages!.Count, pass), token);
+            var changed = live.Version != version;
+            if ((!changed && !more) || (limit > 0 && pass >= limit))
+                break;
+
+            if (changed)
+            {
+                _container.AdoptScriptedSource(live.Serialize());
+                await ReloadAsync(measuringCanvas);
+            }
+        }
+
+        await host.LayoutFinishedAsync(live, new PeachBrackets.ScriptHosting.ScriptLayout(_pages!.Count, 0), token);
     }
 
     /// <summary>

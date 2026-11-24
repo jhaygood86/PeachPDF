@@ -564,6 +564,7 @@ PeachPDF.PdfGenerateConfig : sealed class
   property Int32 MarginLeft { get; set; }
   property Int32 MarginRight { get; set; }
   property Int32 MarginTop { get; set; }
+  property Int32 MaxLayoutPasses { get; set; }
   property Int64 MaxRasterPixels { get; set; }
   property PageOrientation PageOrientation { get; set; }
   property PageSize PageSize { get; set; }

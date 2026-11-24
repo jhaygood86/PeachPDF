@@ -1597,25 +1597,72 @@ namespace PeachBrackets.Html
         // The markup the scripts left, once they have run: SetHtml recognizes it and does not run them again.
         private string? _scriptedSource;
 
+        /// <summary>The script document the host kept live after its scripts ran (see <see cref="ScriptDocument.KeepAlive"/>), or null.</summary>
+        internal ScriptDocument? LiveScriptDocument { get; private set; }
+
+        private CssBox? _liveScriptRoot;
+
+        /// <summary>Makes the markup of the live script document the source of this document, so the next load parses what the scripts left.</summary>
+        internal void AdoptScriptedSource(string markup)
+        {
+            _scriptedSource = markup;
+            _lastHtmlSource = markup;
+        }
+
+        /// <summary>Ends the live script document: tells the host and releases its tree.</summary>
+        internal void EndScriptSession()
+        {
+            var document = LiveScriptDocument;
+            if (document is null)
+                return;
+
+            LiveScriptDocument = null;
+            try
+            {
+                ScriptHost?.DocumentClosed(document);
+            }
+            finally
+            {
+                document.ReleaseProbe();
+                _liveScriptRoot?.Dispose();
+                _liveScriptRoot = null;
+            }
+        }
+
+        /// <summary>How many layouts a script host may ask for; 0 for no limit.</summary>
+        internal int MaxLayoutPasses { get; set; } = 16;
+
         private async ValueTask<string> RunScriptsAsync(IScriptHost host, string htmlSource)
         {
             var root = HtmlParser.ParseDocument(htmlSource, out var mode, document: true, scripting: true);
             var document = new ScriptDocument(this, root, DocumentModeOverride ?? mode);
             document.Probe = ScriptProbe;
 
+            EndScriptSession();
             ParsingRoot = root;
+            var keep = false;
             try
             {
                 await host.RunAsync(document, ScriptCancellation);
                 // A page the scripts left as it was keeps its own source: writing the tree back out is not exact for every construct (foreign content),
                 // and a page that changed nothing gains nothing from it.
-                return document.Version == 0 ? htmlSource : document.Serialize();
+                var markup = document.Version == 0 ? htmlSource : document.Serialize();
+                keep = document.KeepAlive;
+                return markup;
             }
             finally
             {
                 ParsingRoot = null;
-                document.ReleaseProbe();
-                root.Dispose();
+                if (keep)
+                {
+                    LiveScriptDocument = document;
+                    _liveScriptRoot = root;
+                }
+                else
+                {
+                    document.ReleaseProbe();
+                    root.Dispose();
+                }
             }
         }
 
@@ -6199,6 +6246,7 @@ namespace PeachBrackets.Html
         {
             try
             {
+                EndScriptSession();
                 AnimationClock?.Dispose();
                 AnimationClock = null;
                 _shadowLayers?.Dispose();

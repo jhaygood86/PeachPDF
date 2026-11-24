@@ -683,6 +683,7 @@ PeachBrackets.HtmlDocumentOptions : sealed class
   property IScriptHost ScriptHost { get; set; }
   property ImageSelectionOptions ImageSelection { get; set; }
   property InputCapabilities Input { get; set; }
+  property Int32 MaxLayoutPasses { get; set; }
   property Int32 PageNumberOffset { get; set; }
   property Int32? TotalPagesOverride { get; set; }
   property MediaType MediaType { get; set; }
@@ -750,6 +751,9 @@ PeachBrackets.PointerTypes : enum Int32
   None = 0
 PeachBrackets.ScriptHosting.IScriptHost : interface
   method abstract ValueTask RunAsync(ScriptDocument document, CancellationToken cancellationToken = null)
+  method virtual ValueTask LayoutFinishedAsync(ScriptDocument document, ScriptLayout layout, CancellationToken cancellationToken = null)
+  method virtual ValueTask<Boolean> LayoutCompletedAsync(ScriptDocument document, ScriptLayout layout, CancellationToken cancellationToken = null)
+  method virtual Void DocumentClosed(ScriptDocument document)
 PeachBrackets.ScriptHosting.ScriptBox : struct
   ctor(Double X, Double Y, Double Width, Double Height)
   method Void Deconstruct(out Double X, out Double Y, out Double Width, out Double Height)
@@ -776,8 +780,10 @@ PeachBrackets.ScriptHosting.ScriptDocument : sealed class
   method String GetComputedValue(ScriptNode element, String property)
   method ValueTask<String> LoadTextAsync(String address)
   property Boolean CanMeasure { get; }
+  property Boolean KeepAlive { get; set; }
   property IReadOnlyList<ScriptNode> Scripts { get; }
   property Int32 Version { get; }
+  property Object HostState { get; set; }
   property ScriptNode Body { get; }
   property ScriptNode DocumentElement { get; }
   property ScriptNode Head { get; }
@@ -785,6 +791,9 @@ PeachBrackets.ScriptHosting.ScriptDocument : sealed class
   property String CompatMode { get; }
   property String Title { get; }
   property Uri BaseUri { get; }
+PeachBrackets.ScriptHosting.ScriptLayout : sealed class
+  property Int32 PageCount { get; }
+  property Int32 Pass { get; }
 PeachBrackets.ScriptHosting.ScriptNode : sealed class
   method Boolean HasAttribute(String name)
   method Boolean Matches(String selector)

@@ -709,6 +709,7 @@ namespace PeachPDF
                 },
                 Syntax = config.DocumentSyntax == PdfDocumentSyntax.Xml ? DocumentSyntax.Xml : DocumentSyntax.Html,
                 ScriptHost = config.ScriptHost,
+                MaxLayoutPasses = config.MaxLayoutPasses,
                 SnapBoxDecorationsToCssPixels = config.SnapBoxDecorationsToCssPixels,
                 SnapBorderWidthsToCssPixels = config.SnapBorderWidthsToCssPixels,
                 AnimationProgress = config.AnimationProgress,

@@ -99,6 +99,13 @@ namespace PeachPDF
         public PeachBrackets.ScriptHosting.IScriptHost? ScriptHost { get; set; }
 
         /// <summary>
+        /// How many times a script host may change the laid-out document and have it laid out again (a script that registers a function to run after
+        /// layout and then changes the document). When the limit is reached the last change is not laid out. The default is 16; 0 means no limit, which
+        /// lets a script that changes the document on every pass run forever. Only meaningful with a <see cref="ScriptHost"/>.
+        /// </summary>
+        public int MaxLayoutPasses { get; set; } = 16;
+
+        /// <summary>
         /// When set to <c>true</c>, the document's own author style sheets (its <c>&lt;style&gt;</c>
         /// elements and <c>&lt;link rel="stylesheet"&gt;</c> references) are ignored — only the user-agent
         /// default styles and any caller-supplied stylesheet (the <c>cssData</c> argument) are applied.

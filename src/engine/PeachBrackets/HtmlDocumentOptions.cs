@@ -259,6 +259,13 @@ public sealed class HtmlDocumentOptions
     /// </summary>
     public Func<PeachDrawing.Core.Canvas>? MeasuringCanvasFactory { get; set; }
 
+    /// <summary>
+    /// How many times a script host may change a laid-out document and have it laid out again (<see cref="PeachBrackets.ScriptHosting.IScriptHost.LayoutCompletedAsync"/>).
+    /// When the limit is reached the last change is not laid out. The default is 16; 0 means no limit, which lets a script that changes the document
+    /// on every pass run forever.
+    /// </summary>
+    public int MaxLayoutPasses { get; set; } = 16;
+
     internal HtmlDocumentOptions CloneWithoutScripts()
     {
         var copy = (HtmlDocumentOptions)MemberwiseClone();

@@ -107,6 +107,16 @@ public sealed class ScriptDocument
     /// <summary>The document node: the parent of the <c>html</c> element.</summary>
     public ScriptNode Root { get; }
 
+    /// <summary>
+    /// Set by the host from <see cref="IScriptHost.RunAsync"/> to keep the document live after the scripts have run, so it is told when the document has
+    /// been laid out (<see cref="IScriptHost.LayoutCompletedAsync"/>) and can change it again. A host that does not need that leaves it false and the
+    /// tree is released as soon as the scripts are done.
+    /// </summary>
+    public bool KeepAlive { get; set; }
+
+    /// <summary>Whatever the host wants to keep for this document between its calls (the host's script engine, say). The engine never reads it.</summary>
+    public object? HostState { get; set; }
+
     /// <summary>How many changes have been made to the tree so far. A host compares it to find out whether anything changed.</summary>
     public int Version { get; private set; }
 

@@ -1,6 +1,9 @@
 PeachBrackets.Scripting.JintScriptHost : sealed class
   ctor(JintScriptOptions options = null)
+  method virtual ValueTask LayoutFinishedAsync(ScriptDocument document, ScriptLayout layout, CancellationToken cancellationToken = null)
   method virtual ValueTask RunAsync(ScriptDocument document, CancellationToken cancellationToken = null)
+  method virtual ValueTask<Boolean> LayoutCompletedAsync(ScriptDocument document, ScriptLayout layout, CancellationToken cancellationToken = null)
+  method virtual Void DocumentClosed(ScriptDocument document)
   property JintScriptOptions Options { get; }
 PeachBrackets.Scripting.JintScriptOptions : sealed class
   ctor()

@@ -78,6 +78,8 @@ internal static class CliProgram
               --no-default-style     Ignore the default (user-agent) style sheet.
               --no-author-style      Ignore the document's own style sheets.
               --enable-scripting     Run the document's JavaScript while it loads (off by default).
+              --max-passes=N         How many times a script may change the laid-out document
+                                     and have it laid out again (default 16; 0 = no limit).
               --script=FILE          Run a JavaScript file in the document before its own scripts
                                      (repeatable). Runs even without --enable-scripting, and then
                                      the document's own scripts stay off. console and Log output

@@ -132,6 +132,7 @@ internal static class CliRunner
             IgnoreAuthorStyleSheets = options.NoAuthorStyle,
             DocumentMode = options.DocumentMode,
             ScriptHost = BuildScriptHost(options, logger),
+            MaxLayoutPasses = options.MaxPasses ?? new PdfGenerateConfig().MaxLayoutPasses,
             // Set on the config rather than on the loader, so it holds for every input kind - including
             // MHTML, which is rendered through a bare MimeKitNetworkLoader that never saw this option.
             AllowLocalFileAccess = !options.NoLocalFiles,

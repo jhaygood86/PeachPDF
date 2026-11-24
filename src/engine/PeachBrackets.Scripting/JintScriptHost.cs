@@ -30,6 +30,26 @@ public sealed class JintScriptHost(JintScriptOptions? options = null) : IScriptH
         ArgumentNullException.ThrowIfNull(document);
 
         var runtime = new ScriptRuntime(document, _options, cancellationToken);
+        document.HostState = runtime;
         await runtime.RunAsync();
+
+        // A script that asked to be called after layout (a post-layout function or a complete listener) keeps the document, and the engine, live.
+        document.KeepAlive = runtime.WantsLayoutCallbacks;
     }
+
+    /// <inheritdoc />
+    public ValueTask<bool> LayoutCompletedAsync(ScriptDocument document, ScriptLayout layout, CancellationToken cancellationToken = default) =>
+        ValueTask.FromResult(document.HostState is ScriptRuntime runtime && runtime.RunPostLayout(layout));
+
+    /// <inheritdoc />
+    public ValueTask LayoutFinishedAsync(ScriptDocument document, ScriptLayout layout, CancellationToken cancellationToken = default)
+    {
+        if (document.HostState is ScriptRuntime runtime)
+            runtime.RunComplete(layout);
+
+        return ValueTask.CompletedTask;
+    }
+
+    /// <inheritdoc />
+    public void DocumentClosed(ScriptDocument document) => document.HostState = null;
 }

@@ -27,7 +27,7 @@ The command-line tool has the same switch: `peachpdf --enable-scripting page.htm
 
 ## How it runs
 
-Scripts run **once, while the document loads**: after the HTML is parsed and before any style sheet is applied. They run in document order (`defer` and
+Scripts run **while the document loads**: after the HTML is parsed and before any style sheet is applied. They run in document order (`defer` and
 `async` external scripts after the rest), then `DOMContentLoaded` and `load` are fired. What the scripts leave in the document is what is styled,
 laid out and painted; a page whose scripts change nothing is loaded from its own source.
 
@@ -37,6 +37,12 @@ reftest-style page that removes a class when it is ready, is complete when it is
 running forever.
 
 Each document gets its own JavaScript engine, so one `JintScriptHost` may be shared by any number of documents, including ones loading at the same time.
+
+## After layout
+
+A document is laid out after its scripts have run, and a script can ask to be called then. `Prince.registerPostLayoutFunc(fn)` registers a function that runs once after the next layout; if it changes the document, the document is laid out again and the functions registered meanwhile run after that, until a pass changes nothing and registers nothing, or the pass limit is reached (`HtmlDocumentOptions.MaxLayoutPasses`, `PdfGenerateConfig.MaxLayoutPasses` and `peachpdf --max-passes`; default 16, 0 for no limit, and a change made on the last allowed pass is not laid out). A function that registers itself and changes the document on every pass therefore runs until the limit. `Prince.pageCount` is the number of pages of the last layout (0 before the first). When the layout is final, `complete` fires on `Prince` (`Prince.addEventListener('complete', fn)` or `Prince.oncomplete = fn`) once; a change made in it is not laid out. A document keeps its scripts' DOM and engine alive only when a script registered one of these; otherwise they are released when the scripts finish. `document.readyState` changes fire `readystatechange`.
+
+A host built on PeachBrackets gets the same through `IScriptHost.LayoutCompletedAsync` (called after each layout; return true to be called again) and `LayoutFinishedAsync`, with `ScriptDocument.KeepAlive` set from `RunAsync` to ask for them.
 
 ## Options
 

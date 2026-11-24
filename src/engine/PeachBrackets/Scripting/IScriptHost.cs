@@ -19,4 +19,45 @@ public interface IScriptHost
     /// <param name="cancellationToken">cancels the work</param>
     /// <returns>a task that completes when every script has run and the document is ready to be styled</returns>
     ValueTask RunAsync(ScriptDocument document, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Called after the document has been laid out, when the host asked to be (<see cref="ScriptDocument.KeepAlive"/>). The host may change the
+    /// document again: if it did, the engine lays it out again and calls this once more, up to <see cref="HtmlDocumentOptions.MaxLayoutPasses"/> times.
+    /// </summary>
+    /// <param name="document">the document the scripts ran in, still live</param>
+    /// <param name="layout">what the layout came to</param>
+    /// <param name="cancellationToken">cancels the work</param>
+    /// <returns>true to be called again after this pass even if the document did not change (the host has more to do); false when it is done</returns>
+    ValueTask<bool> LayoutCompletedAsync(ScriptDocument document, ScriptLayout layout, CancellationToken cancellationToken = default) => ValueTask.FromResult(false);
+
+    /// <summary>
+    /// Called once, after the last layout pass: the document is final and about to be painted. A change the host makes now is not laid out.
+    /// </summary>
+    /// <param name="document">the document the scripts ran in</param>
+    /// <param name="layout">what the final layout came to</param>
+    /// <param name="cancellationToken">cancels the work</param>
+    /// <returns>a task that completes when the host is done</returns>
+    ValueTask LayoutFinishedAsync(ScriptDocument document, ScriptLayout layout, CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
+
+    /// <summary>Called when the document is disposed, for a document that was kept alive. The host releases whatever it held for it.</summary>
+    /// <param name="document">the document</param>
+    void DocumentClosed(ScriptDocument document)
+    {
+    }
+}
+
+/// <summary>What a layout of a scripted document came to, as <see cref="IScriptHost.LayoutCompletedAsync"/> and <see cref="IScriptHost.LayoutFinishedAsync"/> are told.</summary>
+public sealed class ScriptLayout
+{
+    internal ScriptLayout(int pageCount, int pass)
+    {
+        PageCount = pageCount;
+        Pass = pass;
+    }
+
+    /// <summary>The number of pages the document came to (a screen document has one continuous sheet).</summary>
+    public int PageCount { get; }
+
+    /// <summary>Which layout this is, counting from 1.</summary>
+    public int Pass { get; }
 }

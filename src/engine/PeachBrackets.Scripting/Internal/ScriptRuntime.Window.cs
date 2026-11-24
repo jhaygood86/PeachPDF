@@ -125,7 +125,10 @@ internal sealed partial class ScriptRuntime
         Define("navigator", NavigatorObject());
         Define("console", ConsoleObject());
         if (_options.PrinceCompatibility)
+        {
             Define("Log", LogObject());
+            Define("Prince", PrinceObject());
+        }
         Define("performance", PerformanceObject());
         Define("history", HistoryObject());
 

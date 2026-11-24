@@ -118,6 +118,16 @@ internal static class ArgumentParser
                 case "no-default-style": _options.NoDefaultStyle = true; break;
                 case "no-author-style": _options.NoAuthorStyle = true; break;
                 case "enable-scripting": _options.EnableScripting = true; break;
+                case "max-passes":
+                    if (RequireValue(name, inlineValue) is { } passes)
+                    {
+                        if (int.TryParse(passes, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var count))
+                            _options.MaxPasses = count;
+                        else
+                            _options.Errors.Add($"invalid --max-passes value '{passes}' (expected a whole number of 0 or more)");
+                    }
+
+                    break;
                 case "script":
                     if (RequireValue(name, inlineValue) is { } scriptFile)
                         _options.UserScripts.Add(scriptFile);

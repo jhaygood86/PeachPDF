@@ -172,10 +172,12 @@ internal sealed partial class ScriptRuntime
         }
 
         ReadyState = "interactive";
+        FireEvent(DocumentObject, "readystatechange", bubbles: false, cancelable: false);
         FireEvent(DocumentObject, "DOMContentLoaded", bubbles: true, cancelable: false);
         RunMicrotasks();
 
         ReadyState = "complete";
+        FireEvent(DocumentObject, "readystatechange", bubbles: false, cancelable: false);
         FireEvent(Window, "load", bubbles: false, cancelable: false);
         RunMicrotasks();
 
