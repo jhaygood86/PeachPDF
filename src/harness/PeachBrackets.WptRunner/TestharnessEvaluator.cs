@@ -5,6 +5,7 @@ using System.Text.RegularExpressions;
 using PeachBrackets;
 using PeachBrackets.Scripting;
 using PeachDrawing;
+using PeachBrackets.WptRunner.Server;
 using PeachDrawing.Core;
 
 namespace PeachBrackets.WptRunner;
@@ -22,7 +23,6 @@ internal interface IWptEvaluator
 /// </summary>
 internal sealed partial class TestharnessEvaluator(string wptRoot) : IWptEvaluator
 {
-    private const string Origin = "http://wpt.test";
     private const string ResultPrefix = "WPT-RESULT ";
 
     // Triage aid: with PEACHBRACKETS_WPT_SUBTESTS=<file>, every failing subtest is appended there (path, status, name, message; tab separated).
@@ -71,22 +71,28 @@ internal sealed partial class TestharnessEvaluator(string wptRoot) : IWptEvaluat
         if (SkipReason(wptPath) is { } skip)
             return new TestResult(Outcome.Skipped, skip);
 
-        string source;
-        if (wptPath.EndsWith(".js", StringComparison.Ordinal))
-        {
-            var wrapped = Wrap(wptPath, File.ReadAllText(Full(wptPath)));
-            if (wrapped is null)
-                return new TestResult(Outcome.Skipped, "no window global");
-            source = WptRenderer.Prepare(wptPath, wrapped);
-        }
-        else
-        {
-            source = WptRenderer.Prepare(wptPath, File.ReadAllText(Full(wptPath)));
-        }
+        var server = new WptServer(wptRoot);
+        server.Override("resources/testharnessreport.js", ReportScript);
+        // The vendor file wires testdriver.js to a browser's automation; there is none here, so it is empty and the actions fail when used.
+        server.Override("resources/testdriver-vendor.js", string.Empty);
+
+        // A .any.js or .window.js file stands for the page the server generates; any other test is the page itself, with .sub. substitution done.
+        var served = wptPath.EndsWith(".js", StringComparison.Ordinal) ? wptPath[..^3] + ".html" : wptPath;
+        var page = server.Handle(new ServerRequest("GET", new Uri(WptServer.Origin + "/" + served)));
+        if (page.Status != 200)
+            return wptPath.EndsWith(".js", StringComparison.Ordinal)
+                ? new TestResult(Outcome.Skipped, "no window global")
+                : new TestResult(Outcome.Fail, $"error: the server answered {page.Status} for the test");
+
+        var text = page.Text;
+        if (UnportedHandler(wptPath, text) is { } handler)
+            return new TestResult(Outcome.Skipped, $"needs {handler}, which has no ported handler");
+
+        var source = WptRenderer.Prepare(wptPath, text);
 
         var lines = new List<string>();
         var errors = new List<string>();
-        var context = new RasterRenderContext { ResourceLoader = LoadAsync };
+        var context = new RasterRenderContext { ResourceLoader = uri => LoadAsync(server, uri) };
         var options = new HtmlDocumentOptions
         {
             MediaType = MediaType.Screen,
@@ -184,58 +190,32 @@ internal sealed partial class TestharnessEvaluator(string wptRoot) : IWptEvaluat
     }
 
     /// <summary>The page the WPT server generates for the window global of a <c>.any.js</c> / <c>.window.js</c> file; null when the file asks for no window.</summary>
-    internal static string? Wrap(string wptPath, string script)
+    internal static string? Wrap(string wptPath, string script) => WptServer.GenerateTestPage(wptPath, script);
+
+    [GeneratedRegex(@"[\w./-]+\.py\b", RegexOptions.CultureInvariant)]
+    private static partial Regex PythonReference();
+
+    // The first .py file a test names that exists in the checkout but that the server has no handler for, or null.
+    private string? UnportedHandler(string wptPath, string text)
     {
-        var scripts = new List<string>();
-        string[]? globals = null;
-        foreach (Match m in MetaLine().Matches(script))
+        var directory = ReftestParser.DirectoryOf(wptPath);
+        foreach (Match match in PythonReference().Matches(text))
         {
-            var key = m.Groups[1].Value;
-            var value = m.Groups[2].Value.Trim();
-            if (key == "script")
-                scripts.Add(value);
-            else if (key == "global")
-                globals = value.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+            var resolved = ReftestParser.Resolve(directory, match.Value);
+            if (File.Exists(Full(resolved)) && WptHandlers.Find(resolved) is null)
+                return resolved;
         }
 
-        // With no `global` a .any.js runs in a window as well as the workers; "worker" or "dedicatedworker" alone has no window.
-        if (wptPath.EndsWith(".any.js", StringComparison.Ordinal) && globals is not null && !globals.Contains("window"))
-            return null;
-
-        var name = wptPath[(wptPath.LastIndexOf('/') + 1)..];
-        var page = new StringBuilder();
-        page.Append("<!doctype html>\n<meta charset=utf-8>\n<title>").Append(System.Net.WebUtility.HtmlEncode(name)).Append("</title>\n");
-        page.Append("<script src=\"/resources/testharness.js\"></script>\n<script src=\"/resources/testharnessreport.js\"></script>\n<div id=log></div>\n");
-        foreach (var s in scripts)
-            page.Append("<script src=\"").Append(System.Net.WebUtility.HtmlEncode(s)).Append("\"></script>\n");
-        page.Append("<script src=\"").Append(System.Net.WebUtility.HtmlEncode(name)).Append("\"></script>\n<script>done();</script>\n");
-        return page.ToString();
+        return null;
     }
 
     private string Full(string wptPath) => Path.Combine(wptRoot, wptPath.Replace('/', Path.DirectorySeparatorChar));
 
-    private async ValueTask<RNetworkResponse?> LoadAsync(Uri uri)
+    private static async ValueTask<RNetworkResponse?> LoadAsync(WptServer server, Uri uri)
     {
         if (uri.IsAbsoluteUri && uri.Scheme == "data")
             return await HostResourceLoader.LoadAsync(uri);
 
-        if (!uri.IsAbsoluteUri || !uri.AbsoluteUri.StartsWith(Origin + "/", StringComparison.Ordinal))
-            return null;
-
-        var relative = Uri.UnescapeDataString(uri.AbsolutePath.TrimStart('/'));
-        if (relative == "resources/testharnessreport.js")
-            return new RNetworkResponse(new MemoryStream(Encoding.UTF8.GetBytes(ReportScript)), new Dictionary<string, string[]> { ["Content-Type"] = ["text/javascript"] });
-
-        // The vendor file wires testdriver.js to a browser's automation; there is none here, so it is empty and the actions fail when used.
-        if (relative == "resources/testdriver-vendor.js")
-            return new RNetworkResponse(new MemoryStream(), new Dictionary<string, string[]> { ["Content-Type"] = ["text/javascript"] });
-
-        var path = Path.GetFullPath(Full(relative));
-        if (!path.StartsWith(Path.GetFullPath(wptRoot), StringComparison.Ordinal) || !File.Exists(path))
-            return null;
-
-        var bytes = await File.ReadAllBytesAsync(path);
-        var type = Path.GetExtension(path).Equals(".js", StringComparison.OrdinalIgnoreCase) ? "text/javascript" : WptRenderer.ContentType(path);
-        return new RNetworkResponse(new MemoryStream(bytes), new Dictionary<string, string[]> { ["Content-Type"] = [type] });
+        return await server.LoadAsync(uri);
     }
 }
