@@ -47,7 +47,15 @@ public sealed partial class PdfComposer
             _signing = signing.Clone();
         }
 
+        if (options.OpenAction == PdfOpenAction.Print && (options.Conformance != PdfAConformance.None || options.XConformance != PdfXConformance.None))
+        {
+            throw new InvalidOperationException(
+                "PdfComposerOptions.OpenAction is Print, which is an action that runs when the file opens; PDF/A and PDF/X files may not have one. " +
+                "Drop the open action or the conformance level.");
+        }
+
         ApplyInformation(options);
+        ApplyViewerSettings(options);
         _configured = true;
     }
 
@@ -273,6 +281,55 @@ public sealed partial class PdfComposer
         if (encryption is not null && _document.Version < 17)
             _document.Version = 17;
     }
+
+    // The catalog's page mode, page layout and viewer preferences, and the open action to write once there are pages to point it at.
+    private void ApplyViewerSettings(PdfComposerOptions options)
+    {
+        if (options.PageMode is { } mode)
+        {
+            _document.PageMode = mode switch
+            {
+                PdfPageMode.UseOutlines => PeachDrawing.PDF.Engine.PdfPageMode.UseOutlines,
+                PdfPageMode.UseThumbs => PeachDrawing.PDF.Engine.PdfPageMode.UseThumbs,
+                PdfPageMode.FullScreen => PeachDrawing.PDF.Engine.PdfPageMode.FullScreen,
+                PdfPageMode.UseAttachments => PeachDrawing.PDF.Engine.PdfPageMode.UseAttachments,
+                _ => PeachDrawing.PDF.Engine.PdfPageMode.UseNone,
+            };
+        }
+
+        if (options.PageLayout is { } layout)
+        {
+            _document.PageLayout = layout switch
+            {
+                PdfPageLayout.OneColumn => PeachDrawing.PDF.Engine.PdfPageLayout.OneColumn,
+                PdfPageLayout.TwoColumnLeft => PeachDrawing.PDF.Engine.PdfPageLayout.TwoColumnLeft,
+                PdfPageLayout.TwoColumnRight => PeachDrawing.PDF.Engine.PdfPageLayout.TwoColumnRight,
+                PdfPageLayout.TwoPageLeft => PeachDrawing.PDF.Engine.PdfPageLayout.TwoPageLeft,
+                PdfPageLayout.TwoPageRight => PeachDrawing.PDF.Engine.PdfPageLayout.TwoPageRight,
+                _ => PeachDrawing.PDF.Engine.PdfPageLayout.SinglePage,
+            };
+        }
+
+        _openAction = options.OpenAction;
+
+        if (options.Viewer is { } viewer)
+        {
+            var preferences = _document.Catalog.ViewerPreferences;
+            var elements = preferences.Elements;
+            if (viewer.DisplayDocTitle) elements.SetBoolean("/DisplayDocTitle", true);
+            if (viewer.HideToolbar) elements.SetBoolean("/HideToolbar", true);
+            if (viewer.HideMenubar) elements.SetBoolean("/HideMenubar", true);
+            if (viewer.HideWindowUI) elements.SetBoolean("/HideWindowUI", true);
+            if (viewer.FitWindow) elements.SetBoolean("/FitWindow", true);
+            if (viewer.CenterWindow) elements.SetBoolean("/CenterWindow", true);
+            if (viewer.PrintScaling is { } scaling)
+                elements.SetName("/PrintScaling", scaling == PdfPrintScaling.None ? "/None" : "/AppDefault");
+            if (viewer.Duplex is { } duplex)
+                elements.SetName("/Duplex", duplex switch { PdfDuplex.FlipShortEdge => "/DuplexFlipShortEdge", PdfDuplex.FlipLongEdge => "/DuplexFlipLongEdge", _ => "/Simplex" });
+        }
+    }
+
+    private PdfOpenAction? _openAction;
 
     /// <summary>
     /// Writes the document information and what the claimed conformance level requires of it.

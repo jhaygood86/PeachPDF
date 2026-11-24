@@ -277,6 +277,16 @@ namespace PeachPDF
             var options = ToDocumentOptions(config, orgPageSize);
             foreach (var api in config.ScriptApis)
                 options.ScriptApis.Add(api);
+
+            // What the document's scripts say about the PDF (the PDF object, Prince.failStatus), when there is a host to run them.
+            PdfScriptSettings? scriptSettings = null;
+            if (config.ScriptHost is not null)
+            {
+                scriptSettings = new PdfScriptSettings();
+                options.ScriptApis.Add(scriptSettings.PdfApi);
+                options.ScriptApis.Add(scriptSettings.PrinceApi);
+            }
+
             if (config.DocumentSyntax == PdfDocumentSyntax.Auto && fromLoader && IsXhtmlContentType(_renderContext.NetworkLoader.PrimaryContentType))
                 options.Syntax = DocumentSyntax.Xml;
             options.StyleSheet = cssData?.StyleSheet;
@@ -341,7 +351,7 @@ namespace PeachPDF
                     await htmlDocument.LayoutAsync(measure);
                 }
 
-                await RenderPagesCore(document, htmlDocument, config);
+                await RenderPagesCore(document, htmlDocument, config, scriptSettings: scriptSettings);
             }
             finally
             {
@@ -733,12 +743,17 @@ namespace PeachPDF
         /// document-building path that builds a <c>Html.Dom.CssBox</c> tree directly instead
         /// of parsing HTML. The caller owns its own measure context and disposes it after this returns.
         /// </summary>
-        private async Task RenderPagesCore(PeachPdfDocument document, HtmlDocument htmlDocument, PdfGenerateConfig config, FileLayerPlan? fileLayers = null)
+        private async Task RenderPagesCore(PeachPdfDocument document, HtmlDocument htmlDocument, PdfGenerateConfig config, FileLayerPlan? fileLayers = null, PdfScriptSettings? scriptSettings = null)
         {
+            // The scripts have all run and the layout is final: a script that asked for the conversion to fail ends it before anything is written,
+            // and the files a script asked to attach are read now, while this call can still wait for them.
+            scriptSettings?.ThrowIfFailed();
+            var scriptFiles = scriptSettings is null ? null : await scriptSettings.LoadAttachmentsAsync(LoadAttachmentAsync);
+
             // Whole-document format, document information, and what the claimed conformance level requires of the file (the output
             // intent, the XMP packet, embedded files, the language) - established once, and checked against any earlier call on this
             // document. Everything that depends on this render's content (title, language, creation date) is known by now.
-            ConfigureDocument(document, htmlDocument, config, fileLayers);
+            ConfigureDocument(document, htmlDocument, config, fileLayers, scriptSettings, scriptFiles);
 
             // PDF/A-1a/2a/3a build on tagged-PDF output (StructureTagBuilder below) and additionally require a real document language,
             // which Configure has already checked.
@@ -867,10 +882,14 @@ namespace PeachPDF
         /// <see cref="RenderPagesCore"/>). A document made only of added PDFs has no section to take a title or language from, so it gets the
         /// configured ones.
         /// </summary>
-        private static void ConfigureDocument(PeachPdfDocument document, HtmlDocument? htmlDocument, PdfGenerateConfig config, FileLayerPlan? fileLayers)
+        private static void ConfigureDocument(PeachPdfDocument document, HtmlDocument? htmlDocument, PdfGenerateConfig config, FileLayerPlan? fileLayers,
+            PdfScriptSettings? scriptSettings = null, IReadOnlyList<PdfAttachment>? scriptFiles = null)
         {
             var embeddings = PdfEmbeddingPlan.Create(config);
-            var composerOptions = BuildComposerOptions(config, htmlDocument, embeddings);
+            var composerOptions = BuildComposerOptions(config, htmlDocument, embeddings, scriptSettings);
+            foreach (var file in scriptFiles ?? [])
+                composerOptions.EmbeddedFiles.Add(file.ToEngine());
+
             fileLayers?.ApplyDocumentInformation(composerOptions, canAttachFiles: config.PdfAConformance is PdfAConformance.None or PdfAConformance.PdfA3A or PdfAConformance.PdfA3B or PdfAConformance.PdfA3U or PdfAConformance.PdfA4E or PdfAConformance.PdfA4F);
             document.Composer.Configure(composerOptions);
         }
@@ -889,35 +908,41 @@ namespace PeachPDF
         /// <paramref name="config"/>, and the document information - a non-empty field of <see cref="PdfGenerateConfig.Metadata"/> wins over
         /// the value extracted from the HTML, and a missing one falls back to it.
         /// </summary>
-        private static PeachDrawing.PDF.PdfComposerOptions BuildComposerOptions(PdfGenerateConfig config, HtmlDocument? htmlDocument, PdfEmbeddingPlan embeddings)
+        private static PeachDrawing.PDF.PdfComposerOptions BuildComposerOptions(PdfGenerateConfig config, HtmlDocument? htmlDocument, PdfEmbeddingPlan embeddings,
+            PdfScriptSettings? script = null)
         {
             var metadata = htmlDocument?.Metadata;
             var overrides = config.Metadata;
 
+            // What a script sets stands in for the document's own information, and gives way to what the configuration set explicitly.
+            static string? Pick(string? configured, string? scripted, string? fromDocument) =>
+                !string.IsNullOrEmpty(configured) ? configured : !string.IsNullOrEmpty(scripted) ? scripted : fromDocument;
+
             var options = new PeachDrawing.PDF.PdfComposerOptions
             {
-                Title = !string.IsNullOrEmpty(overrides?.Title) ? overrides.Title : metadata?.Title,
-                Author = !string.IsNullOrEmpty(overrides?.Author) ? overrides.Author : metadata?.Author,
-                Subject = !string.IsNullOrEmpty(overrides?.Subject) ? overrides.Subject : metadata?.Subject,
-                Keywords = !string.IsNullOrEmpty(overrides?.Keywords) ? overrides.Keywords : metadata?.Keywords,
-                Creator = overrides?.Creator ?? metadata?.Generator ?? PeachPdfProductInfo.Generator,
+                Title = Pick(overrides?.Title, script?.Title, metadata?.Title),
+                Author = Pick(overrides?.Author, script?.Author, metadata?.Author),
+                Subject = Pick(overrides?.Subject, script?.Subject, metadata?.Subject),
+                Keywords = Pick(overrides?.Keywords, script?.Keywords, metadata?.Keywords),
+                Creator = overrides?.Creator ?? script?.Creator ?? metadata?.Generator ?? PeachPdfProductInfo.Generator,
                 Producer = PeachPdfProductInfo.Generator,
                 // An HTML-extracted date (<meta name="date" content="2024-03-15">) carries no timezone of its own, so it is read as local
                 // time, which is also how the PDF date it is written as is interpreted.
                 CreationDate = overrides?.CreationDate
                     ?? (metadata?.Date is { } htmlDate ? new DateTimeOffset(DateTime.SpecifyKind(htmlDate, DateTimeKind.Local)) : null),
                 // Resolved by SetContent: the document's own <html lang> takes priority, else PdfGenerateConfig.DefaultLanguage.
-                Language = htmlDocument?.Language ?? (string.IsNullOrEmpty(config.DefaultLanguage) ? null : config.DefaultLanguage),
+                Language = !string.IsNullOrEmpty(script?.Language) ? script.Language : htmlDocument?.Language ?? (string.IsNullOrEmpty(config.DefaultLanguage) ? null : config.DefaultLanguage),
                 Version = config.PdfVersionExplicit ? config.PdfVersion.ToEngine() : null,
                 Conformance = config.PdfAConformance.ToEngine(),
                 XConformance = config.PdfXConformance.ToEngine(),
                 UAConformance = config.PdfUAConformance.ToEngine(),
                 ColorOptions = config.ColorOptions.ToEngine(),
-                WriteXmpMetadata = config.EnableXmpMetadata,
+                WriteXmpMetadata = script?.XmpMetadata ?? config.EnableXmpMetadata,
                 FacturX = embeddings.FacturX,
-                Encryption = config.Encryption.ToEngine(),
+                // A script can ask for encryption on a document that has none configured, never change or drop what the configuration set.
+                Encryption = (config.Encryption ?? script?.BuildEncryption()).ToEngine(),
                 Signing = config.Signing.ToEngine(),
-                CompressContentStreams = config.CompressContentStreams,
+                CompressContentStreams = script?.Compress ?? config.CompressContentStreams,
                 Linearize = config.Linearize,
                 BrotliCompression = config.BrotliCompression,
                 JxlPassthrough = config.JxlPassthrough,
@@ -927,6 +952,10 @@ namespace PeachPDF
                 MaximumDownscaleMultiplier = config.MaximumDownscaleMultiplier,
                 FlattenTransparency = config.TransparencyPolicy == TransparencyPolicy.Flatten,
                 PortableColorFilters = config.PortableColorFilters,
+                PageMode = (config.PageMode ?? script?.PageMode)?.ToEngine(),
+                PageLayout = (config.PageLayout ?? script?.PageLayout)?.ToEngine(),
+                OpenAction = (config.OpenAction ?? script?.OpenAction)?.ToEngine(),
+                Viewer = MergeViewerOptions(config.ViewerOptions, script).ToEngine(),
             };
 
             foreach (var property in overrides?.CustomXmpProperties ?? [])
@@ -936,6 +965,44 @@ namespace PeachPDF
                 options.EmbeddedFiles.Add(file);
 
             return options;
+        }
+
+        // The viewer preferences of the configuration with what a script adds: a flag either one sets stays set, a choice the configuration made wins.
+        private static PdfViewerOptions? MergeViewerOptions(PdfViewerOptions? configured, PdfScriptSettings? script)
+        {
+            if (script is null || (script.DisplayDocTitle is not true && script.PrintScaling is null && script.Duplex is null))
+                return configured;
+
+            return new PdfViewerOptions
+            {
+                DisplayDocTitle = configured?.DisplayDocTitle == true || script.DisplayDocTitle == true,
+                HideToolbar = configured?.HideToolbar ?? false,
+                HideMenubar = configured?.HideMenubar ?? false,
+                HideWindowUI = configured?.HideWindowUI ?? false,
+                FitWindow = configured?.FitWindow ?? false,
+                CenterWindow = configured?.CenterWindow ?? false,
+                PrintScaling = configured?.PrintScaling ?? script.PrintScaling,
+                Duplex = configured?.Duplex ?? script.Duplex,
+            };
+        }
+
+        // The bytes of a file a script attached: resolved against the document's address and read through the same loader as its images.
+        private async Task<byte[]?> LoadAttachmentAsync(string url)
+        {
+            var uri = new Uri(url, UriKind.RelativeOrAbsolute);
+            if (!uri.IsAbsoluteUri && _renderContext.NetworkLoader.BaseUri is { } baseUri)
+                uri = new Uri(baseUri, uri);
+
+            var response = await _renderContext.NetworkLoader.GetResourceStream(uri);
+            if (response?.ResourceStream is not { } stream)
+                return null;
+
+            await using (stream)
+            {
+                using var buffer = new System.IO.MemoryStream();
+                await stream.CopyToAsync(buffer);
+                return buffer.ToArray();
+            }
         }
 
         /// <summary>

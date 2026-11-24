@@ -50,6 +50,25 @@ After layout a script can ask where things ended up. Set `Prince.trackBoxes = tr
 
 `LINE`, `COLUMN`, `FLEXLINE` and `FLOATS` boxes are not reported, and a box has no `baseline`: text sits in the box that owns it, one `TEXT` box for each line of it, and a float or a column is an ordinary box of its element. The text of a box comes before its child boxes whatever their order in the source.
 
+## The PDF object
+
+With PeachPDF and a script host, a script can set properties of the PDF it is turned into. `PDF` and `Prince.failStatus` are added by PeachPDF itself through the mechanism below, so they exist only when PeachPDF runs the document:
+
+| Member | Effect |
+|---|---|
+| `PDF.title`, `subject`, `author`, `keywords`, `creator`, `lang` | The document information and language. They replace what the HTML says (`<title>`, `<meta>`, `<html lang>`) and give way to a value set in `PdfGenerateConfig.Metadata`. |
+| `PDF.pageMode` | `auto`, `show-bookmarks`, `show-thumbnails`, `fullscreen` or `show-attachments`: what a viewer shows beside the pages. |
+| `PDF.pageLayout` | `auto`, `single-page`, `one-column`, `two-column` (or `two-column-left`), `two-column-right`, `two-page` (or `two-page-left`), `two-page-right`. |
+| `PDF.openAction` | `print`, `fit-page` or `fit-width` (also written `zoom(fit-page)`, `zoom(fit-width)`). `print` is refused for a PDF/A or PDF/X file when the file is configured. |
+| `PDF.printScaling`, `duplex`, `displayDocTitle` | The viewer preferences: `auto` or `none`; `auto`, `simplex`, `duplex-flip-short-edge`, `duplex-flip-long-edge`; and a boolean. |
+| `PDF.encrypt`, `userPassword`, `ownerPassword`, `allowPrint`, `allowModify`, `allowCopy`, `allowAnnotate` | Encrypts the file (AES-256) with those passwords and permissions. A script can ask for encryption only when `PdfGenerateConfig.Encryption` is null; it never changes or removes a configured one. `PDF.keyBits` reads `256`, and assigning any other value is an error. |
+| `PDF.compress`, `PDF.xmpMetadata` | Whether content streams are compressed; whether the XMP packet is written. |
+| `PDF.attachFile(url, description)` | Attaches a file, read when the layout is final through the document's loader (a relative address is resolved against the document's). |
+| `PDF.pages` | The boxes of the final layout, one tree per page, as `getPrinceBoxes` describes them (`type`, `pageNum`, `x`, `y`, `w`, `h`, `text`, `src`, `pseudo`, `element` and `children`); null before the document is laid out, so read it in a `complete` handler. |
+| `Prince.failStatus` | Set it to true (for example in a `complete` handler that finds content overflowing) and the conversion ends with `PdfFailSafeException` and no PDF; the CLI reports it as an error and exits 1. |
+
+A property that takes one of a few names throws for any other, so the script finds out as it runs. The settings a script leaves unset fall back to `PdfGenerateConfig` and the document. `PDF.profile`, `outputIntent`, `embedFonts`, `subsetFonts`, `artificialFonts`, `objectStreams`, `colorConversion` and the other members other print engines have are not provided: the conformance level and color setup are decided before the scripts run, and fonts are always embedded and subset.
+
 ## Adding your own objects
 
 A host adds JavaScript objects to the scripts without referencing Jint or this package. A `ScriptApi` (in `PeachBrackets`, namespace `PeachBrackets.ScriptHosting`) is a named global with properties, methods and events, built from plain C# delegates and `ScriptValue`s (undefined, null, boolean, number, text, arrays, objects, functions and nodes convert both ways). Put it in `HtmlDocumentOptions.ScriptApis` (PeachPDF: `PdfGenerateConfig.ScriptApis`) and the script host installs it before the scripts run:
@@ -64,7 +83,7 @@ settings.LayoutFinished += layout => Console.WriteLine(layout.PageCount);
 options.ScriptApis.Add(settings);
 ```
 
-A script reads and assigns the properties, calls the methods, and listens to events with `Settings.addEventListener('ready', fn)` or `Settings.onready = fn`; `settings.Raise("ready", detail)` sends one. A method that throws reaches the script as an `Error` it can catch. The object is told when the scripts are about to run (`ScriptsStarting`, with the `ScriptDocument` it can read), when they have run (`ScriptsCompleted`), after each layout (`LayoutCompleted`) and when the layout is final (`LayoutFinished`), and when the document is closed (`Closed`). Subscribing to the layout events keeps the script document live, as a post-layout function does. Each object serves one document. The `Log` object is made this way.
+A script reads and assigns the properties, calls the methods, and listens to events with `Settings.addEventListener('ready', fn)` or `Settings.onready = fn`; `settings.Raise("ready", detail)` sends one. A method that throws reaches the script as an `Error` it can catch. The object is told when the scripts are about to run (`ScriptsStarting`, with the `ScriptDocument` it can read), when they have run (`ScriptsCompleted`), after each layout (`LayoutCompleted`) and when the layout is final (`LayoutFinished`), and when the document is closed (`Closed`). Subscribing to the layout events keeps the script document live, as a post-layout function does. Each object serves one document. The `Log` object is made this way, and so are PeachPDF's `PDF` object and `Prince.failStatus`. An object named like a global that already exists (`Prince`) adds its members to it instead of replacing it.
 
 ## Options
 

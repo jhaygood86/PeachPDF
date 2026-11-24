@@ -106,6 +106,21 @@ public class ScriptApiTests
     }
 
     [Fact]
+    public async Task AnApiNamedLikeAnExistingGlobal_AddsToItInsteadOfReplacingIt()
+    {
+        var failed = false;
+        var api = new ScriptApi("Prince").AddProperty("failStatus", () => failed, v => failed = v.AsBoolean());
+
+        var (document, logger) = await RunAsync(
+            "<script>Prince.failStatus = true; Log.info(typeof Prince.registerPostLayoutFunc + ' ' + Prince.failStatus + ' ' + typeof Prince.pageCount);</script>", api);
+        using (document)
+        {
+            Assert.True(failed);
+            Assert.Equal(["Information:function true number"], logger.Messages);
+        }
+    }
+
+    [Fact]
     public async Task AMethodThatThrows_IsAnErrorTheScriptCanCatch()
     {
         var api = new ScriptApi("Host").AddMethod("fail", _ => throw new InvalidOperationException("no good"));

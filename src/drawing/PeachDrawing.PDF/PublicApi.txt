@@ -204,9 +204,13 @@ PeachDrawing.PDF.PdfComposerOptions : sealed class
   property PdfAConformance Conformance { get; set; }
   property PdfEncryptionOptions Encryption { get; set; }
   property PdfFacturXInfo FacturX { get; set; }
+  property PdfOpenAction? OpenAction { get; set; }
+  property PdfPageLayout? PageLayout { get; set; }
+  property PdfPageMode? PageMode { get; set; }
   property PdfSigningOptions Signing { get; set; }
   property PdfUAConformance UAConformance { get; set; }
   property PdfVersion? Version { get; set; }
+  property PdfViewerOptions Viewer { get; set; }
   property PdfXConformance XConformance { get; set; }
   property String Author { get; set; }
   property String Creator { get; set; }
@@ -239,6 +243,10 @@ PeachDrawing.PDF.PdfDisclosureDefinition : sealed class
   property Rect ContentBounds { get; init; }
   property Rect ToggleBounds { get; init; }
   property String AccessibleName { get; init; }
+PeachDrawing.PDF.PdfDuplex : enum Int32
+  FlipLongEdge = 2
+  FlipShortEdge = 1
+  Simplex = 0
 PeachDrawing.PDF.PdfEmbeddedFile : sealed class
   ctor()
   property Byte[] Data { get; set; }
@@ -330,6 +338,10 @@ PeachDrawing.PDF.PdfLayerConfiguration : sealed class
   property String SourcePages { get; set; }
   property String TargetPages { get; set; }
 PeachDrawing.PDF.PdfLink : sealed class
+PeachDrawing.PDF.PdfOpenAction : enum Int32
+  FitPage = 0
+  FitWidth = 1
+  Print = 2
 PeachDrawing.PDF.PdfOperation : sealed class
   method Byte[] ToArray()
   method PdfOperation AddAttachment(PdfFileAttachment attachment)
@@ -368,6 +380,19 @@ PeachDrawing.PDF.PdfPageLabelStyle : enum Int32
   None = 0
   RomanLower = 3
   RomanUpper = 2
+PeachDrawing.PDF.PdfPageLayout : enum Int32
+  OneColumn = 1
+  SinglePage = 0
+  TwoColumnLeft = 2
+  TwoColumnRight = 3
+  TwoPageLeft = 4
+  TwoPageRight = 5
+PeachDrawing.PDF.PdfPageMode : enum Int32
+  FullScreen = 3
+  UseAttachments = 4
+  UseNone = 0
+  UseOutlines = 1
+  UseThumbs = 2
 PeachDrawing.PDF.PdfPageSelector : static class
   method static IReadOnlyList<Int32> Select(String selector, Int32 pageCount)
 PeachDrawing.PDF.PdfPageSource : sealed class
@@ -421,6 +446,9 @@ PeachDrawing.PDF.PdfPermissions : enum Int32
   AllowPrint = 4
   None = 0
   ReadOnly = 2580
+PeachDrawing.PDF.PdfPrintScaling : enum Int32
+  AppDefault = 0
+  None = 1
 PeachDrawing.PDF.PdfRenderContext : class
   ctor()
   method ValueTask AddFont(Stream stream, String fontFamilyName)
@@ -616,6 +644,16 @@ PeachDrawing.PDF.PdfValidationData : sealed class
 PeachDrawing.PDF.PdfVersion : enum Int32
   Pdf17 = 0
   Pdf20 = 1
+PeachDrawing.PDF.PdfViewerOptions : sealed class
+  ctor()
+  property Boolean CenterWindow { get; set; }
+  property Boolean DisplayDocTitle { get; set; }
+  property Boolean FitWindow { get; set; }
+  property Boolean HideMenubar { get; set; }
+  property Boolean HideToolbar { get; set; }
+  property Boolean HideWindowUI { get; set; }
+  property PdfDuplex? Duplex { get; set; }
+  property PdfPrintScaling? PrintScaling { get; set; }
 PeachDrawing.PDF.PdfXConformance : enum Int32
   None = 0
   X1a = 1

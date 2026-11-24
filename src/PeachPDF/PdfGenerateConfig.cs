@@ -113,6 +113,24 @@ namespace PeachPDF
         public ICollection<PeachBrackets.ScriptHosting.ScriptApi> ScriptApis { get; } = [];
 
         /// <summary>
+        /// What a PDF viewer shows beside the pages when it opens the file, or null (the default) to leave it to the writer: the bookmarks when the
+        /// document has any, otherwise only the pages. A script can set it through the <c>PDF</c> object when this is null.
+        /// </summary>
+        public PdfPageMode? PageMode { get; set; }
+
+        /// <summary>How a PDF viewer lays the pages out when it opens the file, or null (the default) to leave it to the viewer.</summary>
+        public PdfPageLayout? PageLayout { get; set; }
+
+        /// <summary>
+        /// What a PDF viewer does as it opens the file besides showing the first page, or null (the default) for nothing. <see cref="PdfOpenAction.Print"/>
+        /// is not allowed with <see cref="PdfAConformance"/> or <see cref="PdfXConformance"/>.
+        /// </summary>
+        public PdfOpenAction? OpenAction { get; set; }
+
+        /// <summary>Preferences for how a PDF viewer shows the file and offers to print it, or null (the default) for none.</summary>
+        public PdfViewerOptions? ViewerOptions { get; set; }
+
+        /// <summary>
         /// When set to <c>true</c>, the document's own author style sheets (its <c>&lt;style&gt;</c>
         /// elements and <c>&lt;link rel="stylesheet"&gt;</c> references) are ignored — only the user-agent
         /// default styles and any caller-supplied stylesheet (the <c>cssData</c> argument) are applied.

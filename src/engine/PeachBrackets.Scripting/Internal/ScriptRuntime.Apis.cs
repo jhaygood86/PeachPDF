@@ -60,7 +60,9 @@ internal sealed partial class ScriptRuntime
     /// <summary>Makes a global of a host object: its properties as accessors, its methods as functions, its events as listenable events.</summary>
     private void InstallApi(ScriptApi api)
     {
-        var target = new TargetObject(Engine, EventTargetPrototype);
+        // An object with the name of a global the environment already has (Prince) adds its members to that global instead of replacing it.
+        var existing = Engine.Global.Get(api.Name) as TargetObject;
+        var target = existing ?? new TargetObject(Engine, EventTargetPrototype);
 
         foreach (var name in api.PropertyNames)
         {
@@ -107,7 +109,8 @@ internal sealed partial class ScriptRuntime
             _apiSubscriptions.Add((api, Deliver));
         }
 
-        Engine.Global.FastSetProperty(api.Name, new PropertyDescriptor(target, PropertyFlag.Writable | PropertyFlag.Configurable));
+        if (existing is null)
+            Engine.Global.FastSetProperty(api.Name, new PropertyDescriptor(target, PropertyFlag.Writable | PropertyFlag.Configurable));
     }
 
     // Runs host code a script called; what it throws (other than what the script engine itself throws) is the script's to catch as an Error.
