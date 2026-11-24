@@ -1,5 +1,6 @@
 PeachBrackets.Scripting.JintScriptHost : sealed class
   ctor(JintScriptOptions options = null)
+  method virtual String EvaluateFunction(ScriptDocument document, String name, IReadOnlyList<String> arguments)
   method virtual ValueTask LayoutFinishedAsync(ScriptDocument document, ScriptLayout layout, CancellationToken cancellationToken = null)
   method virtual ValueTask RunAsync(ScriptDocument document, CancellationToken cancellationToken = null)
   method virtual ValueTask<Boolean> LayoutCompletedAsync(ScriptDocument document, ScriptLayout layout, CancellationToken cancellationToken = null)

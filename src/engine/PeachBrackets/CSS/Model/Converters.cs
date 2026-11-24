@@ -165,7 +165,8 @@ namespace PeachBrackets.Css
                 new StringFunctionConverter()).Or(
                 new TargetCounterFunctionConverter()).Or(
                 new TargetTextFunctionConverter()).Or(
-                new LeaderFunctionConverter());
+                new LeaderFunctionConverter()).Or(
+                new ScriptFunctionConverter());
 
         public static readonly IValueConverter ShapeConverter = Construct(() =>
         {

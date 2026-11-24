@@ -15,6 +15,7 @@ internal sealed partial class ScriptRuntime
     private TargetObject? _prince;
     private readonly List<JsValue> _postLayoutFunctions = [];
 
+    private readonly Dictionary<string, JsValue> _scriptFunctions = new(System.StringComparer.Ordinal);
     private ScriptLayout? _layout;
     private readonly Dictionary<BoxReport, ObjectInstance> _boxObjects = new(ReferenceEqualityComparer.Instance as IEqualityComparer<BoxReport>);
 
@@ -26,7 +27,7 @@ internal sealed partial class ScriptRuntime
 
     /// <summary>Whether the scripts asked to be called after layout (a post-layout function or a <c>complete</c> listener), so the document must be kept live.</summary>
     public bool WantsLayoutCallbacks =>
-        _postLayoutFunctions.Count > 0 || (_prince is { } prince && (prince.Handlers.ContainsKey("complete") || (prince.Listeners.TryGetValue("complete", out var list) && list.Count > 0)));
+        _postLayoutFunctions.Count > 0 || _scriptFunctions.Count > 0 || (_prince is { } prince && (prince.Handlers.ContainsKey("complete") || (prince.Listeners.TryGetValue("complete", out var list) && list.Count > 0)));
 
     private ObjectInstance PrinceObject()
     {
@@ -39,6 +40,15 @@ internal sealed partial class ScriptRuntime
                 throw TypeError("registerPostLayoutFunc needs a function.");
 
             _postLayoutFunctions.Add(args[0]);
+            return JsValue.Undefined;
+        });
+        Js.Method(Engine, prince, "addScriptFunc", 2, (_, args) =>
+        {
+            var name = Js.AsText(Js.Arg(args, 0));
+            if (name.Length == 0 || !Js.IsCallable(Js.Arg(args, 1)))
+                throw TypeError("addScriptFunc needs a name and a function.");
+
+            _scriptFunctions[name] = args[1];
             return JsValue.Undefined;
         });
         Js.Accessor(Engine, prince, "pageCount", _ => Js.Num(PageCount));
@@ -107,6 +117,20 @@ internal sealed partial class ScriptRuntime
         Js.Accessor(Engine, obj, "parent", _ => box.Parent is { } parent ? BoxObject(parent) : JsValue.Null);
         Js.Accessor(Engine, obj, "children", _ => Js.Array(Engine, [.. box.Children.Select(c => (JsValue)BoxObject(c))]));
         return obj;
+    }
+
+    /// <summary>
+    /// Calls a function registered with <c>Prince.addScriptFunc</c> for the CSS <c>prince-script()</c> item: its arguments are the text of the items the
+    /// style sheet gave, and what it returns is the text. A function that throws is reported and contributes nothing.
+    /// </summary>
+    /// <returns>the text, or null when there is no function of that name</returns>
+    public string? CallScriptFunction(string name, IReadOnlyList<string> arguments)
+    {
+        if (!_scriptFunctions.TryGetValue(name, out var function))
+            return null;
+
+        var result = Call(function, JsValue.Undefined, [.. arguments.Select(a => Js.Str(a))]);
+        return result is null || Js.IsNullish(result) ? string.Empty : Js.AsText(result);
     }
 
     /// <summary>Runs the functions registered for after layout, each once.</summary>

@@ -214,6 +214,11 @@ namespace PeachBrackets.Html.Dom
                             }
                             break;
                         }
+                    case { Type: TokenType.Function, Data: FunctionNames.ScriptFunction } scriptFunctionToken:
+                        {
+                            contentText.Append(ResolveScriptFunction(cssBox, scriptFunctionToken, ref quoteDepth));
+                            break;
+                        }
                     case { Type: TokenType.Function, Data: FunctionNames.TargetCounter } targetCounterToken:
                         {
                             AppendTargetCounter(contentText, cssBox, targetCounterToken);
@@ -232,6 +237,24 @@ namespace PeachBrackets.Html.Dom
             }
 
             return contentText.ToString();
+        }
+
+        /// <summary>
+        /// Resolves <c>prince-script(&lt;name&gt; [, &lt;item&gt;]*)</c>: each item is resolved to text like any content item, and the document's script host
+        /// is asked for what the function the scripts registered under <c>name</c> returns for them. Empty when there is no host, or it has no such function.
+        /// </summary>
+        private static string ResolveScriptFunction(CssBox cssBox, Token functionToken, ref int quoteDepth)
+        {
+            var arguments = functionToken.ArgumentTokens.Where(t => t.Type != TokenType.Whitespace).ToList();
+            if (arguments.Count == 0 || cssBox.HtmlContainer is not { } container)
+                return string.Empty;
+
+            var name = arguments[0].Data.ToString();
+            var values = new List<string>();
+            for (var i = 2; i < arguments.Count; i += 2)
+                values.Add(ResolveContentTokens(cssBox, [arguments[i]], ref quoteDepth));
+
+            return container.CallScriptFunction(name, values) ?? string.Empty;
         }
 
         /// <summary>

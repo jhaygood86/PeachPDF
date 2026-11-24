@@ -636,6 +636,19 @@ namespace PeachBrackets.Html.Dom
 
             using var pooledTokens = CssValueParser.GetCssTokensPooled(contentValue);
             List<Token> tokens = pooledTokens;
+            var text = ResolveTokens(tokens, pageNumber, totalPages, pageY, htmlContainer, namedStrings);
+            return text.Length > 0 ? text : null;
+        }
+
+        // The text of a list of content items against this page's context; prince-script() resolves each of its own items through it again.
+        private static string ResolveTokens(
+            IReadOnlyList<Token> tokens,
+            int pageNumber,
+            int totalPages,
+            double pageY,
+            HtmlContainerInt htmlContainer,
+            IReadOnlyList<NamedString> namedStrings)
+        {
             var sb = new StringBuilder();
 
             foreach (var token in tokens)
@@ -645,6 +658,19 @@ namespace PeachBrackets.Html.Dom
                     case { Type: TokenType.String } stringToken:
                         sb.Append(stringToken.Data);
                         break;
+                    case { Type: TokenType.Function, Data: FunctionNames.ScriptFunction } scriptToken:
+                    {
+                        var args = scriptToken.ArgumentTokens.Where(t => t.Type != TokenType.Whitespace).ToList();
+                        if (args.Count == 0)
+                            break;
+
+                        var values = new List<string>();
+                        for (var i = 2; i < args.Count; i += 2)
+                            values.Add(ResolveTokens([args[i]], pageNumber, totalPages, pageY, htmlContainer, namedStrings));
+
+                        sb.Append(htmlContainer.CallScriptFunction(args[0].Data.ToString(), values));
+                        break;
+                    }
                     case { Type: TokenType.Function, Data: "counter" } counterToken:
                     {
                         var args = counterToken.ArgumentTokens
@@ -675,7 +701,7 @@ namespace PeachBrackets.Html.Dom
                 }
             }
 
-            return sb.Length > 0 ? sb.ToString() : null;
+            return sb.ToString();
         }
 
         /// <summary>

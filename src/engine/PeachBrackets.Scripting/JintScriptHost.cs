@@ -1,6 +1,7 @@
 using PeachBrackets.Scripting.Internal;
 using PeachBrackets.ScriptHosting;
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -49,6 +50,10 @@ public sealed class JintScriptHost(JintScriptOptions? options = null) : IScriptH
 
         return ValueTask.CompletedTask;
     }
+
+    /// <inheritdoc />
+    public string? EvaluateFunction(ScriptDocument document, string name, IReadOnlyList<string> arguments) =>
+        (document.HostState as ScriptRuntime)?.CallScriptFunction(name, arguments);
 
     /// <inheritdoc />
     public void DocumentClosed(ScriptDocument document)

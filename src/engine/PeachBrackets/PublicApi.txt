@@ -789,6 +789,7 @@ PeachBrackets.ScriptHosting.BoxReportKind : enum Int32
   Text = 4
 PeachBrackets.ScriptHosting.IScriptHost : interface
   method abstract ValueTask RunAsync(ScriptDocument document, CancellationToken cancellationToken = null)
+  method virtual String EvaluateFunction(ScriptDocument document, String name, IReadOnlyList<String> arguments)
   method virtual ValueTask LayoutFinishedAsync(ScriptDocument document, ScriptLayout layout, CancellationToken cancellationToken = null)
   method virtual ValueTask<Boolean> LayoutCompletedAsync(ScriptDocument document, ScriptLayout layout, CancellationToken cancellationToken = null)
   method virtual Void DocumentClosed(ScriptDocument document)

@@ -42,6 +42,16 @@ public interface IScriptHost
     /// <returns>a task that completes when the host is done</returns>
     ValueTask LayoutFinishedAsync(ScriptDocument document, ScriptLayout layout, CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
 
+    /// <summary>
+    /// Calls a function the document's scripts registered for the CSS <c>prince-script(name, ...)</c> content item, while the document is laid out. The call
+    /// must complete without waiting. A host that registers none keeps the default, which answers null.
+    /// </summary>
+    /// <param name="document">the document the scripts ran in, kept live (<see cref="ScriptDocument.KeepAlive"/>)</param>
+    /// <param name="name">the function's name</param>
+    /// <param name="arguments">the text of each argument, resolved from the content items the style sheet gave</param>
+    /// <returns>the text the function returned, or null when there is no function by that name</returns>
+    string? EvaluateFunction(ScriptDocument document, string name, IReadOnlyList<string> arguments) => null;
+
     /// <summary>Called when the document is released: when it is disposed if it was kept alive, or as soon as its scripts have run if not. The host releases whatever it held for it.</summary>
     /// <param name="document">the document</param>
     void DocumentClosed(ScriptDocument document)

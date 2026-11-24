@@ -1641,6 +1641,13 @@ namespace PeachBrackets.Html
             }
         }
 
+        /// <summary>
+        /// Calls a function the document's scripts registered for <c>prince-script()</c> and gives back its text, or null when there is no host, no kept
+        /// script document or no such function. Called while the document is laid out (and while margin boxes are made), so it must not wait.
+        /// </summary>
+        internal string? CallScriptFunction(string name, IReadOnlyList<string> arguments) =>
+            ScriptHost is { } host && LiveScriptDocument is { } document ? host.EvaluateFunction(document, name, arguments) : null;
+
         /// <summary>How many layouts a script host may ask for; 0 for no limit.</summary>
         internal int MaxLayoutPasses { get; set; } = 16;
 

@@ -44,6 +44,22 @@ A document is laid out after its scripts have run, and a script can ask to be ca
 
 A host built on PeachBrackets gets the same through `IScriptHost.LayoutCompletedAsync` (called after each layout; return true to be called again) and `LayoutFinishedAsync`, with `ScriptDocument.KeepAlive` set from `RunAsync` to ask for them.
 
+## Text a script computes: `prince-script()`
+
+A style sheet can ask a script for text. `Prince.addScriptFunc(name, fn)` registers a function, and the content item `prince-script(name, item, item...)` calls it while the document is laid out: each `item` is a content item (a string, `counter()`, `counters()`, `attr()`, `string()`...) resolved to text, those texts are the function's arguments, and what it returns is inserted as text. It works wherever a content list does: `content` of a box or pseudo-element, the margin boxes of `@page` rules (where `counter(page)` and `counter(pages)` are the page being made and the page count), and `bookmark-label`.
+
+```css
+li::marker { content: prince-script(words, counter(list-item)) "." }
+@page { @top-center { content: prince-script(stamp, counter(page), counter(pages)) } }
+```
+
+```js
+Prince.addScriptFunc('words', n => ['one', 'two', 'three'][n - 1] || n);
+Prince.addScriptFunc('stamp', (page, pages) => 'page ' + page + ' of ' + pages);
+```
+
+The function runs synchronously and is called each time the text is made, so it is called again when the document is laid out again. A name with no function, or no script host, gives empty text; a function that throws is logged and gives empty text. A document that registered a function stays live, as for post-layout functions, so the function is there when layout asks. A `string-set` value and a PDF page label are not made from it yet.
+
 ## Reading the laid-out boxes
 
 After layout a script can ask where things ended up. Set `Prince.trackBoxes = true`, then in a post-layout function or the `complete` handler call `element.getPrinceBoxes()`: one box for each piece of the element, which is one on each page it reaches (and one for each line an inline element wraps over). A box has `type` (`BODY` for a page's content area, `BOX`, `SPAN`, `TEXT`, `IMAGE`, `SVG`, `FOOTNOTES`), `pageNum` (from 1), `x`, `y`, `w` and `h` in points with the origin at the lower left of the page, the used `marginTop`/`marginRight`/`marginBottom`/`marginLeft`, `padding…` and `border…` widths, `pseudo` (`before`, `after`, `marker`... for generated content, else null), `text` and `src` (for a text run and an image), and `element`, `parent` and `children`, which are read when asked for. A host written in C# reads the same tree from `ScriptLayout.Pages` and `ScriptLayout.GetBoxes(element)` (a `BoxReport` has its position from the top left, as everything else in PeachBrackets does).
