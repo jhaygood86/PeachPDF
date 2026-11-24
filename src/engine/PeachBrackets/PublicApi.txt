@@ -680,6 +680,7 @@ PeachBrackets.HtmlDocumentOptions : sealed class
   property Double? AnimationProgress { get; set; }
   property Double? ViewportHeightPoints { get; set; }
   property Func<Canvas> MeasuringCanvasFactory { get; set; }
+  property IList<ScriptApi> ScriptApis { get; }
   property IScriptHost ScriptHost { get; set; }
   property ImageSelectionOptions ImageSelection { get; set; }
   property InputCapabilities Input { get; set; }
@@ -754,6 +755,21 @@ PeachBrackets.ScriptHosting.IScriptHost : interface
   method virtual ValueTask LayoutFinishedAsync(ScriptDocument document, ScriptLayout layout, CancellationToken cancellationToken = null)
   method virtual ValueTask<Boolean> LayoutCompletedAsync(ScriptDocument document, ScriptLayout layout, CancellationToken cancellationToken = null)
   method virtual Void DocumentClosed(ScriptDocument document)
+PeachBrackets.ScriptHosting.ScriptApi : sealed class
+  ctor(String name)
+  method Boolean IsWritable(String name)
+  method ScriptApi AddEvent(String name)
+  method ScriptApi AddMethod(String name, Func<IReadOnlyList<ScriptValue>, ScriptValue> body)
+  method ScriptApi AddProperty(String name, Func<ScriptValue> get, Action<ScriptValue> set = null)
+  method ScriptApi AddValue(String name, ScriptValue value)
+  method ScriptValue Call(String name, ScriptValue[] arguments)
+  method ScriptValue GetProperty(String name)
+  method Void Raise(String name, ScriptValue detail = null)
+  method Void SetProperty(String name, ScriptValue value)
+  property IReadOnlyCollection<String> EventNames { get; }
+  property IReadOnlyCollection<String> MethodNames { get; }
+  property IReadOnlyCollection<String> PropertyNames { get; }
+  property String Name { get; }
 PeachBrackets.ScriptHosting.ScriptBox : struct
   ctor(Double X, Double Y, Double Width, Double Height)
   method Void Deconstruct(out Double X, out Double Y, out Double Width, out Double Height)
@@ -765,6 +781,9 @@ PeachBrackets.ScriptHosting.ScriptBox : struct
   property Double Width { get; init; }
   property Double X { get; init; }
   property Double Y { get; init; }
+PeachBrackets.ScriptHosting.ScriptCallback : sealed class
+  ctor(Func<IReadOnlyList<ScriptValue>, ScriptValue> invoke)
+  method ScriptValue Invoke(ScriptValue[] arguments)
 PeachBrackets.ScriptHosting.ScriptDocument : sealed class
   method IReadOnlyList<ScriptNode> GetElementsByClassName(String classNames)
   method IReadOnlyList<ScriptNode> GetElementsByTagName(String tagName)
@@ -781,6 +800,7 @@ PeachBrackets.ScriptHosting.ScriptDocument : sealed class
   method ValueTask<String> LoadTextAsync(String address)
   property Boolean CanMeasure { get; }
   property Boolean KeepAlive { get; set; }
+  property IReadOnlyList<ScriptApi> Apis { get; }
   property IReadOnlyList<ScriptNode> Scripts { get; }
   property Int32 Version { get; }
   property Object HostState { get; set; }
@@ -833,6 +853,39 @@ PeachBrackets.ScriptHosting.ScriptNodeKind : enum Int32
   Element = 1
   Fragment = 3
   Text = 2
+PeachBrackets.ScriptHosting.ScriptValue : struct
+  method Boolean AsBoolean()
+  method Double AsNumber()
+  method IReadOnlyDictionary<String, ScriptValue> AsObject()
+  method IReadOnlyList<ScriptValue> AsArray()
+  method ScriptCallback AsCallback()
+  method ScriptNode AsNode()
+  method String AsString()
+  method static ScriptValue From(Boolean value)
+  method static ScriptValue From(Double value)
+  method static ScriptValue From(IReadOnlyDictionary<String, ScriptValue> properties)
+  method static ScriptValue From(IReadOnlyList<ScriptValue> items)
+  method static ScriptValue From(ScriptCallback callback)
+  method static ScriptValue From(ScriptNode node)
+  method static ScriptValue From(String value)
+  method virtual Boolean Equals(Object obj)
+  method virtual Boolean Equals(ScriptValue other)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property Boolean IsNullish { get; }
+  property ScriptValueKind Kind { get; }
+  property static ScriptValue Null { get; }
+  property static ScriptValue Undefined { get; }
+PeachBrackets.ScriptHosting.ScriptValueKind : enum Int32
+  Array = 5
+  Boolean = 2
+  Function = 7
+  Node = 8
+  Null = 1
+  Number = 3
+  Object = 6
+  String = 4
+  Undefined = 0
 PeachBrackets.ScrollAlignment : enum Int32
   Center = 2
   End = 3

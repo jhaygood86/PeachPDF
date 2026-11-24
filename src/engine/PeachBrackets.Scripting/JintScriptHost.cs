@@ -51,5 +51,9 @@ public sealed class JintScriptHost(JintScriptOptions? options = null) : IScriptH
     }
 
     /// <inheritdoc />
-    public void DocumentClosed(ScriptDocument document) => document.HostState = null;
+    public void DocumentClosed(ScriptDocument document)
+    {
+        (document.HostState as ScriptRuntime)?.DetachApis();
+        document.HostState = null;
+    }
 }

@@ -44,6 +44,22 @@ A document is laid out after its scripts have run, and a script can ask to be ca
 
 A host built on PeachBrackets gets the same through `IScriptHost.LayoutCompletedAsync` (called after each layout; return true to be called again) and `LayoutFinishedAsync`, with `ScriptDocument.KeepAlive` set from `RunAsync` to ask for them.
 
+## Adding your own objects
+
+A host adds JavaScript objects to the scripts without referencing Jint or this package. A `ScriptApi` (in `PeachBrackets`, namespace `PeachBrackets.ScriptHosting`) is a named global with properties, methods and events, built from plain C# delegates and `ScriptValue`s (undefined, null, boolean, number, text, arrays, objects, functions and nodes convert both ways). Put it in `HtmlDocumentOptions.ScriptApis` (PeachPDF: `PdfGenerateConfig.ScriptApis`) and the script host installs it before the scripts run:
+
+```csharp
+var settings = new ScriptApi("Settings")
+    .AddProperty("title", () => title, value => title = value.AsString() ?? "")
+    .AddMethod("greet", args => "hello " + args[0].AsString())
+    .AddEvent("ready");
+
+settings.LayoutFinished += layout => Console.WriteLine(layout.PageCount);
+options.ScriptApis.Add(settings);
+```
+
+A script reads and assigns the properties, calls the methods, and listens to events with `Settings.addEventListener('ready', fn)` or `Settings.onready = fn`; `settings.Raise("ready", detail)` sends one. A method that throws reaches the script as an `Error` it can catch. The object is told when the scripts are about to run (`ScriptsStarting`, with the `ScriptDocument` it can read), when they have run (`ScriptsCompleted`), after each layout (`LayoutCompleted`) and when the layout is final (`LayoutFinished`), and when the document is closed (`Closed`). Subscribing to the layout events keeps the script document live, as a post-layout function does. Each object serves one document. The `Log` object is made this way.
+
 ## Options
 
 `JintScriptHost` takes a `JintScriptOptions`:

@@ -106,6 +106,13 @@ namespace PeachPDF
         public int MaxLayoutPasses { get; set; } = 16;
 
         /// <summary>
+        /// Global objects to add to the document's scripts, in addition to what the script host provides: each is a <see cref="PeachBrackets.ScriptHosting.ScriptApi"/>
+        /// with properties, methods and events, which the host installs by name. Only used when <see cref="ScriptHost"/> is set. An object serves one
+        /// document, so a configuration that renders several documents should add fresh objects for each.
+        /// </summary>
+        public ICollection<PeachBrackets.ScriptHosting.ScriptApi> ScriptApis { get; } = [];
+
+        /// <summary>
         /// When set to <c>true</c>, the document's own author style sheets (its <c>&lt;style&gt;</c>
         /// elements and <c>&lt;link rel="stylesheet"&gt;</c> references) are ignored — only the user-agent
         /// default styles and any caller-supplied stylesheet (the <c>cssData</c> argument) are applied.

@@ -130,6 +130,7 @@ public sealed partial class HtmlDocument : IDisposable
             container.DocumentModeOverride = options.DocumentMode;
             container.DocumentSyntax = options.Syntax;
             container.ScriptHost = options.ScriptHost;
+            container.ScriptApis = [.. options.ScriptApis];
             container.MaxLayoutPasses = options.MaxLayoutPasses;
             if (options.ScriptHost is not null && options.MeasuringCanvasFactory is { } canvasFactory)
             {
@@ -387,7 +388,11 @@ public sealed partial class HtmlDocument : IDisposable
         for (var pass = 1; ; pass++)
         {
             var version = live.Version;
-            var more = await host.LayoutCompletedAsync(live, new PeachBrackets.ScriptHosting.ScriptLayout(_pages!.Count, pass), token);
+            var layout = new PeachBrackets.ScriptHosting.ScriptLayout(_pages!.Count, pass);
+            var more = await host.LayoutCompletedAsync(live, layout, token);
+            foreach (var api in live.Apis)
+                api.NoteLayoutCompleted(layout);
+
             var changed = live.Version != version;
             if ((!changed && !more) || (limit > 0 && pass >= limit))
                 break;
@@ -399,7 +404,10 @@ public sealed partial class HtmlDocument : IDisposable
             }
         }
 
-        await host.LayoutFinishedAsync(live, new PeachBrackets.ScriptHosting.ScriptLayout(_pages!.Count, 0), token);
+        var final = new PeachBrackets.ScriptHosting.ScriptLayout(_pages!.Count, 0);
+        await host.LayoutFinishedAsync(live, final, token);
+        foreach (var api in live.Apis)
+            api.NoteLayoutFinished(final);
     }
 
     /// <summary>

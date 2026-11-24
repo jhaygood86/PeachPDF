@@ -557,6 +557,7 @@ PeachPDF.PdfGenerateConfig : sealed class
   property Double? AnimationProgress { get; set; }
   property FacturXOptions FacturX { get; set; }
   property ICollection<PdfAttachment> Attachments { get; }
+  property ICollection<ScriptApi> ScriptApis { get; }
   property IScriptHost ScriptHost { get; set; }
   property ImageCompression ImageCompression { get; set; }
   property Int32 DownscaleQuality { get; set; }

@@ -37,6 +37,7 @@ internal sealed partial class ScriptRuntime
 
         InstallPrototypes();
         Window = InstallWindow();
+        InstallHostApis();
     }
 
     public Engine Engine { get; }

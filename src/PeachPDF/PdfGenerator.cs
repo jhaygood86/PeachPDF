@@ -275,6 +275,8 @@ namespace PeachPDF
             html ??= await _renderContext.NetworkLoader.GetPrimaryContents();
 
             var options = ToDocumentOptions(config, orgPageSize);
+            foreach (var api in config.ScriptApis)
+                options.ScriptApis.Add(api);
             if (config.DocumentSyntax == PdfDocumentSyntax.Auto && fromLoader && IsXhtmlContentType(_renderContext.NetworkLoader.PrimaryContentType))
                 options.Syntax = DocumentSyntax.Xml;
             options.StyleSheet = cssData?.StyleSheet;

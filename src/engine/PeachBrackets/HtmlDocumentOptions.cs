@@ -1,5 +1,6 @@
 using PeachBrackets.Html;
 using System;
+using System.Collections.Generic;
 
 namespace PeachBrackets;
 
@@ -266,12 +267,19 @@ public sealed class HtmlDocumentOptions
     /// </summary>
     public int MaxLayoutPasses { get; set; } = 16;
 
+    /// <summary>
+    /// Global objects the host adds to the document's scripts (see <see cref="PeachBrackets.ScriptHosting.ScriptApi"/>), installed by the
+    /// <see cref="ScriptHost"/>. Each object serves one document, so give each document its own. Only read when <see cref="ScriptHost"/> is set.
+    /// </summary>
+    public IList<PeachBrackets.ScriptHosting.ScriptApi> ScriptApis { get; private set; } = [];
+
     internal HtmlDocumentOptions CloneWithoutScripts()
     {
         var copy = (HtmlDocumentOptions)MemberwiseClone();
         // Not null: a document parses differently with scripting on (<noscript> is text), and the probe's elements must be numbered as the scripted tree's are.
         copy.ScriptHost = PeachBrackets.ScriptHosting.IdleScriptHost.Instance;
         copy.MeasuringCanvasFactory = null;
+        copy.ScriptApis = [];
         return copy;
     }
 

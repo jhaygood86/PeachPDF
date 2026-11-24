@@ -1597,6 +1597,11 @@ namespace PeachBrackets.Html
         // The markup the scripts left, once they have run: SetHtml recognizes it and does not run them again.
         private string? _scriptedSource;
 
+        /// <summary>The global objects the host of the document added to its scripts.</summary>
+        internal IReadOnlyList<ScriptApi> ScriptApis { get; set; } = [];
+
+        private bool _apisStarted;
+
         /// <summary>The script document the host kept live after its scripts ran (see <see cref="ScriptDocument.KeepAlive"/>), or null.</summary>
         internal ScriptDocument? LiveScriptDocument { get; private set; }
 
@@ -1612,6 +1617,13 @@ namespace PeachBrackets.Html
         /// <summary>Ends the live script document: tells the host and releases its tree.</summary>
         internal void EndScriptSession()
         {
+            if (_apisStarted)
+            {
+                _apisStarted = false;
+                foreach (var api in ScriptApis)
+                    api.NoteClosed();
+            }
+
             var document = LiveScriptDocument;
             if (document is null)
                 return;
@@ -1637,17 +1649,25 @@ namespace PeachBrackets.Html
             var root = HtmlParser.ParseDocument(htmlSource, out var mode, document: true, scripting: true);
             var document = new ScriptDocument(this, root, DocumentModeOverride ?? mode);
             document.Probe = ScriptProbe;
+            document.Apis = ScriptApis;
 
             EndScriptSession();
             ParsingRoot = root;
             var keep = false;
             try
             {
+                _apisStarted = true;
+                foreach (var api in ScriptApis)
+                    api.NoteScriptsStarting(document);
+
                 await host.RunAsync(document, ScriptCancellation);
+                foreach (var api in ScriptApis)
+                    api.NoteScriptsCompleted(document);
+
                 // A page the scripts left as it was keeps its own source: writing the tree back out is not exact for every construct (foreign content),
                 // and a page that changed nothing gains nothing from it.
                 var markup = document.Version == 0 ? htmlSource : document.Serialize();
-                keep = document.KeepAlive;
+                keep = document.KeepAlive || ScriptApis.Any(api => api.ObservesLayout);
                 return markup;
             }
             finally
@@ -1662,6 +1682,7 @@ namespace PeachBrackets.Html
                 {
                     document.ReleaseProbe();
                     root.Dispose();
+                    host.DocumentClosed(document);
                 }
             }
         }

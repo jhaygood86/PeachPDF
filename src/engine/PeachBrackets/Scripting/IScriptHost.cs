@@ -39,7 +39,7 @@ public interface IScriptHost
     /// <returns>a task that completes when the host is done</returns>
     ValueTask LayoutFinishedAsync(ScriptDocument document, ScriptLayout layout, CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
 
-    /// <summary>Called when the document is disposed, for a document that was kept alive. The host releases whatever it held for it.</summary>
+    /// <summary>Called when the document is released: when it is disposed if it was kept alive, or as soon as its scripts have run if not. The host releases whatever it held for it.</summary>
     /// <param name="document">the document</param>
     void DocumentClosed(ScriptDocument document)
     {

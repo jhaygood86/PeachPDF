@@ -107,6 +107,9 @@ public sealed class ScriptDocument
     /// <summary>The document node: the parent of the <c>html</c> element.</summary>
     public ScriptNode Root { get; }
 
+    /// <summary>The global objects the host of the document asked for (<see cref="HtmlDocumentOptions.ScriptApis"/>); a script host installs them before the scripts run.</summary>
+    public IReadOnlyList<ScriptApi> Apis { get; internal set; } = [];
+
     /// <summary>
     /// Set by the host from <see cref="IScriptHost.RunAsync"/> to keep the document live after the scripts have run, so it is told when the document has
     /// been laid out (<see cref="IScriptHost.LayoutCompletedAsync"/>) and can change it again. A host that does not need that leaves it false and the
