@@ -682,6 +682,7 @@ PeachBrackets.HtmlDocumentOptions : sealed class
   property Func<Canvas> MeasuringCanvasFactory { get; set; }
   property IList<ScriptApi> ScriptApis { get; }
   property IScriptHost ScriptHost { get; set; }
+  property IScriptNetwork ScriptNetwork { get; set; }
   property ImageSelectionOptions ImageSelection { get; set; }
   property InputCapabilities Input { get; set; }
   property Int32 MaxLayoutPasses { get; set; }
@@ -793,6 +794,8 @@ PeachBrackets.ScriptHosting.IScriptHost : interface
   method virtual ValueTask LayoutFinishedAsync(ScriptDocument document, ScriptLayout layout, CancellationToken cancellationToken = null)
   method virtual ValueTask<Boolean> LayoutCompletedAsync(ScriptDocument document, ScriptLayout layout, CancellationToken cancellationToken = null)
   method virtual Void DocumentClosed(ScriptDocument document)
+PeachBrackets.ScriptHosting.IScriptNetwork : interface
+  method abstract ValueTask<ScriptNetworkResponse> SendAsync(ScriptNetworkRequest request, CancellationToken cancellationToken = null)
 PeachBrackets.ScriptHosting.ScriptApi : sealed class
   ctor(String name)
   method Boolean IsWritable(String name)
@@ -835,6 +838,7 @@ PeachBrackets.ScriptHosting.ScriptDocument : sealed class
   method ScriptNode GetElementById(String id)
   method ScriptNode QuerySelector(String selector)
   method String GetComputedValue(ScriptNode element, String property)
+  method ValueTask<ScriptNetworkResponse> SendAsync(ScriptNetworkRequest request, CancellationToken cancellationToken = null)
   method ValueTask<String> LoadTextAsync(String address)
   property Boolean CanMeasure { get; }
   property Boolean KeepAlive { get; set; }
@@ -848,12 +852,39 @@ PeachBrackets.ScriptHosting.ScriptDocument : sealed class
   property ScriptNode Root { get; }
   property String CompatMode { get; }
   property String Title { get; }
+  property Uri BaseAddress { get; }
   property Uri BaseUri { get; }
 PeachBrackets.ScriptHosting.ScriptLayout : sealed class
   method IReadOnlyList<BoxReport> GetBoxes(ScriptNode element)
   property IReadOnlyList<BoxReport> Pages { get; }
   property Int32 PageCount { get; }
   property Int32 Pass { get; }
+PeachBrackets.ScriptHosting.ScriptNetworkRequest : sealed class
+  ctor(String Method, Uri Url, IReadOnlyList<KeyValuePair<String, String>> Headers, Byte[] Body, Boolean FollowRedirects = True)
+  method ScriptNetworkRequest <Clone>$()
+  method Void Deconstruct(out String Method, out Uri Url, out IReadOnlyList<KeyValuePair<String, String>> Headers, out Byte[] Body, out Boolean FollowRedirects)
+  method virtual Boolean Equals(Object obj)
+  method virtual Boolean Equals(ScriptNetworkRequest other)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property Boolean FollowRedirects { get; init; }
+  property Byte[] Body { get; init; }
+  property IReadOnlyList<KeyValuePair<String, String>> Headers { get; init; }
+  property String Method { get; init; }
+  property Uri Url { get; init; }
+PeachBrackets.ScriptHosting.ScriptNetworkResponse : sealed class
+  ctor(Int32 Status, String StatusText, IReadOnlyList<KeyValuePair<String, String>> Headers, Byte[] Body, Uri Url)
+  method ScriptNetworkResponse <Clone>$()
+  method Void Deconstruct(out Int32 Status, out String StatusText, out IReadOnlyList<KeyValuePair<String, String>> Headers, out Byte[] Body, out Uri Url)
+  method virtual Boolean Equals(Object obj)
+  method virtual Boolean Equals(ScriptNetworkResponse other)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property Byte[] Body { get; init; }
+  property IReadOnlyList<KeyValuePair<String, String>> Headers { get; init; }
+  property Int32 Status { get; init; }
+  property String StatusText { get; init; }
+  property Uri Url { get; init; }
 PeachBrackets.ScriptHosting.ScriptNode : sealed class
   method Boolean HasAttribute(String name)
   method Boolean Matches(String selector)

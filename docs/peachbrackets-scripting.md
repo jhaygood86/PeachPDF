@@ -145,14 +145,18 @@ All script output goes to `JintScriptOptions.Logger`; with none set it is discar
 - **Events**: `addEventListener`/`removeEventListener`/`dispatchEvent` with capture, bubble, `once` and `handleEvent`; the `on<type>` properties; handler
   attributes (`onclick="..."`, and the body's `onload`); `Event`, `CustomEvent` and the other event constructors; `DOMContentLoaded` and `load`.
 
+## The network scripts see
+
+`XMLHttpRequest`, `fetch`, `Request`, `Response`, `Headers`, `URL`, `URLSearchParams`, `Blob`, `File`, `FormData`, `FileReader`, `TextEncoder` and `TextDecoder` are provided. They are defined by a script bundle that is evaluated the first time a script names one of them, so a document that uses none pays nothing. Requests go to `HtmlDocumentOptions.ScriptNetwork` (an `IScriptNetwork`: method, URL, headers and body in, status, headers and body out); without one a script can only `GET` what the document's resource loader can fetch, and `data:` addresses are read in the package. Answers are delivered as timers: the virtual clock does not move past a request until its answer has arrived, so a script that waits for a response with a timer sees it. A synchronous `XMLHttpRequest` blocks the calling thread on the answer. Streams (`ReadableStream`, `response.body`), CORS enforcement, cookies and `FormData` parsing of a response are not provided.
+
 ## Limits
 
 - A page's scripts run once at load. Nothing replays input into the document afterwards, so there is no pointer or keyboard event unless a script
   dispatches one itself.
 - A document with scripts that changed it is written back out as HTML and loaded again; constructs the HTML parser cannot round-trip exactly (some
   foreign content in `<svg>` and `<math>`) may differ. A page the scripts did not change keeps its own source.
-- `<script type="module">` has no `import`; Web APIs outside the DOM (`fetch`, `XMLHttpRequest`, `Worker`, canvas, Web Animations, custom elements,
-  shadow DOM) are not provided; `document.cookie` and `location` are inert.
+- `<script type="module">` has no `import`; Web APIs outside the DOM (`Worker`, canvas, Web Animations, custom elements,
+  shadow DOM, streams) are not provided; `document.cookie` and `location` are inert.
 - The document is the HTML tree PeachBrackets lays out, so the parts of the DOM standard that have no box in it are missing: comments, processing instructions and doctypes as nodes, `Attr` nodes and the namespaced attribute methods, `Range` and `Selection`, `MutationObserver` (the constructor exists but never reports), `DOMParser` and `document.implementation.createHTMLDocument`/`createDocument` (a script cannot make another document), shadow DOM and custom elements. Lists such as `childNodes` and `getElementsByTagName` are `NodeList`/`HTMLCollection` snapshots, not live.
 
 ## Testing

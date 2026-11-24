@@ -39,16 +39,14 @@ public sealed class JintScriptHost(JintScriptOptions? options = null) : IScriptH
     }
 
     /// <inheritdoc />
-    public ValueTask<bool> LayoutCompletedAsync(ScriptDocument document, ScriptLayout layout, CancellationToken cancellationToken = default) =>
-        ValueTask.FromResult(document.HostState is ScriptRuntime runtime && runtime.RunPostLayout(layout));
+    public async ValueTask<bool> LayoutCompletedAsync(ScriptDocument document, ScriptLayout layout, CancellationToken cancellationToken = default) =>
+        document.HostState is ScriptRuntime runtime && await runtime.RunPostLayoutAsync(layout);
 
     /// <inheritdoc />
-    public ValueTask LayoutFinishedAsync(ScriptDocument document, ScriptLayout layout, CancellationToken cancellationToken = default)
+    public async ValueTask LayoutFinishedAsync(ScriptDocument document, ScriptLayout layout, CancellationToken cancellationToken = default)
     {
         if (document.HostState is ScriptRuntime runtime)
-            runtime.RunComplete(layout);
-
-        return ValueTask.CompletedTask;
+            await runtime.RunCompleteAsync(layout);
     }
 
     /// <inheritdoc />

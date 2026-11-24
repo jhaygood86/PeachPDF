@@ -6,6 +6,10 @@
     "dom-nodes": 2582,
     "dom-other": 214,
     "dom-ranges": 1,
-    "dom-traversal": 42
+    "dom-traversal": 42,
+    "fetch-api": 647,
+    "fileapi": 410,
+    "url": 4735,
+    "xhr": 285
   }
 }

@@ -107,6 +107,7 @@ internal sealed partial class TestharnessEvaluator(string wptRoot) : IWptEvaluat
                 Logger = new CollectingLogger(lines, errors),
             }),
             MeasuringCanvasFactory = () => context.CreateCanvas(1, 1),
+            ScriptNetwork = new ServerNetwork(server),
         };
         options.SetMargins(0);
 

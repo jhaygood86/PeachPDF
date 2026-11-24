@@ -82,6 +82,7 @@ internal sealed partial class WptRenderer(string wptRoot) : IReftestRenderer
                 MaxVirtualTime = TimeSpan.FromSeconds(10),
             });
             options.MeasuringCanvasFactory = () => context.CreateCanvas(1, 1);
+            options.ScriptNetwork = new ServerNetwork(server);
         }
 
         using var document = await HtmlDocument.LoadAsync(source, context, options);

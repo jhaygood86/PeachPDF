@@ -7,6 +7,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace PeachBrackets.ScriptHosting;
@@ -238,6 +239,20 @@ public sealed class ScriptDocument
     /// <summary>Makes an empty fragment: a holder that is not in the tree, whose children replace it when it is inserted.</summary>
     /// <returns>the fragment</returns>
     public ScriptNode CreateEmptyFragment() => Wrap(new CssBox(null, null));
+
+    /// <summary>The address a script's relative request addresses resolve against: the document's base.</summary>
+    public Uri? BaseAddress => BaseUri;
+
+    /// <summary>Sends a request a script made (<c>XMLHttpRequest</c>, <c>fetch</c>) through the document's <see cref="HtmlDocumentOptions.ScriptNetwork"/>, or its resource loader.</summary>
+    /// <param name="request">the request</param>
+    /// <param name="cancellationToken">cancels the work</param>
+    /// <returns>the answer, or null for a network error</returns>
+    public ValueTask<ScriptNetworkResponse?> SendAsync(ScriptNetworkRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        IScriptNetwork network = _container.ScriptNetwork ?? new LoaderScriptNetwork(_container);
+        return network.SendAsync(request, cancellationToken);
+    }
 
     /// <summary>Reads the text of a resource: an external script. It resolves against <see cref="BaseUri"/>.</summary>
     /// <param name="address">the address as written, absolute or relative</param>

@@ -7,6 +7,7 @@ using Jint.Runtime.Descriptors;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using System.Text;
 using PeachBrackets.ScriptHosting;
 
@@ -47,11 +48,16 @@ internal sealed partial class ScriptRuntime
     }
 
     /// <summary>Plays the timers and animation frames in order of their time, until none is left or a limit is reached.</summary>
-    private void PlayTimers()
+    private async ValueTask PlayTimersAsync()
     {
         var limit = _options.MaxVirtualTime.TotalMilliseconds;
-        while (_timers.Count > 0 && _callbacks < _options.MaxCallbacks)
+        while (true)
         {
+            // Requests the scripts have sent are answered before the clock moves on: they take no virtual time, and are delivered as a zero-delay timer.
+            await DeliverRequestsAsync();
+            if (_timers.Count == 0 || _callbacks >= _options.MaxCallbacks)
+                break;
+
             var next = _timers.OrderBy(t => t.Due).ThenBy(t => t.Order).First();
             if (next.Due > limit)
                 break;
@@ -120,6 +126,7 @@ internal sealed partial class ScriptRuntime
         }
 
         InstallExtras();
+        InstallLazyWebGlobals();
 
         Define("location", LocationObject());
         Define("navigator", NavigatorObject());

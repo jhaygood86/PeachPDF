@@ -1,3 +1,4 @@
+using PeachBrackets.ScriptHosting;
 using PeachDrawing.Core;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -161,6 +162,63 @@ internal sealed partial class WptServer(string root)
 
         return ValueTask.FromResult<RNetworkResponse?>(null);
     }
+
+    /// <summary>
+    /// Answers a request a script made (<c>fetch</c>, <c>XMLHttpRequest</c>): any method, the headers and body the script gave, redirects followed
+    /// (or returned as they are), cookies kept. Null for an address the server does not serve, which a browser reports as a network error.
+    /// </summary>
+    public ScriptNetworkResponse? Send(ScriptNetworkRequest request)
+    {
+        var uri = request.Url;
+        var method = request.Method;
+        var body = request.Body;
+        var headers = request.Headers.ToList();
+
+        for (var hops = 0; hops < 20; hops++)
+        {
+            if (!Serves(uri))
+                return null;
+
+            var sent = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var (name, value) in headers)
+                sent[name] = sent.TryGetValue(name, out var existing) ? existing + ", " + value : value;
+            if (_cookies.TryGetValue(uri.Host, out var jar) && jar.Count > 0 && !sent.ContainsKey("Cookie"))
+                sent["Cookie"] = string.Join("; ", jar.Select(c => c.Key + "=" + c.Value));
+            sent.TryAdd("Host", uri.Authority);
+
+            var response = Handle(new ServerRequest(method, uri, sent, body));
+            foreach (var (_, value) in response.Headers.Where(h => h.Key.Equals("Set-Cookie", StringComparison.OrdinalIgnoreCase)))
+                StoreCookie(uri.Host, value);
+
+            if (response.IsRedirect && request.FollowRedirects)
+            {
+                uri = new Uri(uri, response.Get("Location")!);
+                // 303 always, and 301 and 302 for a POST, become a GET without a body.
+                if (response.Status == 303 && method is not ("GET" or "HEAD") || response.Status is 301 or 302 && method == "POST")
+                {
+                    method = "GET";
+                    body = null;
+                    headers.RemoveAll(h => h.Key.StartsWith("Content-", StringComparison.OrdinalIgnoreCase));
+                }
+
+                continue;
+            }
+
+            var payload = method == "HEAD" ? [] : response.Body;
+            return new ScriptNetworkResponse(response.Status, ReasonPhrase(response.Status), [.. response.Headers], payload, uri);
+        }
+
+        return null;
+    }
+
+    private static string ReasonPhrase(int status) => status switch
+    {
+        200 => "OK", 201 => "Created", 202 => "Accepted", 204 => "No Content", 206 => "Partial Content",
+        301 => "Moved Permanently", 302 => "Found", 303 => "See Other", 304 => "Not Modified", 307 => "Temporary Redirect", 308 => "Permanent Redirect",
+        400 => "Bad Request", 401 => "Unauthorized", 403 => "Forbidden", 404 => "Not Found", 405 => "Method Not Allowed", 418 => "I'm a teapot",
+        500 => "Internal Server Error", 501 => "Not Implemented", 502 => "Bad Gateway", 503 => "Service Unavailable",
+        _ => string.Empty,
+    };
 
     /// <summary>The Content-Type the server gives a path: what its <c>.headers</c> file says, else what its extension implies.</summary>
     public string ContentTypeFor(string path)

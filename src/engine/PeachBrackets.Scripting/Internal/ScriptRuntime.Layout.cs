@@ -5,6 +5,7 @@ using Jint.Runtime.Descriptors;
 using PeachBrackets.ScriptHosting;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 
 namespace PeachBrackets.Scripting.Internal;
 
@@ -135,7 +136,7 @@ internal sealed partial class ScriptRuntime
 
     /// <summary>Runs the functions registered for after layout, each once.</summary>
     /// <returns>true when a function registered another, which asks for another pass</returns>
-    public bool RunPostLayout(ScriptLayout layout)
+    public async ValueTask<bool> RunPostLayoutAsync(ScriptLayout layout)
     {
         UseLayout(layout);
         var functions = _postLayoutFunctions.ToArray();
@@ -144,18 +145,18 @@ internal sealed partial class ScriptRuntime
             Call(function, JsValue.Undefined);
 
         RunMicrotasks();
-        PlayTimers();
+        await PlayTimersAsync();
         return _postLayoutFunctions.Count > 0;
     }
 
     /// <summary>Fires <c>complete</c>: the layout is final.</summary>
-    public void RunComplete(ScriptLayout layout)
+    public async ValueTask RunCompleteAsync(ScriptLayout layout)
     {
         UseLayout(layout);
         if (_prince is { } prince)
             FireEvent(prince, "complete", bubbles: false, cancelable: false);
 
         RunMicrotasks();
-        PlayTimers();
+        await PlayTimersAsync();
     }
 }

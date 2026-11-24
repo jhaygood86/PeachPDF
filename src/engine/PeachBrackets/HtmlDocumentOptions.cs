@@ -268,6 +268,13 @@ public sealed class HtmlDocumentOptions
     public int MaxLayoutPasses { get; set; } = 16;
 
     /// <summary>
+    /// How the document's scripts reach the network with <c>XMLHttpRequest</c> and <c>fetch</c>, or null (the default) to let them read what the document's
+    /// resource loader can: a GET that either answers or fails. A host that wants every method, status and header sets one. Only read when
+    /// <see cref="ScriptHost"/> is set. No cross-origin check is made: whatever the network answers a script can read.
+    /// </summary>
+    public PeachBrackets.ScriptHosting.IScriptNetwork? ScriptNetwork { get; set; }
+
+    /// <summary>
     /// Global objects the host adds to the document's scripts (see <see cref="PeachBrackets.ScriptHosting.ScriptApi"/>), installed by the
     /// <see cref="ScriptHost"/>. Each object serves one document, so give each document its own. Only read when <see cref="ScriptHost"/> is set.
     /// </summary>

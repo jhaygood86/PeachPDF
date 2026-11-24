@@ -4,6 +4,10 @@
     { "id": "dom-events", "dirs": ["dom/events"] },
     { "id": "dom-ranges", "dirs": ["dom/ranges"] },
     { "id": "dom-traversal", "dirs": ["dom/traversal"] },
+    { "id": "url", "dirs": ["url"] },
+    { "id": "xhr", "dirs": ["xhr"] },
+    { "id": "fetch-api", "dirs": ["fetch/api"] },
+    { "id": "fileapi", "dirs": ["FileAPI"] },
     { "id": "dom-other", "dirs": ["dom/abort", "dom/collections", "dom/lists", "dom/observable", "dom/attributes-are-nodes.html", "dom/eventPathRemoved.html", "dom/historical-mutation-events.html", "dom/historical.html", "dom/idlharness.any.js", "dom/idlharness.window.js", "dom/interface-objects.html", "dom/window-extends-event-target.html"] }
   ]
 }

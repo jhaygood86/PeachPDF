@@ -1600,6 +1600,9 @@ namespace PeachBrackets.Html
         /// <summary>The global objects the host of the document added to its scripts.</summary>
         internal IReadOnlyList<ScriptApi> ScriptApis { get; set; } = [];
 
+        /// <summary>How the document's scripts reach the network; null for the render context's loader.</summary>
+        internal IScriptNetwork? ScriptNetwork { get; set; }
+
         private bool _apisStarted;
 
         /// <summary>The script document the host kept live after its scripts ran (see <see cref="ScriptDocument.KeepAlive"/>), or null.</summary>

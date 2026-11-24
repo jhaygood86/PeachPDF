@@ -36,6 +36,11 @@ internal static class ExtrasScripts
             Object.defineProperty(DOMException.prototype, "message", { get: function () { return state(this).message; }, enumerable: true, configurable: true });
             Object.defineProperty(DOMException.prototype, "code", { get: function () { return codes[state(this).name] || 0; }, enumerable: true, configurable: true });
             Object.defineProperty(DOMException.prototype, Symbol.toStringTag, { value: "DOMException", configurable: true });
+            // Error.prototype.toString would read name and message through the prototype, where they have no state; this reads the exception's own.
+            Object.defineProperty(DOMException.prototype, "toString", {
+                value: function toString() { var s = state(this); return s.message ? s.name + ": " + s.message : s.name; },
+                writable: true, configurable: true
+            });
             for (var key in constants) {
                 Object.defineProperty(DOMException, key, { value: constants[key], enumerable: true });
                 Object.defineProperty(DOMException.prototype, key, { value: constants[key], enumerable: true });

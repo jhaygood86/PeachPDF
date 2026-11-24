@@ -182,7 +182,7 @@ internal sealed partial class ScriptRuntime
         FireEvent(Window, "load", bubbles: false, cancelable: false);
         RunMicrotasks();
 
-        PlayTimers();
+        await PlayTimersAsync();
     }
 
     private async ValueTask RunPendingScriptsAsync(bool deferred)
