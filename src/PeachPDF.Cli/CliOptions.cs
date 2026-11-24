@@ -72,6 +72,9 @@ internal sealed class CliOptions
     public bool NoDefaultStyle { get; set; }
     public bool NoAuthorStyle { get; set; }
 
+    /// <summary>Whether the document's <c>&lt;script&gt;</c> elements run (<c>--enable-scripting</c>), with the JavaScript host of <c>PeachBrackets.Scripting</c>.</summary>
+    public bool EnableScripting { get; set; }
+
     /// <summary>The mode to lay the HTML out in (<c>--document-mode</c>); <see cref="PdfDocumentMode.Auto"/> takes it from the DOCTYPE, as a browser does.</summary>
     public PdfDocumentMode DocumentMode { get; set; } = PdfDocumentMode.Auto;
 

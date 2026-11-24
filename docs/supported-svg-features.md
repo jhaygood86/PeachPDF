@@ -243,7 +243,7 @@ A document a host plays (`HtmlDocumentOptions.AnimationsEnabled`) plays the stan
 
 The following SVG 1.0/1.1 features are not supported, each for the reason given:
 
-- **Scripting** (`script`, event-handler attributes like `onclick`) — no script execution context exists in a static PDF page.
+- **Scripting inside an SVG** (`script`, event-handler attributes like `onclick`) — not run. Scripts of the surrounding HTML document run only when the opt-in [PeachBrackets.Scripting](peachbrackets-scripting.md) host is set, and they see an inline `<svg>` as ordinary DOM elements.
 - **`cursor`** (the SVG 1.1 `<cursor>` element) — a PDF has no pointer to give an image to. The CSS `cursor` property is read for HTML elements; see [Pointer Interaction](html-css-support.md#pointer-interaction).
 - **`view`** — fragment-based view navigation has no equivalent in static PDF page content.
 - **Legacy SVG glyph-outline fonts** (`font`, `glyph`, `missing-glyph`, `hkern`, `vkern`, `font-face` and its children) — this would duplicate PeachPDF's existing full TrueType/CFF/WOFF/WOFF2 font pipeline for a mechanism SVG2 itself deprecated in favor of ordinary web fonts; use real fonts via `font-family`/`@font-face` instead.

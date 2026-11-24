@@ -244,6 +244,30 @@ public sealed class HtmlDocumentOptions
     /// </summary>
     public bool IncrementalRestyle { get; set; } = true;
 
+    /// <summary>
+    /// The host that runs the document's <c>&lt;script&gt;</c> elements, or null (the default) to leave scripting off: scripts are then ignored,
+    /// <c>&lt;noscript&gt;</c> content is shown and the <c>(scripting)</c> media feature reports <c>none</c>. The <c>PeachBrackets.Scripting</c>
+    /// package supplies a JavaScript host. Scripts run once while the document loads; what they leave is what is laid out.
+    /// </summary>
+    public PeachBrackets.ScriptHosting.IScriptHost? ScriptHost { get; set; }
+
+    /// <summary>
+    /// Makes a canvas to measure text on, for the layout a script asks for while it runs (<c>getBoundingClientRect</c>, <c>offsetWidth</c>,
+    /// <c>getComputedStyle</c>). Called each time the script needs the document laid out again after it changed. Null (the default) means scripts
+    /// get no layout: sizes read as zero and computed styles as what the element's own <c>style</c> attribute says. Only read when
+    /// <see cref="ScriptHost"/> is set.
+    /// </summary>
+    public Func<PeachDrawing.Core.Canvas>? MeasuringCanvasFactory { get; set; }
+
+    internal HtmlDocumentOptions CloneWithoutScripts()
+    {
+        var copy = (HtmlDocumentOptions)MemberwiseClone();
+        // Not null: a document parses differently with scripting on (<noscript> is text), and the probe's elements must be numbered as the scripted tree's are.
+        copy.ScriptHost = PeachBrackets.ScriptHosting.IdleScriptHost.Instance;
+        copy.MeasuringCanvasFactory = null;
+        return copy;
+    }
+
     /// <summary>The background of a selection where no <c>::selection</c> rule applies; light blue by default.</summary>
     public PeachDrawing.Core.PaintColor SelectionBackground { get; set; } = PeachDrawing.Core.PaintColor.FromArgb(255, 173, 214, 255);
 

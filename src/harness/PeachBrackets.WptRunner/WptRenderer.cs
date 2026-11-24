@@ -69,6 +69,16 @@ internal sealed partial class WptRenderer(string wptRoot) : IReftestRenderer
         };
         options.SetMargins(0);
 
+        if (ReftestParser.ScriptingEnabled)
+        {
+            options.ScriptHost = new PeachBrackets.Scripting.JintScriptHost(new PeachBrackets.Scripting.JintScriptOptions
+            {
+                ScriptTimeout = TimeSpan.FromSeconds(10),
+                MaxVirtualTime = TimeSpan.FromSeconds(10),
+            });
+            options.MeasuringCanvasFactory = () => context.CreateCanvas(1, 1);
+        }
+
         using var document = await HtmlDocument.LoadAsync(source, context, options);
         using (var measuring = context.CreateCanvas(1, 1))
         {

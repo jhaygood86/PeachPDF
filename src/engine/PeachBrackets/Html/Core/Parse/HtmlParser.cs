@@ -49,7 +49,9 @@ namespace PeachBrackets.Html.Parse
         /// <param name="root">the root box (null for document root)</param>
         /// <param name="document">whether the source is a whole document, which gets the <c>html</c>, <c>head</c> and <c>body</c> elements it leaves out,
         /// rather than a fragment whose elements go in as they come</param>
-        public static CssBox ParseDocument(string source, out DocumentMode mode, CssBox? root = null, bool document = false)
+        /// <param name="scripting">whether scripting is enabled for the document: <c>&lt;noscript&gt;</c> content is then raw text and the text of a
+        /// <c>&lt;script&gt;</c> element is kept as the element's child instead of being dropped</param>
+        public static CssBox ParseDocument(string source, out DocumentMode mode, CssBox? root = null, bool document = false, bool scripting = false)
         {
             root ??= CssBox.CreateBlock();
 
@@ -61,8 +63,8 @@ namespace PeachBrackets.Html.Parse
             MathSourceParser? mathParser = null;
 
             using var sourceReader = new StringReader(source);
-            // No scripting in a PDF: <noscript> content is markup, so its children arrive as ordinary tokens.
-            var tokenizer = new HtmlTokenizer(sourceReader) { ScriptingEnabled = false };
+            // No scripting in a PDF unless a script host is configured: <noscript> content is markup, so its children arrive as ordinary tokens.
+            var tokenizer = new HtmlTokenizer(sourceReader) { ScriptingEnabled = scripting };
 
             while (tokenizer.ReadNextToken(out var token))
             {
@@ -129,9 +131,12 @@ namespace PeachBrackets.Html.Parse
                         }
                     case HtmlTokenKind.DocType:
                         break;
+                    case HtmlTokenKind.ScriptData:
+                        // The text of a <script> element is what a script host runs; without one it is dropped, as it always was.
+                        if (scripting && token is HtmlDataToken { Data: { Length: > 0 } scriptText}) ProcessText(state, scriptText);
+                        break;
                     case HtmlTokenKind.CData:
                     case HtmlTokenKind.Comment:
-                    case HtmlTokenKind.ScriptData:
                         break;
                     default:
                         throw new ArgumentOutOfRangeException();

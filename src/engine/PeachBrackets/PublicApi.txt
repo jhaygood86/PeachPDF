@@ -679,6 +679,8 @@ PeachBrackets.HtmlDocumentOptions : sealed class
   property Double PageWidthPoints { get; set; }
   property Double? AnimationProgress { get; set; }
   property Double? ViewportHeightPoints { get; set; }
+  property Func<Canvas> MeasuringCanvasFactory { get; set; }
+  property IScriptHost ScriptHost { get; set; }
   property ImageSelectionOptions ImageSelection { get; set; }
   property InputCapabilities Input { get; set; }
   property Int32 PageNumberOffset { get; set; }
@@ -746,6 +748,82 @@ PeachBrackets.PointerTypes : enum Int32
   Coarse = 1
   Fine = 2
   None = 0
+PeachBrackets.ScriptHosting.IScriptHost : interface
+  method abstract ValueTask RunAsync(ScriptDocument document, CancellationToken cancellationToken = null)
+PeachBrackets.ScriptHosting.ScriptBox : struct
+  ctor(Double X, Double Y, Double Width, Double Height)
+  method Void Deconstruct(out Double X, out Double Y, out Double Width, out Double Height)
+  method virtual Boolean Equals(Object obj)
+  method virtual Boolean Equals(ScriptBox other)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property Double Height { get; init; }
+  property Double Width { get; init; }
+  property Double X { get; init; }
+  property Double Y { get; init; }
+PeachBrackets.ScriptHosting.ScriptDocument : sealed class
+  method IReadOnlyList<ScriptNode> GetElementsByClassName(String classNames)
+  method IReadOnlyList<ScriptNode> GetElementsByTagName(String tagName)
+  method IReadOnlyList<ScriptNode> QuerySelectorAll(String selector)
+  method Int32 OrdinalOf(ScriptNode element)
+  method ScriptBox? GetLayoutBox(ScriptNode element)
+  method ScriptNode CreateElement(String tagName)
+  method ScriptNode CreateEmptyFragment()
+  method ScriptNode CreateFragment(String html)
+  method ScriptNode CreateTextNode(String text)
+  method ScriptNode GetElementById(String id)
+  method ScriptNode QuerySelector(String selector)
+  method String GetComputedValue(ScriptNode element, String property)
+  method ValueTask<String> LoadTextAsync(String address)
+  property Boolean CanMeasure { get; }
+  property IReadOnlyList<ScriptNode> Scripts { get; }
+  property Int32 Version { get; }
+  property ScriptNode Body { get; }
+  property ScriptNode DocumentElement { get; }
+  property ScriptNode Head { get; }
+  property ScriptNode Root { get; }
+  property String CompatMode { get; }
+  property String Title { get; }
+  property Uri BaseUri { get; }
+PeachBrackets.ScriptHosting.ScriptNode : sealed class
+  method Boolean HasAttribute(String name)
+  method Boolean Matches(String selector)
+  method Boolean RemoveAttribute(String name)
+  method IReadOnlyList<ScriptNode> QuerySelectorAll(String selector)
+  method ScriptNode AppendChild(ScriptNode child)
+  method ScriptNode CloneNode(Boolean deep)
+  method ScriptNode Closest(String selector)
+  method ScriptNode InsertBefore(ScriptNode child, ScriptNode reference)
+  method ScriptNode QuerySelector(String selector)
+  method ScriptNode RemoveChild(ScriptNode child)
+  method ScriptNode ReplaceChild(ScriptNode child, ScriptNode existing)
+  method String GetAttribute(String name)
+  method Void Remove()
+  method Void SetAttribute(String name, String value)
+  method virtual String ToString()
+  property Boolean IsConnected { get; }
+  property IReadOnlyList<ScriptNode> ChildElements { get; }
+  property IReadOnlyList<ScriptNode> Children { get; }
+  property IReadOnlyList<String> AttributeNames { get; }
+  property IReadOnlyList<String> ClassNames { get; }
+  property ScriptDocument OwnerDocument { get; }
+  property ScriptNode FirstChild { get; }
+  property ScriptNode LastChild { get; }
+  property ScriptNode NextSibling { get; }
+  property ScriptNode Parent { get; }
+  property ScriptNode PreviousSibling { get; }
+  property ScriptNodeKind Kind { get; }
+  property String Data { get; set; }
+  property String Id { get; }
+  property String InnerHtml { get; set; }
+  property String OuterHtml { get; }
+  property String TagName { get; }
+  property String TextContent { get; set; }
+PeachBrackets.ScriptHosting.ScriptNodeKind : enum Int32
+  Document = 0
+  Element = 1
+  Fragment = 3
+  Text = 2
 PeachBrackets.ScrollAlignment : enum Int32
   Center = 2
   End = 3

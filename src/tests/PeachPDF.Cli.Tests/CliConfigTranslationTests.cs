@@ -157,6 +157,13 @@ public class CliConfigTranslationTests
     }
 
     [Fact]
+    public void Scripting_IsOffUnlessAsked()
+    {
+        Assert.Null(CliRunner.BuildConfig(ArgumentParser.Parse(["doc.html"])).ScriptHost);
+        Assert.IsType<PeachBrackets.Scripting.JintScriptHost>(CliRunner.BuildConfig(ArgumentParser.Parse(["--enable-scripting", "doc.html"])).ScriptHost);
+    }
+
+    [Fact]
     public void RasterDpi_DefaultsToTheLibraryDefault_AndMapsWhenGiven()
     {
         Assert.Equal(new PdfGenerateConfig().RasterizationDpi, CliRunner.BuildConfig(ArgumentParser.Parse(["doc.html"])).RasterizationDpi);

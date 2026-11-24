@@ -20,6 +20,7 @@ namespace PeachBrackets.Html
     /// <param name="Input">The pointing devices <c>hover</c>, <c>pointer</c> and their <c>any-</c> forms report; none by default.</param>
     /// <param name="Preferences">The reader's settings the <c>prefers-*</c>, <c>forced-colors</c> and <c>inverted-colors</c> features report; those of a static document when null.</param>
     /// <param name="QuirksMode">Whether the document is in quirks mode, which the user-agent style sheet's <c>-peachpdf-quirks-mode</c> block reads.</param>
+    /// <param name="Scripting">Whether a script host runs the document's scripts, which the <c>scripting</c> feature reports as <c>enabled</c>.</param>
     /// <param name="PixelsPerPoint">The ambient <c>PdfGenerateConfig.PixelsPerInch / 72</c> catch-up
     /// multiplier (issue #814's convention) a length-valued feature's resolved value must be scaled by
     /// before comparing against <see cref="ViewportWidthPt"/>/<see cref="ViewportHeightPt"/> - despite
@@ -37,7 +38,8 @@ namespace PeachBrackets.Html
         double PixelsPerPoint = 1.0,
         InputCapabilities? Input = null,
         UserPreferences? Preferences = null,
-        bool QuirksMode = false)
+        bool QuirksMode = false,
+        bool Scripting = false)
     {
         /// <summary>
         /// A context carrying only the media type, with no page geometry — used by callers that have no
@@ -70,7 +72,8 @@ namespace PeachBrackets.Html
                 pixelsPerPoint,
                 container.Input,
                 container.Preferences,
-                container.DocumentMode == DocumentMode.Quirks);
+                container.DocumentMode == DocumentMode.Quirks,
+                container.ScriptHost is not null);
         }
     }
 }

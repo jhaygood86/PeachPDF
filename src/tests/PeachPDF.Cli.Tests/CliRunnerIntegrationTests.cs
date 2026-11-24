@@ -50,6 +50,27 @@ public class CliRunnerIntegrationTests
     }
 
     [Fact]
+    public async Task EnableScripting_RunsTheDocumentsJavaScript_AndOffIgnoresIt()
+    {
+        const string html = "<!DOCTYPE html><html><body><p id=p>plain</p><div style='width:80px;height:20px;background:#f00'></div><script>document.getElementById('p').textContent = 'a much longer paragraph written by the script';</script></body></html>";
+
+        async Task<byte[]> RenderAsync(params string[] args)
+        {
+            using var stdout = new MemoryStream();
+            var exit = await CliRunner.RunAsync(ArgumentParser.Parse([.. args, "--no-compress", "-", "-o", "-"]), new StringReader(html), stdout);
+            Assert.Equal(0, exit);
+            return stdout.ToArray();
+        }
+
+        var off = await RenderAsync();
+        var on = await RenderAsync("--enable-scripting");
+
+        // The script makes the paragraph longer, which puts more glyphs in the (uncompressed) page content.
+        Assert.NotEqual(off.Length, on.Length);
+        Assert.True(on.Length > off.Length);
+    }
+
+    [Fact]
     public async Task FileInput_DefaultOutput_DerivesPdfName()
     {
         var dir = CreateTempDir();

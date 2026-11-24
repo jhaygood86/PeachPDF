@@ -22,6 +22,40 @@ internal static class Modules
             [.. m.GetProperty("dirs").EnumerateArray().Select(d => d.GetString()!)]))];
     }
 
+    /// <summary>
+    /// Every testharness.js test under the module's entries (a directory, searched recursively, or one file): a page that loads testharness.js
+    /// or a <c>.any.js</c>/<c>.window.js</c> file, as WPT-relative paths in ordinal order.
+    /// </summary>
+    public static List<string> DiscoverTestharness(string wptRoot, WptModule module)
+    {
+        var found = new List<string>();
+        foreach (var entry in module.Dirs)
+        {
+            var root = Path.Combine(wptRoot, entry.Replace('/', Path.DirectorySeparatorChar));
+            IEnumerable<string> files = File.Exists(root)
+                ? [root]
+                : Directory.Exists(root) ? Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories) : [];
+
+            foreach (var file in files)
+            {
+                var relative = Path.GetRelativePath(wptRoot, file).Replace('\\', '/');
+                if (relative.Split('/').SkipLast(1).Any(NonTestDirectories.Contains) || relative.Split('/').SkipLast(1).Contains("crashtests"))
+                    continue;
+
+                var extension = Path.GetExtension(file).ToLowerInvariant();
+                if (extension != ".js" && !TestExtensions.Contains(extension))
+                    continue;
+
+                var path = file;
+                if (TestharnessEvaluator.IsTest(relative, () => File.ReadAllText(path)))
+                    found.Add(relative);
+            }
+        }
+
+        found.Sort(StringComparer.Ordinal);
+        return found;
+    }
+
     /// <summary>Every reftest (a file that links a reference) or testharness test under the module's directories, as WPT-relative paths in ordinal order.</summary>
     public static List<string> Discover(string wptRoot, WptModule module)
     {

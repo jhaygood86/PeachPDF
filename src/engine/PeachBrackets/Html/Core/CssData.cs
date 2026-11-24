@@ -1428,6 +1428,9 @@ namespace PeachBrackets.Html
             return DoesSelectorMatch(selector, node);
         }
 
+        /// <summary>Whether a parsed selector (a list, a complex selector or a compound one) matches an element; what <c>querySelector</c> asks.</summary>
+        internal static bool SelectorMatches(ISelector selector, ICssDomNode node) => DoesSelectorMatch(selector, node);
+
         private static bool DoesSelectorMatch(ISelector selector, ICssDomNode? node)
         {
             return selector switch

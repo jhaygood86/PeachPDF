@@ -101,6 +101,7 @@ A long option takes its value as `--option=VALUE` or as the next argument (`--op
 | `-s`, `--style=FILE` | Apply a user style sheet. Repeatable; later sheets win. |
 | `--no-default-style` | Ignore the default (user-agent) style sheet. |
 | `--no-author-style` | Ignore the document's own `<style>`/`<link>` style sheets. |
+| `--enable-scripting` | Run the document's JavaScript while it loads, with the Jint interpreter. Off by default: scripts are ignored. See [PeachBrackets.Scripting](peachbrackets-scripting.md). |
 | `--document-syntax=SYNTAX` | How the HTML is parsed: `auto` (the default: a `.xhtml` or `.xht` file, or a URL that answers `application/xhtml+xml`, is parsed as XHTML with an XML parser, anything else as HTML), `html`, or `xml` (XHTML, which must be well-formed; standard input is only XHTML with this). See [XHTML](html-css-support.md#xhtml). |
 | `--document-mode=MODE` | Lay the HTML out in a document mode: `auto` (the default: the mode the DOCTYPE gives, as in a browser, so HTML with no DOCTYPE is in quirks mode), `no-quirks`, `limited-quirks` or `quirks`. `no-quirks` lays out a document with no DOCTYPE by the standards. See [Document modes](html-css-support.md#document-modes-quirks-mode). |
 | `--page-size=SIZE` | Page size: a keyword (`A4`, `letter`, …), one or two lengths (`"210mm 297mm"`), optionally with `portrait`/`landscape`. |

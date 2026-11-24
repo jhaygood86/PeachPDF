@@ -111,6 +111,7 @@ Invoke-PackageReference 'PeachDrawing.Skia'
 # reference does not need (it reads the assembly and its XML documentation), so the generation is emptied out.
 Invoke-PackageReference 'PeachDrawing.Win2D' 'net10.0-windows10.0.19041.0' @('-p:_GenerateProjectPriFileDependsOn=')
 Invoke-PackageReference 'PeachBrackets'
+Invoke-PackageReference 'PeachBrackets.Scripting'
 Invoke-PackageReference 'PeachPDF'
 
 # DefaultDocumentation writes an assembly page (index.md, which the site serves at /api/<package>/) only for an assembly with more than one
@@ -132,6 +133,7 @@ foreach ($folder in Get-ChildItem -Path $apiRoot -Directory) {
 & $fixLinks -ApiDocsPath (Join-Path $apiRoot 'PeachDrawing.Skia')
 & $fixLinks -ApiDocsPath (Join-Path $apiRoot 'PeachDrawing.Win2D')
 & $fixLinks -ApiDocsPath (Join-Path $apiRoot 'PeachBrackets')
+& $fixLinks -ApiDocsPath (Join-Path $apiRoot 'PeachBrackets.Scripting')
 & $fixLinks -ApiDocsPath $apiRoot
 
 if (-not $SkipLinkCheck) { & (Join-Path $PSScriptRoot 'Test-ApiDocLinks.ps1') -ApiDocsPath $apiRoot }

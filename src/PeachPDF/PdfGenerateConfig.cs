@@ -92,6 +92,13 @@ namespace PeachPDF
         public PdfDocumentSyntax DocumentSyntax { get; set; } = PdfDocumentSyntax.Auto;
 
         /// <summary>
+        /// The host that runs the document's <c>&lt;script&gt;</c> elements, or null (the default) to leave scripting off, in which case scripts are
+        /// ignored. Add the <c>PeachBrackets.Scripting</c> package and set a <c>JintScriptHost</c> to run JavaScript while the document loads; what the
+        /// scripts leave in the document is what is rendered. PeachPDF itself does not depend on that package.
+        /// </summary>
+        public PeachBrackets.ScriptHosting.IScriptHost? ScriptHost { get; set; }
+
+        /// <summary>
         /// When set to <c>true</c>, the document's own author style sheets (its <c>&lt;style&gt;</c>
         /// elements and <c>&lt;link rel="stylesheet"&gt;</c> references) are ignored — only the user-agent
         /// default styles and any caller-supplied stylesheet (the <c>cssData</c> argument) are applied.

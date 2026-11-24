@@ -10,6 +10,7 @@
 // - Sun Tsu,
 // "The Art of War"
 
+using PeachBrackets.ScriptHosting;
 using PeachBrackets.Tagging;
 using PeachBrackets.Html.Animation;
 using PeachBrackets.Html.CounterStyles;
@@ -1572,11 +1573,54 @@ namespace PeachBrackets.Html
             Clear();
             if (string.IsNullOrEmpty(htmlSource)) return;
 
+            // The scripts run once for a source. What they left is the document from then on, so the loads that follow (a restyle that has to parse
+            // again, a container query's next pass) start from that and not from the page the author wrote.
+            if (ScriptHost is { } scriptHost && DocumentSyntax != DocumentSyntax.Xml && !string.Equals(htmlSource, _scriptedSource, StringComparison.Ordinal))
+            {
+                htmlSource = await RunScriptsAsync(scriptHost, htmlSource);
+                _scriptedSource = htmlSource;
+                _lastHtmlSource = htmlSource;
+            }
+
             CssData = baseCssData ?? await DefaultCssDataCache.GetAsync(RenderContext);
 
             DomParser parser = new(CssParser);
             (Root, CssData, DocumentMetadata) = await parser.GenerateCssTree(htmlSource, this, CssData, containerSizes);
         }
+
+        /// <summary>Loads and lays out a copy of the document as it is, for the layout a script reads; null when the host gave no way to measure.</summary>
+        internal Func<string, ValueTask<HtmlDocument>>? ScriptProbe { get; set; }
+
+        /// <summary>The host that runs the document's scripts, or null when scripting is off.</summary>
+        internal IScriptHost? ScriptHost { get; set; }
+
+        // The markup the scripts left, once they have run: SetHtml recognizes it and does not run them again.
+        private string? _scriptedSource;
+
+        private async ValueTask<string> RunScriptsAsync(IScriptHost host, string htmlSource)
+        {
+            var root = HtmlParser.ParseDocument(htmlSource, out var mode, document: true, scripting: true);
+            var document = new ScriptDocument(this, root, DocumentModeOverride ?? mode);
+            document.Probe = ScriptProbe;
+
+            ParsingRoot = root;
+            try
+            {
+                await host.RunAsync(document, ScriptCancellation);
+                // A page the scripts left as it was keeps its own source: writing the tree back out is not exact for every construct (foreign content),
+                // and a page that changed nothing gains nothing from it.
+                return document.Version == 0 ? htmlSource : document.Serialize();
+            }
+            finally
+            {
+                ParsingRoot = null;
+                document.ReleaseProbe();
+                root.Dispose();
+            }
+        }
+
+        /// <summary>Cancels the scripts of the document being set.</summary>
+        internal System.Threading.CancellationToken ScriptCancellation { get; set; }
 
         /// <summary>
         /// The size containers' sizes as the previous layout pass left them, which this pass was cascaded against

@@ -77,6 +77,7 @@ internal static class CliProgram
                                      run). Default: animations are not applied.
               --no-default-style     Ignore the default (user-agent) style sheet.
               --no-author-style      Ignore the document's own style sheets.
+              --enable-scripting     Run the document's JavaScript while it loads (off by default).
               --document-mode=MODE   Lay the HTML out in this mode: auto (from the DOCTYPE, as
                                      a browser does; the default), no-quirks, limited-quirks
                                      or quirks.

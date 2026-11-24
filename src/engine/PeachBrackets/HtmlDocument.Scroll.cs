@@ -91,6 +91,27 @@ public sealed partial class HtmlDocument
         return ScrollExactly(element, (offset.X / ppp) + dx, (offset.Y / ppp) + dy);
     }
 
+    /// <summary>The place and size of the element that is the <paramref name="ordinal"/>-th element of the source, in CSS pixels, or null.</summary>
+    internal (double X, double Y, double Width, double Height)? ProbeBounds(int ordinal)
+    {
+        _ = Pages;
+        if (FindByOrdinal(_container.Root, ordinal) is not { } box)
+            return null;
+
+        box = PeachBrackets.Html.Utils.DomUtils.ResolveGeometryBox(box);
+        var rect = PeachBrackets.Html.Utils.CommonUtils.GetFirstValueOrDefault(box.Rectangles, box.Bounds);
+        var points = PeachBrackets.Utilities.Utils.ToPoints(rect, _unitsPerPoint);
+        const double pointsPerPixel = 0.75;
+        return (points.X / pointsPerPixel, points.Y / pointsPerPixel, points.Width / pointsPerPixel, points.Height / pointsPerPixel);
+    }
+
+    /// <summary>The computed value of a property of the element that is the <paramref name="ordinal"/>-th element of the source, or null.</summary>
+    internal string? ProbeComputedValue(int ordinal, string property)
+    {
+        _ = Pages;
+        return FindByOrdinal(_container.Root, ordinal) is { } box ? PeachBrackets.Html.Utils.CssUtils.GetPropertyValue(box, property) : null;
+    }
+
     // Moves the content where a drag put it, with no snapping and no glide.
     private IReadOnlyList<DirtyRegion> ScrollExactly(DocumentElement element, double x, double y)
     {

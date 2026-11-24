@@ -1,0 +1,304 @@
+using Jint;
+using Jint.Native;
+using Jint.Native.Object;
+using Jint.Runtime.Descriptors;
+using PeachBrackets.ScriptHosting;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+
+namespace PeachBrackets.Scripting.Internal;
+
+internal sealed partial class ScriptRuntime
+{
+    // The event types that get an on<type> property on every element, the document and the window.
+    private static readonly string[] HandlerTypes =
+    [
+        "click", "dblclick", "mousedown", "mouseup", "mouseover", "mouseout", "mousemove", "mouseenter", "mouseleave", "contextmenu", "wheel",
+        "keydown", "keyup", "keypress", "input", "change", "submit", "reset", "focus", "blur", "focusin", "focusout", "select",
+        "load", "error", "abort", "scroll", "resize", "pointerdown", "pointerup", "pointermove", "touchstart", "touchend", "touchmove",
+        "transitionend", "transitionstart", "transitionrun", "transitioncancel", "animationstart", "animationend", "animationiteration", "animationcancel",
+        "readystatechange", "visibilitychange", "hashchange", "popstate", "pageshow", "pagehide", "unload", "beforeunload", "message", "toggle",
+    ];
+
+    // Events that go to the window when written as attributes of the body.
+    private static readonly HashSet<string> BodyForwarded =
+        ["load", "error", "resize", "scroll", "hashchange", "popstate", "pageshow", "pagehide", "unload", "beforeunload", "message", "blur", "focus"];
+
+    private ObjectInstance EventTargetPrototype = null!;
+    private ObjectInstance EventPrototype = null!;
+    private readonly Dictionary<string, ObjectInstance> _eventPrototypes = [];
+
+    public EventObject CreateEvent(string type, bool bubbles, bool cancelable) => new(Engine, EventPrototype, type, bubbles, cancelable) { TimeStamp = NowMs };
+
+    private void InstallEventPrototypes(ObjectInstance objectPrototype)
+    {
+        EventTargetPrototype = new JsObject(Engine);
+        EventTargetPrototype.Prototype = objectPrototype;
+
+        Js.Method(Engine, EventTargetPrototype, "addEventListener", 2, (self, args) =>
+        {
+            var target = Target(self);
+            var type = Js.AsText(Js.Arg(args, 0));
+            var callback = Js.Arg(args, 1);
+            if (Js.IsNullish(callback))
+                return JsValue.Undefined;
+
+            var capture = false;
+            var once = false;
+            var options = Js.Arg(args, 2);
+            if (options.IsObject())
+            {
+                capture = Jint.Runtime.TypeConverter.ToBoolean(options.AsObject().Get("capture"));
+                once = Jint.Runtime.TypeConverter.ToBoolean(options.AsObject().Get("once"));
+            }
+            else if (!options.IsUndefined())
+            {
+                capture = Jint.Runtime.TypeConverter.ToBoolean(options);
+            }
+
+            if (!target.Listeners.TryGetValue(type, out var list))
+                target.Listeners[type] = list = [];
+
+            if (!list.Any(l => l.Callback == callback && l.Capture == capture))
+                list.Add(new Listener(callback, capture, once));
+
+            return JsValue.Undefined;
+        });
+
+        Js.Method(Engine, EventTargetPrototype, "removeEventListener", 2, (self, args) =>
+        {
+            var target = Target(self);
+            var capture = Js.Arg(args, 2) is var options && options.IsObject()
+                ? Jint.Runtime.TypeConverter.ToBoolean(options.AsObject().Get("capture"))
+                : Jint.Runtime.TypeConverter.ToBoolean(Js.Arg(args, 2));
+            if (target.Listeners.TryGetValue(Js.AsText(Js.Arg(args, 0)), out var list))
+                list.RemoveAll(l => l.Callback == Js.Arg(args, 1) && l.Capture == capture);
+
+            return JsValue.Undefined;
+        });
+
+        Js.Method(Engine, EventTargetPrototype, "dispatchEvent", 1, (self, args) =>
+        {
+            if (Js.Arg(args, 0) is not EventObject ev)
+                throw TypeError("Failed to execute 'dispatchEvent' on 'EventTarget': parameter 1 is not of type 'Event'.");
+            if (ev.Dispatching || !ev.Initialized)
+                throw DomError("InvalidStateError", "The event is already being dispatched or was never initialized.");
+
+            return Js.Bool(DispatchEvent(Target(self), ev));
+        });
+
+        foreach (var type in HandlerTypes)
+        {
+            var captured = type;
+            Js.Accessor(Engine, EventTargetPrototype, "on" + captured,
+                self => Target(self).Handlers.TryGetValue(captured, out var handler) ? handler : JsValue.Null,
+                (self, value) =>
+                {
+                    if (Js.IsCallable(value)) Target(self).Handlers[captured] = value;
+                    else Target(self).Handlers.Remove(captured);
+                });
+        }
+
+        EventPrototype = new JsObject(Engine);
+        EventPrototype.Prototype = objectPrototype;
+        Js.Accessor(Engine, EventPrototype, "type", self => Js.Str(Ev(self).EventType));
+        Js.Accessor(Engine, EventPrototype, "target", self => Expose(Ev(self).Target));
+        Js.Accessor(Engine, EventPrototype, "srcElement", self => Expose(Ev(self).Target));
+        Js.Accessor(Engine, EventPrototype, "currentTarget", self => Expose(Ev(self).CurrentTarget));
+        Js.Accessor(Engine, EventPrototype, "eventPhase", self => Js.Num(Ev(self).Phase));
+        Js.Accessor(Engine, EventPrototype, "bubbles", self => Js.Bool(Ev(self).Bubbles));
+        Js.Accessor(Engine, EventPrototype, "cancelable", self => Js.Bool(Ev(self).Cancelable));
+        Js.Accessor(Engine, EventPrototype, "defaultPrevented", self => Js.Bool(Ev(self).DefaultPrevented));
+        Js.Accessor(Engine, EventPrototype, "isTrusted", self => Js.Bool(Ev(self).IsTrusted));
+        Js.Accessor(Engine, EventPrototype, "timeStamp", self => Js.Num(Ev(self).TimeStamp));
+        Js.Method(Engine, EventPrototype, "preventDefault", 0, (self, _) =>
+        {
+            if (Ev(self) is { Cancelable: true } ev) ev.DefaultPrevented = true;
+            return JsValue.Undefined;
+        });
+        Js.Method(Engine, EventPrototype, "stopPropagation", 0, (self, _) =>
+        {
+            Ev(self).PropagationStopped = true;
+            return JsValue.Undefined;
+        });
+        Js.Method(Engine, EventPrototype, "stopImmediatePropagation", 0, (self, _) =>
+        {
+            Ev(self).PropagationStopped = true;
+            Ev(self).ImmediatePropagationStopped = true;
+            return JsValue.Undefined;
+        });
+        Js.Method(Engine, EventPrototype, "composedPath", 0, (self, _) =>
+            Js.Array(Engine, [.. PathOf(Ev(self).Target ?? Window).Select(Expose)]));
+    }
+
+    private TargetObject Target(JsValue self) =>
+        self as TargetObject ?? (ReferenceEquals(self, Engine.Global) || self.IsUndefined() || self.IsNull() ? Window : throw TypeError("Illegal invocation"));
+
+    // What a page sees for a target: the window is the global object.
+    private JsValue Expose(TargetObject? target) => target is null ? JsValue.Null : target is WindowObject ? Engine.Global : target;
+
+    private EventObject Ev(JsValue self) => self as EventObject ?? throw TypeError("Illegal invocation");
+
+    /// <summary>Makes the <c>Event</c>-like constructors a page can call, one for each name, all sharing the event prototype chain.</summary>
+    private void InstallEventConstructors()
+    {
+        foreach (var name in new[] { "Event", "CustomEvent", "UIEvent", "MouseEvent", "KeyboardEvent", "FocusEvent", "InputEvent", "PointerEvent", "TransitionEvent", "AnimationEvent", "ErrorEvent", "MessageEvent", "ProgressEvent", "WheelEvent", "TouchEvent", "HashChangeEvent", "PageTransitionEvent" })
+        {
+            var prototype = name == "Event" ? EventPrototype : new JsObject(Engine);
+            if (name != "Event") prototype.Prototype = EventPrototype;
+
+            var captured = name;
+            _eventPrototypes[name] = prototype;
+            var constructor = Js.Constructor(Engine, name, prototype, 1, (self, args, _) =>
+            {
+                if (args.Length == 0)
+                    throw TypeError($"Failed to construct '{captured}': 1 argument required, but only 0 present.");
+
+                var type = Js.AsText(Js.Arg(args, 0));
+                var init = Js.Arg(args, 1);
+                var bubbles = false;
+                var cancelable = false;
+                if (init.IsObject())
+                {
+                    bubbles = Jint.Runtime.TypeConverter.ToBoolean(init.AsObject().Get("bubbles"));
+                    cancelable = Jint.Runtime.TypeConverter.ToBoolean(init.AsObject().Get("cancelable"));
+                }
+
+                var ev = new EventObject(Engine, (self as ObjectInstance)?.Prototype ?? prototype, type, bubbles, cancelable) { TimeStamp = NowMs };
+                if (captured == "CustomEvent")
+                    ev.FastSetProperty("detail", new PropertyDescriptor(JsValue.Null, PropertyFlag.ConfigurableEnumerableWritable));
+                if (init.IsObject())
+                {
+                    foreach (var key in init.AsObject().GetOwnPropertyKeys())
+                    {
+                        if (key.IsString() && key.AsString() is not ("bubbles" or "cancelable"))
+                            ev.FastSetProperty(key.AsString(), new PropertyDescriptor(init.AsObject().Get(key), PropertyFlag.ConfigurableEnumerableWritable));
+                    }
+                }
+
+                _ = captured;
+                return ev;
+            });
+
+            Engine.Global.FastSetProperty(name, new PropertyDescriptor(constructor, PropertyFlag.Writable | PropertyFlag.Configurable));
+        }
+    }
+
+    /// <summary>The targets an event aimed at <paramref name="target"/> passes through, from the target outwards.</summary>
+    private static List<TargetObject> PathOf(TargetObject target)
+    {
+        var path = new List<TargetObject>();
+        for (var current = target; current is not null && path.Count < 10_000; current = current.ParentTarget)
+            path.Add(current);
+
+        return path;
+    }
+
+    public void FireEvent(TargetObject target, string type, bool bubbles, bool cancelable) => DispatchEvent(target, CreateEvent(type, bubbles, cancelable));
+
+    /// <summary>Sends an event along its path: the capturing listeners from the outside in, the target's, and the bubbling ones from the inside out.</summary>
+    /// <returns>false when a listener cancelled it</returns>
+    public bool DispatchEvent(TargetObject target, EventObject ev)
+    {
+        ev.Target = target;
+        ev.Dispatching = true;
+        var path = PathOf(target);
+
+        ev.Phase = 1;
+        for (var i = path.Count - 1; i >= 1 && !ev.PropagationStopped; i--)
+            Invoke(path[i], ev, capturing: true);
+
+        if (!ev.PropagationStopped)
+        {
+            ev.Phase = 2;
+            Invoke(path[0], ev, capturing: null);
+        }
+
+        if (ev.Bubbles)
+        {
+            ev.Phase = 3;
+            for (var i = 1; i < path.Count && !ev.PropagationStopped; i++)
+                Invoke(path[i], ev, capturing: false);
+        }
+
+        ev.Phase = 0;
+        ev.Dispatching = false;
+        ev.CurrentTarget = null;
+        return !ev.DefaultPrevented;
+    }
+
+    // capturing: true runs the capture listeners, false the others, null (at the target) all of them.
+    private void Invoke(TargetObject target, EventObject ev, bool? capturing)
+    {
+        ev.CurrentTarget = target;
+
+        if (target.Listeners.TryGetValue(ev.EventType, out var registered))
+        {
+            foreach (var listener in registered.ToArray())
+            {
+                if (capturing is { } wanted && listener.Capture != wanted)
+                    continue;
+
+                if (listener.Once)
+                    registered.Remove(listener);
+
+                CallListener(listener.Callback, target, ev);
+                if (ev.ImmediatePropagationStopped)
+                    return;
+            }
+        }
+
+        // The on<type> handler runs where the bubbling listeners do.
+        if (capturing != true && HandlerFor(target, ev.EventType) is { } handler)
+        {
+            var result = Call(handler, Expose(target), ev);
+            if (result is { } value && value.IsBoolean() && !value.AsBoolean() && ev.Cancelable && ev.EventType != "error")
+                ev.DefaultPrevented = true;
+        }
+    }
+
+    private void CallListener(JsValue callback, TargetObject target, EventObject ev)
+    {
+        if (Js.IsCallable(callback))
+        {
+            Call(callback, Expose(target), ev);
+        }
+        else if (callback.IsObject() && callback.AsObject().Get("handleEvent") is var handle && Js.IsCallable(handle))
+        {
+            Call(handle, callback, ev);
+        }
+    }
+
+    private JsValue? HandlerFor(TargetObject target, string type)
+    {
+        if (target.Handlers.TryGetValue(type, out var assigned))
+            return assigned;
+
+        // A handler written as an attribute, compiled the first time it is needed. The window's own come from the body's attributes.
+        var element = target switch
+        {
+            NodeObject node when node.Node.Kind == ScriptNodeKind.Element => node,
+            WindowObject when BodyForwarded.Contains(type) && Document.Body is { } body => Wrap(body),
+            _ => null,
+        };
+
+        if (element is null || element.Node.GetAttribute("on" + type) is not { Length: > 0 } code)
+            return null;
+
+        if (element.AttributeHandlers.TryGetValue(type, out var cached) && cached.Code == code)
+            return cached.Function;
+
+        try
+        {
+            var function = Engine.Evaluate("(function(event){" + code + "\n})");
+            element.AttributeHandlers[type] = (code, function);
+            return function;
+        }
+        catch (Exception error) when (IsScriptFailure(error))
+        {
+            ReportError(error);
+            return null;
+        }
+    }
+}

@@ -278,6 +278,8 @@ namespace PeachPDF
             if (config.DocumentSyntax == PdfDocumentSyntax.Auto && fromLoader && IsXhtmlContentType(_renderContext.NetworkLoader.PrimaryContentType))
                 options.Syntax = DocumentSyntax.Xml;
             options.StyleSheet = cssData?.StyleSheet;
+            if (config.ScriptHost is not null)
+                options.MeasuringCanvasFactory = () => PdfCanvas.CreateMeasuring(_renderContext, orgPageSize);
 
             var htmlDocument = await HtmlDocument.LoadAsync(html, _renderContext, options);
             PdfCanvas? measure = null;
@@ -706,6 +708,7 @@ namespace PeachPDF
                     _ => null
                 },
                 Syntax = config.DocumentSyntax == PdfDocumentSyntax.Xml ? DocumentSyntax.Xml : DocumentSyntax.Html,
+                ScriptHost = config.ScriptHost,
                 SnapBoxDecorationsToCssPixels = config.SnapBoxDecorationsToCssPixels,
                 SnapBorderWidthsToCssPixels = config.SnapBorderWidthsToCssPixels,
                 AnimationProgress = config.AnimationProgress,

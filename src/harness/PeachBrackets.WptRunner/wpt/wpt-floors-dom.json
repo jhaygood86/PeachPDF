@@ -1,0 +1,11 @@
+{
+  "formatVersion": 1,
+  "wptCommit": "33926aca0f4313541f0ac5d67d4a4ab949d50b16",
+  "floors": {
+    "dom-events": 234,
+    "dom-nodes": 2582,
+    "dom-other": 214,
+    "dom-ranges": 1,
+    "dom-traversal": 42
+  }
+}

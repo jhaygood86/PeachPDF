@@ -207,8 +207,9 @@ namespace PeachBrackets.Html
                 case "-peachpdf-quirks-mode":
                     // Boolean only: `(-peachpdf-quirks-mode)` is the document being in quirks mode, and `(-peachpdf-quirks-mode: 0)` is it not.
                     return !feature.HasValue || feature.Value == "1" ? context.QuirksMode : !context.QuirksMode;
-                case "update":
                 case "scripting":
+                    return MatchesKeyword(feature, context.Scripting ? "enabled" : "none", booleanContextResult: context.Scripting);
+                case "update":
                 // A PDF is not drawn under a user agent's forced palette (Media Queries 5, forced-colors), and has no other
                 // settings of its reader to report, unless the host passes some in.
                 case "forced-colors":

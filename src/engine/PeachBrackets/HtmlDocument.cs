@@ -129,6 +129,20 @@ public sealed partial class HtmlDocument : IDisposable
             container.PaintFormControls = options.PaintFormControls;
             container.DocumentModeOverride = options.DocumentMode;
             container.DocumentSyntax = options.Syntax;
+            container.ScriptHost = options.ScriptHost;
+            if (options.ScriptHost is not null && options.MeasuringCanvasFactory is { } canvasFactory)
+            {
+                // What a script's layout reads are answered from: the document as it is then, loaded and laid out once more without the scripts.
+                var probeOptions = options.CloneWithoutScripts();
+                container.ScriptProbe = async markup =>
+                {
+                    var probe = await LoadAsync(markup, renderContext, probeOptions);
+                    using var canvas = canvasFactory();
+                    await probe.LayoutAsync(canvas);
+                    return probe;
+                };
+            }
+
             document.ApplyTextOptions(options);
 
             // Read while the DOM tree is generated, when every text box is cut into words: hyphens: auto and the language-dependent

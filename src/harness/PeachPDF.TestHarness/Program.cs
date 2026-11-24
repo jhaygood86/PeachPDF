@@ -939,6 +939,45 @@ const string pointerHtml = """
         """, pdfConfig);
 }
 
+// --- JavaScript (PeachBrackets.Scripting) ---
+
+{
+    var scriptingConfig = new PdfGenerateConfig { ScriptHost = new PeachBrackets.Scripting.JintScriptHost() };
+    await SaveShowcaseAsync("scripting", "Layout", "JavaScript Builds the Page",
+        "A page that fills itself in with JavaScript while it loads, with the opt-in PeachBrackets.Scripting package: a table made from data, bars sized from layout reads, a class set by a timer and a computed style copied into text. Without a script host the same page shows only its noscript fallback.",
+        """
+        <!DOCTYPE html><html><head><style>
+          @page { size: a4; margin: 15mm }
+          body { font: 10pt Arial, sans-serif; margin: 0 }
+          table { border-collapse: collapse; width: 100% }
+          td, th { border: 1px solid #889; padding: 3pt 6pt; text-align: left }
+          .bar { height: 10pt; background: #3b7ea8 }
+          .ready { background: #e6f4e6 }
+          #status { margin-top: 10pt; padding: 6pt }
+        </style></head><body>
+        <h1>JavaScript builds the page</h1>
+        <noscript><p>Scripting is off: this is the fallback.</p></noscript>
+        <table><thead><tr><th>Region</th><th>Sales</th><th></th></tr></thead><tbody id="rows"></tbody></table>
+        <div id="status">Waiting for the timer...</div>
+        <script>
+          var data = [['North', 120], ['South', 80], ['East', 200], ['West', 45]];
+          var rows = document.getElementById('rows');
+          data.forEach(function (row) {
+            var tr = document.createElement('tr');
+            tr.innerHTML = '<td>' + row[0] + '</td><td>' + row[1] + '</td><td><div class="bar" style="width:' + row[1] + 'px"></div></td>';
+            rows.appendChild(tr);
+          });
+          var widest = Math.max.apply(null, [].map.call(document.querySelectorAll('.bar'), function (b) { return b.getBoundingClientRect().width; }));
+          setTimeout(function () {
+            var status = document.getElementById('status');
+            status.classList.add('ready');
+            status.textContent = 'Built ' + data.length + ' rows; the widest bar is ' + Math.round(widest) + 'px; background is ' + getComputedStyle(status).backgroundColor;
+          }, 100);
+        </script>
+        </body></html>
+        """, scriptingConfig);
+}
+
 await SaveShowcaseAsync("progress_meter", "Forms & Interaction", "Progress & Meter",
     "<progress> bars filled to their value in the accent color (a blue by default), an indeterminate bar, and <meter> gauges that turn green, yellow or red by the region their value is in.",
     """

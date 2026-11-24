@@ -1,0 +1,35 @@
+using PeachBrackets.Scripting.Internal;
+using PeachBrackets.ScriptHosting;
+using System;
+using System.Threading;
+using System.Threading.Tasks;
+
+namespace PeachBrackets.Scripting;
+
+/// <summary>
+/// An <see cref="IScriptHost"/> that runs a document's JavaScript with the Jint interpreter. Give one to
+/// <see cref="HtmlDocumentOptions.ScriptHost"/> (or PeachPDF's <c>PdfGenerateConfig.ScriptHost</c>) to turn scripting on.
+/// </summary>
+/// <remarks>
+/// Each document gets its own JavaScript engine, so one host may be shared by any number of documents, including ones loading at the same time.
+/// The scripts see a window, a document and the DOM of the parsed page; timers and animation frames run on a virtual clock until the page settles
+/// (see <see cref="JintScriptOptions.MaxVirtualTime"/>). A script that throws is reported through <see cref="JintScriptOptions.ScriptError"/> and
+/// does not stop the document from loading.
+/// </remarks>
+/// <param name="options">what scripts may do; null for the defaults</param>
+public sealed class JintScriptHost(JintScriptOptions? options = null) : IScriptHost
+{
+    private readonly JintScriptOptions _options = options ?? new JintScriptOptions();
+
+    /// <summary>The options the host runs scripts with.</summary>
+    public JintScriptOptions Options => _options;
+
+    /// <inheritdoc />
+    public async ValueTask RunAsync(ScriptDocument document, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+
+        var runtime = new ScriptRuntime(document, _options, cancellationToken);
+        await runtime.RunAsync();
+    }
+}

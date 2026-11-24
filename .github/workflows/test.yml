@@ -159,7 +159,7 @@ jobs:
     - name: Build small test projects
       if: matrix.suite == 'small'
       run: |
-        foreach ($p in 'PeachPDF.Cli.Tests', 'PeachDrawing.Core.Tests', 'PeachDrawing.Tests', 'PeachDrawing.PDF.Tests', 'PeachDrawing.Svg.Tests', 'PeachDrawing.Skia.Tests', 'PeachBrackets.Avalonia.Tests', 'PeachBrackets.Tests', 'PeachBrackets.WptRunner.Tests', 'PeachPDF.SourceGenerators.Tests', 'PeachDrawing.Text.Brotli.Tests', 'PeachReader.Core.Tests') {
+        foreach ($p in 'PeachPDF.Cli.Tests', 'PeachDrawing.Core.Tests', 'PeachDrawing.Tests', 'PeachDrawing.PDF.Tests', 'PeachDrawing.Svg.Tests', 'PeachDrawing.Skia.Tests', 'PeachBrackets.Avalonia.Tests', 'PeachBrackets.Tests', 'PeachBrackets.Scripting.Tests', 'PeachBrackets.WptRunner.Tests', 'PeachPDF.SourceGenerators.Tests', 'PeachDrawing.Text.Brotli.Tests', 'PeachReader.Core.Tests') {
           dotnet build "src/tests/$p/$p.csproj" --configuration Release
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         }

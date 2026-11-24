@@ -127,7 +127,7 @@ namespace PeachBrackets.Html.Parse
             {
                 root = htmlContainer.DocumentSyntax == DocumentSyntax.Xml
                     ? XhtmlParser.ParseDocument(html, out mode)
-                    : HtmlParser.ParseDocument(html, out mode, document: true);
+                    : HtmlParser.ParseDocument(html, out mode, document: true, scripting: htmlContainer.ScriptHost is not null);
             }
 
             // Before anything reads it: the style sheets' @media block for quirks mode, selector matching and layout all go by it.

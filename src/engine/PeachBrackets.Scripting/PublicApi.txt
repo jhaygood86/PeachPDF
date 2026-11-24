@@ -1,0 +1,15 @@
+PeachBrackets.Scripting.JintScriptHost : sealed class
+  ctor(JintScriptOptions options = null)
+  method virtual ValueTask RunAsync(ScriptDocument document, CancellationToken cancellationToken = null)
+  property JintScriptOptions Options { get; }
+PeachBrackets.Scripting.JintScriptOptions : sealed class
+  ctor()
+  property Action<String, String> Console { get; set; }
+  property Action<String> ScriptError { get; set; }
+  property Boolean LoadExternalScripts { get; set; }
+  property Boolean RunModuleScripts { get; set; }
+  property Int32 MaxCallbacks { get; set; }
+  property Int32 MaxRecursionDepth { get; set; }
+  property Int64 MemoryLimitBytes { get; set; }
+  property TimeSpan MaxVirtualTime { get; set; }
+  property TimeSpan ScriptTimeout { get; set; }
