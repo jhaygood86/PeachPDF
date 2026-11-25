@@ -16,8 +16,7 @@ Raster, CoreGraphics) needed a change in this phase.
   raster fallback for a canvas that uses them is the likely route (a temporary surface per operation), the way `BeginRasterSurface` is used elsewhere.
 - **Erasing**: `clearRect` of part of the canvas has no vector form (no "clear" primitive), so only a clear of the whole canvas is honored (it drops what was drawn).
 - **Patterns as a fill** (`createPattern`): `TileBrush` exists but is made by a `Canvas` from a tile of drawing, which the recorded form does not yet build.
-- **Reading pixels** (`getImageData`, `toDataURL`, `toBlob`, `isPointInPath`, `isPointInStroke`, `createImageData`, `putImageData`, `ImageData`) and **`OffscreenCanvas`/`ImageBitmap`**:
-  these need the recording replayed onto `PeachDrawing`'s `RasterCanvas` and read back, plus typed-array output; not wired.
+- **Reading pixels**: done (see docs); `putImageData` draws over instead of replacing, and a canvas read back is replayed on a bitmap, so fonts from another backend may not show.
 - **`filter`** (a CSS filter list on the context), `letterSpacing`, `wordSpacing`, `fontKerning`, `fontStretch`, `fontVariantCaps`, `textRendering`, text `lang`, color spaces and `willReadFrequently`.
 - **A canvas drawn on after layout** (timer, post-layout function) is not repainted: its drawing is attached to the element when the scripts finish loading.
 

@@ -167,9 +167,23 @@ internal sealed partial class ScriptRuntime
     // A change was made: queue a record for each observer watching the node or an ancestor that watches its subtree.
     private void OnMutated(ScriptMutation mutation)
     {
+        if (mutation.Kind == ScriptMutationKind.Attributes && string.Equals(mutation.AttributeName, "id", StringComparison.OrdinalIgnoreCase) && ReferenceEquals(mutation.Target.OwnerDocument, Document))
+            NameElement(mutation.Target);
+
         // An img element given a source loads it.
-        if (mutation.Kind == ScriptMutationKind.Attributes && IsImage(mutation.Target) && string.Equals(mutation.AttributeName, "src", StringComparison.OrdinalIgnoreCase))
+        if (mutation.Kind == ScriptMutationKind.Attributes && IsImage(mutation.Target) && mutation.AttributeName is { } named
+            && (named.Equals("src", StringComparison.OrdinalIgnoreCase) || named.Equals("srcset", StringComparison.OrdinalIgnoreCase) || named.Equals("sizes", StringComparison.OrdinalIgnoreCase)))
             StartImageLoad(mutation.Target);
+
+        // A picture's sources, or an img put in a picture, change which image its img elements show.
+        if ((mutation.Kind == ScriptMutationKind.Attributes && mutation.Target.TagName is { } sourceTag && sourceTag.Equals("source", StringComparison.OrdinalIgnoreCase) && mutation.Target.Parent is { } picture
+                && string.Equals(picture.TagName, "picture", StringComparison.OrdinalIgnoreCase))
+            || (mutation.Kind == ScriptMutationKind.ChildList && string.Equals(mutation.Target.TagName, "picture", StringComparison.OrdinalIgnoreCase)))
+        {
+            var holder = mutation.Kind == ScriptMutationKind.ChildList ? mutation.Target : mutation.Target.Parent!;
+            foreach (var inside in holder.ChildElements.Where(IsImage))
+                StartImageLoad(inside);
+        }
 
         if (_ranges.Count > 0)
             AdjustRanges(mutation);

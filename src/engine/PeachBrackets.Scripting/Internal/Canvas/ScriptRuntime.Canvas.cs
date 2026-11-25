@@ -89,6 +89,30 @@ internal sealed partial class ScriptRuntime
 
     private ContextObject Cx(JsValue self) => self as ContextObject ?? throw TypeError("Illegal invocation");
 
+    // Elements with an id are properties of the window (named access), unless the window has a property of that name.
+    private void NameElement(ScriptNode element)
+    {
+        if (element.GetAttribute("id") is not { Length: > 0 } id)
+            return;
+
+        var global = Engine.Global;
+        if (global.GetOwnProperty(id) is { } existing && existing != PropertyDescriptor.Undefined && !_namedAccess.Contains(id))
+            return;
+
+        _namedAccess.Add(id);
+        global.FastSetProperty(id, new GetSetPropertyDescriptor(
+            Js.Function(Engine, "get " + id, 0, (_, _) => WrapOrNull(Document.GetElementById(id))),
+            Js.Function(Engine, "set " + id, 1, (_, args) =>
+            {
+                _namedAccess.Remove(id);
+                global.FastSetProperty(id, new PropertyDescriptor(Js.Arg(args, 0), PropertyFlag.ConfigurableEnumerableWritable));
+                return JsValue.Undefined;
+            }),
+            enumerable: false, configurable: true));
+    }
+
+    private readonly HashSet<string> _namedAccess = [];
+
     private static (double Width, double Height) CanvasSize(ScriptNode element)
     {
         double Read(string name, double fallback) =>
@@ -805,6 +829,9 @@ internal sealed partial class ScriptRuntime
     // The decoded picture an image element, a pattern source or drawImage argument stands for, or null while it is not loaded.
     private Image? ImageOf(JsValue source)
     {
+        if (source is BitmapObject { Image: { } bitmapImage })
+            return bitmapImage;
+
         if (source is NodeObject { Node: { Kind: ScriptNodeKind.Element } element } && IsImage(element)
             && _images.TryGetValue(element, out var state) && state.Status == 2)
             return element.OwnerDocument.GetLoadedImage(element.GetAttribute("src") ?? string.Empty);

@@ -843,6 +843,7 @@ PeachBrackets.ScriptHosting.ScriptDocument : sealed class
   method IReadOnlyList<ScriptNode> GetElementsByClassName(String classNames)
   method IReadOnlyList<ScriptNode> GetElementsByTagName(String tagName)
   method IReadOnlyList<ScriptNode> QuerySelectorAll(String selector)
+  method Image DecodeImage(Byte[] bytes)
   method Image GetLoadedImage(String address)
   method Int32 OrdinalOf(ScriptNode element)
   method ScriptBox? GetLayoutBox(ScriptNode element)

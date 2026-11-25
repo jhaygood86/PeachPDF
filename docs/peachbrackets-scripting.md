@@ -156,7 +156,7 @@ All script output goes to `JintScriptOptions.Logger`; with none set it is discar
 
 ## Images scripts load
 
-`new Image(width, height)` makes an `img` element, and setting an `img` element's `src` (the property or `setAttribute`) loads it, as does an `img` already in the page. The image is fetched and decoded through the document's resource loader (data: addresses included, SVG too); the result is delivered the way a network answer is, before the virtual clock moves on, as a `load` or `error` event on the element. `complete`, `naturalWidth`, `naturalHeight`, `currentSrc`, `width`, `height` and `decode()` report it. `srcset`, `sizes`, `<picture>`, `crossOrigin`, `loading` and `fetchpriority` have no effect on the load, and an image a script loads is decoded only to learn its size: it is not drawn into anything (there is no canvas yet).
+`new Image(width, height)` makes an `img` element, and setting an `img` element's `src` or `srcset` (the property or `setAttribute`) loads it, as does an `img` already in the page. The image is fetched and decoded through the document's resource loader (data: addresses included, SVG too); the result is delivered the way a network answer is, before the virtual clock moves on, as a `load` or `error` event on the element. `complete`, `naturalWidth`, `naturalHeight`, `currentSrc`, `width`, `height` and `decode()` report it. `srcset` (density and width descriptors, `sizes` in `px` and `vw`) and `<picture>` sources (`type`, and `media` made of `min-width`/`max-width`) choose the address on a viewport 800 px wide; `crossOrigin`, `loading` and `fetchpriority` have no effect on the load, and an image a script loads is decoded only to learn its size: it is not drawn into anything (there is no canvas yet).
 
 ## Canvas 2D
 
@@ -164,7 +164,9 @@ A `<canvas>` is a replaced element as large as its `width` and `height` attribut
 
 Every call is recorded and replayed onto the page's canvas, so a PDF or SVG gets the shapes and text as **vector content**, scaled from the bitmap's size to the box's. What a script draws before layout is what the box shows; a canvas drawn on by a timer or a post-layout function after the document has been laid out is not repainted.
 
-Not provided yet: reading pixels back (`getImageData`, `toDataURL`, `isPointInPath`), `putImageData`/`ImageData`, `OffscreenCanvas`, patterns as a fill, the Porter-Duff compositing modes (`source-in`, `destination-out`, `xor`, `copy`...; they draw as `source-over`), `clearRect` of part of the canvas (clearing all of it works), `filter`, `letterSpacing`/`fontKerning` and the other text properties beyond `font`, `textAlign`, `textBaseline` and `direction`.
+Pixels can be read and written: `getImageData`, `putImageData`, `createImageData`, `ImageData`, `toDataURL` (PNG), `toBlob`, `isPointInPath`/`isPointInStroke`, `createImageBitmap` (a blob, image, canvas or `ImageData`) and `OffscreenCanvas` (no workers). Reading a canvas replays its drawing onto a bitmap, so text drawn with a font from another backend may not show in it. Elements with an `id` are properties of `window`.
+
+Not provided yet: `putImageData` does not replace pixels (it draws them over), patterns as a fill, color spaces (`display-p3`), the Porter-Duff compositing modes (`source-in`, `destination-out`, `xor`, `copy`...; they draw as `source-over`), `clearRect` of part of the canvas (clearing all of it works), `filter`, `letterSpacing`/`fontKerning` and the other text properties beyond `font`, `textAlign`, `textBaseline` and `direction`.
 
 ## Limits
 

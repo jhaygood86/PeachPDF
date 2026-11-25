@@ -8,6 +8,10 @@
     { "id": "xhr", "dirs": ["xhr"] },
     { "id": "fetch-api", "dirs": ["fetch/api"] },
     { "id": "fileapi", "dirs": ["FileAPI"] },
+    { "id": "domparsing", "dirs": ["domparsing"] },
+    { "id": "html-canvas", "dirs": ["html/canvas/element", "html/canvas/offscreen", "html/canvas/historical.any.js", "html/canvas/historical.window.js", "html/canvas/color.window.js"] },
+    { "id": "html-img-canvas-elements", "dirs": ["html/semantics/embedded-content/the-img-element", "html/semantics/embedded-content/the-canvas-element"] },
+    { "id": "html-dom", "dirs": ["html/dom"] },
     { "id": "dom-other", "dirs": ["dom/abort", "dom/collections", "dom/lists", "dom/observable", "dom/attributes-are-nodes.html", "dom/eventPathRemoved.html", "dom/historical-mutation-events.html", "dom/historical.html", "dom/idlharness.any.js", "dom/idlharness.window.js", "dom/interface-objects.html", "dom/window-extends-event-target.html"] }
   ]
 }

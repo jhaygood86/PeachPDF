@@ -313,6 +313,44 @@ internal sealed class CanvasBitmap(ScriptDocument document, double width, double
             op(canvas);
     }
 
+    /// <summary>Replays onto a canvas that may not understand everything (an image another backend made): an operation that fails is skipped.</summary>
+    public void ReplayGuarded(PeachDrawing.Core.Canvas canvas)
+    {
+        foreach (var op in _ops.ToArray())
+        {
+            try
+            {
+                op(canvas);
+            }
+            catch (Exception error) when (error is not OutOfMemoryException)
+            {
+            }
+        }
+    }
+
+    /// <summary>Changes whenever the drawing does, so a read of the pixels can be reused until then.</summary>
+    public int Revision { get; private set; }
+
+    private (int Revision, byte[] Pixels)? _pixels;
+
+    /// <summary>The drawing as pixels, kept until the drawing changes.</summary>
+    public byte[] Pixels()
+    {
+        if (_pixels is { } cached && cached.Revision == Revision)
+            return cached.Pixels;
+
+        var rendered = this.RenderPixels();
+        _pixels = (Revision, rendered);
+        return rendered;
+    }
+
+    /// <summary>Puts pixels on the canvas as they are: no transform, clip, alpha or shadow applies to this.</summary>
+    public void PutPixels(Image image, Rect source, Rect destination)
+    {
+        Revision++;
+        _ops.Add(canvas => canvas.DrawImage(image, destination, source, ImageSampling.Pixelated));
+    }
+
     public void Save() => Saved.Push(State.Clone());
 
     public void Restore()
@@ -323,6 +361,7 @@ internal sealed class CanvasBitmap(ScriptDocument document, double width, double
 
     public void Reset()
     {
+        Revision++;
         _ops.Clear();
         Saved.Clear();
         State = new CanvasState();
@@ -367,6 +406,7 @@ internal sealed class CanvasBitmap(ScriptDocument document, double width, double
     /// </summary>
     public void Record(Action<PeachDrawing.Core.Canvas> draw)
     {
+        Revision++;
         var state = State;
         var (clips, matrix) = (state.Clips.ToArray(), state.Transform);
         var alpha = state.GlobalAlpha;
@@ -420,7 +460,11 @@ internal sealed class CanvasBitmap(ScriptDocument document, double width, double
     }
 
     /// <summary>Starts over: everything drawn so far is dropped (what <c>clearRect</c> over the whole canvas comes to).</summary>
-    public void ClearDrawing() => _ops.Clear();
+    public void ClearDrawing()
+    {
+        Revision++;
+        _ops.Clear();
+    }
 
     // ---- brushes and pens
 

@@ -2,13 +2,17 @@
   "formatVersion": 1,
   "wptCommit": "33926aca0f4313541f0ac5d67d4a4ab949d50b16",
   "floors": {
-    "dom-events": 245,
+    "dom-events": 247,
     "dom-nodes": 7800,
     "dom-other": 269,
     "dom-ranges": 37000,
     "dom-traversal": 1439,
+    "domparsing": 106,
     "fetch-api": 647,
     "fileapi": 411,
+    "html-canvas": 668,
+    "html-dom": 28000,
+    "html-img-canvas-elements": 440,
     "url": 4735,
     "xhr": 285
   }

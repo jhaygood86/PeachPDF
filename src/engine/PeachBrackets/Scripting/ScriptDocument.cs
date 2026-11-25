@@ -455,6 +455,23 @@ public sealed class ScriptDocument
     /// <returns>the canvas, which the caller disposes</returns>
     public PeachDrawing.Core.Canvas? CreateMeasuringCanvas() => _container.MeasuringCanvasFactory?.Invoke();
 
+    /// <summary>Decodes an encoded image (PNG, JPEG...) with the document's render context.</summary>
+    /// <param name="bytes">the file's bytes</param>
+    /// <returns>the image, or null when it cannot be decoded</returns>
+    public PeachDrawing.Core.Image? DecodeImage(byte[] bytes)
+    {
+        ArgumentNullException.ThrowIfNull(bytes);
+        try
+        {
+            using var stream = new MemoryStream(bytes);
+            return _container.RenderContext.ImageFromStream(stream);
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or IOException or ArgumentException)
+        {
+            return null;
+        }
+    }
+
     /// <summary>The decoded image an earlier <see cref="LoadImageAsync"/> of this address made, or null.</summary>
     /// <param name="address">the address as it was given to <see cref="LoadImageAsync"/></param>
     /// <returns>the image, or null</returns>

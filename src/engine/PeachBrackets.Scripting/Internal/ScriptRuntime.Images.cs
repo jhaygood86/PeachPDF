@@ -36,6 +36,117 @@ internal sealed partial class ScriptRuntime
 
     private static bool IsImage(ScriptNode node) => node.Kind == ScriptNodeKind.Element && string.Equals(node.TagName, "img", StringComparison.OrdinalIgnoreCase);
 
+    private const double ViewportWidth = 800;
+
+    private static readonly string[] ImageTypes = ["image/png", "image/jpeg", "image/jpg", "image/gif", "image/webp", "image/svg+xml", "image/bmp", "image/avif", "image/apng", "image/x-icon"];
+
+    // A media query the image sources use, as far as the width of the viewport answers it.
+    private static bool MediaMatches(string? media)
+    {
+        if (string.IsNullOrWhiteSpace(media) || media.Trim().Equals("all", StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        var matches = System.Text.RegularExpressions.Regex.Matches(media, @"\(\s*(min|max)-width\s*:\s*([0-9.]+)px\s*\)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        if (matches.Count == 0 || media.Contains(',') || media.Contains("not ", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        return matches.All(m =>
+        {
+            var limit = double.Parse(m.Groups[2].Value, CultureInfo.InvariantCulture);
+            return m.Groups[1].Value.Equals("min", StringComparison.OrdinalIgnoreCase) ? ViewportWidth >= limit : ViewportWidth <= limit;
+        });
+    }
+
+    // The width the image is laid out at, from a sizes attribute: px and vw lengths, 100vw when there is none.
+    private static double SourceSize(string? sizes)
+    {
+        foreach (var entry in (sizes ?? string.Empty).Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
+        {
+            var match = System.Text.RegularExpressions.Regex.Match(entry, @"^(?:(\(.*\))\s*)?([0-9.]+)(px|vw)$", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            if (!match.Success || (match.Groups[1].Success && !MediaMatches(match.Groups[1].Value)))
+                continue;
+
+            var number = double.Parse(match.Groups[2].Value, CultureInfo.InvariantCulture);
+            return match.Groups[3].Value.Equals("vw", StringComparison.OrdinalIgnoreCase) ? number / 100 * ViewportWidth : number;
+        }
+
+        return ViewportWidth;
+    }
+
+    // The candidate a srcset gives for a one-to-one screen: the smallest that is at least as dense as the screen, else the densest.
+    private static string? PickCandidate(string srcset, string? sizes)
+    {
+        var candidates = new List<(string Url, double Density)>();
+        var width = SourceSize(sizes);
+        var text = srcset.Trim();
+        var position = 0;
+        while (position < text.Length)
+        {
+            while (position < text.Length && (char.IsWhiteSpace(text[position]) || text[position] == ','))
+                position++;
+
+            var start = position;
+            while (position < text.Length && !char.IsWhiteSpace(text[position]))
+                position++;
+
+            var url = text[start..position];
+            var descriptor = string.Empty;
+            if (url.EndsWith(','))
+            {
+                url = url.TrimEnd(',');
+            }
+            else
+            {
+                var end = text.IndexOf(',', position);
+                descriptor = (end < 0 ? text[position..] : text[position..end]).Trim();
+                position = end < 0 ? text.Length : end + 1;
+            }
+
+            var density = 1.0;
+            if (descriptor.Length > 0)
+            {
+                var d = descriptor.ToLowerInvariant();
+                if (d.EndsWith('w') && double.TryParse(d[..^1], NumberStyles.Float, CultureInfo.InvariantCulture, out var w) && w > 0) density = w / width;
+                else if (d.EndsWith('x') && double.TryParse(d[..^1], NumberStyles.Float, CultureInfo.InvariantCulture, out var x) && x > 0) density = x;
+                else continue;
+            }
+
+            if (url.Length > 0)
+                candidates.Add((url, density));
+        }
+
+        if (candidates.Count == 0)
+            return null;
+
+        var denser = candidates.Where(c => c.Density >= 1).OrderBy(c => c.Density).ToList();
+        return (denser.Count > 0 ? denser[0] : candidates.OrderByDescending(c => c.Density).First()).Url;
+    }
+
+    // The address an img element loads: from a source element of its picture, else its own srcset, else src.
+    private static string? SelectImageSource(ScriptNode image)
+    {
+        if (image.Parent is { Kind: ScriptNodeKind.Element } parent && string.Equals(parent.TagName, "picture", StringComparison.OrdinalIgnoreCase))
+        {
+            foreach (var sibling in parent.ChildElements.TakeWhile(c => !ReferenceEquals(c, image)))
+            {
+                if (!string.Equals(sibling.TagName, "source", StringComparison.OrdinalIgnoreCase) || string.IsNullOrWhiteSpace(sibling.GetAttribute("srcset")))
+                    continue;
+                if (sibling.GetAttribute("type") is { } type && !ImageTypes.Contains(type.Trim().ToLowerInvariant()))
+                    continue;
+                if (!MediaMatches(sibling.GetAttribute("media")))
+                    continue;
+
+                if (PickCandidate(sibling.GetAttribute("srcset")!, sibling.GetAttribute("sizes")) is { } fromSource)
+                    return fromSource;
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(image.GetAttribute("srcset")) && PickCandidate(image.GetAttribute("srcset")!, image.GetAttribute("sizes")) is { } picked)
+            return picked;
+
+        return image.GetAttribute("src");
+    }
+
     private void StartImageLoad(ScriptNode image)
     {
         if (!_images.TryGetValue(image, out var state))
@@ -44,7 +155,7 @@ internal sealed partial class ScriptRuntime
         state.Token++;
         state.Width = state.Height = 0;
         state.CurrentSource = string.Empty;
-        var source = image.GetAttribute("src");
+        var source = SelectImageSource(image);
         if (string.IsNullOrEmpty(source))
         {
             state.Status = 0;
@@ -73,6 +184,7 @@ internal sealed partial class ScriptRuntime
         foreach (var (task, node, token) in batch)
         {
             ScriptImageInfo? info = null;
+            var source = SelectImageSource(node) ?? string.Empty;
             try
             {
                 info = await task;
@@ -89,7 +201,7 @@ internal sealed partial class ScriptRuntime
                 state.Status = info is null ? 3 : 2;
                 state.Width = info?.Width ?? 0;
                 state.Height = info?.Height ?? 0;
-                state.CurrentSource = info?.Address ?? string.Empty;
+                state.CurrentSource = info?.Address ?? ResolveAddress(node, source);
                 var waiters = state.Waiters.ToArray();
                 state.Waiters.Clear();
                 foreach (var (resolve, reject) in waiters)
@@ -105,6 +217,9 @@ internal sealed partial class ScriptRuntime
             }), 0, [], repeat: false, frame: false);
         }
     }
+
+    private string ResolveAddress(ScriptNode node, string address) =>
+        node.OwnerDocument.BaseUri is { } baseUri && Uri.TryCreate(baseUri, address, out var absolute) ? absolute.AbsoluteUri : address;
 
     private void InstallImages()
     {

@@ -97,6 +97,24 @@ public class CanvasTests
     }
 
     [Fact]
+    public async Task PixelsCanBeReadWrittenAndExported()
+    {
+        var (_, log) = await PaintAsync("""
+            g.fillStyle = '#ff0000'; g.fillRect(0, 0, 10, 10); g.fillStyle = 'rgba(0, 0, 255, 0.5)'; g.fillRect(10, 0, 10, 10);
+            var d = g.getImageData(0, 0, 20, 10).data;
+            console.log([d[0], d[1], d[2], d[3], d[40], d[41], d[42], d[43], g.getImageData(30, 15, 1, 1).data[3]].join());
+            var image = g.createImageData(2, 1); image.data.set([0, 255, 0, 255, 0, 0, 0, 0]); g.putImageData(image, 30, 15);
+            console.log(g.getImageData(30, 15, 2, 1).data.join(), image.width, image instanceof ImageData);
+            console.log(c.toDataURL().indexOf('data:image/png;base64,') === 0, new ImageData(new Uint8ClampedArray(8), 2).height);
+            g.beginPath(); g.rect(0, 0, 10, 10); console.log(g.isPointInPath(5, 5), g.isPointInPath(15, 5));
+            var off = new OffscreenCanvas(4, 4); off.getContext('2d').fillRect(0, 0, 4, 4); console.log(off.width, off.getContext('2d').getImageData(1, 1, 1, 1).data[3]);
+            console.log(typeof createImageBitmap);
+            """);
+
+        Assert.Equal(["255,0,0,255,0,0,255,128,0", "0,255,0,255,0,0,0,0 2 true", "true 1", "true false", "4 255", "function"], log);
+    }
+
+    [Fact]
     public async Task TheCanvasHasItsBitmapSize_AndClearingStartsOver()
     {
         var (page, _) = await PaintAsync("""
