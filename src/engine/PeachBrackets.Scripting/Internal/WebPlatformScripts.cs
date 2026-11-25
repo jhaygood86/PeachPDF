@@ -13,6 +13,9 @@ internal static class WebPlatformScripts
     /// <summary>Where <see cref="XmlSerializerScripts.Source"/> goes in <see cref="Bundle"/>.</summary>
     public const string XmlSerializerMarker = "/*XMLSERIALIZER*/";
 
+    /// <summary>Where <see cref="MessagingScripts.Source"/> goes in <see cref="Bundle"/>.</summary>
+    public const string MessagingMarker = "/*MESSAGING*/";
+
     public const string Bundle = """
         (function (net, global) {
             "use strict";
@@ -755,6 +758,7 @@ internal static class WebPlatformScripts
 
             /*STREAMS*/
             /*XMLSERIALIZER*/
+            /*MESSAGING*/
             // ---------------------------------------------------------------- Blob, File, FormData
             var blobState = new WeakMap();
             function Blob(parts, options) {
@@ -1719,7 +1723,7 @@ internal static class WebPlatformScripts
                 ["ReadableStream", ReadableStream], ["ReadableStreamDefaultReader", ReadableStreamDefaultReader], ["ReadableStreamDefaultController", ReadableStreamDefaultController],
                 ["WritableStream", WritableStream], ["WritableStreamDefaultWriter", WritableStreamDefaultWriter], ["WritableStreamDefaultController", WritableStreamDefaultController],
                 ["TransformStream", TransformStream], ["TransformStreamDefaultController", TransformStreamDefaultController], ["TextEncoderStream", TextEncoderStream],
-                ["TextDecoderStream", TextDecoderStream], ["CountQueuingStrategy", CountQueuingStrategy], ["ByteLengthQueuingStrategy", ByteLengthQueuingStrategy], ["XMLSerializer", XMLSerializer], ["structuredClone", structuredClone], ["ReadableStreamBYOBReader", ReadableStreamBYOBReader], ["ReadableStreamBYOBRequest", ReadableStreamBYOBRequest], ["ReadableByteStreamController", ReadableByteStreamController]
+                ["TextDecoderStream", TextDecoderStream], ["CountQueuingStrategy", CountQueuingStrategy], ["ByteLengthQueuingStrategy", ByteLengthQueuingStrategy], ["XMLSerializer", XMLSerializer], ["structuredClone", structuredClone], ["ReadableStreamBYOBReader", ReadableStreamBYOBReader], ["ReadableStreamBYOBRequest", ReadableStreamBYOBRequest], ["ReadableByteStreamController", ReadableByteStreamController], ["MessageChannel", MessageChannel], ["MessagePort", MessagePort], ["postMessage", windowPostMessage]
             ].forEach(function (pair) { define(pair[0], pair[1]); });
         })
         """;

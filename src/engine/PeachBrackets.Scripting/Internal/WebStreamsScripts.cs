@@ -1329,11 +1329,23 @@ internal static class WebStreamsScripts
                         transferList = Array.from(list);
                     }
                 }
+                return serializeWithTransfer(value, transferList).value;
+            }
+            // Objects other than ArrayBuffers a transfer list may hold (message ports, readable and writable streams): each registers
+            // { test(v), check(v) throws DataCloneError, transfer(v) -> the object that takes its place }.
+            var transferHandlers = [];
+            function transferHandlerOf(item) {
+                for (var i = 0; i < transferHandlers.length; i++) if (transferHandlers[i].test(item)) return transferHandlers[i];
+                return null;
+            }
+            function serializeWithTransfer(value, transferList) {
                 var seen = new Set(), transferred = new Map();
                 transferList.forEach(function (item) {
-                    if (!(item instanceof ArrayBuffer)) throw dataCloneError("An object could not be transferred");
+                    var handler = isObject(item) && !(item instanceof ArrayBuffer) ? transferHandlerOf(item) : null;
+                    if (!(item instanceof ArrayBuffer) && !handler) throw dataCloneError("An object could not be transferred");
                     if (seen.has(item)) throw dataCloneError("Transfer list contains duplicate entries");
-                    if (isDetached(item)) throw dataCloneError("An ArrayBuffer is detached and could not be cloned");
+                    if (handler) handler.check(item, transferList);
+                    else if (isDetached(item)) throw dataCloneError("An ArrayBuffer is detached and could not be cloned");
                     seen.add(item);
                 });
                 var memory = new Map();
@@ -1345,7 +1357,8 @@ internal static class WebStreamsScripts
                     if (typeof v === "function") throw dataCloneError("A function could not be cloned");
                     if (memory.has(v)) return memory.get(v);
                     var result;
-                    if (v instanceof ArrayBuffer) {
+                    if (seen.has(v) && !(v instanceof ArrayBuffer)) result = transferred.get(v);
+                    else if (v instanceof ArrayBuffer) {
                         if (seen.has(v)) result = transferred.get(v);
                         else if (isDetached(v)) throw dataCloneError("An ArrayBuffer is detached and could not be cloned");
                         else result = v.slice(0);
@@ -1362,6 +1375,9 @@ internal static class WebStreamsScripts
                     } else if (v instanceof Set) {
                         result = new Set(); memory.set(v, result);
                         v.forEach(function (val) { result.add(clone(val)); });
+                        return result;
+                    } else if (v instanceof DOMException) {
+                        result = new DOMException(v.message, v.name); memory.set(v, result);
                         return result;
                     } else if (v instanceof Error) {
                         var names = ["Error", "EvalError", "RangeError", "ReferenceError", "SyntaxError", "TypeError", "URIError"];
@@ -1382,10 +1398,11 @@ internal static class WebStreamsScripts
                     return result;
                 }
                 // Transferred buffers move before the clone reads them, so views over them follow.
-                transferList.forEach(function (buffer) { transferred.set(buffer, buffer.transfer()); });
-                var cloned;
-                try { cloned = clone(value); } catch (e) { throw e; }
-                return cloned;
+                transferList.forEach(function (item) {
+                    var handler = item instanceof ArrayBuffer ? null : transferHandlerOf(item);
+                    transferred.set(item, handler ? handler.transfer(item) : item.transfer());
+                });
+                return { value: clone(value), transferred: transferred };
             }
             function readAllBytes(stream) {
                 var reader = stream.getReader(), chunks = [], total = 0;

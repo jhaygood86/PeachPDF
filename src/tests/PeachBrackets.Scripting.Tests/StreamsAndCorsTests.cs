@@ -291,4 +291,64 @@ public class StreamsAndCorsTests
 
         Assert.Equal(["false 2 7,8", "true 0", "0 8 1,2", "DataCloneError", "1,2,3"], log);
     }
+
+    [Fact]
+    public async Task MessageChannel_DeliversClonedMessagesInOrder_AndTransfersPorts()
+    {
+        var (log, _) = await RunAsync("""
+            (async function () { try {
+                var channel = new MessageChannel(), got = [];
+                channel.port2.onmessage = function (e) { got.push(JSON.stringify(e.data) + ':' + e.ports.length); };
+                var original = { n: 1 };
+                channel.port1.postMessage(original);
+                channel.port1.postMessage('two');
+                original.n = 99;
+                await new Promise(function (r) { setTimeout(r, 20); });
+                Log.info(got.join(' '));
+                var other = new MessageChannel(), moved;
+                channel.port2.onmessage = function (e) { moved = e.ports[0]; };
+                channel.port1.postMessage('carry', [other.port2]);
+                await new Promise(function (r) { setTimeout(r, 20); });
+                var back; other.port1.onmessage = function (e) { back = e.data; };
+                moved.postMessage('hello');
+                other.port1.postMessage('x');
+                await new Promise(function (r) { setTimeout(r, 20); });
+                Log.info((moved instanceof MessagePort) + ' ' + back);
+                try { channel.port1.postMessage(1, [channel.port1]); } catch (e) { Log.info(e.name); }
+                var seen = new Promise(function (r) { addEventListener('message', r, { once: true }); });
+                postMessage({ a: [1, 2] }, '*');
+                var event = await seen;
+                Log.info(JSON.stringify(event.data) + ' ' + (event.source === window));
+            } catch (e) { Log.info('threw ' + e + ' ' + e.stack); } })();
+            """);
+
+        Assert.Equal(["{\"n\":1}:0 \"two\":0", "true hello", "DataCloneError", "{\"a\":[1,2]} true"], log);
+    }
+
+    [Fact]
+    public async Task Streams_AreTransferred_ThroughPostMessage_AndStructuredClone()
+    {
+        var (log, _) = await RunAsync("""
+            (async function () { try {
+                var rs = new ReadableStream({ start: function (c) { c.enqueue('a'); c.enqueue({ b: 2 }); c.close(); } });
+                var moved = structuredClone(rs, { transfer: [rs] });
+                Log.info(rs.locked + ' ' + (moved instanceof ReadableStream));
+                var reader = moved.getReader(), chunks = [];
+                for (var r = await reader.read(); !r.done; r = await reader.read()) chunks.push(JSON.stringify(r.value));
+                Log.info(chunks.join());
+                var written = [], ws = new WritableStream({ write: function (c) { written.push(c); } });
+                var movedWriter = structuredClone(ws, { transfer: [ws] });
+                var w = movedWriter.getWriter();
+                await w.write(1); await w.write('two'); await w.close();
+                await new Promise(function (r) { setTimeout(r, 50); });
+                Log.info(ws.locked + ' ' + written.join());
+                var locked = new ReadableStream(); locked.getReader();
+                try { structuredClone(locked, { transfer: [locked] }); } catch (e) { Log.info(e.name); }
+                var t = new TransformStream();
+                try { structuredClone(t, { transfer: [t] }); } catch (e) { Log.info(e.name); }
+            } catch (e) { Log.info('threw ' + e + ' ' + e.stack); } })();
+            """);
+
+        Assert.Equal(["true true", "\"a\",{\"b\":2}", "false 1,two", "DataCloneError", "DataCloneError"], log);
+    }
 }
