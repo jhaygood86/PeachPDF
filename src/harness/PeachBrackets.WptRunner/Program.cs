@@ -261,15 +261,25 @@ namespace PeachBrackets.WptRunner
 
         private static async Task<TestResult> EvaluateWithTimeoutAsync(IWptEvaluator evaluator, string path, TimeSpan timeout)
         {
-            // A page that recurses deeply (up to the engine's depth limit) needs more stack than a pool thread has, so each test runs on a thread of its own.
-            var completion = new TaskCompletionSource<TestResult>(TaskCreationOptions.RunContinuationsAsynchronously);
-            var thread = new Thread(() =>
+            // A page that recurses deeply (up to the engine's depth limit) overflows the 1 MB stack of a Windows pool thread, so there each test runs on a
+            // thread of its own with a large one. Elsewhere the pool's threads have 8 MB, and the pool is kept: a thread per test changed what the scripted
+            // css2-tables reftests rendered on the Linux runner (41 of them lost their monospace font) for a reason not found.
+            Task<TestResult> work;
+            if (OperatingSystem.IsWindows())
             {
-                try { completion.SetResult(evaluator.EvaluateAsync(path).GetAwaiter().GetResult()); }
-                catch (Exception ex) { completion.SetException(ex); }
-            }, 128 * 1024 * 1024) { IsBackground = true };
-            thread.Start();
-            var work = completion.Task;
+                var completion = new TaskCompletionSource<TestResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+                var thread = new Thread(() =>
+                {
+                    try { completion.SetResult(evaluator.EvaluateAsync(path).GetAwaiter().GetResult()); }
+                    catch (Exception ex) { completion.SetException(ex); }
+                }, 128 * 1024 * 1024) { IsBackground = true };
+                thread.Start();
+                work = completion.Task;
+            }
+            else
+            {
+                work = Task.Run(() => evaluator.EvaluateAsync(path));
+            }
             if (await Task.WhenAny(work, Task.Delay(timeout)) == work)
                 return await work;
             return new TestResult(Outcome.Fail, $"error: timeout after {timeout.TotalSeconds:0}s");
