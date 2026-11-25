@@ -111,6 +111,48 @@ internal static class MessagingScripts
                 }
             });
 
+            // ---- BroadcastChannel: channels of one name in this document hear each other.
+            var broadcastState = new WeakMap(), broadcastChannels = {};
+            function BroadcastChannel(name) {
+                if (new.target === undefined) throw new TypeError("Failed to construct 'BroadcastChannel': Please use the 'new' operator, this DOM object constructor cannot be called as a function.");
+                if (arguments.length < 1) throw new TypeError("Failed to construct 'BroadcastChannel': 1 argument required, but only 0 present.");
+                var self = Reflect.construct(EventTarget, [], new.target);
+                var state = { name: String(name), closed: false };
+                broadcastState.set(self, state);
+                (broadcastChannels[state.name] = broadcastChannels[state.name] || []).push(self);
+                return self;
+            }
+            BroadcastChannel.prototype = Object.create(EventTarget.prototype, { constructor: { value: BroadcastChannel, writable: true, configurable: true } });
+            function broadcastOf(self) {
+                var state = broadcastState.get(self);
+                if (!state) throw new TypeError("Illegal invocation");
+                return state;
+            }
+            readonly(BroadcastChannel.prototype, "name", function () { return broadcastOf(this).name; });
+            method(BroadcastChannel.prototype, "postMessage", function postMessage(message) {
+                var state = broadcastOf(this), self = this;
+                if (arguments.length < 1) throw new TypeError("Failed to execute 'postMessage' on 'BroadcastChannel': 1 argument required, but only 0 present.");
+                if (state.closed) throw new DOMException("BroadcastChannel is closed.", "InvalidStateError");
+                var serialized = serializeWithTransfer(message, []);
+                (broadcastChannels[state.name] || []).slice().forEach(function (target) {
+                    if (target === self) return;
+                    var data = serializeWithTransfer(serialized.value, []).value;
+                    setTimeout(function () {
+                        if (broadcastState.get(target).closed) return;
+                        target.dispatchEvent(new MessageEvent("message", { data: data, origin: global.location.origin, lastEventId: "", source: null, ports: [] }));
+                    }, 0);
+                });
+            });
+            method(BroadcastChannel.prototype, "close", function close() {
+                var state = broadcastOf(this);
+                state.closed = true;
+                var list = broadcastChannels[state.name] || [], at = list.indexOf(this);
+                if (at >= 0) list.splice(at, 1);
+            });
+            handlerAttribute(BroadcastChannel.prototype, "message");
+            handlerAttribute(BroadcastChannel.prototype, "messageerror");
+            tag(BroadcastChannel, "BroadcastChannel");
+
             function windowPostMessage(message, targetOrigin, transfer) {
                 if (arguments.length < 1) throw new TypeError("Failed to execute 'postMessage' on 'Window': 1 argument required, but only 0 present.");
                 var list, origin = "/";

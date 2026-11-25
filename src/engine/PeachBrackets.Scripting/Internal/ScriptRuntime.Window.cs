@@ -161,6 +161,7 @@ internal sealed partial class ScriptRuntime
 
         Define("location", LocationObject());
         Define("navigator", NavigatorObject());
+        Engine.Execute(ExtrasScripts.NavigatorHandlers);
         Define("console", ConsoleObject());
         if (_options.PrinceCompatibility)
         {
@@ -206,16 +207,46 @@ internal sealed partial class ScriptRuntime
         });
         Js.Method(Engine, global, "atob", 1, (_, args) =>
         {
+            if (args.Length == 0)
+                throw TypeError("Failed to execute 'atob' on 'Window': 1 argument required, but only 0 present.");
+
+            // The forgiving-base64 decode of the Infra standard.
+            var input = new StringBuilder();
+            foreach (var c in Js.AsText(args[0]))
+            {
+                if (c is not (' ' or '\t' or '\n' or '\f' or '\r'))
+                    input.Append(c);
+            }
+
+            var text = input.ToString();
+            if (text.Length % 4 == 0 && text.EndsWith("==", StringComparison.Ordinal))
+                text = text[..^2];
+            else if (text.Length % 4 == 0 && text.EndsWith('='))
+                text = text[..^1];
+
+            if (text.Length % 4 == 1 || text.Any(c => !(c is >= 'A' and <= 'Z' or >= 'a' and <= 'z' or >= '0' and <= '9' or '+' or '/')))
+                throw DomError("InvalidCharacterError", "The string to be decoded is not correctly encoded.");
+
             try
             {
-                return Js.Str(Encoding.Latin1.GetString(Convert.FromBase64String(Js.AsText(Js.Arg(args, 0)))));
+                return Js.Str(Encoding.Latin1.GetString(Convert.FromBase64String(text.PadRight(text.Length + (4 - text.Length % 4) % 4, '='))));
             }
             catch (FormatException)
             {
-                throw DomError("InvalidCharacterError", "The string is not correctly encoded.");
+                throw DomError("InvalidCharacterError", "The string to be decoded is not correctly encoded.");
             }
         });
-        Js.Method(Engine, global, "btoa", 1, (_, args) => Js.Str(Convert.ToBase64String(Encoding.Latin1.GetBytes(Js.AsText(Js.Arg(args, 0))))));
+        Js.Method(Engine, global, "btoa", 1, (_, args) =>
+        {
+            if (args.Length == 0)
+                throw TypeError("Failed to execute 'btoa' on 'Window': 1 argument required, but only 0 present.");
+
+            var text = Js.AsText(args[0]);
+            if (text.Any(c => c > 255))
+                throw DomError("InvalidCharacterError", "The string to be encoded contains characters outside of the Latin1 range.");
+
+            return Js.Str(Convert.ToBase64String(Encoding.Latin1.GetBytes(text)));
+        });
         foreach (var no in new[] { "alert", "focus", "blur", "scrollTo", "scrollBy", "scroll", "print", "close", "stop" })
             Js.Method(Engine, global, no, 0, (_, _) => JsValue.Undefined);
 

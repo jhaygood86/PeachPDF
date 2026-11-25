@@ -26,6 +26,7 @@ internal static class WptHandlers
         ["common/CustomCorsResponse.py"] = CustomCors,
         ["dom/nodes/Document-contentType/support/contenttype_setter.py"] = ContentTypeSetter,
         ["dom/nodes/encoding.py"] = Encoding_,
+        ["encoding/resources/single-byte-raw.py"] = SingleByteRaw,
     };
 
     /// <summary>The handler for a path relative to the checkout, or null when none is ported.</summary>
@@ -109,5 +110,12 @@ internal static class WptHandlers
     {
         response.Set("Content-Type", "text/html");
         response.SetText($"<!doctype html><meta charset=\"{System.Net.WebUtility.HtmlEncode(request.First("label") ?? string.Empty)}\">");
+    }
+
+    // The bytes 0 to 254 as text/plain in the charset the label names (the encoding tests decode them through XMLHttpRequest).
+    private static void SingleByteRaw(ServerRequest request, ServerResponse response)
+    {
+        response.Set("Content-Type", "text/plain;charset=" + (request.First("label") ?? string.Empty));
+        response.Body = Enumerable.Range(0, 255).Select(b => (byte)b).ToArray();
     }
 }

@@ -1367,7 +1367,10 @@ internal static class WebStreamsScripts
                         result = v instanceof DataView ? new DataView(buffer, v.byteOffset, v.byteLength) : new v.constructor(buffer, v.byteOffset, v.length);
                     } else if (v instanceof Date) result = new Date(v.getTime());
                     else if (v instanceof RegExp) result = new RegExp(v.source, v.flags);
-                    else if (v instanceof Boolean || v instanceof Number || v instanceof String) result = Object(v.valueOf());
+                    else if (v instanceof Boolean || v instanceof Number || v instanceof String || Object.prototype.toString.call(v) === "[object BigInt]") result = Object(v.valueOf());
+                    else if (typeof global.File === "function" && v instanceof global.File) result = new global.File([v], v.name, { type: v.type, lastModified: v.lastModified });
+                    else if (typeof global.Blob === "function" && v instanceof global.Blob) result = new global.Blob([v], { type: v.type });
+                    else if (typeof global.ImageData === "function" && v instanceof global.ImageData) result = new global.ImageData(new Uint8ClampedArray(v.data), v.width, v.height, { colorSpace: v.colorSpace });
                     else if (v instanceof Map) {
                         result = new Map(); memory.set(v, result);
                         v.forEach(function (val, key) { result.set(clone(key), clone(val)); });
@@ -1382,14 +1385,16 @@ internal static class WebStreamsScripts
                     } else if (v instanceof Error) {
                         var names = ["Error", "EvalError", "RangeError", "ReferenceError", "SyntaxError", "TypeError", "URIError"];
                         var ctor = names.indexOf(v.name) >= 0 ? global[v.name] : Error;
-                        result = new ctor(v.message); memory.set(v, result);
+                        result = new ctor(); memory.set(v, result);
+                        if (Object.prototype.hasOwnProperty.call(v, "message")) Object.defineProperty(result, "message", { value: String(v.message), writable: true, configurable: true });
+                        if (Object.prototype.hasOwnProperty.call(v, "cause")) Object.defineProperty(result, "cause", { value: clone(v.cause), writable: true, configurable: true });
                         if (typeof v.stack === "string") Object.defineProperty(result, "stack", { value: v.stack, writable: true, configurable: true });
                         return result;
                     } else if (Array.isArray(v)) {
                         result = new Array(v.length); memory.set(v, result);
                         Object.keys(v).forEach(function (k) { result[k] = clone(v[k]); });
                         return result;
-                    } else if (Object.getPrototypeOf(v) === Object.prototype || Object.getPrototypeOf(v) === null) {
+                    } else if (Object.prototype.toString.call(v) === "[object Object]") {
                         result = {}; memory.set(v, result);
                         Object.keys(v).forEach(function (k) { result[k] = clone(v[k]); });
                         return result;

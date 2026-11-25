@@ -13,6 +13,10 @@
     { "id": "html-img-canvas-elements", "dirs": ["html/semantics/embedded-content/the-img-element", "html/semantics/embedded-content/the-canvas-element"] },
     { "id": "html-dom", "dirs": ["html/dom"] },
     { "id": "streams", "dirs": ["streams"] },
+    { "id": "webappapis", "dirs": ["html/webappapis"] },
+    { "id": "html-infrastructure", "dirs": ["html/infrastructure"] },
+    { "id": "webmessaging", "dirs": ["webmessaging"] },
+    { "id": "encoding", "dirs": ["encoding/api-basics.any.js", "encoding/api-invalid-label.any.js", "encoding/api-replacement-encodings.any.js", "encoding/api-surrogates-utf8.any.js", "encoding/encodeInto.any.js", "encoding/encodeInto-tail-unmodified.any.js", "encoding/iso-2022-jp-decoder.any.js", "encoding/replacement-encodings.any.js", "encoding/single-byte-decoder.any.js", "encoding/streams", "encoding/textdecoder-arguments.any.js", "encoding/textdecoder-byte-order-marks.any.js", "encoding/textdecoder-copy.any.js", "encoding/textdecoder-eof.any.js", "encoding/textdecoder-fatal-single-byte.any.js", "encoding/textdecoder-fatal-streaming.any.js", "encoding/textdecoder-fatal.any.js", "encoding/textdecoder-ignorebom.any.js", "encoding/textdecoder-labels.any.js", "encoding/textdecoder-mistakes.any.js", "encoding/textdecoder-streaming.any.js", "encoding/textdecoder-utf16-surrogates.any.js", "encoding/textencoder-constructor-non-utf.any.js", "encoding/textencoder-utf16-surrogates.any.js", "encoding/unsupported-encodings.any.js", "encoding/unsupported-labels.window.js", "encoding/legacy-mb-schinese/gb18030", "encoding/legacy-mb-schinese/gbk"] },
     { "id": "dom-other", "dirs": ["dom/abort", "dom/collections", "dom/lists", "dom/observable", "dom/attributes-are-nodes.html", "dom/eventPathRemoved.html", "dom/historical-mutation-events.html", "dom/historical.html", "dom/idlharness.any.js", "dom/idlharness.window.js", "dom/interface-objects.html", "dom/window-extends-event-target.html"] }
   ]
 }

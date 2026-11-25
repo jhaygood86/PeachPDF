@@ -58,7 +58,7 @@ internal sealed partial class ScriptRuntime
         "URL", "URLSearchParams", "Headers", "Request", "Response", "fetch", "XMLHttpRequest", "XMLHttpRequestEventTarget", "XMLHttpRequestUpload",
         "Blob", "File", "FormData", "TextEncoder", "TextDecoder", "FileReader",
         "ReadableStream", "ReadableStreamDefaultReader", "ReadableStreamDefaultController", "WritableStream", "WritableStreamDefaultWriter", "WritableStreamDefaultController",
-        "TransformStream", "TransformStreamDefaultController", "TextEncoderStream", "TextDecoderStream", "CountQueuingStrategy", "ByteLengthQueuingStrategy", "XMLSerializer", "structuredClone", "ReadableStreamBYOBReader", "ReadableStreamBYOBRequest", "ReadableByteStreamController", "MessageChannel", "MessagePort", "postMessage",
+        "TransformStream", "TransformStreamDefaultController", "TextEncoderStream", "TextDecoderStream", "CountQueuingStrategy", "ByteLengthQueuingStrategy", "XMLSerializer", "structuredClone", "ReadableStreamBYOBReader", "ReadableStreamBYOBRequest", "ReadableByteStreamController", "MessageChannel", "MessagePort", "BroadcastChannel", "postMessage",
     ];
 
     private void InstallLazyWebGlobals()
@@ -140,6 +140,12 @@ internal sealed partial class ScriptRuntime
             var bytes = Encoding.Latin1.GetBytes(Js.AsText(Js.Arg(args, 0)));
             return Js.Str(DecoderFor(Js.AsText(Js.Arg(args, 1)))?.GetString(bytes));
         });
+        // Decoders with a state, for TextDecoder: decoderNew(name, fatal) is a handle or -1; decoderRun(handle, bytes, flush) is the text, or null for an invalid input of a fatal decoder.
+        Js.Method(Engine, net, "decoderNew", 2, (_, args) => (double)TextEncodings.Create(Js.AsText(Js.Arg(args, 0)), TypeConverter.ToBoolean(Js.Arg(args, 1))));
+        Js.Method(Engine, net, "decoderRun", 3, (_, args) =>
+            Js.Str(TextEncodings.Run((int)TypeConverter.ToNumber(Js.Arg(args, 0)), Encoding.Latin1.GetBytes(Js.AsText(Js.Arg(args, 1))), TypeConverter.ToBoolean(Js.Arg(args, 2)))));
+        // The lower-case name of the encoding a label stands for in the Encoding Standard ("replacement" for the replacement encodings), or null.
+        Js.Method(Engine, net, "encodingName", 1, (_, args) => Js.Str(EncodingLabels.NameOf(Js.AsText(Js.Arg(args, 0)))?.ToLowerInvariant()));
         // Domain to ASCII (UTS #46); null on an error.
         Js.Method(Engine, net, "idna", 1, (_, args) => Js.Str(Idna.Uts46.ToAscii(Js.AsText(Js.Arg(args, 0)))));
 

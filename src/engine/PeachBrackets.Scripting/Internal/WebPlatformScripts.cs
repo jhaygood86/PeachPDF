@@ -57,15 +57,9 @@ internal static class WebPlatformScripts
             function utf8Decode(bytes) { return net.utf8Decode(bytesToBinary(bytes), true); }
             function toArrayBuffer(bytes) { return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength); }
 
-            var encodingNames = {
-                "utf-8": "utf-8", "utf8": "utf-8", "unicode-1-1-utf-8": "utf-8",
-                "utf-16le": "utf-16le", "utf-16": "utf-16le", "ucs-2": "utf-16le", "unicode": "utf-16le",
-                "utf-16be": "utf-16be",
-                "iso-8859-1": "windows-1252", "latin1": "windows-1252", "l1": "windows-1252", "windows-1252": "windows-1252",
-                "us-ascii": "windows-1252", "ascii": "windows-1252", "cp1252": "windows-1252"
-            };
             function normalizeEncoding(label) {
-                return encodingNames[String(label).replace(/^[ \t\n\f\r]+|[ \t\n\f\r]+$/g, "").toLowerCase()] || null;
+                var name = net.encodingName(String(label));
+                return name === "replacement" ? null : name;
             }
 
             function TextEncoder() {
@@ -125,9 +119,21 @@ internal static class WebPlatformScripts
                     if (state.fatal && text.indexOf("�") >= 0 && utf8(text).length !== bytes.length) throw new TypeError("The encoded data was not valid for encoding utf-8");
                     return text;
                 }
-                var decoded = net.decode(binary, state.name);
-                if (decoded === null) throw new TypeError("Unsupported encoding");
-                return !state.ignoreBOM && decoded.charCodeAt(0) === 0xFEFF ? decoded.slice(1) : decoded;
+                if (state.handle === undefined) {
+                    state.handle = net.decoderNew(state.name, state.fatal);
+                    state.started = false;
+                }
+                if (state.handle < 0) { state.handle = undefined; throw new TypeError("Unsupported encoding " + state.name); }
+                var handle = state.handle;
+                if (!streaming) state.handle = undefined;
+                var decoded = net.decoderRun(handle, binary, !streaming);
+                if (decoded === null) { state.handle = undefined; throw new TypeError("The encoded data was not valid for encoding " + state.name); }
+                if (!state.ignoreBOM && !state.started && decoded.length > 0) {
+                    state.started = true;
+                    if (decoded.charCodeAt(0) === 0xFEFF && (state.name === "utf-16le" || state.name === "utf-16be")) decoded = decoded.slice(1);
+                }
+                if (!streaming) state.started = false;
+                return decoded;
             });
             tag(TextDecoder, "TextDecoder");
 
@@ -1649,7 +1655,10 @@ internal static class WebPlatformScripts
                 var name = charset ? normalizeEncoding(charset[1]) : null;
                 var bytes = s.responseBytes || new Uint8Array(0);
                 if (name === null || name === "utf-8") return net.utf8Decode(bytesToBinary(bytes), true);
-                return net.decode(bytesToBinary(bytes), name) || net.utf8Decode(bytesToBinary(bytes), true);
+                var handle = net.decoderNew(name, false);
+                if (handle < 0) return net.utf8Decode(bytesToBinary(bytes), true);
+                var text = net.decoderRun(handle, bytesToBinary(bytes), true);
+                return name.indexOf("utf-16") === 0 && text.charCodeAt(0) === 0xFEFF ? text.slice(1) : text;
             }
             readonly(XMLHttpRequest.prototype, "responseText", function () {
                 var s = xhrOf(this);
@@ -1723,7 +1732,7 @@ internal static class WebPlatformScripts
                 ["ReadableStream", ReadableStream], ["ReadableStreamDefaultReader", ReadableStreamDefaultReader], ["ReadableStreamDefaultController", ReadableStreamDefaultController],
                 ["WritableStream", WritableStream], ["WritableStreamDefaultWriter", WritableStreamDefaultWriter], ["WritableStreamDefaultController", WritableStreamDefaultController],
                 ["TransformStream", TransformStream], ["TransformStreamDefaultController", TransformStreamDefaultController], ["TextEncoderStream", TextEncoderStream],
-                ["TextDecoderStream", TextDecoderStream], ["CountQueuingStrategy", CountQueuingStrategy], ["ByteLengthQueuingStrategy", ByteLengthQueuingStrategy], ["XMLSerializer", XMLSerializer], ["structuredClone", structuredClone], ["ReadableStreamBYOBReader", ReadableStreamBYOBReader], ["ReadableStreamBYOBRequest", ReadableStreamBYOBRequest], ["ReadableByteStreamController", ReadableByteStreamController], ["MessageChannel", MessageChannel], ["MessagePort", MessagePort], ["postMessage", windowPostMessage]
+                ["TextDecoderStream", TextDecoderStream], ["CountQueuingStrategy", CountQueuingStrategy], ["ByteLengthQueuingStrategy", ByteLengthQueuingStrategy], ["XMLSerializer", XMLSerializer], ["structuredClone", structuredClone], ["ReadableStreamBYOBReader", ReadableStreamBYOBReader], ["ReadableStreamBYOBRequest", ReadableStreamBYOBRequest], ["ReadableByteStreamController", ReadableByteStreamController], ["MessageChannel", MessageChannel], ["BroadcastChannel", BroadcastChannel], ["MessagePort", MessagePort], ["postMessage", windowPostMessage]
             ].forEach(function (pair) { define(pair[0], pair[1]); });
         })
         """;

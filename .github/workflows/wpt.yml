@@ -73,7 +73,7 @@ jobs:
       uses: actions/cache@v4
       with:
         path: ~/.peachbrackets-wpt
-        key: wpt-v5-${{ hashFiles('src/harness/PeachBrackets.WptRunner/wpt/WPT_COMMIT') }}
+        key: wpt-v6-${{ hashFiles('src/harness/PeachBrackets.WptRunner/wpt/WPT_COMMIT') }}
 
     - name: Build the runner
       run: dotnet build src/harness/PeachBrackets.WptRunner/PeachBrackets.WptRunner.csproj --configuration Release --framework net10.0

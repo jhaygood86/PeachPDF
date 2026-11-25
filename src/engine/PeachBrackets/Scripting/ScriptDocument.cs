@@ -466,7 +466,7 @@ public sealed class ScriptDocument
             using var stream = new MemoryStream(bytes);
             return _container.RenderContext.ImageFromStream(stream);
         }
-        catch (Exception ex) when (ex is InvalidOperationException or IOException or ArgumentException)
+        catch (Exception ex) when (ex is InvalidOperationException or IOException or ArgumentException or InvalidDataException or NotSupportedException)
         {
             return null;
         }

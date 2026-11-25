@@ -351,4 +351,60 @@ public class StreamsAndCorsTests
 
         Assert.Equal(["true true", "\"a\",{\"b\":2}", "false 1,two", "DataCloneError", "DataCloneError"], log);
     }
+
+    [Fact]
+    public async Task TextDecoder_ReadsLegacyEncodings_AndStreamsUtf16()
+    {
+        var (log, _) = await RunAsync("""
+            (function () { try {
+                Log.info(new TextDecoder('windows-1251').decode(new Uint8Array([0xCF, 0xF0, 0xE8])) + ' ' + new TextDecoder('latin1').encoding + ' ' + new TextDecoder('UTF-16').encoding);
+                Log.info(new TextDecoder('iso-8859-7').decode(new Uint8Array([0xA1])) + ' ' + new TextDecoder('koi8-r').decode(new Uint8Array([0xC1])));
+                var user = new TextDecoder('x-user-defined');
+                Log.info(user.decode(new Uint8Array([0x41, 0x80, 0xFF])).split('').map(function (c) { return c.charCodeAt(0).toString(16); }).join());
+                var userFatal = new TextDecoder('x-user-defined', { fatal: true }), bad = [];
+                for (var b = 0; b < 256; b++) { try { userFatal.decode(Uint8Array.of(b)); } catch (e) { bad.push(b); } }
+                Log.info('bad ' + bad.length + ' ' + bad.slice(0, 3));
+                var fatal = new TextDecoder('windows-1253', { fatal: true });
+                try { fatal.decode(new Uint8Array([0xAA])); } catch (e) { Log.info(e.name); }
+                var utf16 = new TextDecoder('utf-16le'), out = '';
+                [[0x3D], [0xD8, 0x00], [0xDC, 0x41, 0x00]].forEach(function (chunk) { out += utf16.decode(new Uint8Array(chunk), { stream: true }); });
+                out += utf16.decode();
+                Log.info(out.length + ' ' + out.codePointAt(0).toString(16) + ' ' + out.charCodeAt(2).toString(16));
+                try { new TextDecoder('hz-gb-2312'); } catch (e) { Log.info(e.name); }
+            } catch (e) { Log.info('threw ' + e + ' ' + e.stack); } })();
+            """);
+
+        Assert.Equal(["При windows-1252 utf-16le", "‘ а", "41,f780,f7ff", "bad 0 ", "TypeError", "3 1f400 41", "RangeError"], log);
+    }
+
+    [Fact]
+    public async Task BroadcastChannel_Atob_ProtocolHandlers_AndMoreCloneKinds()
+    {
+        var (log, _) = await RunAsync("""
+            (async function () { try {
+                var a = new BroadcastChannel('x'), b = new BroadcastChannel('x'), c = new BroadcastChannel('y'), heard = [];
+                b.onmessage = function (e) { heard.push('b:' + JSON.stringify(e.data)); };
+                a.onmessage = function () { heard.push('a'); };
+                c.onmessage = function () { heard.push('c'); };
+                a.postMessage({ n: 1 });
+                await new Promise(function (r) { setTimeout(r, 20); });
+                b.close();
+                try { b.postMessage(1); } catch (e) { heard.push(e.name); }
+                Log.info(heard.join(' '));
+                Log.info(atob(' YQ== ') + atob('YWI') + ' ' + btoa('ab'));
+                try { atob('a'); } catch (e) { Log.info(e.name); }
+                try { btoa('Ā'); } catch (e) { Log.info(e.name); }
+                navigator.registerProtocolHandler('web+peach', location.origin + '/%s');
+                try { navigator.registerProtocolHandler('http', location.origin + '/%s'); } catch (e) { Log.info(e.name); }
+                try { navigator.registerProtocolHandler('mailto', 'nothing'); } catch (e) { Log.info(e.name); }
+                try { navigator.registerProtocolHandler('mailto', 'https://elsewhere.example/%s'); } catch (e) { Log.info(e.name); }
+                class Point { constructor() { this.x = 1; } }
+                var error = new Error('boom', { cause: 'why' }), copy = structuredClone({ p: new Point(), e: error, blob: new Blob(['hi'], { type: 'text/plain' }) });
+                Log.info(copy.p.x + ' ' + Object.getPrototypeOf(copy.p).constructor.name + ' ' + copy.e.message + ' ' + copy.e.cause + ' ' + (copy.blob instanceof Blob) + ' ' + copy.blob.size);
+                Log.info('' + Object.hasOwn(structuredClone(new Error()), 'message'));
+            } catch (e) { Log.info('threw ' + e + ' ' + e.stack); } })();
+            """);
+
+        Assert.Equal(["b:{\"n\":1} InvalidStateError", "aab YWI=", "InvalidCharacterError", "InvalidCharacterError", "SecurityError", "SyntaxError", "SecurityError", "1 Object boom why true 2", "false"], log);
+    }
 }

@@ -3,6 +3,36 @@ namespace PeachBrackets.Scripting.Internal;
 /// <summary>The parts of the page's global environment that are plainest as script: they use only what the node and event objects already expose.</summary>
 internal static class ExtrasScripts
 {
+    /// <summary>
+    /// <c>navigator.registerProtocolHandler</c> and <c>unregisterProtocolHandler</c>: the checks of the HTML standard (the scheme is a safelisted one or
+    /// <c>web+</c> and ASCII letters, the URL contains <c>%s</c>, parses, and is of this origin); no handler is kept, as there is no browser to use one.
+    /// </summary>
+    public const string NavigatorHandlers = """
+        (function (navigator, global) {
+            var safelisted = ["bitcoin", "ftp", "ftps", "geo", "im", "irc", "ircs", "magnet", "mailto", "matrix", "mms", "news", "nntp", "openpgp4fpr", "sftp", "sip", "sms", "smsto", "ssh", "tel", "urn", "webcal", "wtai", "xmpp"];
+            function check(scheme, url) {
+                var lower = scheme.replace(/[A-Z]/g, function (c) { return c.toLowerCase(); });
+                if (safelisted.indexOf(lower) < 0 && !/^web\+[a-z]+$/.test(lower)) throw new DOMException("The scheme '" + scheme + "' cannot be registered.", "SecurityError");
+                if (url.indexOf("%s") < 0) throw new DOMException("The URL does not contain '%s'.", "SyntaxError");
+                var parsed;
+                try { parsed = new URL(url, global.document.baseURI); } catch (e) { throw new DOMException("The URL is not valid.", "SyntaxError"); }
+                if ((parsed.protocol !== "http:" && parsed.protocol !== "https:") || parsed.origin !== global.location.origin)
+                    throw new DOMException("The URL must be of the same origin as the document.", "SecurityError");
+            }
+            function arity(name, count, given) {
+                if (given < count) throw new TypeError("Failed to execute '" + name + "' on 'Navigator': " + count + " arguments required, but only " + given + " present.");
+            }
+            Object.defineProperty(navigator, "registerProtocolHandler", { enumerable: true, configurable: true, writable: true, value: function registerProtocolHandler(scheme, url) {
+                arity("registerProtocolHandler", 2, arguments.length);
+                check(String(scheme), String(url));
+            } });
+            Object.defineProperty(navigator, "unregisterProtocolHandler", { enumerable: true, configurable: true, writable: true, value: function unregisterProtocolHandler(scheme, url) {
+                arity("unregisterProtocolHandler", 2, arguments.length);
+                check(String(scheme), String(url));
+            } });
+        })(globalThis.navigator, globalThis)
+        """;
+
     /// <summary>The <c>DOMException</c> interface: an Error with a name, a message and the legacy numeric code of its name.</summary>
     public const string DomException = """
         (function () {

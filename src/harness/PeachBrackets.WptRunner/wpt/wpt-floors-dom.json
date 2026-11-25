@@ -14,6 +14,10 @@
     "html-dom": 63000,
     "html-img-canvas-elements": 1455,
     "streams": 1180,
+    "webappapis": 920,
+    "html-infrastructure": 255,
+    "webmessaging": 125,
+    "encoding": 10900,
     "url": 8516,
     "xhr": 712
   },
