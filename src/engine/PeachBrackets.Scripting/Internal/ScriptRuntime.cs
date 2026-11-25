@@ -60,12 +60,16 @@ internal sealed partial class ScriptRuntime
 
         var prototype = node.Kind switch
         {
-            ScriptNodeKind.Document => DocumentPrototype,
+            ScriptNodeKind.Document => node.OwnerDocument.IsHtml ? DocumentPrototype : XmlDocumentPrototype,
             ScriptNodeKind.Element => ElementPrototypeFor(node.TagName),
-            ScriptNodeKind.Text => TextPrototype,
+            ScriptNodeKind.Text => node.IsCDataSection ? CDataPrototype : TextPrototype,
+            ScriptNodeKind.Comment => CommentPrototype,
+            ScriptNodeKind.ProcessingInstruction => ProcessingInstructionPrototype,
+            ScriptNodeKind.DocumentType => DocumentTypePrototype,
             _ => FragmentPrototype,
         };
 
+        WatchDocument(node.OwnerDocument);
         var wrapper = new NodeObject(this, node, prototype);
         _wrappers[node] = wrapper;
         return wrapper;

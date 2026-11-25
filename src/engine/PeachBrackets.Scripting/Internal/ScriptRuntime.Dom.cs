@@ -15,7 +15,13 @@ internal sealed partial class ScriptRuntime
     private ObjectInstance NodePrototype = null!;
     private ObjectInstance ElementPrototype = null!;
     private ObjectInstance TextPrototype = null!;
+    private ObjectInstance CharacterDataPrototype = null!;
+    private ObjectInstance CommentPrototype = null!;
+    private ObjectInstance CDataPrototype = null!;
+    private ObjectInstance ProcessingInstructionPrototype = null!;
+    private ObjectInstance DocumentTypePrototype = null!;
     private ObjectInstance DocumentPrototype = null!;
+    private ObjectInstance XmlDocumentPrototype = null!;
     private ObjectInstance FragmentPrototype = null!;
     private ObjectInstance StylePrototype = null!;
     private ObjectInstance TokenListPrototype = null!;
@@ -68,6 +74,32 @@ internal sealed partial class ScriptRuntime
         return prototype;
     }
 
+    // The window an iframe's document has: its document and the interfaces a page reaches through it.
+    private readonly Dictionary<ScriptDocument, ObjectInstance> _windows = [];
+
+    // The document a document object stands for.
+    private ScriptDocument D(JsValue self) => Sn(self).OwnerDocument;
+
+    private JsValue ImportNode(ScriptDocument into, ScriptNode node, bool deep)
+    {
+        if (node.Kind == ScriptNodeKind.Document)
+            throw DomError("NotSupportedError", "A document cannot be imported.");
+
+        var copy = node.CloneNode(deep);
+        into.AdoptNode(copy);
+        CopyNamespaces(node, copy, deep);
+        return Wrap(copy);
+    }
+
+    private JsValue AdoptNode(ScriptDocument into, ScriptNode node)
+    {
+        if (node.Kind == ScriptNodeKind.Document)
+            throw DomError("NotSupportedError", "A document cannot be adopted.");
+
+        into.AdoptNode(node);
+        return Wrap(node);
+    }
+
     private NodeObject Node(JsValue self) => self as NodeObject ?? throw TypeError("Illegal invocation");
 
     private ScriptNode Sn(JsValue self) => Node(self).Node;
@@ -88,11 +120,30 @@ internal sealed partial class ScriptRuntime
         ElementPrototype.Prototype = NodePrototype;
         InstallElement();
 
+        CharacterDataPrototype = new JsObject(Engine);
+        CharacterDataPrototype.Prototype = NodePrototype;
+        Js.Accessor(Engine, CharacterDataPrototype, "data", self => Js.Str(Sn(self).Data), (self, value) => Sn(self).Data = value.IsNull() ? string.Empty : Js.AsText(value));
+        Js.Accessor(Engine, CharacterDataPrototype, "length", self => Js.Num((Sn(self).Data ?? string.Empty).Length));
+
         TextPrototype = new JsObject(Engine);
-        TextPrototype.Prototype = NodePrototype;
-        Js.Accessor(Engine, TextPrototype, "data", self => Js.Str(Sn(self).Data), (self, value) => Sn(self).Data = Js.AsText(value));
-        Js.Accessor(Engine, TextPrototype, "length", self => Js.Num((Sn(self).Data ?? string.Empty).Length));
+        TextPrototype.Prototype = CharacterDataPrototype;
         Js.Accessor(Engine, TextPrototype, "wholeText", self => Js.Str(Sn(self).Data));
+
+        CDataPrototype = new JsObject(Engine);
+        CDataPrototype.Prototype = TextPrototype;
+
+        CommentPrototype = new JsObject(Engine);
+        CommentPrototype.Prototype = CharacterDataPrototype;
+
+        ProcessingInstructionPrototype = new JsObject(Engine);
+        ProcessingInstructionPrototype.Prototype = CharacterDataPrototype;
+        Js.Accessor(Engine, ProcessingInstructionPrototype, "target", self => Js.Str(Sn(self).Name));
+
+        DocumentTypePrototype = new JsObject(Engine);
+        DocumentTypePrototype.Prototype = NodePrototype;
+        Js.Accessor(Engine, DocumentTypePrototype, "name", self => Js.Str(Sn(self).Name));
+        Js.Accessor(Engine, DocumentTypePrototype, "publicId", self => Js.Str(Sn(self).PublicId));
+        Js.Accessor(Engine, DocumentTypePrototype, "systemId", self => Js.Str(Sn(self).SystemId));
 
         FragmentPrototype = new JsObject(Engine);
         FragmentPrototype.Prototype = NodePrototype;
@@ -102,6 +153,9 @@ internal sealed partial class ScriptRuntime
         DocumentPrototype.Prototype = NodePrototype;
         InstallDocument();
         InstallParentOperations(DocumentPrototype);
+
+        XmlDocumentPrototype = new JsObject(Engine);
+        XmlDocumentPrototype.Prototype = DocumentPrototype;
 
         StylePrototype = new JsObject(Engine);
         StylePrototype.Prototype = objectPrototype;
@@ -117,39 +171,44 @@ internal sealed partial class ScriptRuntime
     private void InstallNode()
     {
         var p = NodePrototype;
-        foreach (var (name, value) in new[] { ("ELEMENT_NODE", 1), ("ATTRIBUTE_NODE", 2), ("TEXT_NODE", 3), ("COMMENT_NODE", 8), ("DOCUMENT_NODE", 9), ("DOCUMENT_FRAGMENT_NODE", 11) })
+        foreach (var (name, value) in new[] { ("ELEMENT_NODE", 1), ("ATTRIBUTE_NODE", 2), ("TEXT_NODE", 3), ("CDATA_SECTION_NODE", 4), ("ENTITY_REFERENCE_NODE", 5), ("ENTITY_NODE", 6), ("PROCESSING_INSTRUCTION_NODE", 7), ("COMMENT_NODE", 8), ("DOCUMENT_NODE", 9), ("DOCUMENT_TYPE_NODE", 10), ("DOCUMENT_FRAGMENT_NODE", 11), ("NOTATION_NODE", 12) })
             p.FastSetProperty(name, new PropertyDescriptor(Js.Num(value), PropertyFlag.AllForbidden));
 
         Js.Accessor(Engine, p, "nodeType", self => Js.Num(Sn(self).Kind switch
         {
             ScriptNodeKind.Element => 1,
-            ScriptNodeKind.Text => 3,
+            ScriptNodeKind.Text => Sn(self).IsCDataSection ? 4 : 3,
+            ScriptNodeKind.ProcessingInstruction => 7,
+            ScriptNodeKind.Comment => 8,
             ScriptNodeKind.Document => 9,
+            ScriptNodeKind.DocumentType => 10,
             _ => 11,
         }));
         Js.Accessor(Engine, p, "nodeName", self => Js.Str(Sn(self).Kind switch
         {
             ScriptNodeKind.Element => QualifiedName(Node(self)),
-            ScriptNodeKind.Text => "#text",
+            ScriptNodeKind.Text => Sn(self).IsCDataSection ? "#cdata-section" : "#text",
+            ScriptNodeKind.Comment => "#comment",
+            ScriptNodeKind.ProcessingInstruction or ScriptNodeKind.DocumentType => Sn(self).Name ?? string.Empty,
             ScriptNodeKind.Document => "#document",
             _ => "#document-fragment",
         }));
-        Js.Accessor(Engine, p, "nodeValue", self => Sn(self).Kind == ScriptNodeKind.Text ? Js.Str(Sn(self).Data) : JsValue.Null,
-            (self, value) => { if (Sn(self).Kind == ScriptNodeKind.Text) Sn(self).Data = Js.AsText(value); });
+        Js.Accessor(Engine, p, "nodeValue", self => Sn(self).Data is { } data ? Js.Str(data) : JsValue.Null,
+            (self, value) => { if (Sn(self).Data is not null) Sn(self).Data = Js.IsNullish(value) ? string.Empty : Js.AsText(value); });
         Js.Accessor(Engine, p, "parentNode", self => WrapOrNull(Sn(self).Parent));
         Js.Accessor(Engine, p, "parentElement", self => Sn(self).Parent is { Kind: ScriptNodeKind.Element } parent ? Wrap(parent) : JsValue.Null);
-        Js.Accessor(Engine, p, "childNodes", self => WrapList(Sn(self).Children));
+        Js.Accessor(Engine, p, "childNodes", self => Node(self).ChildNodesList ??= WrapLive(Sn(self).OwnerDocument, () => Sn(self).Children, false));
         Js.Accessor(Engine, p, "firstChild", self => WrapOrNull(Sn(self).FirstChild));
         Js.Accessor(Engine, p, "lastChild", self => WrapOrNull(Sn(self).LastChild));
         Js.Accessor(Engine, p, "previousSibling", self => WrapOrNull(Sn(self).PreviousSibling));
         Js.Accessor(Engine, p, "nextSibling", self => WrapOrNull(Sn(self).NextSibling));
         Js.Accessor(Engine, p, "isConnected", self => Js.Bool(Sn(self).IsConnected));
-        Js.Accessor(Engine, p, "ownerDocument", self => Sn(self).Kind == ScriptNodeKind.Document ? JsValue.Null : DocumentObject);
+        Js.Accessor(Engine, p, "ownerDocument", self => Sn(self).Kind == ScriptNodeKind.Document ? JsValue.Null : Wrap(Sn(self).OwnerDocument.Root));
         Js.Accessor(Engine, p, "textContent",
-            self => Sn(self).Kind == ScriptNodeKind.Document ? JsValue.Null : Js.Str(Sn(self).TextContent),
+            self => Sn(self).Kind is ScriptNodeKind.Document or ScriptNodeKind.DocumentType ? JsValue.Null : Js.Str(Sn(self).TextContent),
             (self, value) =>
             {
-                if (Sn(self).Kind != ScriptNodeKind.Document) Sn(self).TextContent = Js.IsNullish(value) ? string.Empty : Js.AsText(value);
+                if (Sn(self).Kind is not (ScriptNodeKind.Document or ScriptNodeKind.DocumentType)) Sn(self).TextContent = Js.IsNullish(value) ? string.Empty : Js.AsText(value);
             });
 
         Js.Method(Engine, p, "hasChildNodes", 0, (self, _) => Js.Bool(Sn(self).Children.Count > 0));
@@ -158,7 +217,12 @@ internal sealed partial class ScriptRuntime
             Wrap(Guard(() => Sn(self).InsertBefore(NodeArg(args, 0), Js.IsNullish(Js.Arg(args, 1)) ? null : NodeArg(args, 1)))));
         Js.Method(Engine, p, "removeChild", 1, (self, args) => Wrap(Guard(() => Sn(self).RemoveChild(NodeArg(args, 0)))));
         Js.Method(Engine, p, "replaceChild", 2, (self, args) => Wrap(Guard(() => Sn(self).ReplaceChild(NodeArg(args, 0), NodeArg(args, 1)))));
-        Js.Method(Engine, p, "cloneNode", 0, (self, args) => Wrap(Sn(self).CloneNode(TypeConverter.ToBoolean(Js.Arg(args, 0)))));
+        Js.Method(Engine, p, "cloneNode", 0, (self, args) =>
+        {
+            var copy = Sn(self).CloneNode(TypeConverter.ToBoolean(Js.Arg(args, 0)));
+            CopyNamespaces(Sn(self), copy, TypeConverter.ToBoolean(Js.Arg(args, 0)));
+            return Wrap(copy);
+        });
         Js.Method(Engine, p, "contains", 1, (self, args) =>
         {
             if (Js.Arg(args, 0) is not NodeObject other) return JsBoolean.False;
@@ -197,7 +261,7 @@ internal sealed partial class ScriptRuntime
     // The operations that document, fragments and elements share: children, queries, append and prepend.
     private void InstallParentOperations(ObjectInstance p)
     {
-        Js.Accessor(Engine, p, "children", self => WrapList(Sn(self).ChildElements, collection: true));
+        Js.Accessor(Engine, p, "children", self => Node(self).ChildrenList ??= WrapLive(Sn(self).OwnerDocument, () => Sn(self).ChildElements, true));
         Js.Accessor(Engine, p, "childElementCount", self => Js.Num(Sn(self).ChildElements.Count));
         Js.Accessor(Engine, p, "firstElementChild", self => WrapOrNull(Sn(self).ChildElements.FirstOrDefault()));
         Js.Accessor(Engine, p, "lastElementChild", self => WrapOrNull(Sn(self).ChildElements.LastOrDefault()));
@@ -207,18 +271,18 @@ internal sealed partial class ScriptRuntime
             WrapList(QueryGuard(() => Sn(self).QuerySelectorAll(Js.AsText(Js.Arg(args, 0))))!));
         Js.Method(Engine, p, "append", 1, (self, args) =>
         {
-            Sn(self).AppendChild(ToNode(args));
+            Sn(self).AppendChild(ToNode(Sn(self).OwnerDocument, args));
             return JsValue.Undefined;
         });
         Js.Method(Engine, p, "prepend", 1, (self, args) =>
         {
-            Sn(self).InsertBefore(ToNode(args), Sn(self).FirstChild);
+            Sn(self).InsertBefore(ToNode(Sn(self).OwnerDocument, args), Sn(self).FirstChild);
             return JsValue.Undefined;
         });
         Js.Method(Engine, p, "replaceChildren", 0, (self, args) =>
         {
             foreach (var child in Sn(self).Children) Sn(self).RemoveChild(child);
-            if (args.Length > 0) Sn(self).AppendChild(ToNode(args));
+            if (args.Length > 0) Sn(self).AppendChild(ToNode(Sn(self).OwnerDocument, args));
             return JsValue.Undefined;
         });
     }
@@ -236,11 +300,11 @@ internal sealed partial class ScriptRuntime
     }
 
     // The nodes and strings of an append(...) call as one node: strings become text nodes.
-    private ScriptNode ToNode(JsValue[] args)
+    private ScriptNode ToNode(ScriptDocument document, JsValue[] args)
     {
-        var fragment = Document.CreateEmptyFragment();
+        var fragment = document.CreateEmptyFragment();
         foreach (var arg in args)
-            fragment.AppendChild(arg is NodeObject node ? node.Node : Document.CreateTextNode(Js.AsText(arg)));
+            fragment.AppendChild(arg is NodeObject node ? node.Node : document.CreateTextNode(Js.AsText(arg)));
 
         return fragment;
     }
@@ -251,7 +315,7 @@ internal sealed partial class ScriptRuntime
         InstallParentOperations(p);
 
         Js.Accessor(Engine, p, "tagName", self => Js.Str(QualifiedName(Node(self))));
-        Js.Accessor(Engine, p, "localName", self => Js.Str(Node(self).NamespaceInfo?.LocalName ?? Sn(self).TagName!.ToLowerInvariant()));
+        Js.Accessor(Engine, p, "localName", self => Js.Str(Node(self).NamespaceInfo?.LocalName ?? (Sn(self).OwnerDocument.IsHtml ? Sn(self).TagName!.ToLowerInvariant() : Sn(self).TagName)));
         Js.Accessor(Engine, p, "namespaceURI", self => Js.Str(Node(self).NamespaceInfo is { } ns ? ns.Namespace : HtmlNamespace));
         Js.Accessor(Engine, p, "prefix", self => Js.Str(Node(self).NamespaceInfo?.Prefix));
         Js.Accessor(Engine, p, "id", self => Js.Str(Sn(self).Id), (self, value) => Sn(self).SetAttribute("id", Js.AsText(value)));
@@ -303,9 +367,15 @@ internal sealed partial class ScriptRuntime
         Js.Method(Engine, p, "webkitMatchesSelector", 1, (self, args) => Js.Bool(QueryGuard(() => Sn(self).Matches(Js.AsText(Js.Arg(args, 0))))));
         Js.Method(Engine, p, "closest", 1, (self, args) => WrapOrNull(QueryGuard(() => Sn(self).Closest(Js.AsText(Js.Arg(args, 0))))));
         Js.Method(Engine, p, "getElementsByTagName", 1, (self, args) =>
-            WrapList(Sn(self).QuerySelectorAll(Js.AsText(Js.Arg(args, 0)) == "*" ? "*" : Js.AsText(Js.Arg(args, 0))), collection: true));
+        {
+            var name = Js.AsText(Js.Arg(args, 0));
+            return WrapLive(Sn(self).OwnerDocument, () => ElementsByTagName(Sn(self), name), true);
+        });
         Js.Method(Engine, p, "getElementsByClassName", 1, (self, args) =>
-            WrapList(Sn(self).QuerySelectorAll(string.Concat(Js.AsText(Js.Arg(args, 0)).Split([' ', '\t', '\n'], StringSplitOptions.RemoveEmptyEntries).Select(c => "." + c))), collection: true));
+        {
+            var names = Js.AsText(Js.Arg(args, 0));
+            return WrapLive(Sn(self).OwnerDocument, () => ElementsByClassName(Sn(self), names), true);
+        });
         Js.Method(Engine, p, "remove", 0, (self, _) =>
         {
             Sn(self).Remove();
@@ -313,22 +383,22 @@ internal sealed partial class ScriptRuntime
         });
         Js.Method(Engine, p, "before", 1, (self, args) =>
         {
-            Sn(self).Parent?.InsertBefore(ToNode(args), Sn(self));
+            Sn(self).Parent?.InsertBefore(ToNode(Sn(self).OwnerDocument, args), Sn(self));
             return JsValue.Undefined;
         });
         Js.Method(Engine, p, "after", 1, (self, args) =>
         {
-            Sn(self).Parent?.InsertBefore(ToNode(args), Sn(self).NextSibling);
+            Sn(self).Parent?.InsertBefore(ToNode(Sn(self).OwnerDocument, args), Sn(self).NextSibling);
             return JsValue.Undefined;
         });
         Js.Method(Engine, p, "replaceWith", 1, (self, args) =>
         {
-            Sn(self).Parent?.ReplaceChild(ToNode(args), Sn(self));
+            Sn(self).Parent?.ReplaceChild(ToNode(Sn(self).OwnerDocument, args), Sn(self));
             return JsValue.Undefined;
         });
-        Js.Method(Engine, p, "insertAdjacentHTML", 2, (self, args) => InsertAdjacent(Sn(self), Js.AsText(Js.Arg(args, 0)), Document.CreateFragment(Js.AsText(Js.Arg(args, 1))), JsValue.Undefined));
+        Js.Method(Engine, p, "insertAdjacentHTML", 2, (self, args) => InsertAdjacent(Sn(self), Js.AsText(Js.Arg(args, 0)), Sn(self).OwnerDocument.CreateFragment(Js.AsText(Js.Arg(args, 1))), JsValue.Undefined));
         Js.Method(Engine, p, "insertAdjacentElement", 2, (self, args) => InsertAdjacent(Sn(self), Js.AsText(Js.Arg(args, 0)), NodeArg(args, 1), Js.Arg(args, 1)));
-        Js.Method(Engine, p, "insertAdjacentText", 2, (self, args) => InsertAdjacent(Sn(self), Js.AsText(Js.Arg(args, 0)), Document.CreateTextNode(Js.AsText(Js.Arg(args, 1))), JsValue.Undefined));
+        Js.Method(Engine, p, "insertAdjacentText", 2, (self, args) => InsertAdjacent(Sn(self), Js.AsText(Js.Arg(args, 0)), Sn(self).OwnerDocument.CreateTextNode(Js.AsText(Js.Arg(args, 1))), JsValue.Undefined));
         foreach (var focus in new[] { "focus", "blur", "click", "scrollIntoView", "scrollTo", "scroll", "select" })
             Js.Method(Engine, p, focus, 0, (_, _) => JsValue.Undefined);
 
@@ -416,76 +486,111 @@ internal sealed partial class ScriptRuntime
     private void InstallDocument()
     {
         var p = DocumentPrototype;
-        Js.Accessor(Engine, p, "documentElement", _ => WrapOrNull(Document.DocumentElement));
-        Js.Accessor(Engine, p, "head", _ => WrapOrNull(Document.Head));
-        Js.Accessor(Engine, p, "body", _ => WrapOrNull(Document.Body));
-        Js.Accessor(Engine, p, "scrollingElement", _ => WrapOrNull(Document.DocumentElement));
-        Js.Accessor(Engine, p, "activeElement", _ => WrapOrNull(Document.Body));
-        Js.Accessor(Engine, p, "title", _ => Js.Str(Document.Title), (_, value) =>
+        Js.Accessor(Engine, p, "documentElement", self => WrapOrNull(D(self).DocumentElement));
+        Js.Accessor(Engine, p, "head", self => WrapOrNull(D(self).Head));
+        Js.Accessor(Engine, p, "body", self => WrapOrNull(D(self).Body));
+        Js.Accessor(Engine, p, "scrollingElement", self => WrapOrNull(D(self).DocumentElement));
+        Js.Accessor(Engine, p, "activeElement", self => WrapOrNull(D(self).Body));
+        Js.Accessor(Engine, p, "title", self => Js.Str(D(self).Title), (self, value) =>
         {
-            var title = Document.GetElementsByTagName("title").FirstOrDefault();
-            if (title is null && Document.Head is { } head)
-                head.AppendChild(title = Document.CreateElement("title"));
+            var title = D(self).GetElementsByTagName("title").FirstOrDefault();
+            if (title is null && D(self).Head is { } head)
+                head.AppendChild(title = D(self).CreateElement("title"));
 
             if (title is not null) title.TextContent = Js.AsText(value);
         });
-        Js.Accessor(Engine, p, "readyState", _ => Js.Str(ReadyState));
-        Js.Accessor(Engine, p, "compatMode", _ => Js.Str(Document.CompatMode));
-        Js.Accessor(Engine, p, "characterSet", _ => Js.Str("UTF-8"));
-        Js.Accessor(Engine, p, "contentType", _ => Js.Str("text/html"));
-        Js.Accessor(Engine, p, "URL", _ => Js.Str(Document.BaseUri?.AbsoluteUri ?? "about:blank"));
-        Js.Accessor(Engine, p, "documentURI", _ => Js.Str(Document.BaseUri?.AbsoluteUri ?? "about:blank"));
-        Js.Accessor(Engine, p, "baseURI", _ => Js.Str(Document.BaseUri?.AbsoluteUri ?? "about:blank"));
-        Js.Accessor(Engine, p, "defaultView", _ => Engine.Global);
-        Js.Accessor(Engine, p, "currentScript", _ => WrapOrNull(CurrentScript));
-        Js.Accessor(Engine, p, "visibilityState", _ => Js.Str("visible"));
-        Js.Accessor(Engine, p, "hidden", _ => JsBoolean.False);
-        Js.Accessor(Engine, p, "cookie", _ => Js.Str(string.Empty), (_, _) => { });
-        Js.Accessor(Engine, p, "referrer", _ => Js.Str(string.Empty));
-        Js.Accessor(Engine, p, "scripts", _ => WrapList(Document.Scripts, collection: true));
-        Js.Accessor(Engine, p, "forms", _ => WrapList(Document.GetElementsByTagName("form"), collection: true));
-        Js.Accessor(Engine, p, "images", _ => WrapList(Document.GetElementsByTagName("img"), collection: true));
-        Js.Accessor(Engine, p, "links", _ => WrapList(Document.QuerySelectorAll("a[href], area[href]"), collection: true));
-        Js.Accessor(Engine, p, "fonts", _ => FontFaceSet());
-        Js.Accessor(Engine, p, "styleSheets", _ => Js.Array(Engine, []));
-        Js.Method(Engine, p, "createElement", 1, (_, args) =>
+        Js.Accessor(Engine, p, "readyState", self => Js.Str(ReadyState));
+        Js.Accessor(Engine, p, "compatMode", self => Js.Str(D(self).CompatMode));
+        Js.Accessor(Engine, p, "characterSet", self => Js.Str("UTF-8"));
+        Js.Accessor(Engine, p, "charset", self => Js.Str("UTF-8"));
+        Js.Accessor(Engine, p, "inputEncoding", self => Js.Str("UTF-8"));
+        Js.Accessor(Engine, p, "contentType", self => Js.Str(D(self).ContentType));
+        Js.Accessor(Engine, p, "URL", self => Js.Str(D(self).BaseUri?.AbsoluteUri ?? "about:blank"));
+        Js.Accessor(Engine, p, "documentURI", self => Js.Str(D(self).BaseUri?.AbsoluteUri ?? "about:blank"));
+        Js.Accessor(Engine, p, "baseURI", self => Js.Str(D(self).BaseUri?.AbsoluteUri ?? "about:blank"));
+        Js.Accessor(Engine, p, "defaultView", self => ReferenceEquals(D(self), Document) ? Engine.Global : _windows.TryGetValue(D(self), out var window) ? window : JsValue.Null);
+        Js.Accessor(Engine, p, "currentScript", self => WrapOrNull(CurrentScript));
+        Js.Accessor(Engine, p, "visibilityState", self => Js.Str("visible"));
+        Js.Accessor(Engine, p, "hidden", self => JsBoolean.False);
+        Js.Accessor(Engine, p, "cookie", self => Js.Str(string.Empty), (self, _) => { });
+        Js.Accessor(Engine, p, "referrer", self => Js.Str(string.Empty));
+        Js.Accessor(Engine, p, "scripts", self => WrapLive(D(self), () => D(self).Scripts, true));
+        Js.Accessor(Engine, p, "forms", self => WrapLive(D(self), () => ElementsByTagName(D(self).Root, "form"), true));
+        Js.Accessor(Engine, p, "images", self => WrapLive(D(self), () => ElementsByTagName(D(self).Root, "img"), true));
+        Js.Accessor(Engine, p, "links", self => WrapLive(D(self), () => D(self).QuerySelectorAll("a[href], area[href]"), true));
+        Js.Accessor(Engine, p, "fonts", self => FontFaceSet());
+        Js.Accessor(Engine, p, "styleSheets", self => Js.Array(Engine, []));
+        Js.Method(Engine, p, "createElement", 1, (self, args) =>
         {
             var name = Js.AsText(Js.Arg(args, 0));
             if (!XmlNames.IsName(name))
                 throw DomError("InvalidCharacterError", $"'{name}' is not a valid element name.");
-            return Wrap(Document.CreateElement(name));
+            return Wrap(D(self).CreateElement(name));
         });
-        Js.Method(Engine, p, "createElementNS", 2, (_, args) => CreateElementNs(Js.Arg(args, 0), Js.AsText(Js.Arg(args, 1))));
-        Js.Method(Engine, p, "createTextNode", 1, (_, args) => Wrap(Document.CreateTextNode(Js.AsText(Js.Arg(args, 0)))));
-        Js.Method(Engine, p, "createComment", 1, (_, _) => Wrap(Document.CreateTextNode(string.Empty)));
-        Js.Method(Engine, p, "createDocumentFragment", 0, (_, _) => Wrap(Document.CreateEmptyFragment()));
-        Js.Method(Engine, p, "getElementById", 1, (_, args) => WrapOrNull(Document.GetElementById(Js.AsText(Js.Arg(args, 0)))));
-        Js.Method(Engine, p, "getElementsByTagName", 1, (_, args) => WrapList(Document.GetElementsByTagName(Js.AsText(Js.Arg(args, 0))), collection: true));
-        Js.Method(Engine, p, "getElementsByClassName", 1, (_, args) => WrapList(Document.GetElementsByClassName(Js.AsText(Js.Arg(args, 0))), collection: true));
-        Js.Method(Engine, p, "getElementsByName", 1, (_, args) => WrapList(Document.QuerySelectorAll($"[name=\"{Js.AsText(Js.Arg(args, 0)).Replace("\"", "\\\"")}\"]")));
-        Js.Method(Engine, p, "importNode", 1, (_, args) => Wrap(NodeArg(args, 0).CloneNode(TypeConverter.ToBoolean(Js.Arg(args, 1)))));
-        Js.Method(Engine, p, "adoptNode", 1, (_, args) => Wrap(NodeArg(args, 0)));
-        Js.Method(Engine, p, "hasFocus", 0, (_, _) => JsBoolean.True);
-        Js.Method(Engine, p, "elementFromPoint", 2, (_, _) => WrapOrNull(Document.Body));
-        Js.Method(Engine, p, "getSelection", 0, (_, _) => JsValue.Null);
-        Js.Method(Engine, p, "createEvent", 1, (_, args) => CreateLegacyEvent(Js.AsText(Js.Arg(args, 0))));
-        Js.Method(Engine, p, "write", 1, (_, args) =>
+        Js.Method(Engine, p, "createElementNS", 2, (self, args) => CreateElementNs(D(self), Js.Arg(args, 0), Js.AsText(Js.Arg(args, 1))));
+        Js.Method(Engine, p, "createTextNode", 1, (self, args) => Wrap(D(self).CreateTextNode(Js.AsText(Js.Arg(args, 0)))));
+        Js.Method(Engine, p, "createComment", 1, (self, args) => Wrap(D(self).CreateComment(Js.AsText(Js.Arg(args, 0)))));
+        Js.Method(Engine, p, "createProcessingInstruction", 2, (self, args) =>
+        {
+            var target = Js.AsText(Js.Arg(args, 0));
+            var data = Js.AsText(Js.Arg(args, 1));
+            if (!XmlNames.IsName(target))
+                throw DomError("InvalidCharacterError", $"'{target}' is not a valid processing instruction target.");
+            if (data.Contains("?>", StringComparison.Ordinal))
+                throw DomError("InvalidCharacterError", "The data contains '?>'.");
+            return Wrap(D(self).CreateProcessingInstruction(target, data));
+        });
+        Js.Accessor(Engine, p, "doctype", self => WrapOrNull(D(self).DocumentType));
+        Js.Method(Engine, p, "createCDATASection", 1, (self, args) =>
+        {
+            if (D(self).IsHtml)
+                throw DomError("NotSupportedError", "An HTML document has no CDATA sections.");
+
+            var data = Js.AsText(Js.Arg(args, 0));
+            if (data.Contains("]]>", StringComparison.Ordinal))
+                throw DomError("InvalidCharacterError", "The data contains ']]>'.");
+
+            return Wrap(D(self).CreateCDataSection(data));
+        });
+        Js.Method(Engine, p, "createDocumentFragment", 0, (self, _) => Wrap(D(self).CreateEmptyFragment()));
+        Js.Method(Engine, p, "getElementById", 1, (self, args) => WrapOrNull(D(self).GetElementById(Js.AsText(Js.Arg(args, 0)))));
+        Js.Method(Engine, p, "getElementsByTagName", 1, (self, args) =>
+        {
+            var name = Js.AsText(Js.Arg(args, 0));
+            return WrapLive(D(self), () => ElementsByTagName(D(self).Root, name), true);
+        });
+        Js.Method(Engine, p, "getElementsByClassName", 1, (self, args) =>
+        {
+            var names = Js.AsText(Js.Arg(args, 0));
+            return WrapLive(D(self), () => ElementsByClassName(D(self).Root, names), true);
+        });
+        Js.Method(Engine, p, "getElementsByName", 1, (self, args) =>
+        {
+            var name = Js.AsText(Js.Arg(args, 0));
+            return WrapLive(D(self), () => D(self).QuerySelectorAll("*").Where(e => e.GetAttribute("name") == name), false);
+        });
+        Js.Method(Engine, p, "importNode", 1, (self, args) => ImportNode(D(self), NodeArg(args, 0), TypeConverter.ToBoolean(Js.Arg(args, 1))));
+        Js.Method(Engine, p, "adoptNode", 1, (self, args) => AdoptNode(D(self), NodeArg(args, 0)));
+        Js.Method(Engine, p, "hasFocus", 0, (self, _) => JsBoolean.True);
+        Js.Method(Engine, p, "elementFromPoint", 2, (self, _) => WrapOrNull(D(self).Body));
+        Js.Method(Engine, p, "createEvent", 1, (self, args) => CreateLegacyEvent(Js.AsText(Js.Arg(args, 0))));
+        Js.Method(Engine, p, "write", 1, (self, args) =>
         {
             // A write after the parser is done would replace the document; during a script it adds to the body, which is the common intent.
-            if (Document.Body is { } body)
-                body.AppendChild(Document.CreateFragment(string.Concat(args.Select(Js.AsText))));
+            if (D(self).Body is { } body)
+                body.AppendChild(D(self).CreateFragment(string.Concat(args.Select(Js.AsText))));
 
             return JsValue.Undefined;
         });
-        Js.Method(Engine, p, "writeln", 1, (_, args) =>
+        Js.Method(Engine, p, "writeln", 1, (self, args) =>
         {
-            if (Document.Body is { } body)
-                body.AppendChild(Document.CreateFragment(string.Concat(args.Select(Js.AsText)) + "\n"));
+            if (D(self).Body is { } body)
+                body.AppendChild(D(self).CreateFragment(string.Concat(args.Select(Js.AsText)) + "\n"));
 
             return JsValue.Undefined;
         });
         foreach (var no in new[] { "open", "close" })
-            Js.Method(Engine, p, no, 0, (_, _) => JsValue.Undefined);
+            Js.Method(Engine, p, no, 0, (self, _) => JsValue.Undefined);
     }
 
     private JsValue FontFaceSet()

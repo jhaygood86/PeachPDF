@@ -137,7 +137,7 @@ public class DomStandardTests
             console.log(out.join('|'));
             """);
 
-        Assert.Equal(["InvalidCharacterError|InvalidCharacterError|InvalidCharacterError|InvalidCharacterError|http://www.w3.org/2000/svg|svg|linearGradient|svg:linearGradient|DIV||http://www.w3.org/1999/xhtml||NamespaceError|NamespaceError|ok|NamespaceError|NamespaceError|NamespaceError"], log);
+        Assert.Equal(["InvalidCharacterError|InvalidCharacterError|InvalidCharacterError|InvalidCharacterError|http://www.w3.org/2000/svg|svg|linearGradient|svg:linearGradient|DIV||http://www.w3.org/1999/xhtml||NamespaceError|InvalidCharacterError|ok|NamespaceError|NamespaceError|InvalidCharacterError"], log);
     }
 
     [Fact]

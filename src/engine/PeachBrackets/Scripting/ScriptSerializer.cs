@@ -46,6 +46,29 @@ internal static class ScriptSerializer
     {
         if (box.HtmlTag is not { } tag)
         {
+            if (SpecialNode.Of(box) is { } special)
+            {
+                switch (special.Kind)
+                {
+                    case ScriptNodeKind.Comment:
+                        text.Append("<!--").Append(special.Data).Append("-->");
+                        break;
+                    case ScriptNodeKind.ProcessingInstruction:
+                        text.Append("<?").Append(special.Name).Append(' ').Append(special.Data).Append('>');
+                        break;
+                    case ScriptNodeKind.DocumentType:
+                        text.Append("<!DOCTYPE ").Append(special.Name);
+                        if (special.PublicId.Length > 0)
+                            text.Append(" PUBLIC \"").Append(special.PublicId).Append("\" \"").Append(special.SystemId).Append('"');
+                        else if (special.SystemId.Length > 0)
+                            text.Append(" SYSTEM \"").Append(special.SystemId).Append('"');
+                        text.Append('>');
+                        break;
+                }
+
+                return;
+            }
+
             if (box.Text is { } own)
             {
                 if (parent?.HtmlTag is { } owner && RawText.Contains(owner.Name))

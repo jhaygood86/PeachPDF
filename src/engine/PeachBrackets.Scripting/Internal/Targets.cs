@@ -51,6 +51,20 @@ internal sealed class NodeObject : TargetObject
     /// <summary>The namespace, prefix and local name of an element made with <c>createElementNS</c>; null for one the parser made.</summary>
     public ElementNamespace? NamespaceInfo { get; set; }
 
+    /// <summary>The namespace, prefix and local name of each attribute set with a namespace, by qualified name; an attribute not listed has none.</summary>
+    public Dictionary<string, ElementNamespace> AttributeNames { get; } = [];
+
+    /// <summary>The <c>Attr</c> objects made for the element's attributes, by qualified name, so the same attribute is the same object.</summary>
+    public Dictionary<string, AttrObject> AttrNodes { get; } = [];
+
+    /// <summary>The node's <c>childNodes</c> and <c>children</c> lists, made when first read: each is one object for the life of the node.</summary>
+    public JsValue? ChildNodesList { get; set; }
+
+    public JsValue? ChildrenList { get; set; }
+
+    /// <summary>The element's <c>attributes</c> object.</summary>
+    public ObjectInstance? AttributeMap { get; set; }
+
     /// <summary>The functions the element's <c>on&lt;type&gt;</c> attributes compiled to, by event type and the code they came from.</summary>
     public Dictionary<string, (string Code, JsValue Function)> AttributeHandlers { get; } = [];
 

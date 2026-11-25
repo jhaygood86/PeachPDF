@@ -23,6 +23,42 @@ public enum ScriptNodeKind
 
     /// <summary>A holder of nodes that is not in the tree: when it is inserted, its children are inserted in its place.</summary>
     Fragment,
+
+    /// <summary>A comment.</summary>
+    Comment,
+
+    /// <summary>A processing instruction.</summary>
+    ProcessingInstruction,
+
+    /// <summary>A document type declaration.</summary>
+    DocumentType,
+}
+
+/// <summary>What a node that is not an element, text or the document carries: kept beside the box that holds its place in the tree.</summary>
+internal sealed class SpecialNode(ScriptNodeKind kind, string name, string data, string publicId = "", string systemId = "")
+{
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<CssBox, SpecialNode> Table = new();
+
+    public ScriptNodeKind Kind { get; } = kind;
+    public string Name { get; } = name;
+    public string Data { get; set; } = data;
+    public string PublicId { get; } = publicId;
+    public string SystemId { get; } = systemId;
+
+    public static CssBox Create(SpecialNode info)
+    {
+        var box = new CssBox(null, null);
+        Table.Add(box, info);
+        return box;
+    }
+
+    public static SpecialNode? Of(CssBox box) => Table.TryGetValue(box, out var info) ? info : null;
+
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<CssBox, object> CData = new();
+
+    public static void MarkCData(CssBox box) => CData.TryAdd(box, box);
+
+    public static bool IsCData(CssBox box) => CData.TryGetValue(box, out _);
 }
 
 /// <summary>
@@ -46,11 +82,12 @@ public sealed class ScriptNode
     internal CssBox Box { get; }
 
     /// <summary>The document the node belongs to.</summary>
-    public ScriptDocument OwnerDocument { get; }
+    public ScriptDocument OwnerDocument { get; internal set; }
 
     /// <summary>What the node is.</summary>
     public ScriptNodeKind Kind =>
         Box.HtmlTag is not null ? ScriptNodeKind.Element
+        : SpecialNode.Of(Box) is { } special ? special.Kind
         : ReferenceEquals(Box, OwnerDocument.RootBox) ? ScriptNodeKind.Document
         : Box.Text is null ? ScriptNodeKind.Fragment
         : ScriptNodeKind.Text;
@@ -61,17 +98,47 @@ public sealed class ScriptNode
     /// <summary>The text of a text node, or null for any other node. Setting it changes the node's text.</summary>
     public string? Data
     {
-        get => Kind == ScriptNodeKind.Text ? Box.Text ?? string.Empty : null;
+        get => Kind switch
+        {
+            ScriptNodeKind.Text => Box.Text ?? string.Empty,
+            ScriptNodeKind.Comment or ScriptNodeKind.ProcessingInstruction => SpecialNode.Of(Box)!.Data,
+            _ => null,
+        };
         set
         {
             ArgumentNullException.ThrowIfNull(value);
-            if (Kind != ScriptNodeKind.Text)
-                throw new InvalidOperationException("Only a text node has data.");
+            var before = Data;
+            switch (Kind)
+            {
+                case ScriptNodeKind.Text:
+                    Box.Text = value;
+                    break;
+                case ScriptNodeKind.Comment or ScriptNodeKind.ProcessingInstruction:
+                    SpecialNode.Of(Box)!.Data = value;
+                    break;
+                default:
+                    throw new InvalidOperationException("Only a text, comment or processing instruction node has data.");
+            }
 
-            Box.Text = value;
             OwnerDocument.NoteChanged();
+            OwnerDocument.RaiseMutation(new ScriptMutation(ScriptMutationKind.CharacterData, this, OldValue: before));
         }
     }
+
+    /// <summary>The name of a document type, or the target of a processing instruction; null for any other node.</summary>
+    public string? Name => SpecialNode.Of(Box) is { Kind: ScriptNodeKind.DocumentType or ScriptNodeKind.ProcessingInstruction } special ? special.Name : null;
+
+    /// <summary>The public identifier of a document type, or null.</summary>
+    public string? PublicId => SpecialNode.Of(Box) is { Kind: ScriptNodeKind.DocumentType } special ? special.PublicId : null;
+
+    /// <summary>The system identifier of a document type, or null.</summary>
+    public string? SystemId => SpecialNode.Of(Box) is { Kind: ScriptNodeKind.DocumentType } special ? special.SystemId : null;
+
+    /// <summary>Whether the node is a CDATA section: a text node an XML document marks as such.</summary>
+    public bool IsCDataSection => Kind == ScriptNodeKind.Text && SpecialNode.IsCData(Box);
+
+    /// <summary>Whether the node cannot have children: text, a comment, a processing instruction or a document type.</summary>
+    public bool IsLeaf => Kind is ScriptNodeKind.Text or ScriptNodeKind.Comment or ScriptNodeKind.ProcessingInstruction or ScriptNodeKind.DocumentType;
 
     /// <summary>The parent node, or null for the document and for a node that is not in the tree.</summary>
     public ScriptNode? Parent => Box.ParentBox is { } parent ? OwnerDocument.Wrap(parent) : null;
@@ -110,7 +177,7 @@ public sealed class ScriptNode
     }
 
     // A text box the parser kept for markup it dropped is empty: it is not a node of the document.
-    private static bool IsPartOfSource(CssBox box) => box.HtmlTag is not null || box.Text is not null;
+    private static bool IsPartOfSource(CssBox box) => box.HtmlTag is not null || box.Text is not null || SpecialNode.Of(box) is not null;
 
     private ScriptNode? Sibling(int step)
     {
@@ -158,8 +225,10 @@ public sealed class ScriptNode
         ArgumentException.ThrowIfNullOrEmpty(name);
         ArgumentNullException.ThrowIfNull(value);
         RequireElement();
+        var before = Box.HtmlTag!.TryGetAttribute(name);
         Box.HtmlTag!.SetAttribute(name, value);
         OwnerDocument.NoteChanged();
+        OwnerDocument.RaiseMutation(new ScriptMutation(ScriptMutationKind.Attributes, this, AttributeName: name, OldValue: before));
     }
 
     /// <summary>Removes an attribute of the element, if it has it.</summary>
@@ -171,8 +240,10 @@ public sealed class ScriptNode
         if (Box.HtmlTag is not { } tag || !tag.HasAttribute(name))
             return false;
 
+        var before = tag.TryGetAttribute(name);
         tag.RemoveAttribute(name);
         OwnerDocument.NoteChanged();
+        OwnerDocument.RaiseMutation(new ScriptMutation(ScriptMutationKind.Attributes, this, AttributeName: name, OldValue: before));
         return true;
     }
 
@@ -197,10 +268,8 @@ public sealed class ScriptNode
     public ScriptNode InsertBefore(ScriptNode child, ScriptNode? reference)
     {
         ArgumentNullException.ThrowIfNull(child);
-        if (!ReferenceEquals(child.OwnerDocument, OwnerDocument))
-            throw new InvalidOperationException("The node belongs to another document.");
-        if (Kind == ScriptNodeKind.Text)
-            throw new InvalidOperationException("A text node has no children.");
+        if (IsLeaf)
+            throw new InvalidOperationException("A node of this kind has no children.");
         if (child.Kind == ScriptNodeKind.Document)
             throw new InvalidOperationException("The document cannot be a child.");
         if (child.Kind == ScriptNodeKind.Fragment && IsInside(child.Box))
@@ -217,8 +286,12 @@ public sealed class ScriptNode
         if (ReferenceEquals(reference?.Box, child.Box))
             return child;
 
+        if (!ReferenceEquals(child.OwnerDocument, OwnerDocument))
+            OwnerDocument.Adopt(child);
+
         if (child.Kind == ScriptNodeKind.Fragment)
         {
+            var added = child.Children;
             foreach (var moved in child.Box.Boxes.ToArray())
             {
                 moved.ParentBox = Box;
@@ -227,14 +300,22 @@ public sealed class ScriptNode
             }
 
             OwnerDocument.NoteChanged();
+            if (added.Count > 0)
+                OwnerDocument.RaiseMutation(new ScriptMutation(ScriptMutationKind.ChildList, this, Added: added, Previous: added[0].PreviousSibling, Next: added[^1].NextSibling));
+
             return child;
         }
+
+        // A node that is somewhere else is taken out of there first, which is a change of its own.
+        if (child.Box.ParentBox is not null)
+            child.Parent!.RemoveChild(child);
 
         child.Box.ParentBox = Box;
         if (reference is not null)
             child.Box.SetBeforeBox(reference.Box);
 
         OwnerDocument.NoteChanged();
+        OwnerDocument.RaiseMutation(new ScriptMutation(ScriptMutationKind.ChildList, this, Added: [child], Previous: child.PreviousSibling, Next: child.NextSibling));
         return child;
     }
 
@@ -259,8 +340,11 @@ public sealed class ScriptNode
         if (!ReferenceEquals(child.Box.ParentBox, Box))
             throw new InvalidOperationException("The node is not a child of this node.");
 
+        var previous = child.PreviousSibling;
+        var next = child.NextSibling;
         child.Box.ParentBox = null;
         OwnerDocument.NoteChanged();
+        OwnerDocument.RaiseMutation(new ScriptMutation(ScriptMutationKind.ChildList, this, Removed: [child], Previous: previous, Next: next));
         return child;
     }
 
@@ -276,8 +360,31 @@ public sealed class ScriptNode
         if (ReferenceEquals(child, existing))
             return existing;
 
-        InsertBefore(child, existing);
-        return RemoveChild(existing);
+        if (!ReferenceEquals(existing.Box.ParentBox, Box))
+            throw new InvalidOperationException("The node is not a child of this node.");
+
+        // One change: the new node(s) in, the old one out.
+        var previous = existing.PreviousSibling;
+        var next = existing.NextSibling;
+        if (ReferenceEquals(previous, child))
+            previous = child.PreviousSibling;
+        if (ReferenceEquals(next, child))
+            next = child.NextSibling;
+
+        var added = child.Kind == ScriptNodeKind.Fragment ? child.Children : [child];
+        OwnerDocument.SuppressMutations++;
+        try
+        {
+            InsertBefore(child, existing);
+            RemoveChild(existing);
+        }
+        finally
+        {
+            OwnerDocument.SuppressMutations--;
+        }
+
+        OwnerDocument.RaiseMutation(new ScriptMutation(ScriptMutationKind.ChildList, this, Added: added, Removed: [existing], Previous: previous, Next: next));
+        return existing;
     }
 
     /// <summary>Takes the node out of its parent, if it has one.</summary>
@@ -301,9 +408,16 @@ public sealed class ScriptNode
                     Clone(child, true).ParentBox = copy;
             }
         }
+        else if (SpecialNode.Of(source) is { } special)
+        {
+            copy = SpecialNode.Create(new SpecialNode(special.Kind, special.Name, special.Data, special.PublicId, special.SystemId));
+        }
         else
         {
             copy = new CssBox(null, null) { Text = source.Text };
+            if (SpecialNode.IsCData(source))
+                SpecialNode.MarkCData(copy);
+
             if (deep && source.Text is null)
             {
                 foreach (var child in source.Boxes.Where(IsPartOfSource))
@@ -319,8 +433,8 @@ public sealed class ScriptNode
     {
         get
         {
-            if (Kind == ScriptNodeKind.Text)
-                return Box.Text ?? string.Empty;
+            if (IsLeaf)
+                return Data ?? string.Empty;
 
             var text = new System.Text.StringBuilder();
             Collect(Box, text);
@@ -330,19 +444,25 @@ public sealed class ScriptNode
         set
         {
             ArgumentNullException.ThrowIfNull(value);
-            if (Kind == ScriptNodeKind.Text)
+            if (IsLeaf)
             {
-                Data = value;
+                if (Kind != ScriptNodeKind.DocumentType)
+                    Data = value;
+
                 return;
             }
 
+            var removed = Children;
             foreach (var child in Box.Boxes.ToArray())
                 child.ParentBox = null;
 
+            ScriptNode[] added = [];
             if (value.Length > 0)
-                new CssBox(Box, null) { Text = value };
+                added = [OwnerDocument.Wrap(new CssBox(Box, null) { Text = value })];
 
             OwnerDocument.NoteChanged();
+            if (removed.Count > 0 || added.Length > 0)
+                OwnerDocument.RaiseMutation(new ScriptMutation(ScriptMutationKind.ChildList, this, Added: added, Removed: removed));
         }
     }
 
@@ -364,9 +484,10 @@ public sealed class ScriptNode
         set
         {
             ArgumentNullException.ThrowIfNull(value);
-            if (Kind == ScriptNodeKind.Text)
-                throw new InvalidOperationException("A text node has no markup.");
+            if (IsLeaf)
+                throw new InvalidOperationException("A node of this kind has no markup.");
 
+            var removed = Children;
             foreach (var child in Box.Boxes.ToArray())
                 child.ParentBox = null;
 
@@ -375,6 +496,9 @@ public sealed class ScriptNode
                 child.ParentBox = Box;
 
             OwnerDocument.NoteChanged();
+            var added = Children;
+            if (removed.Count > 0 || added.Count > 0)
+                OwnerDocument.RaiseMutation(new ScriptMutation(ScriptMutationKind.ChildList, this, Added: added, Removed: removed));
         }
     }
 
@@ -485,6 +609,9 @@ public sealed class ScriptNode
     {
         ScriptNodeKind.Element => $"<{TagName}>",
         ScriptNodeKind.Text => "#text",
+        ScriptNodeKind.Comment => "#comment",
+        ScriptNodeKind.ProcessingInstruction => "#processing-instruction",
+        ScriptNodeKind.DocumentType => "#doctype",
         ScriptNodeKind.Fragment => "#fragment",
         _ => "#document",
     };

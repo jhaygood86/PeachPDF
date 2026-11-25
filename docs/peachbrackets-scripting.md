@@ -130,7 +130,7 @@ All script output goes to `JintScriptOptions.Logger`; with none set it is discar
 ## The DOM scripts see
 
 - **`window`**: `document`, `location`, `navigator`, `history`, `console`, `performance`, timers and animation frames, `getComputedStyle`, `matchMedia`,
-  `atob`/`btoa`, `CSS.supports`, `innerWidth`/`innerHeight`, and inert `MutationObserver`/`ResizeObserver`/`IntersectionObserver` constructors.
+  `atob`/`btoa`, `CSS.supports`, `innerWidth`/`innerHeight`, `MutationObserver`, `getSelection`, and inert `ResizeObserver`/`IntersectionObserver` constructors.
 - **`document`**: `documentElement`, `head`, `body`, `title`, `readyState`, `currentScript`, `getElementById`, `getElementsByTagName`/`ClassName`/`Name`,
   `querySelector(All)`, `createElement`, `createTextNode`, `createDocumentFragment`, `importNode`, `write`, `fonts.ready`.
 - **Nodes and elements**: navigation (`parentNode`, `children`, `firstChild`, `nextElementSibling`...), `appendChild`, `insertBefore`, `removeChild`,
@@ -142,6 +142,11 @@ All script output goes to `JintScriptOptions.Logger`; with none set it is discar
   the document **as the script has left it so far**: the first read after a change lays the document out again (once per batch of changes, however many
   changes there were). PeachPDF supplies the canvas to measure on; a host using PeachBrackets directly sets `HtmlDocumentOptions.MeasuringCanvasFactory`,
   and without it layout reads answer zero and computed styles come from the element's own `style` attribute.
+- **Node kinds**: comments, processing instructions, CDATA sections (XML documents) and document types are nodes (`createComment`, `createProcessingInstruction`, `createCDATASection`, `implementation.createDocumentType`, `document.doctype`); attributes are `Attr` nodes (`attributes`, `getAttributeNode`, `setAttributeNode`, `createAttribute`) with the namespaced methods (`setAttributeNS`, `getAttributeNS`, `lookupNamespaceURI`...).
+- **Other documents**: `document.implementation.createHTMLDocument`/`createDocument`, `new Document()`, `DOMParser` (HTML and XML), an `<iframe>`'s `contentDocument` (loaded from its `src` through the document's network when a script first asks), and moving nodes between documents with `adoptNode`, `importNode` or any insertion. The documents share the page's resource loader and are never laid out.
+- **Live lists**: `childNodes`, `children` and `getElementsByTagName`/`ClassName`/`Name`/`TagNameNS`, `scripts`, `forms`, `images` and `links` follow the tree.
+- **`MutationObserver`**: `childList`, `attributes` (with `attributeFilter` and old values), `characterData` and `subtree`, delivered on a microtask, with the transient observers that keep a removed subtree watched until then.
+- **`Range` and `Selection`**: live ranges that follow insertions, removals and text changes, `extractContents`, `cloneContents`, `deleteContents`, `insertNode`, `surroundContents`, the comparison methods, and one document selection.
 - **Events**: `addEventListener`/`removeEventListener`/`dispatchEvent` with capture, bubble, `once` and `handleEvent`; the `on<type>` properties; handler
   attributes (`onclick="..."`, and the body's `onload`); `Event`, `CustomEvent` and the other event constructors; `DOMContentLoaded` and `load`.
 
@@ -157,7 +162,7 @@ All script output goes to `JintScriptOptions.Logger`; with none set it is discar
   foreign content in `<svg>` and `<math>`) may differ. A page the scripts did not change keeps its own source.
 - `<script type="module">` has no `import`; Web APIs outside the DOM (`Worker`, canvas, Web Animations, custom elements,
   shadow DOM, streams) are not provided; `document.cookie` and `location` are inert.
-- The document is the HTML tree PeachBrackets lays out, so the parts of the DOM standard that have no box in it are missing: comments, processing instructions and doctypes as nodes, `Attr` nodes and the namespaced attribute methods, `Range` and `Selection`, `MutationObserver` (the constructor exists but never reports), `DOMParser` and `document.implementation.createHTMLDocument`/`createDocument` (a script cannot make another document), shadow DOM and custom elements. Lists such as `childNodes` and `getElementsByTagName` are `NodeList`/`HTMLCollection` snapshots, not live.
+- Shadow DOM, custom elements, `Observable`, `StaticRange`, `moveBefore` and `ProcessingInstruction` pseudo-attributes are not provided. Namespaces are tracked per element and attribute on the script side, so a script's namespaced markup keeps its names but an XML document is written back as HTML when it is the page's own. A document made by a script is never styled or laid out (`getComputedStyle` and `getBoundingClientRect` read the page only), has no `window` unless it is an iframe's, and fires no load events.
 
 ## Testing
 

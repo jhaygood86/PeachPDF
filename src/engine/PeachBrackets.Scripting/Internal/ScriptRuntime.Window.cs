@@ -105,7 +105,8 @@ internal sealed partial class ScriptRuntime
         var constructors = new (string Name, ObjectInstance Prototype)[]
         {
             ("EventTarget", EventTargetPrototype), ("Node", NodePrototype), ("Element", ElementPrototype), ("HTMLElement", ElementPrototype),
-            ("Text", TextPrototype), ("CharacterData", TextPrototype), ("Document", DocumentPrototype), ("HTMLDocument", DocumentPrototype),
+            ("Text", TextPrototype), ("CDATASection", CDataPrototype), ("CharacterData", CharacterDataPrototype), ("Comment", CommentPrototype),
+            ("ProcessingInstruction", ProcessingInstructionPrototype), ("DocumentType", DocumentTypePrototype), ("Document", DocumentPrototype), ("XMLDocument", XmlDocumentPrototype), ("HTMLDocument", DocumentPrototype),
             ("DocumentFragment", FragmentPrototype), ("CSSStyleDeclaration", StylePrototype), ("DOMTokenList", TokenListPrototype),
         };
 
@@ -113,6 +114,13 @@ internal sealed partial class ScriptRuntime
         {
             var captured = name;
             var constructor = Js.Constructor(Engine, name, prototype, 0, (_, _, _) => throw TypeError($"Illegal constructor: {captured}"));
+            if (name == "Node")
+            {
+                // The node-type constants are on the interface as well as on every node.
+                foreach (var constant in new[] { "ELEMENT_NODE", "ATTRIBUTE_NODE", "TEXT_NODE", "CDATA_SECTION_NODE", "ENTITY_REFERENCE_NODE", "ENTITY_NODE", "PROCESSING_INSTRUCTION_NODE", "COMMENT_NODE", "DOCUMENT_NODE", "DOCUMENT_TYPE_NODE", "DOCUMENT_FRAGMENT_NODE", "NOTATION_NODE" })
+                    constructor.FastSetProperty(constant, prototype.GetOwnProperty(constant));
+            }
+
             Define(name, constructor);
         }
 
@@ -209,7 +217,7 @@ internal sealed partial class ScriptRuntime
         Js.Method(Engine, css, "escape", 1, (_, args) => Js.Str(Js.AsText(Js.Arg(args, 0))));
         Define("CSS", css);
 
-        foreach (var name in new[] { "MutationObserver", "ResizeObserver", "IntersectionObserver", "PerformanceObserver" })
+        foreach (var name in new[] { "ResizeObserver", "IntersectionObserver", "PerformanceObserver" })
             Define(name, ObserverConstructor(name));
 
         return window;

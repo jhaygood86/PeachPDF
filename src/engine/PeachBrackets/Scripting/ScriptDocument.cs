@@ -28,15 +28,93 @@ public sealed class ScriptDocument
     private readonly HtmlContainerInt _container;
     private readonly Dictionary<CssBox, ScriptNode> _nodes = new(ReferenceEqualityComparer.Instance as IEqualityComparer<CssBox>);
 
-    internal ScriptDocument(HtmlContainerInt container, CssBox root, DocumentMode mode)
+    internal ScriptDocument(HtmlContainerInt container, CssBox root, DocumentMode mode, bool html = true, bool declareDoctype = true, string? contentType = null)
     {
         _container = container;
         RootBox = root;
         Mode = mode;
+        IsHtml = html;
+        ContentType = contentType ?? (html ? "text/html" : "application/xml");
         Root = Wrap(root);
+
+        // The document type the page declared is a node of the document, from which the mode is written back.
+        if (declareDoctype && mode != DocumentMode.Quirks)
+        {
+            var info = mode == DocumentMode.NoQuirks
+                ? new SpecialNode(ScriptNodeKind.DocumentType, "html", string.Empty)
+                : new SpecialNode(ScriptNodeKind.DocumentType, "html", string.Empty, "-//W3C//DTD XHTML 1.0 Transitional//EN", "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd");
+            var doctype = SpecialNode.Create(info);
+            doctype.ParentBox = root;
+            if (root.Boxes.FirstOrDefault(b => !ReferenceEquals(b, doctype)) is { } first)
+                doctype.SetBeforeBox(first);
+        }
     }
 
     internal CssBox RootBox { get; }
+
+    /// <summary>Whether the document is an HTML document: element names are matched without regard to case and made in lower case.</summary>
+    public bool IsHtml { get; }
+
+    /// <summary>The document's MIME type: <c>text/html</c> for an HTML document, <c>application/xml</c> for one made empty.</summary>
+    public string ContentType { get; }
+
+    /// <summary>Makes another, empty document that shares this one's resource loader: what <c>document.implementation</c> and <c>DOMParser</c> hand a script.</summary>
+    /// <param name="html">whether it is an HTML document (otherwise an XML one)</param>
+    /// <param name="withDocumentType">whether it starts with an HTML document type</param>
+    /// <param name="contentType">its MIME type, or null for the default of its kind</param>
+    /// <returns>the document</returns>
+    public ScriptDocument CreateDocument(bool html, bool withDocumentType, string? contentType = null) =>
+        new(_container, new CssBox(null, null), withDocumentType ? DocumentMode.NoQuirks : DocumentMode.Quirks, html, withDocumentType, contentType);
+
+    /// <summary>Parses HTML into another document, as a browser parses a page.</summary>
+    /// <param name="html">the markup</param>
+    /// <returns>the document</returns>
+    public ScriptDocument ParseDocument(string html)
+    {
+        ArgumentNullException.ThrowIfNull(html);
+        var root = Html.Parse.HtmlParser.ParseDocument(html, out var mode, null, document: true, scripting: false);
+        return new ScriptDocument(_container, root, mode, html: true, declareDoctype: true);
+    }
+
+    // A node that came from another document, and its descendants, now belong to this one.
+    internal void Adopt(ScriptNode node)
+    {
+        var from = node.OwnerDocument;
+        if (ReferenceEquals(from, this))
+            return;
+
+        if (node.Box.ParentBox is not null)
+        {
+            node.Box.ParentBox = null;
+            from.NoteChanged();
+        }
+
+        void Move(CssBox box)
+        {
+            if (from._nodes.Remove(box, out var wrapper))
+            {
+                wrapper.OwnerDocument = this;
+                _nodes[box] = wrapper;
+            }
+
+            foreach (var child in box.Boxes.ToArray())
+                Move(child);
+        }
+
+        Move(node.Box);
+        if (!_nodes.ContainsKey(node.Box))
+            Wrap(node.Box);
+    }
+
+    /// <summary>Takes a node and its descendants out of the document they are in (detaching them) and makes them this document's.</summary>
+    /// <param name="node">the node</param>
+    /// <returns>the node</returns>
+    public ScriptNode AdoptNode(ScriptNode node)
+    {
+        ArgumentNullException.ThrowIfNull(node);
+        Adopt(node);
+        return node;
+    }
 
     internal Func<string, ValueTask<HtmlDocument>>? Probe { get; set; }
 
@@ -126,6 +204,17 @@ public sealed class ScriptDocument
 
     internal void NoteChanged() => Version++;
 
+    /// <summary>Raised for each change a script makes to the tree: the node and what changed. Nothing is built unless something listens.</summary>
+    public event Action<ScriptMutation>? Mutated;
+
+    internal int SuppressMutations { get; set; }
+
+    internal void RaiseMutation(ScriptMutation mutation)
+    {
+        if (Mutated is { } handler && SuppressMutations == 0)
+            handler(mutation);
+    }
+
     internal ScriptNode Wrap(CssBox box)
     {
         if (!_nodes.TryGetValue(box, out var node))
@@ -135,18 +224,18 @@ public sealed class ScriptDocument
     }
 
     /// <summary>The <c>html</c> element, or null for a document that has none.</summary>
-    public ScriptNode? DocumentElement => Root.ChildElements.FirstOrDefault(e => IsNamed(e, "html"));
+    public ScriptNode? DocumentElement => Root.ChildElements.FirstOrDefault();
 
     /// <summary>The <c>head</c> element, or null.</summary>
-    public ScriptNode? Head => DocumentElement?.ChildElements.FirstOrDefault(e => IsNamed(e, "head"));
+    public ScriptNode? Head => DocumentElement is { } html && IsNamed(html, "html") ? html.ChildElements.FirstOrDefault(e => IsNamed(e, "head")) : null;
 
     /// <summary>The <c>body</c> element, or null.</summary>
-    public ScriptNode? Body => DocumentElement?.ChildElements.FirstOrDefault(e => IsNamed(e, "body") || IsNamed(e, "frameset"));
+    public ScriptNode? Body => DocumentElement is { } html && IsNamed(html, "html") ? html.ChildElements.FirstOrDefault(e => IsNamed(e, "body") || IsNamed(e, "frameset")) : null;
 
     private static bool IsNamed(ScriptNode node, string name) => string.Equals(node.TagName, name, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>Whether the document is in quirks mode, limited-quirks mode or neither.</summary>
-    public string CompatMode => Mode == DocumentMode.NoQuirks ? "CSS1Compat" : "BackCompat";
+    public string CompatMode => Mode == DocumentMode.Quirks ? "BackCompat" : "CSS1Compat";
 
     /// <summary>The address the document's relative references resolve against, or null when it has none.</summary>
     public Uri? BaseUri => _container.DocumentBaseUri;
@@ -209,8 +298,53 @@ public sealed class ScriptDocument
     {
         ArgumentException.ThrowIfNullOrEmpty(tagName);
 
-        var name = tagName.ToLowerInvariant();
-        return Wrap(CssBox.CreateBox(new HtmlTag(name, HtmlUtils.IsSingleTag(name))));
+        var name = IsHtml ? tagName.ToLowerInvariant() : tagName;
+        return Wrap(CssBox.CreateBox(new HtmlTag(name, HtmlUtils.IsSingleTag(name.ToLowerInvariant()))));
+    }
+
+    /// <summary>The document type node among the document's children, or null.</summary>
+    public ScriptNode? DocumentType => Root.Children.FirstOrDefault(c => c.Kind == ScriptNodeKind.DocumentType);
+
+    /// <summary>Makes a comment that is not in the tree.</summary>
+    /// <param name="data">the comment's text</param>
+    /// <returns>the node</returns>
+    public ScriptNode CreateComment(string data)
+    {
+        ArgumentNullException.ThrowIfNull(data);
+        return Wrap(SpecialNode.Create(new SpecialNode(ScriptNodeKind.Comment, "#comment", data)));
+    }
+
+    /// <summary>Makes a processing instruction that is not in the tree.</summary>
+    /// <param name="target">the target</param>
+    /// <param name="data">the data</param>
+    /// <returns>the node</returns>
+    public ScriptNode CreateProcessingInstruction(string target, string data)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+        ArgumentNullException.ThrowIfNull(data);
+        return Wrap(SpecialNode.Create(new SpecialNode(ScriptNodeKind.ProcessingInstruction, target, data)));
+    }
+
+    /// <summary>Makes a document type that is not in the tree.</summary>
+    /// <param name="name">the name</param>
+    /// <param name="publicId">the public identifier</param>
+    /// <param name="systemId">the system identifier</param>
+    /// <returns>the node</returns>
+    public ScriptNode CreateDocumentType(string name, string publicId, string systemId)
+    {
+        ArgumentNullException.ThrowIfNull(name);
+        return Wrap(SpecialNode.Create(new SpecialNode(ScriptNodeKind.DocumentType, name, string.Empty, publicId ?? string.Empty, systemId ?? string.Empty)));
+    }
+
+    /// <summary>Makes a CDATA section (a text node of an XML document) that is not in the tree.</summary>
+    /// <param name="data">the text</param>
+    /// <returns>the node</returns>
+    public ScriptNode CreateCDataSection(string data)
+    {
+        ArgumentNullException.ThrowIfNull(data);
+        var box = new CssBox(null, null) { Text = data };
+        SpecialNode.MarkCData(box);
+        return Wrap(box);
     }
 
     /// <summary>Makes a text node that is not in the tree.</summary>
@@ -318,5 +452,5 @@ public sealed class ScriptDocument
     }
 
     // The document as markup: the DOCTYPE that gives its mode, and the tree.
-    internal string Serialize() => ScriptSerializer.DocType(Mode) + ScriptSerializer.SerializeChildren(RootBox);
+    internal string Serialize() => ScriptSerializer.SerializeChildren(RootBox);
 }

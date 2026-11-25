@@ -831,9 +831,16 @@ PeachBrackets.ScriptHosting.ScriptDocument : sealed class
   method IReadOnlyList<ScriptNode> QuerySelectorAll(String selector)
   method Int32 OrdinalOf(ScriptNode element)
   method ScriptBox? GetLayoutBox(ScriptNode element)
+  method ScriptDocument CreateDocument(Boolean html, Boolean withDocumentType, String contentType = null)
+  method ScriptDocument ParseDocument(String html)
+  method ScriptNode AdoptNode(ScriptNode node)
+  method ScriptNode CreateCDataSection(String data)
+  method ScriptNode CreateComment(String data)
+  method ScriptNode CreateDocumentType(String name, String publicId, String systemId)
   method ScriptNode CreateElement(String tagName)
   method ScriptNode CreateEmptyFragment()
   method ScriptNode CreateFragment(String html)
+  method ScriptNode CreateProcessingInstruction(String target, String data)
   method ScriptNode CreateTextNode(String text)
   method ScriptNode GetElementById(String id)
   method ScriptNode QuerySelector(String selector)
@@ -841,6 +848,7 @@ PeachBrackets.ScriptHosting.ScriptDocument : sealed class
   method ValueTask<ScriptNetworkResponse> SendAsync(ScriptNetworkRequest request, CancellationToken cancellationToken = null)
   method ValueTask<String> LoadTextAsync(String address)
   property Boolean CanMeasure { get; }
+  property Boolean IsHtml { get; }
   property Boolean KeepAlive { get; set; }
   property IReadOnlyList<ScriptApi> Apis { get; }
   property IReadOnlyList<ScriptNode> Scripts { get; }
@@ -848,9 +856,11 @@ PeachBrackets.ScriptHosting.ScriptDocument : sealed class
   property Object HostState { get; set; }
   property ScriptNode Body { get; }
   property ScriptNode DocumentElement { get; }
+  property ScriptNode DocumentType { get; }
   property ScriptNode Head { get; }
   property ScriptNode Root { get; }
   property String CompatMode { get; }
+  property String ContentType { get; }
   property String Title { get; }
   property Uri BaseAddress { get; }
   property Uri BaseUri { get; }
@@ -859,6 +869,26 @@ PeachBrackets.ScriptHosting.ScriptLayout : sealed class
   property IReadOnlyList<BoxReport> Pages { get; }
   property Int32 PageCount { get; }
   property Int32 Pass { get; }
+PeachBrackets.ScriptHosting.ScriptMutation : sealed class
+  ctor(ScriptMutationKind Kind, ScriptNode Target, IReadOnlyList<ScriptNode> Added = null, IReadOnlyList<ScriptNode> Removed = null, ScriptNode Previous = null, ScriptNode Next = null, String AttributeName = null, String OldValue = null)
+  method ScriptMutation <Clone>$()
+  method Void Deconstruct(out ScriptMutationKind Kind, out ScriptNode Target, out IReadOnlyList<ScriptNode> Added, out IReadOnlyList<ScriptNode> Removed, out ScriptNode Previous, out ScriptNode Next, out String AttributeName, out String OldValue)
+  method virtual Boolean Equals(Object obj)
+  method virtual Boolean Equals(ScriptMutation other)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property IReadOnlyList<ScriptNode> Added { get; init; }
+  property IReadOnlyList<ScriptNode> Removed { get; init; }
+  property ScriptMutationKind Kind { get; init; }
+  property ScriptNode Next { get; init; }
+  property ScriptNode Previous { get; init; }
+  property ScriptNode Target { get; init; }
+  property String AttributeName { get; init; }
+  property String OldValue { get; init; }
+PeachBrackets.ScriptHosting.ScriptMutationKind : enum Int32
+  Attributes = 1
+  CharacterData = 2
+  ChildList = 0
 PeachBrackets.ScriptHosting.ScriptNetworkRequest : sealed class
   ctor(String Method, Uri Url, IReadOnlyList<KeyValuePair<String, String>> Headers, Byte[] Body, Boolean FollowRedirects = True)
   method ScriptNetworkRequest <Clone>$()
@@ -901,7 +931,9 @@ PeachBrackets.ScriptHosting.ScriptNode : sealed class
   method Void Remove()
   method Void SetAttribute(String name, String value)
   method virtual String ToString()
+  property Boolean IsCDataSection { get; }
   property Boolean IsConnected { get; }
+  property Boolean IsLeaf { get; }
   property IReadOnlyList<ScriptNode> ChildElements { get; }
   property IReadOnlyList<ScriptNode> Children { get; }
   property IReadOnlyList<String> AttributeNames { get; }
@@ -916,13 +948,19 @@ PeachBrackets.ScriptHosting.ScriptNode : sealed class
   property String Data { get; set; }
   property String Id { get; }
   property String InnerHtml { get; set; }
+  property String Name { get; }
   property String OuterHtml { get; }
+  property String PublicId { get; }
+  property String SystemId { get; }
   property String TagName { get; }
   property String TextContent { get; set; }
 PeachBrackets.ScriptHosting.ScriptNodeKind : enum Int32
+  Comment = 4
   Document = 0
+  DocumentType = 6
   Element = 1
   Fragment = 3
+  ProcessingInstruction = 5
   Text = 2
 PeachBrackets.ScriptHosting.ScriptValue : struct
   method Boolean AsBoolean()

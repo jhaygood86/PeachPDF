@@ -1,6 +1,7 @@
 using Jint;
 using Jint.Native;
 using Jint.Runtime;
+using PeachBrackets.ScriptHosting;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -62,43 +63,35 @@ internal sealed partial class ScriptRuntime
     // The name an element reports: the one it was made with, upper-cased only in the HTML namespace.
     private static string QualifiedName(NodeObject node)
     {
+        var html = node.Node.OwnerDocument.IsHtml;
         if (node.NamespaceInfo is not { } info)
-            return node.Node.TagName!.ToUpperInvariant();
+            return html ? node.Node.TagName!.ToUpperInvariant() : node.Node.TagName!;
 
         var name = info.Prefix is null ? info.LocalName : info.Prefix + ":" + info.LocalName;
-        return info.Namespace == HtmlNamespace ? name.ToUpperInvariant() : name;
+        return info.Namespace == HtmlNamespace && html ? name.ToUpperInvariant() : name;
+    }
+
+    // A copy of a node keeps the namespace its original was made with.
+    private void CopyNamespaces(ScriptNode original, ScriptNode copy, bool deep)
+    {
+        if (Wrap(original).NamespaceInfo is { } info)
+            Wrap(copy).NamespaceInfo = info;
+
+        if (!deep)
+            return;
+
+        var from = original.Children;
+        var to = copy.Children;
+        for (var i = 0; i < from.Count && i < to.Count; i++)
+            CopyNamespaces(from[i], to[i], true);
     }
 
     // createElementNS: validate and extract the namespace, prefix and local name, then make the element.
-    private JsValue CreateElementNs(JsValue namespaceArg, string qualifiedName)
+    private JsValue CreateElementNs(ScriptDocument document, JsValue namespaceArg, string qualifiedName)
     {
-        var ns = Js.IsNullish(namespaceArg) ? null : Js.AsText(namespaceArg);
-        if (ns is { Length: 0 })
-            ns = null;
+        var (ns, prefix, local) = ValidateAndExtract(namespaceArg, qualifiedName);
 
-        if (!XmlNames.IsName(qualifiedName))
-            throw DomError("InvalidCharacterError", $"'{qualifiedName}' is not a valid name.");
-        if (!XmlNames.IsQName(qualifiedName))
-            throw DomError("NamespaceError", $"'{qualifiedName}' is not a qualified name.");
-
-        string? prefix = null;
-        var local = qualifiedName;
-        if (qualifiedName.IndexOf(':') is var colon and >= 0)
-        {
-            prefix = qualifiedName[..colon];
-            local = qualifiedName[(colon + 1)..];
-        }
-
-        if (prefix is not null && ns is null)
-            throw DomError("NamespaceError", "A prefix needs a namespace.");
-        if (prefix == "xml" && ns != XmlNamespace)
-            throw DomError("NamespaceError", "The xml prefix belongs to the XML namespace.");
-        if ((qualifiedName == "xmlns" || prefix == "xmlns") && ns != XmlnsNamespace)
-            throw DomError("NamespaceError", "The xmlns name belongs to the XMLNS namespace.");
-        if (ns == XmlnsNamespace && qualifiedName != "xmlns" && prefix != "xmlns")
-            throw DomError("NamespaceError", "The XMLNS namespace is for the xmlns name.");
-
-        var element = Wrap(Document.CreateElement(local));
+        var element = Wrap(document.CreateElement(local));
         element.NamespaceInfo = new ElementNamespace(ns, prefix, local);
         return element;
     }
