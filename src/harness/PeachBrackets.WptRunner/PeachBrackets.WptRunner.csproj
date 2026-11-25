@@ -25,6 +25,10 @@
     <None Include="wpt\testharness-modules.json" Link="testharness-modules.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <!-- The faces the generic font families are pinned to, so a run measures the same fonts on every machine. -->
+    <None Include="..\..\..\assets\fonts\Liberation*.woff" Link="fonts\%(Filename)%(Extension)">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
     <None Include="wpt\WPT_COMMIT" Link="WPT_COMMIT">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>

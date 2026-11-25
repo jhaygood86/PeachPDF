@@ -32,6 +32,36 @@ internal sealed partial class WptRenderer(string wptRoot) : IReftestRenderer
         return File.Exists(path) ? path : null;
     }
 
+    private static readonly string[] LiberationFaces =
+    [
+        "LiberationSans-Regular", "LiberationSans-Bold", "LiberationSans-Italic", "LiberationSans-BoldItalic",
+        "LiberationSerif-Regular", "LiberationSerif-Bold", "LiberationSerif-Italic", "LiberationSerif-BoldItalic",
+        "LiberationMono-Regular", "LiberationMono-Bold", "LiberationMono-Italic", "LiberationMono-BoldItalic",
+    ];
+
+    private static async Task PinGenericFontsAsync(RasterRenderContext context)
+    {
+        var directory = Path.Combine(AppContext.BaseDirectory, "fonts");
+        foreach (var face in LiberationFaces)
+        {
+            var path = Path.Combine(directory, face + ".woff");
+            if (!File.Exists(path))
+                return;
+
+            var family = face.StartsWith("LiberationSans", StringComparison.Ordinal) ? "Liberation Sans"
+                : face.StartsWith("LiberationSerif", StringComparison.Ordinal) ? "Liberation Serif" : "Liberation Mono";
+            await using var stream = File.OpenRead(path);
+            await context.AddFont(stream, family);
+        }
+
+        context.AddFontFamilyMapping("sans-serif", "Liberation Sans");
+        context.AddFontFamilyMapping("serif", "Liberation Serif");
+        context.AddFontFamilyMapping("monospace", "Liberation Mono");
+        context.AddFontFamilyMapping("ui-sans-serif", "Liberation Sans");
+        context.AddFontFamilyMapping("ui-serif", "Liberation Serif");
+        context.AddFontFamilyMapping("ui-monospace", "Liberation Mono");
+    }
+
     public string FullPath(string wptPath) => Path.Combine(wptRoot, wptPath.Replace('/', Path.DirectorySeparatorChar));
 
     public async Task<RgbaImage> RenderAsync(string wptPath)
@@ -50,6 +80,10 @@ internal sealed partial class WptRenderer(string wptRoot) : IReftestRenderer
         foreach (var (keyword, generic) in FontDefaults.GenericFamilies)
             if (fontSet.ResolveGeneric(generic, context.IsFontExists) is { } family)
                 context.AddFontFamilyMapping(keyword, family);
+
+        // Pinned: the serif, sans-serif and monospace families are the bundled Liberation faces whatever the machine has installed, so the
+        // floors do not depend on the fonts of the runner image (they differed between Windows and Linux by dozens of reftests).
+        await PinGenericFontsAsync(context);
 
         // The WPT harness installs the Ahem font (every glyph an em square, metrics known exactly) on the machine, and a test that sets
         // `font-family: Ahem` without an @font-face rule relies on that.
