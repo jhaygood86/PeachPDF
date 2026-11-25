@@ -529,6 +529,30 @@ internal sealed partial class ScriptRuntime
         return result;
     }
 
+    // The encoding a document declares in a meta element (charset, or a Content-Type http-equiv), by its Encoding Standard name; the UTF-16 labels mean UTF-8 there.
+    private static string CharacterSetOf(ScriptDocument document)
+    {
+        if (!document.IsHtml)
+            return "UTF-8";
+
+        string? label = document.QuerySelector("meta[charset]")?.GetAttribute("charset");
+        if (label is null)
+        {
+            foreach (var meta in document.QuerySelectorAll("meta[http-equiv]"))
+            {
+                if (string.Equals(meta.GetAttribute("http-equiv")?.Trim(), "content-type", StringComparison.OrdinalIgnoreCase)
+                    && System.Text.RegularExpressions.Regex.Match(meta.GetAttribute("content") ?? string.Empty, @"charset\s*=\s*[""']?([^\s;""']+)", System.Text.RegularExpressions.RegexOptions.IgnoreCase) is { Success: true } found)
+                {
+                    label = found.Groups[1].Value;
+                    break;
+                }
+            }
+        }
+
+        var name = label is null ? null : EncodingLabels.NameOf(label);
+        return name is null or "replacement" || name.StartsWith("UTF-16", StringComparison.Ordinal) ? "UTF-8" : name;
+    }
+
     private void InstallDocument()
     {
         var p = DocumentPrototype;
@@ -546,13 +570,13 @@ internal sealed partial class ScriptRuntime
             if (title is not null) title.TextContent = Js.AsText(value);
         });
         Js.Accessor(Engine, p, "readyState", self => Js.Str(ReadyState));
-        Js.Accessor(Engine, p, "compatMode", self => Js.Str(D(self).CompatMode));
-        Js.Accessor(Engine, p, "characterSet", self => Js.Str("UTF-8"));
-        Js.Accessor(Engine, p, "charset", self => Js.Str("UTF-8"));
-        Js.Accessor(Engine, p, "inputEncoding", self => Js.Str("UTF-8"));
+        Js.Accessor(Engine, p, "compatMode", self => Js.Str(D(self).IsHtml ? D(self).CompatMode : "CSS1Compat"));
+        Js.Accessor(Engine, p, "characterSet", self => Js.Str(CharacterSetOf(D(self))));
+        Js.Accessor(Engine, p, "charset", self => Js.Str(CharacterSetOf(D(self))));
+        Js.Accessor(Engine, p, "inputEncoding", self => Js.Str(CharacterSetOf(D(self))));
         Js.Accessor(Engine, p, "contentType", self => Js.Str(D(self).ContentType));
-        Js.Accessor(Engine, p, "URL", self => Js.Str(D(self).BaseUri?.AbsoluteUri ?? "about:blank"));
-        Js.Accessor(Engine, p, "documentURI", self => Js.Str(D(self).BaseUri?.AbsoluteUri ?? "about:blank"));
+        Js.Accessor(Engine, p, "URL", self => Js.Str(_blankDocuments.Contains(D(self)) ? "about:blank" : D(self).BaseUri?.AbsoluteUri ?? "about:blank"));
+        Js.Accessor(Engine, p, "documentURI", self => Js.Str(_blankDocuments.Contains(D(self)) ? "about:blank" : D(self).BaseUri?.AbsoluteUri ?? "about:blank"));
         Js.Accessor(Engine, p, "baseURI", self => Js.Str(BaseOf(Sn(self).OwnerDocument)));
         Js.Accessor(Engine, p, "location", self => ReferenceEquals(D(self), Document) ? Engine.Global.Get("location") : _windows.TryGetValue(D(self), out var frame) && frame is ObjectInstance frameWindow ? frameWindow.Get("location") : JsValue.Null);
         Js.Accessor(Engine, p, "defaultView", self => ReferenceEquals(D(self), Document) ? Engine.Global : _windows.TryGetValue(D(self), out var window) ? window : JsValue.Null);
@@ -570,7 +594,7 @@ internal sealed partial class ScriptRuntime
         Js.Method(Engine, p, "createElement", 1, (self, args) =>
         {
             var name = Js.AsText(Js.Arg(args, 0));
-            if (!XmlNames.IsName(name))
+            if (!XmlNames.IsElementLocalName(name))
                 throw DomError("InvalidCharacterError", $"'{name}' is not a valid element name.");
             var created = Wrap(D(self).CreateElement(name));
             // In an XML document that is not XHTML an element made by createElement has no namespace.

@@ -46,11 +46,18 @@ internal sealed partial class ScriptRuntime
 
             var capture = false;
             var once = false;
+            bool? passive = null;
+            JsValue signal = JsValue.Undefined;
             var options = Js.Arg(args, 2);
             if (options.IsObject())
             {
                 capture = Jint.Runtime.TypeConverter.ToBoolean(options.AsObject().Get("capture"));
                 once = Jint.Runtime.TypeConverter.ToBoolean(options.AsObject().Get("once"));
+                if (options.AsObject().Get("passive") is { } passiveValue && !passiveValue.IsUndefined())
+                    passive = Jint.Runtime.TypeConverter.ToBoolean(passiveValue);
+                signal = options.AsObject().Get("signal");
+                if (signal.IsObject() && Jint.Runtime.TypeConverter.ToBoolean(signal.AsObject().Get("aborted")))
+                    return JsValue.Undefined;
             }
             else if (!options.IsUndefined())
             {
@@ -60,8 +67,22 @@ internal sealed partial class ScriptRuntime
             if (!target.Listeners.TryGetValue(type, out var list))
                 target.Listeners[type] = list = [];
 
+            // touchstart, touchmove, wheel and mousewheel listeners on the window, the document, its element and its body are passive unless said otherwise.
+            passive ??= type is "touchstart" or "touchmove" or "wheel" or "mousewheel" && IsDefaultPassiveTarget(target);
             if (!list.Any(l => l.Callback == callback && l.Capture == capture))
-                list.Add(new Listener(callback, capture, once));
+            {
+                var added = new Listener(callback, capture, once, passive.Value);
+                list.Add(added);
+                if (signal.IsObject())
+                {
+                    var removal = Js.Function(Engine, "removeListener", 0, (_, _) =>
+                    {
+                        list.Remove(added);
+                        return JsValue.Undefined;
+                    });
+                    signal.AsObject().Get("addEventListener").Call(signal, [Js.Str("abort"), removal]);
+                }
+            }
 
             return JsValue.Undefined;
         });
@@ -114,7 +135,7 @@ internal sealed partial class ScriptRuntime
         Js.Accessor(Engine, EventPrototype, "timeStamp", self => Js.Num(Ev(self).TimeStamp));
         Js.Method(Engine, EventPrototype, "preventDefault", 0, (self, _) =>
         {
-            if (Ev(self) is { Cancelable: true } ev) ev.DefaultPrevented = true;
+            if (Ev(self) is { Cancelable: true, InPassiveListener: false } ev) ev.DefaultPrevented = true;
             return JsValue.Undefined;
         });
         Js.Method(Engine, EventPrototype, "stopPropagation", 0, (self, _) =>
@@ -132,6 +153,9 @@ internal sealed partial class ScriptRuntime
             Js.Array(Engine, [.. PathOf(Ev(self).Target ?? Window).Select(Expose)]));
     }
 
+    private bool IsDefaultPassiveTarget(TargetObject target) =>
+        target is WindowObject || target is NodeObject { Node: var node } && (node.Kind == ScriptNodeKind.Document || node.Equals(node.OwnerDocument.DocumentElement) || node.Equals(node.OwnerDocument.Body));
+
     private TargetObject Target(JsValue self) =>
         self as TargetObject ?? (ReferenceEquals(self, Engine.Global) || self.IsUndefined() || self.IsNull() ? Window : throw TypeError("Illegal invocation"));
 
@@ -143,10 +167,10 @@ internal sealed partial class ScriptRuntime
     /// <summary>Makes the <c>Event</c>-like constructors a page can call, one for each name, all sharing the event prototype chain.</summary>
     private void InstallEventConstructors()
     {
-        foreach (var name in new[] { "Event", "CustomEvent", "UIEvent", "MouseEvent", "KeyboardEvent", "FocusEvent", "InputEvent", "PointerEvent", "TransitionEvent", "AnimationEvent", "ErrorEvent", "MessageEvent", "ProgressEvent", "WheelEvent", "TouchEvent", "HashChangeEvent", "PageTransitionEvent" })
+        foreach (var (name, parent, members) in EventInterfaces)
         {
             var prototype = name == "Event" ? EventPrototype : new JsObject(Engine);
-            if (name != "Event") prototype.Prototype = EventPrototype;
+            if (name != "Event") prototype.Prototype = _eventPrototypes[parent];
 
             var captured = name;
             _eventPrototypes[name] = prototype;
@@ -166,23 +190,70 @@ internal sealed partial class ScriptRuntime
                 }
 
                 var ev = new EventObject(Engine, (self as ObjectInstance)?.Prototype ?? prototype, type, bubbles, cancelable) { TimeStamp = NowMs };
-                if (captured == "CustomEvent")
-                    ev.FastSetProperty("detail", new PropertyDescriptor(JsValue.Null, PropertyFlag.ConfigurableEnumerableWritable));
+                var handled = ApplyEventMembers(ev, captured, init.IsObject() ? init.AsObject() : null);
                 if (init.IsObject())
                 {
                     foreach (var key in init.AsObject().GetOwnPropertyKeys())
                     {
-                        if (key.IsString() && key.AsString() is not ("bubbles" or "cancelable"))
-                            ev.FastSetProperty(key.AsString(), new PropertyDescriptor(init.AsObject().Get(key), PropertyFlag.ConfigurableEnumerableWritable));
+                        if (key.IsString() && key.AsString() is var member && member is not ("bubbles" or "cancelable") && !handled.Contains(member))
+                            ev.FastSetProperty(member, new PropertyDescriptor(init.AsObject().Get(key), PropertyFlag.ConfigurableEnumerableWritable));
                     }
                 }
 
-                _ = captured;
                 return ev;
             });
 
             Engine.Global.FastSetProperty(name, new PropertyDescriptor(constructor, PropertyFlag.Writable | PropertyFlag.Configurable));
         }
+    }
+
+    // The members each event interface adds to its parent's: name:default, where the default is n (null), 0, e (empty string), f (false) or a (empty array).
+    private static readonly (string Name, string Parent, string Members)[] EventInterfaces =
+    [
+        ("Event", "", ""), ("CustomEvent", "Event", "detail:n"), ("UIEvent", "Event", "view:n detail:0"),
+        ("MouseEvent", "UIEvent", "screenX:0 screenY:0 clientX:0 clientY:0 ctrlKey:f shiftKey:f altKey:f metaKey:f button:0 buttons:0 relatedTarget:n"),
+        ("KeyboardEvent", "UIEvent", "key:e code:e location:0 repeat:f isComposing:f ctrlKey:f shiftKey:f altKey:f metaKey:f"),
+        ("FocusEvent", "UIEvent", "relatedTarget:n"), ("InputEvent", "UIEvent", "data:n isComposing:f inputType:e"),
+        ("PointerEvent", "MouseEvent", "pointerId:0 width:1 height:1 pressure:0 tangentialPressure:0 tiltX:0 tiltY:0 twist:0 pointerType:e isPrimary:f"),
+        ("WheelEvent", "MouseEvent", "deltaX:0 deltaY:0 deltaZ:0 deltaMode:0"), ("DragEvent", "MouseEvent", "dataTransfer:n"),
+        ("TouchEvent", "UIEvent", "ctrlKey:f shiftKey:f altKey:f metaKey:f"), ("CompositionEvent", "UIEvent", "data:e"), ("TextEvent", "UIEvent", "data:e"),
+        ("TransitionEvent", "Event", "propertyName:e elapsedTime:0 pseudoElement:e"), ("AnimationEvent", "Event", "animationName:e elapsedTime:0 pseudoElement:e"),
+        ("ErrorEvent", "Event", "message:e filename:e lineno:0 colno:0 error:n"), ("MessageEvent", "Event", "data:n origin:e lastEventId:e source:n ports:a"),
+        ("ProgressEvent", "Event", "lengthComputable:f loaded:0 total:0"), ("HashChangeEvent", "Event", "oldURL:e newURL:e"),
+        ("PageTransitionEvent", "Event", "persisted:f"), ("StorageEvent", "Event", "key:n oldValue:n newValue:n url:e storageArea:n"),
+        ("BeforeUnloadEvent", "Event", "returnValue:e"), ("DeviceMotionEvent", "Event", "acceleration:n accelerationIncludingGravity:n rotationRate:n interval:0"),
+        ("DeviceOrientationEvent", "Event", "alpha:n beta:n gamma:n absolute:f"),
+    ];
+
+    // Defines the members of an event interface (and its parents') on the event: the init dictionary's value converted to the member's type, or its default.
+    private HashSet<string> ApplyEventMembers(EventObject ev, string interfaceName, ObjectInstance? init)
+    {
+        var handled = new HashSet<string>(StringComparer.Ordinal);
+        var chain = new List<string>();
+        for (var current = interfaceName; current.Length > 0; current = EventInterfaces.First(e => e.Name == current).Parent)
+            chain.Insert(0, current);
+
+        foreach (var interfaceInChain in chain)
+        {
+            foreach (var spec in EventInterfaces.First(e => e.Name == interfaceInChain).Members.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+            {
+                var parts = spec.Split(':');
+                var member = parts[0];
+                var given = init is not null && init.Get(member) is { } value && !value.IsUndefined() ? value : (JsValue?)null;
+                JsValue result = parts[1] switch
+                {
+                    "0" => Js.Num(given is { } n ? Jint.Runtime.TypeConverter.ToNumber(n) : 0),
+                    "e" => Js.Str(given is { } t ? Js.AsText(t) : string.Empty),
+                    "f" => Js.Bool(given is { } b && Jint.Runtime.TypeConverter.ToBoolean(b)),
+                    "a" => given ?? Js.Array(Engine, []),
+                    _ => given ?? JsValue.Null,
+                };
+                ev.FastSetProperty(member, new PropertyDescriptor(result, PropertyFlag.ConfigurableEnumerableWritable));
+                handled.Add(member);
+            }
+        }
+
+        return handled;
     }
 
     /// <summary>The targets an event aimed at <paramref name="target"/> passes through, from the target outwards.</summary>
@@ -243,7 +314,16 @@ internal sealed partial class ScriptRuntime
                 if (listener.Once)
                     registered.Remove(listener);
 
-                CallListener(listener.Callback, target, ev);
+                ev.InPassiveListener = listener.Passive;
+                try
+                {
+                    CallListener(listener.Callback, target, ev);
+                }
+                finally
+                {
+                    ev.InPassiveListener = false;
+                }
+
                 if (ev.ImmediatePropagationStopped)
                     return;
             }

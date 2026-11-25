@@ -105,18 +105,18 @@ internal sealed partial class ScriptRuntime
         if (ns is { Length: 0 })
             ns = null;
 
-        if (!XmlNames.IsName(qualifiedName))
-            throw DomError("InvalidCharacterError", $"'{qualifiedName}' is not a valid name.");
-        if (!XmlNames.IsQName(qualifiedName))
-            throw DomError("InvalidCharacterError", $"'{qualifiedName}' is not a qualified name.");
-
         string? prefix = null;
         var local = qualifiedName;
         if (qualifiedName.IndexOf(':') is var colon and >= 0)
         {
             prefix = qualifiedName[..colon];
             local = qualifiedName[(colon + 1)..];
+            if (!XmlNames.IsNamespacePrefix(prefix))
+                throw DomError("InvalidCharacterError", $"'{qualifiedName}' is not a valid qualified name.");
         }
+
+        if (!XmlNames.IsElementLocalName(local))
+            throw DomError("InvalidCharacterError", $"'{qualifiedName}' is not a valid qualified name.");
 
         if (prefix is not null && ns is null)
             throw DomError("NamespaceError", "A prefix needs a namespace.");
@@ -451,6 +451,56 @@ internal sealed partial class ScriptRuntime
 
     private readonly Dictionary<NodeObject, (ObjectInstance Window, ScriptDocument Document)> _frames = [];
 
+    private Func<JsValue, (ObjectInstance Window, ScriptDocument Document)?>? _frameLoader;
+
+    private readonly HashSet<ScriptNode> _framesLoaded = [];
+
+    // An iframe put in the page loads its document and then gets a load event, after the script that inserted it.
+    private void HandleFrameMutation(ScriptMutation mutation)
+    {
+        if (mutation.Kind != ScriptMutationKind.ChildList)
+            return;
+
+        foreach (var added in mutation.Added ?? [])
+        {
+            if (added.Kind != ScriptNodeKind.Element)
+                continue;
+
+            var frames = added.QuerySelectorAll("iframe").ToList();
+            if (string.Equals(added.TagName, "iframe", StringComparison.OrdinalIgnoreCase))
+                frames.Insert(0, added);
+
+            foreach (var frame in frames.Where(f => f.IsConnected))
+            {
+                var wrapper = Wrap(frame);
+                AddTimer(Js.Function(Engine, "frameLoaded", 0, (_, _) =>
+                {
+                    if (frame.IsConnected && _framesLoaded.Add(frame))
+                    {
+                        _frameLoader?.Invoke(wrapper);
+                        FireEvent(wrapper, "load", bubbles: false, cancelable: false);
+                    }
+
+                    return JsValue.Undefined;
+                }), 0, [], repeat: false, frame: false);
+            }
+        }
+    }
+
+    // The frames a page starts with load before the window's load event, each with its own load event.
+    private void LoadInitialFrames()
+    {
+        foreach (var frame in Document.QuerySelectorAll("iframe").ToList())
+        {
+            if (!_framesLoaded.Add(frame))
+                continue;
+
+            var wrapper = Wrap(frame);
+            _frameLoader?.Invoke(wrapper);
+            FireEvent(wrapper, "load", bubbles: false, cancelable: false);
+        }
+    }
+
     // The size an iframe gives its document: its style or width and height attributes, else the 300 by 150 a frame has by default.
     private static ImageViewport FrameViewport(ScriptNode frame)
     {
@@ -533,6 +583,7 @@ internal sealed partial class ScriptRuntime
             return _frames[element] = (window, loaded);
         }
 
+        _frameLoader = element => Frame(element);
         Js.Accessor(Engine, iframe, "contentDocument", self => Frame(self) is { } frame ? Wrap(frame.Document.Root) : JsValue.Null);
         Js.Accessor(Engine, iframe, "contentWindow", self => Frame(self) is { } frame ? frame.Window : JsValue.Null);
     }

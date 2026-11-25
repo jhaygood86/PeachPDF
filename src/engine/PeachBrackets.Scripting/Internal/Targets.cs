@@ -10,7 +10,7 @@ namespace PeachBrackets.Scripting.Internal;
 internal sealed record ElementNamespace(string? Namespace, string? Prefix, string LocalName);
 
 /// <summary>One registered listener.</summary>
-internal sealed record Listener(JsValue Callback, bool Capture, bool Once);
+internal sealed record Listener(JsValue Callback, bool Capture, bool Once, bool Passive = false);
 
 /// <summary>An object events can be sent to: a node, the document or the window.</summary>
 internal class TargetObject : ObjectInstance
@@ -113,6 +113,9 @@ internal sealed class EventObject : ObjectInstance
     public bool ImmediatePropagationStopped { get; set; }
 
     public bool IsTrusted { get; set; }
+
+    /// <summary>True while a passive listener runs: preventDefault does nothing then.</summary>
+    public bool InPassiveListener { get; set; }
 
     public double TimeStamp { get; set; }
 }

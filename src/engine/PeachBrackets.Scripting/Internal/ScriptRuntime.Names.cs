@@ -1,3 +1,5 @@
+using Jint.Native.Symbol;
+using Jint.Runtime.Descriptors;
 using Jint;
 using Jint.Native;
 using Jint.Runtime;
@@ -42,6 +44,27 @@ internal static class XmlNames
 
         return true;
     }
+
+    private static bool HasForbiddenCharacter(string text, bool slash)
+    {
+        foreach (var c in text)
+        {
+            if (c is ' ' or '\t' or '\n' or '\f' or '\r' or '\0' or '>' || (slash && c == '/'))
+                return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>Whether the text is a valid element local name (DOM): not empty, starting with a letter, a colon, an underscore or a non-ASCII character, without white space, NUL, / or &gt;.</summary>
+    public static bool IsElementLocalName(string text) =>
+        text.Length > 0 && (text[0] is >= 'A' and <= 'Z' or >= 'a' and <= 'z' or ':' or '_' or >= '\u0080') && !HasForbiddenCharacter(text, slash: true);
+
+    /// <summary>Whether the text is a valid namespace prefix (DOM): not empty, without white space, NUL, / or &gt;.</summary>
+    public static bool IsNamespacePrefix(string text) => text.Length > 0 && !HasForbiddenCharacter(text, slash: true);
+
+    /// <summary>Whether the text is a valid document type name (DOM): without white space, NUL or &gt;.</summary>
+    public static bool IsDoctypeName(string text) => !HasForbiddenCharacter(text, slash: false);
 
     /// <summary>Whether the text is a name with no colon (an <c>NCName</c>).</summary>
     public static bool IsNcName(string text) => text.IndexOf(':') < 0 && IsName(text);
@@ -144,6 +167,32 @@ internal sealed partial class ScriptRuntime
     {
         var p = TokenListPrototype;
         Js.Accessor(Engine, p, "length", self => Js.Num(Tokens(self).Count));
+
+        // The iterable parts: the tokens as they are when asked for, through the array iterators.
+        JsValue TokenArray(JsValue self) => Js.Array(Engine, [.. Tokens(self).Select(t => Js.Str(t))]);
+        foreach (var kind in new[] { "keys", "values", "entries" })
+        {
+            var iteration = kind;
+            var function = Js.Function(Engine, iteration, 0, (self, _) =>
+            {
+                var array = TokenArray(self);
+                return array.AsObject().Get(iteration).Call(array, []);
+            });
+            p.FastSetProperty(iteration, new PropertyDescriptor(function, PropertyFlag.Writable | PropertyFlag.Configurable | PropertyFlag.Enumerable));
+            if (iteration == "values")
+                p.FastSetProperty(GlobalSymbolRegistry.Iterator, new PropertyDescriptor(function, PropertyFlag.Writable | PropertyFlag.Configurable));
+        }
+
+        Js.Method(Engine, p, "forEach", 1, (self, args) =>
+        {
+            var callback = Js.Arg(args, 0);
+            if (!Js.IsCallable(callback))
+                throw TypeError("Failed to execute 'forEach' on 'DOMTokenList': parameter 1 is not of type 'Function'.");
+            var tokens = Tokens(self);
+            for (var i = 0; i < tokens.Count; i++)
+                callback.Call(Js.Arg(args, 1), [Js.Str(tokens[i]), Js.Num(i), self]);
+            return JsValue.Undefined;
+        });
         Js.Accessor(Engine, p, "value", self => Js.Str(((TokenListObject)self).Node.GetAttribute(((TokenListObject)self).Attribute) ?? string.Empty),
             (self, value) => ((TokenListObject)self).Node.SetAttribute(((TokenListObject)self).Attribute, Js.AsText(value)));
         Js.Method(Engine, p, "item", 1, (self, args) =>

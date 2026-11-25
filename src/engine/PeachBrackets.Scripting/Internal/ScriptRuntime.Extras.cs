@@ -68,6 +68,7 @@ internal sealed partial class ScriptRuntime
         {
             var made = Document.CreateDocument(html: false, withDocumentType: false);
             _plainDocuments.Add(made);
+            _blankDocuments.Add(made);
             return Wrap(made.Root);
         }));
         Define(global, "DOMParser", Js.Constructor(Engine, "DOMParser", ParserPrototype(), 0, (self, _, _) =>
@@ -87,6 +88,7 @@ internal sealed partial class ScriptRuntime
         InstallCanvasPixels();
         InstallNodeOrdering();
         InstallParsingMethods();
+        InstallPseudoAttributes();
 
         // The ChildNode and NonDocumentTypeChildNode operations text has as well as elements.
         foreach (var name in new[] { "remove", "before", "after", "replaceWith", "previousElementSibling", "nextElementSibling" })
@@ -99,55 +101,11 @@ internal sealed partial class ScriptRuntime
             }
         }
 
-        var implementation = Js.NewObject(Engine);
-        Js.Method(Engine, implementation, "hasFeature", 0, (_, _) => JsBoolean.True);
-        Js.Method(Engine, implementation, "createDocumentType", 3, (_, args) =>
-        {
-            var name = Js.AsText(Js.Arg(args, 0));
-            if (!XmlNames.IsName(name))
-                throw DomError("InvalidCharacterError", $"'{name}' is not a valid document type name.");
-            return Wrap(Document.CreateDocumentType(name, Js.AsText(Js.Arg(args, 1)), Js.AsText(Js.Arg(args, 2))));
-        });
-        Js.Method(Engine, implementation, "createHTMLDocument", 0, (_, args) =>
-        {
-            var made = Document.CreateDocument(html: true, withDocumentType: true);
-            var html = made.CreateElement("html");
-            made.Root.AppendChild(html);
-            var head = made.CreateElement("head");
-            html.AppendChild(head);
-            if (args.Length > 0 && !args[0].IsUndefined())
-            {
-                var title = made.CreateElement("title");
-                title.AppendChild(made.CreateTextNode(Js.AsText(args[0])));
-                head.AppendChild(title);
-            }
-
-            html.AppendChild(made.CreateElement("body"));
-            return Wrap(made.Root);
-        });
-        Js.Method(Engine, implementation, "createDocument", 2, (_, args) =>
-        {
-            var made = Document.CreateDocument(html: false, withDocumentType: false, contentType: ContentTypeFor(Js.Arg(args, 0), Js.Arg(args, 1)));
-            var qualified = Js.IsNullish(Js.Arg(args, 1)) ? string.Empty : Js.AsText(Js.Arg(args, 1));
-            if (qualified.Length > 0)
-            {
-                var element = CreateElementNs(made, Js.Arg(args, 0), qualified);
-                made.Root.AppendChild(((NodeObject)element).Node);
-            }
-
-            if (Js.Arg(args, 2) is NodeObject { Node.Kind: ScriptNodeKind.DocumentType } doctype)
-            {
-                made.AdoptNode(doctype.Node);
-                made.Root.InsertBefore(doctype.Node, made.Root.FirstChild);
-            }
-
-            return Wrap(made.Root);
-        });
-
-        Js.Accessor(Engine, DocumentPrototype, "implementation", _ => implementation);
+        Js.Accessor(Engine, DocumentPrototype, "implementation", self => ImplementationOf(D(self)));
 
         // The interfaces written in script: AbortController/AbortSignal, NodeFilter, TreeWalker and NodeIterator.
         Engine.Execute(ExtrasScripts.Interfaces);
+        Engine.Execute(ObservableScripts.Source);
 
         // Object.prototype.toString shows the interface a page's object has.
         foreach (var (name, prototype) in new (string, ObjectInstance)[]
@@ -189,6 +147,67 @@ internal sealed partial class ScriptRuntime
         });
         Tag(prototype, "DOMParser");
         return _parserPrototype = prototype;
+    }
+
+    // The DOMImplementation of a document: one object each, whose createDocumentType makes nodes of that document.
+    private readonly Dictionary<ScriptDocument, ObjectInstance> _implementations = [];
+
+    // Documents made by createDocument, createHTMLDocument and new Document(): their address is about:blank.
+    private readonly HashSet<ScriptDocument> _blankDocuments = [];
+
+    private ObjectInstance ImplementationOf(ScriptDocument owner)
+    {
+        if (_implementations.TryGetValue(owner, out var existing))
+            return existing;
+
+        var implementation = Js.NewObject(Engine);
+        Js.Method(Engine, implementation, "hasFeature", 0, (_, _) => JsBoolean.True);
+        Js.Method(Engine, implementation, "createDocumentType", 3, (_, args) =>
+        {
+            var name = Js.AsText(Js.Arg(args, 0));
+            if (!XmlNames.IsDoctypeName(name))
+                throw DomError("InvalidCharacterError", $"'{name}' is not a valid document type name.");
+            return Wrap(owner.CreateDocumentType(name, Js.AsText(Js.Arg(args, 1)), Js.AsText(Js.Arg(args, 2))));
+        });
+        Js.Method(Engine, implementation, "createHTMLDocument", 0, (_, args) =>
+        {
+            var made = Document.CreateDocument(html: true, withDocumentType: true);
+            _blankDocuments.Add(made);
+            var html = made.CreateElement("html");
+            made.Root.AppendChild(html);
+            var head = made.CreateElement("head");
+            html.AppendChild(head);
+            if (args.Length > 0 && !args[0].IsUndefined())
+            {
+                var title = made.CreateElement("title");
+                title.AppendChild(made.CreateTextNode(Js.AsText(args[0])));
+                head.AppendChild(title);
+            }
+
+            html.AppendChild(made.CreateElement("body"));
+            return Wrap(made.Root);
+        });
+        Js.Method(Engine, implementation, "createDocument", 2, (_, args) =>
+        {
+            var made = Document.CreateDocument(html: false, withDocumentType: false, contentType: ContentTypeFor(Js.Arg(args, 0), Js.Arg(args, 1)));
+            _blankDocuments.Add(made);
+            var qualified = Js.IsNullish(Js.Arg(args, 1)) ? string.Empty : Js.AsText(Js.Arg(args, 1));
+            if (qualified.Length > 0)
+            {
+                var element = CreateElementNs(made, Js.Arg(args, 0), qualified);
+                made.Root.AppendChild(((NodeObject)element).Node);
+            }
+
+            if (Js.Arg(args, 2) is NodeObject { Node.Kind: ScriptNodeKind.DocumentType } doctype)
+            {
+                made.AdoptNode(doctype.Node);
+                made.Root.InsertBefore(doctype.Node, made.Root.FirstChild);
+            }
+
+            return Wrap(made.Root);
+        });
+
+        return _implementations[owner] = implementation;
     }
 
     // The media type an XML document made by createDocument has: by the namespace of its root.
@@ -297,6 +316,9 @@ internal sealed partial class ScriptRuntime
         ["event"] = "Event", ["events"] = "Event", ["htmlevents"] = "Event", ["customevent"] = "CustomEvent", ["uievent"] = "UIEvent", ["uievents"] = "UIEvent",
         ["mouseevent"] = "MouseEvent", ["mouseevents"] = "MouseEvent", ["keyboardevent"] = "KeyboardEvent", ["focusevent"] = "FocusEvent",
         ["hashchangeevent"] = "HashChangeEvent", ["messageevent"] = "MessageEvent", ["touchevent"] = "TouchEvent", ["wheelevent"] = "WheelEvent",
+        ["beforeunloadevent"] = "BeforeUnloadEvent", ["compositionevent"] = "CompositionEvent", ["devicemotionevent"] = "DeviceMotionEvent",
+        ["deviceorientationevent"] = "DeviceOrientationEvent", ["dragevent"] = "DragEvent", ["storageevent"] = "StorageEvent", ["svgevents"] = "Event",
+        ["textevent"] = "TextEvent", ["uievents"] = "UIEvent", ["mouseevents"] = "MouseEvent",
     };
 
     private JsValue CreateLegacyEvent(string interfaceName)
@@ -305,8 +327,7 @@ internal sealed partial class ScriptRuntime
             throw DomError("NotSupportedError", $"The event interface '{interfaceName}' is not supported.");
 
         var ev = new EventObject(Engine, prototype, string.Empty, false, false) { TimeStamp = NowMs, Initialized = false };
-        if (name == "CustomEvent")
-            ev.FastSetProperty("detail", new PropertyDescriptor(JsValue.Null, PropertyFlag.ConfigurableEnumerableWritable));
+        ApplyEventMembers(ev, name, null);
         return ev;
     }
 

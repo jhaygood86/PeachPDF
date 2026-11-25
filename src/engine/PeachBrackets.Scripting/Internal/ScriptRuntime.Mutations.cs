@@ -171,6 +171,7 @@ internal sealed partial class ScriptRuntime
             NameElement(mutation.Target);
 
         HandleImageMutation(mutation);
+        HandleFrameMutation(mutation);
 
         if (_ranges.Count > 0)
             AdjustRanges(mutation);

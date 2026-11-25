@@ -183,6 +183,8 @@ internal sealed partial class ScriptRuntime
 
         await LoadInitialImagesAsync();
         RunMicrotasks();
+        LoadInitialFrames();
+        RunMicrotasks();
 
         ReadyState = "complete";
         FireEvent(DocumentObject, "readystatechange", bubbles: false, cancelable: false);
