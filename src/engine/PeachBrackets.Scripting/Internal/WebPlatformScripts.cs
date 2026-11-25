@@ -1719,7 +1719,7 @@ internal static class WebPlatformScripts
                 ["ReadableStream", ReadableStream], ["ReadableStreamDefaultReader", ReadableStreamDefaultReader], ["ReadableStreamDefaultController", ReadableStreamDefaultController],
                 ["WritableStream", WritableStream], ["WritableStreamDefaultWriter", WritableStreamDefaultWriter], ["WritableStreamDefaultController", WritableStreamDefaultController],
                 ["TransformStream", TransformStream], ["TransformStreamDefaultController", TransformStreamDefaultController], ["TextEncoderStream", TextEncoderStream],
-                ["TextDecoderStream", TextDecoderStream], ["CountQueuingStrategy", CountQueuingStrategy], ["ByteLengthQueuingStrategy", ByteLengthQueuingStrategy], ["XMLSerializer", XMLSerializer]
+                ["TextDecoderStream", TextDecoderStream], ["CountQueuingStrategy", CountQueuingStrategy], ["ByteLengthQueuingStrategy", ByteLengthQueuingStrategy], ["XMLSerializer", XMLSerializer], ["structuredClone", structuredClone], ["ReadableStreamBYOBReader", ReadableStreamBYOBReader], ["ReadableStreamBYOBRequest", ReadableStreamBYOBRequest], ["ReadableByteStreamController", ReadableByteStreamController]
             ].forEach(function (pair) { define(pair[0], pair[1]); });
         })
         """;

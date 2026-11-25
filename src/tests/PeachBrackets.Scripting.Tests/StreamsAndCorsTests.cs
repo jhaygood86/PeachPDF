@@ -230,4 +230,65 @@ public class StreamsAndCorsTests
         Assert.Equal(["true|http://other.test/open|open", "opaqueredirect|0|", "error true"], log);
         Assert.All(network.Requests, r => Assert.False(r.FollowRedirects));
     }
+
+    [Fact]
+    public async Task ABundleGlobal_FirstNamedWhileAPromiseJobIsWaiting_IsStillThereForThatJob()
+    {
+        var (log, _) = await RunAsync("""
+            Promise.resolve().then(function () { Log.info(typeof WritableStream + ' ' + typeof ReadableStream); });
+            var ws = new WritableStream();
+            Log.info('made');
+            """);
+
+        Assert.Contains("made", log);
+        Assert.Contains("function function", log);
+    }
+
+    [Fact]
+    public async Task WritableStream_FinishesTheWriteInFlightWhenAborted_AndPipeToClosesTheDestination()
+    {
+        var (log, _) = await RunAsync("""
+            (async function () { try {
+                var events = [], release;
+                var ws = new WritableStream({ write: function (chunk) { events.push('write ' + chunk); return new Promise(function (r) { release = r; }); }, abort: function (reason) { events.push('abort ' + reason); } });
+                var writer = ws.getWriter();
+                var first = writer.write(1), second = writer.write(2).catch(function (e) { return 'rejected ' + e; });
+                await new Promise(function (r) { setTimeout(r, 0); });
+                var aborted = writer.abort('why');
+                release();
+                var a1 = await first, a2 = await second, a3 = await aborted; Log.info((a1 === undefined) + ',' + a2 + ',' + (a3 === undefined) + ',' + events.join(','));
+                var closed = [];
+                var sink = new WritableStream({ write: function (c) { closed.push(c); }, close: function () { closed.push('close'); } });
+                await new ReadableStream({ start: function (c) { c.enqueue('a'); c.enqueue('b'); c.close(); } }).pipeTo(sink);
+                Log.info(closed.join());
+            } catch (e) { Log.info('threw ' + e + ' ' + e.stack); } })();
+            """);
+
+        Assert.Equal(["true,rejected why,true,write 1,abort why", "a,b,close"], log);
+    }
+
+    [Fact]
+    public async Task ByteStreams_ServeBYOBReads_AndStructuredCloneTransfersBuffers()
+    {
+        var (log, _) = await RunAsync("""
+            (async function () {
+                var stream = new ReadableStream({
+                    type: 'bytes',
+                    pull: function (c) { var v = c.byobRequest.view; v[0] = 7; v[1] = 8; c.byobRequest.respond(2); c.close(); }
+                });
+                var reader = stream.getReader({ mode: 'byob' });
+                var result = await reader.read(new Uint8Array(4));
+                Log.info(result.done + ' ' + result.value.byteLength + ' ' + Array.from(result.value).join());
+                var again = await reader.read(new Uint8Array(4));
+                Log.info(again.done + ' ' + again.value.byteLength);
+                var buffer = new ArrayBuffer(8), copy = structuredClone({ b: buffer, n: [1, 2] }, { transfer: [buffer] });
+                Log.info(buffer.byteLength + ' ' + copy.b.byteLength + ' ' + copy.n.join());
+                try { structuredClone(function () {}); } catch (e) { Log.info(e.name); }
+                var defaults = new ReadableStream({ type: 'bytes', start: function (c) { c.enqueue(new Uint8Array([1, 2, 3])); c.close(); } }).getReader();
+                Log.info(Array.from((await defaults.read()).value).join());
+            })();
+            """);
+
+        Assert.Equal(["false 2 7,8", "true 0", "0 8 1,2", "DataCloneError", "1,2,3"], log);
+    }
 }

@@ -9,10 +9,11 @@
     "dom-traversal": 1439,
     "domparsing": 490,
     "fetch-api": 1555,
-    "fileapi": 456,
+    "fileapi": 457,
     "html-canvas": 995,
     "html-dom": 63000,
     "html-img-canvas-elements": 1455,
+    "streams": 1120,
     "url": 8516,
     "xhr": 712
   },
