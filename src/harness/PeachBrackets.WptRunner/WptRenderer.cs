@@ -50,8 +50,19 @@ internal sealed partial class WptRenderer(string wptRoot) : IReftestRenderer
 
             var family = face.StartsWith("LiberationSans", StringComparison.Ordinal) ? "Liberation Sans"
                 : face.StartsWith("LiberationSerif", StringComparison.Ordinal) ? "Liberation Serif" : "Liberation Mono";
-            await using var stream = File.OpenRead(path);
-            await context.AddFont(stream, family);
+            // The same faces again under the names of the fonts they are metric-compatible with. A font added under a name takes precedence over an
+            // installed family of that name, so a page that says Arial or Times New Roman is drawn with Liberation on every machine.
+            var aliases = family switch
+            {
+                "Liberation Sans" => new[] { family, "Arial", "Helvetica", "Helvetica Neue", "Segoe UI" },
+                "Liberation Serif" => new[] { family, "Times New Roman", "Times" },
+                _ => new[] { family, "Courier New", "Courier" },
+            };
+            foreach (var name in aliases)
+            {
+                await using var stream = File.OpenRead(path);
+                await context.AddFont(stream, name);
+            }
         }
 
         context.AddFontFamilyMapping("sans-serif", "Liberation Sans");
