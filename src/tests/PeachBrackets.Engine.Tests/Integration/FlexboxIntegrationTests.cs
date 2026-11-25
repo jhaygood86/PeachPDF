@@ -51,6 +51,28 @@ namespace PeachBrackets.Engine.Tests.Integration
             Assert.Equal(items[1].Location.Y, items[2].Location.Y, 1.0);
         }
 
+        // ─── Inline-box decoration counts toward an item's max-content width (css-sizing-3 §5.2) ──
+
+        private const string RectSvgDataUri =
+            "data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHdpZHRoPSc4MCcgaGVpZ2h0PScyNic+PHJlY3Qgd2lkdGg9JzgwJyBoZWlnaHQ9JzI2JyBmaWxsPScjMDM2Jy8+PC9zdmc+";
+
+        [Theory]
+        [InlineData("<img src='" + RectSvgDataUri + "' style='height:26pt;margin-right:8pt'>Invoice request")]
+        [InlineData("<span style='margin-right:8pt'>Invoice</span> request")]
+        [InlineData("<span style='padding:0 8pt'>Invoice</span> request")]
+        [InlineData("<span style='border:4pt solid red'>Invoice</span> request")]
+        public async Task AFlexItemWithDecoratedInlineContent_KeepsItsTextOnOneLine(string content)
+        {
+            var html = Wrap($@"
+                <div style='display:flex;justify-content:space-between;width:400pt;font-size:14pt'>
+                    <h1 class='item' style='margin:0;font-size:18pt'>{content}</h1>
+                    <div class='other'>No. 12</div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var item = FindAllByClass(root, "item").Single();
+            Assert.Single(item.LineBoxes);
+        }
+
         // ─── Inline items containing blocks (block-in-inline must not split items) ──
 
         [Theory]
