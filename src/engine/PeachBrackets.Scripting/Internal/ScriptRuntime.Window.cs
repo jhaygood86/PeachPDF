@@ -193,8 +193,20 @@ internal sealed partial class ScriptRuntime
             }
         });
         Js.Method(Engine, global, "btoa", 1, (_, args) => Js.Str(Convert.ToBase64String(Encoding.Latin1.GetBytes(Js.AsText(Js.Arg(args, 0))))));
-        foreach (var no in new[] { "alert", "focus", "blur", "scrollTo", "scrollBy", "scroll", "print", "open", "close", "stop" })
+        foreach (var no in new[] { "alert", "focus", "blur", "scrollTo", "scrollBy", "scroll", "print", "close", "stop" })
             Js.Method(Engine, global, no, 0, (_, _) => JsValue.Undefined);
+
+        // window.open: an address that is not a URL is a SyntaxError; otherwise a window the page cannot see (there are no other windows) that can be closed.
+        Js.Method(Engine, global, "open", 0, (_, args) =>
+        {
+            if (args.Length > 0 && !args[0].IsUndefined())
+                RequireValidUrl(Js.AsText(args[0]));
+
+            var opened = Js.NewObject(Engine);
+            Js.Value(opened, "closed", JsBoolean.False);
+            Js.Method(Engine, opened, "close", 0, (_, _) => JsValue.Undefined);
+            return opened;
+        });
 
         Js.Method(Engine, global, "confirm", 1, (_, _) => JsBoolean.False);
         Js.Method(Engine, global, "prompt", 1, (_, _) => JsValue.Null);

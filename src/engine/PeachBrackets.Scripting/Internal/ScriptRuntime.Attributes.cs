@@ -502,6 +502,15 @@ internal sealed partial class ScriptRuntime
             }
 
             Js.Value(window, "window", window);
+            var frameDocument = loaded;
+            window.FastSetProperty("location", new GetSetPropertyDescriptor(
+                Js.Function(Engine, "get location", 0, (_, _) => Js.Str(frameDocument.BaseUri?.AbsoluteUri ?? "about:blank")),
+                Js.Function(Engine, "set location", 1, (_, args) =>
+                {
+                    // Navigating is not done; an address that is not a URL is refused as a browser refuses it.
+                    RequireValidUrl(Js.AsText(Js.Arg(args, 0)));
+                    return JsValue.Undefined;
+                }), enumerable: true, configurable: true));
             _windows[loaded] = window;
             return _frames[element] = (window, loaded);
         }

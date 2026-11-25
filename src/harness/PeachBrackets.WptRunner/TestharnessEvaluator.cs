@@ -88,11 +88,13 @@ internal sealed partial class TestharnessEvaluator(string wptRoot) : IWptEvaluat
         if (UnportedHandler(wptPath, text) is { } handler)
             return new TestResult(Outcome.Skipped, $"needs {handler}, which has no ported handler");
 
-        var source = WptRenderer.Prepare(wptPath, text);
+        // The page's address is the document's own (a <base> the page declares is then the first one in it, as in a browser), not a base element put in front.
+        var source = text;
+        var pageAddress = new Uri(WptServer.Origin + "/" + served);
 
         var lines = new List<string>();
         var errors = new List<string>();
-        var context = new RasterRenderContext { ResourceLoader = uri => LoadAsync(server, uri) };
+        var context = new RasterRenderContext { DocumentAddress = pageAddress, ResourceLoader = uri => LoadAsync(server, uri) };
         var options = new HtmlDocumentOptions
         {
             MediaType = MediaType.Screen,

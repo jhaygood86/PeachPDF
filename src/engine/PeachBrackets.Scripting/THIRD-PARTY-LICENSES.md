@@ -10,3 +10,8 @@ carries its own terms and is installed with this one rather than copied into it.
 
 Jint in turn depends on Acornima, its JavaScript parser (<https://github.com/adams85/acornima>, BSD 3-Clause). Both licenses
 are in the NuGet packages of those libraries; check them there before redistributing.
+
+## IDNA mapping table (`Internal/Idna/idna-uts46.bin`)
+
+- **Source:** the Unicode Consortium's `IdnaMappingTable.txt` (UTS #46) and `UnicodeData.txt` (for the canonical combining class), Unicode 18.0.0, checked in under `assets/unicode/` and turned into the table by `assets/unicode/generate_idna_table.py`.
+- **License:** Unicode License v3 (<https://www.unicode.org/license.txt>), the same as the other Unicode data PeachPDF embeds (see `assets/unicode/UnicodeCharacterDatabase.LICENSE.txt`).

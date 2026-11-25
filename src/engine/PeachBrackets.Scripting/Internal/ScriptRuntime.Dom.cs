@@ -55,7 +55,7 @@ internal sealed partial class ScriptRuntime
         ["textarea"] = "HTMLTextAreaElement", ["label"] = "HTMLLabelElement", ["ul"] = "HTMLUListElement", ["ol"] = "HTMLOListElement",
         ["li"] = "HTMLLIElement", ["h1"] = "HTMLHeadingElement", ["h2"] = "HTMLHeadingElement", ["h3"] = "HTMLHeadingElement",
         ["h4"] = "HTMLHeadingElement", ["h5"] = "HTMLHeadingElement", ["h6"] = "HTMLHeadingElement", ["link"] = "HTMLLinkElement",
-        ["meta"] = "HTMLMetaElement", ["title"] = "HTMLTitleElement", ["br"] = "HTMLBRElement", ["pre"] = "HTMLPreElement",
+        ["meta"] = "HTMLMetaElement", ["area"] = "HTMLAreaElement", ["title"] = "HTMLTitleElement", ["br"] = "HTMLBRElement", ["pre"] = "HTMLPreElement",
     };
 
     private readonly Dictionary<string, ObjectInstance> _interfacePrototypes = [];
@@ -76,6 +76,24 @@ internal sealed partial class ScriptRuntime
 
     // The window an iframe's document has: its document and the interfaces a page reaches through it.
     private readonly Dictionary<ScriptDocument, ObjectInstance> _windows = [];
+
+    // The address a document's relative references resolve against: its first base element's href resolved against the document's address, else the address.
+    private static string BaseOf(ScriptDocument document)
+    {
+        var address = document.BaseUri?.AbsoluteUri ?? "about:blank";
+        var element = document.QuerySelector("base[href]");
+        if (element?.GetAttribute("href") is { } href)
+        {
+            // An address with a scheme of its own stands as it is (about:blank has no authority, which a relative resolution would not keep).
+            if (System.Text.RegularExpressions.Regex.IsMatch(href, "^[A-Za-z][A-Za-z0-9+.-]*:"))
+                return href.Trim();
+
+            if (Uri.TryCreate(document.BaseUri ?? new Uri("about:blank"), href, out var resolved))
+                return resolved.AbsoluteUri;
+        }
+
+        return address;
+    }
 
     // The document a document object stands for.
     private ScriptDocument D(JsValue self) => Sn(self).OwnerDocument;
@@ -203,6 +221,7 @@ internal sealed partial class ScriptRuntime
         Js.Accessor(Engine, p, "previousSibling", self => WrapOrNull(Sn(self).PreviousSibling));
         Js.Accessor(Engine, p, "nextSibling", self => WrapOrNull(Sn(self).NextSibling));
         Js.Accessor(Engine, p, "isConnected", self => Js.Bool(Sn(self).IsConnected));
+        Js.Accessor(Engine, p, "baseURI", self => Js.Str(BaseOf(Sn(self).OwnerDocument)));
         Js.Accessor(Engine, p, "ownerDocument", self => Sn(self).Kind == ScriptNodeKind.Document ? JsValue.Null : Wrap(Sn(self).OwnerDocument.Root));
         Js.Accessor(Engine, p, "textContent",
             self => Sn(self).Kind is ScriptNodeKind.Document or ScriptNodeKind.DocumentType ? JsValue.Null : Js.Str(Sn(self).TextContent),
@@ -507,7 +526,7 @@ internal sealed partial class ScriptRuntime
         Js.Accessor(Engine, p, "contentType", self => Js.Str(D(self).ContentType));
         Js.Accessor(Engine, p, "URL", self => Js.Str(D(self).BaseUri?.AbsoluteUri ?? "about:blank"));
         Js.Accessor(Engine, p, "documentURI", self => Js.Str(D(self).BaseUri?.AbsoluteUri ?? "about:blank"));
-        Js.Accessor(Engine, p, "baseURI", self => Js.Str(D(self).BaseUri?.AbsoluteUri ?? "about:blank"));
+        Js.Accessor(Engine, p, "baseURI", self => Js.Str(BaseOf(Sn(self).OwnerDocument)));
         Js.Accessor(Engine, p, "defaultView", self => ReferenceEquals(D(self), Document) ? Engine.Global : _windows.TryGetValue(D(self), out var window) ? window : JsValue.Null);
         Js.Accessor(Engine, p, "currentScript", self => WrapOrNull(CurrentScript));
         Js.Accessor(Engine, p, "visibilityState", self => Js.Str("visible"));

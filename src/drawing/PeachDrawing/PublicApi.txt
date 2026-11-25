@@ -132,6 +132,8 @@ PeachDrawing.RasterRenderContext : sealed class
   property Double LayoutUnitsPerPoint { get; }
   property Double PixelsPerPoint { get; set; }
   property Func<Uri, ValueTask<RNetworkResponse>> ResourceLoader { get; set; }
+  property Uri BaseUri { get; }
+  property Uri DocumentAddress { get; set; }
 PeachDrawing.RasterSurfaceEncoding : static class
   method static Boolean IsOpaque(RasterSurface surface)
   method static Byte[] EncodePng(RasterSurface surface, Boolean opaque)

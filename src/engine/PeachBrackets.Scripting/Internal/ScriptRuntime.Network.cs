@@ -19,6 +19,37 @@ internal sealed partial class ScriptRuntime
 {
     private readonly List<(Task<ScriptNetworkResponse?> Task, JsValue Callback, Uri Url)> _pendingRequests = [];
     private bool _webLoaded;
+    private ObjectInstance? _hyperlink;
+
+    // a and area elements have the parts of their href as properties, worked out by the script bundle's URL parser (loaded when first asked).
+    private void InstallHyperlinks()
+    {
+        foreach (var tag in new[] { "a", "area" })
+        {
+            var prototype = ElementPrototypeFor(tag);
+            foreach (var part in new[] { "href", "origin", "protocol", "username", "password", "host", "hostname", "port", "pathname", "search", "hash" })
+            {
+                var name = part;
+                Js.Accessor(Engine, prototype, name,
+                    self =>
+                    {
+                        LoadWebBundle();
+                        return _hyperlink is null ? Js.Str(string.Empty) : _hyperlink.Get("get").Call(_hyperlink, [self, Js.Str(name)]);
+                    },
+                    name == "origin" ? null : (self, value) =>
+                    {
+                        LoadWebBundle();
+                        _hyperlink?.Get("set").Call(_hyperlink, [self, Js.Str(name), value]);
+                    });
+            }
+
+            Js.Method(Engine, prototype, "toString", 0, (self, _) =>
+            {
+                LoadWebBundle();
+                return _hyperlink is null ? Js.Str(string.Empty) : _hyperlink.Get("get").Call(_hyperlink, [self, Js.Str("href")]);
+            });
+        }
+    }
 
     // The globals the bundle defines. Each is an accessor until the first read, which runs the bundle and replaces them all with the real values.
     private static readonly string[] WebGlobals =
@@ -47,6 +78,15 @@ internal sealed partial class ScriptRuntime
         }
     }
 
+    // An address resolved against the document's must be a URL; if not it is a SyntaxError, as a location assignment or window.open reports it.
+    private void RequireValidUrl(string address)
+    {
+        LoadWebBundle();
+        var check = Engine.Evaluate("(function (a, b) { try { new URL(a, b); return true; } catch (e) { return false; } })");
+        if (!TypeConverter.ToBoolean(check.Call(JsValue.Undefined, [Js.Str(address), Js.Str(BaseOf(Document))])))
+            throw DomError("SyntaxError", $"'{address}' is not a valid URL.");
+    }
+
     private void LoadWebBundle()
     {
         if (_webLoaded)
@@ -67,6 +107,11 @@ internal sealed partial class ScriptRuntime
     {
         var net = Js.NewObject(Engine);
 
+        Js.Method(Engine, net, "registerHyperlink", 1, (_, args) =>
+        {
+            _hyperlink = Js.Arg(args, 0) as ObjectInstance;
+            return JsValue.Undefined;
+        });
         Js.Method(Engine, net, "documentUrl", 0, (_, _) => Js.Str(Document.BaseUri?.AbsoluteUri ?? "about:blank"));
         Js.Method(Engine, net, "utf8Encode", 1, (_, args) => Js.Str(Encoding.Latin1.GetString(Encoding.UTF8.GetBytes(Js.AsText(Js.Arg(args, 0))))));
         Js.Method(Engine, net, "utf8Decode", 2, (_, args) =>
@@ -83,17 +128,8 @@ internal sealed partial class ScriptRuntime
             var bytes = Encoding.Latin1.GetBytes(Js.AsText(Js.Arg(args, 0)));
             return Js.Str(DecoderFor(Js.AsText(Js.Arg(args, 1)))?.GetString(bytes));
         });
-        Js.Method(Engine, net, "idna", 1, (_, args) =>
-        {
-            try
-            {
-                return Js.Str(new IdnMapping { AllowUnassigned = false, UseStd3AsciiRules = false }.GetAscii(Js.AsText(Js.Arg(args, 0))));
-            }
-            catch (ArgumentException)
-            {
-                return JsValue.Null;
-            }
-        });
+        // Domain to ASCII (UTS #46); null on an error.
+        Js.Method(Engine, net, "idna", 1, (_, args) => Js.Str(Idna.Uts46.ToAscii(Js.AsText(Js.Arg(args, 0)))));
 
         // send(method, url, headers, body, followRedirects, callback): the callback gets the answer, or null for a network error, after the clock has
         // stopped for it (see PlayTimersAsync). sendSync answers at once.

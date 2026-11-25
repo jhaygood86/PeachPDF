@@ -466,7 +466,12 @@ internal static class WebPlatformScripts
                 if (state.params) paramsState.get(state.params).list = parseUrlencoded(state.record.query === null ? "" : state.record.query);
             }
             function accessor(name, get, set) {
-                Object.defineProperty(URL.prototype, name, { get: function () { return get(stateOf(this).record, stateOf(this)); }, set: set ? function (value) { set(stateOf(this).record, String(value), stateOf(this)); } : undefined, enumerable: true, configurable: true });
+                Object.defineProperty(URL.prototype, name, { get: function () { return get(stateOf(this).record, stateOf(this)); }, set: set ? function (value) {
+                    // A setter that parses its value (all but username and password) first drops ASCII tabs and newlines, as the URL parser does.
+                    value = String(value);
+                    if (name !== "username" && name !== "password") value = value.replace(/[\t\n\r]/g, "");
+                    set(stateOf(this).record, value, stateOf(this));
+                } : undefined, enumerable: true, configurable: true });
             }
             accessor("href", function (r) { return serialize(r); }, function (r, value, state) {
                 var parsed = basicParse(value);
@@ -699,6 +704,30 @@ internal static class WebPlatformScripts
             Object.defineProperty(URLSearchParams.prototype, Symbol.iterator, { value: URLSearchParams.prototype.entries, writable: true, configurable: true });
             readonly(URLSearchParams.prototype, "size", function () { return paramsOf(this).list.length; });
             tag(URLSearchParams, "URLSearchParams");
+
+            // HTMLHyperlinkElementUtils: the URL parts an a or area element has, over its href and the base the element resolves against.
+            var hyperlink = {
+                parse: function (element) {
+                    var href = element.getAttribute("href");
+                    if (href === null) return null;
+                    try { return new URL(href, element.baseURI); } catch (e) { return null; }
+                },
+                get: function (element, name) {
+                    var url = this.parse(element);
+                    if (name === "href") return url === null ? (element.getAttribute("href") || "") : url.href;
+                    if (url === null) return name === "protocol" ? ":" : "";
+                    return url[name];
+                },
+                set: function (element, name, value) {
+                    value = String(value);
+                    if (name === "href") { element.setAttribute("href", value); return; }
+                    var url = this.parse(element);
+                    if (url === null || name === "origin") return;
+                    url[name] = value;
+                    element.setAttribute("href", url.href);
+                }
+            };
+            net.registerHyperlink(hyperlink);
 
             // ---------------------------------------------------------------- Blob, File, FormData
             var blobState = new WeakMap();
