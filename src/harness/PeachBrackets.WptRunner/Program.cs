@@ -227,8 +227,12 @@ namespace PeachBrackets.WptRunner
                         Console.WriteLine($"  note: {module.Id} passes {score} above its floor of {floor}; raise it with --update-floors.");
                     }
 
-                    if (o.ContainsKey("update-floors") && (score > floor || o.ContainsKey("allow-lower")))
-                        floors.Modules[module.Id] = score;
+                    if (o.ContainsKey("update-floors"))
+                    {
+                        var written = score - floors.Margins.GetValueOrDefault(module.Id);
+                        if (written > floor || o.ContainsKey("allow-lower"))
+                            floors.Modules[module.Id] = written;
+                    }
                 }
             }
 

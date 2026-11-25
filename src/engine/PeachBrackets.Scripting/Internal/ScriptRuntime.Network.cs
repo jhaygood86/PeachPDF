@@ -97,18 +97,18 @@ internal sealed partial class ScriptRuntime
 
         // send(method, url, headers, body, followRedirects, callback): the callback gets the answer, or null for a network error, after the clock has
         // stopped for it (see PlayTimersAsync). sendSync answers at once.
-        Js.Method(Engine, net, "send", 6, (_, args) =>
+        Js.Method(Engine, net, "send", 8, (_, args) =>
         {
-            var (request, url) = BuildRequest(args);
+            var (request, url) = BuildRequest(args, 6);
             if (!Js.IsCallable(Js.Arg(args, 5)))
                 throw TypeError("send needs a callback.");
 
             _pendingRequests.Add((SendAsync(request), args[5], url));
             return JsValue.Undefined;
         });
-        Js.Method(Engine, net, "sendSync", 5, (_, args) =>
+        Js.Method(Engine, net, "sendSync", 7, (_, args) =>
         {
-            var (request, url) = BuildRequest(args);
+            var (request, url) = BuildRequest(args, 5);
             // The script is waiting for the answer, so this waits for it, and can deadlock a host that holds a context the answer needs; the documented cost of a synchronous request.
             var response = SendAsync(request).GetAwaiter().GetResult();
             return Result(response, url);
@@ -117,7 +117,7 @@ internal sealed partial class ScriptRuntime
         return net;
     }
 
-    private (ScriptNetworkRequest Request, Uri Url) BuildRequest(JsValue[] args)
+    private (ScriptNetworkRequest Request, Uri Url) BuildRequest(JsValue[] args, int referrerIndex)
     {
         var method = Js.AsText(Js.Arg(args, 0));
         if (!Uri.TryCreate(Js.AsText(Js.Arg(args, 1)), UriKind.Absolute, out var url))
@@ -136,7 +136,10 @@ internal sealed partial class ScriptRuntime
 
         var body = Js.Arg(args, 3);
         byte[]? bytes = Js.IsNullish(body) ? null : Encoding.Latin1.GetBytes(Js.AsText(body));
-        return (new ScriptNetworkRequest(method, url, headers, bytes, TypeConverter.ToBoolean(Js.Arg(args, 4))), url);
+        var referrer = Js.Arg(args, referrerIndex);
+        var policy = Js.Arg(args, referrerIndex + 1);
+        return (new ScriptNetworkRequest(method, url, headers, bytes, TypeConverter.ToBoolean(Js.Arg(args, 4)),
+            Js.IsNullish(referrer) ? null : Js.AsText(referrer), Js.IsNullish(policy) ? string.Empty : Js.AsText(policy)), url);
     }
 
     // The answer to a request: a data: address is read here, anything else is the document's network's to answer. A failure is a network error, not an exception.

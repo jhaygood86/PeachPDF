@@ -15,12 +15,16 @@ namespace PeachBrackets.ScriptHosting;
 /// <param name="Headers">the request headers the script set, in order</param>
 /// <param name="Body">the body, or null</param>
 /// <param name="FollowRedirects">whether a redirect answer is followed to its target (the default) or returned as it is</param>
+/// <param name="Referrer">the address a <c>Referer</c> header is made from (the page's, or the one the script asked for), or null for none</param>
+/// <param name="ReferrerPolicy">the referrer policy the script asked for (<c>no-referrer</c>, <c>origin</c>...), or empty for the default</param>
 public sealed record ScriptNetworkRequest(
     string Method,
     Uri Url,
     IReadOnlyList<KeyValuePair<string, string>> Headers,
     byte[]? Body,
-    bool FollowRedirects = true);
+    bool FollowRedirects = true,
+    string? Referrer = null,
+    string ReferrerPolicy = "");
 
 /// <summary>The answer to a <see cref="ScriptNetworkRequest"/>.</summary>
 /// <param name="Status">the status code</param>

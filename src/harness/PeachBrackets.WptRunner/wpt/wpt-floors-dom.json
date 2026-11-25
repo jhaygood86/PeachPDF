@@ -2,18 +2,27 @@
   "formatVersion": 1,
   "wptCommit": "33926aca0f4313541f0ac5d67d4a4ab949d50b16",
   "floors": {
-    "dom-events": 247,
-    "dom-nodes": 7800,
+    "dom-events": 251,
+    "dom-nodes": 7838,
     "dom-other": 269,
-    "dom-ranges": 37000,
+    "dom-ranges": 39859,
     "dom-traversal": 1439,
     "domparsing": 106,
-    "fetch-api": 647,
-    "fileapi": 411,
+    "fetch-api": 1078,
+    "fileapi": 452,
     "html-canvas": 668,
-    "html-dom": 28000,
-    "html-img-canvas-elements": 440,
+    "html-dom": 33636,
+    "html-img-canvas-elements": 450,
     "url": 4735,
-    "xhr": 285
+    "xhr": 699
+  },
+  "margins": {
+    "dom-nodes": 100,
+    "dom-ranges": 300,
+    "fetch-api": 10,
+    "html-canvas": 10,
+    "html-dom": 800,
+    "html-img-canvas-elements": 10,
+    "xhr": 10
   }
 }

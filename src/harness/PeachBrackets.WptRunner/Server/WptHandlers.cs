@@ -9,6 +9,12 @@ namespace PeachBrackets.WptRunner.Server;
 /// </summary>
 internal static class WptHandlers
 {
+    static WptHandlers()
+    {
+        foreach (var (path, handler) in NetworkHandlers.All())
+            Table.TryAdd(path, handler);
+    }
+
     private static readonly Dictionary<string, Action<ServerRequest, ServerResponse>> Table = new(StringComparer.Ordinal)
     {
         ["common/redirect.py"] = Redirect,

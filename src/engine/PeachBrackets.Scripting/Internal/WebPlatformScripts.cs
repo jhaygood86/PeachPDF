@@ -1136,6 +1136,13 @@ internal static class WebPlatformScripts
 
             function abortReason(signal) { return signal.reason !== undefined ? signal.reason : new DOMException("The operation was aborted.", "AbortError"); }
 
+            // The address a Referer is made from: the page's for "about:client", none for "", else the URL the script gave.
+            function referrerOf(referrer) {
+                if (referrer === "") return null;
+                var page = net.documentUrl();
+                if (referrer === "about:client") return page === "about:blank" ? null : page;
+                try { return new URL(referrer, page).href; } catch (e) { return null; }
+            }
             function fetch(input, init) {
                 return new Promise(function (resolve, reject) {
                     var request;
@@ -1159,7 +1166,7 @@ internal static class WebPlatformScripts
                         return;
                     }
                     var body = bodyOf(request).bytes;
-                    net.send(state.method, state.url, headerPairs(state.headers), body === null ? null : bytesToBinary(body), state.redirect === "follow", finish);
+                    net.send(state.method, state.url, headerPairs(state.headers), body === null ? null : bytesToBinary(body), state.redirect === "follow", finish, referrerOf(state.referrer), state.referrerPolicy);
                 });
             }
 
@@ -1329,7 +1336,7 @@ internal static class WebPlatformScripts
                 if (!s.async) {
                     var result;
                     if (url.slice(0, 5) === "blob:") result = blobAnswer(url);
-                    else result = net.sendSync(s.method, url, s.headers, payload, true);
+                    else result = net.sendSync(s.method, url, s.headers, payload, true, referrerOf("about:client"), "");
                     s.sendFlag = false;
                     if (result === null) {
                         s.errorFlag = true; s.state = 4;
@@ -1342,7 +1349,7 @@ internal static class WebPlatformScripts
                 fire(self, "loadstart", 0, 0);
                 if (s.token !== token) return;
                 if (url.slice(0, 5) === "blob:") { var blobResult = blobAnswer(url); Promise.resolve().then(function () { complete(blobResult); }); return; }
-                net.send(s.method, url, s.headers, payload, true, complete);
+                net.send(s.method, url, s.headers, payload, true, complete, referrerOf("about:client"), "");
             });
             method(XMLHttpRequest.prototype, "abort", function abort() {
                 var s = xhrOf(this);

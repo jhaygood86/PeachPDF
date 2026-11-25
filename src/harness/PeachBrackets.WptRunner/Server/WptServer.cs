@@ -33,7 +33,7 @@ internal sealed partial class WptServer(string root)
     public List<ServerRequest> Log { get; } = [];
 
     /// <summary>The server's stash: values a test keeps between its requests, by key.</summary>
-    public Dictionary<string, string> Stash { get; } = new(StringComparer.Ordinal);
+    public ServerStash Stash { get; } = new();
 
     /// <summary>The name of a host in the group: <c>""</c> for the main domain, <c>alt</c> for the alternate one; <c>""</c> for the domain itself or a subdomain's label.</summary>
     public static string HostFor(string group, string subdomain)
@@ -77,6 +77,7 @@ internal sealed partial class WptServer(string root)
     public ServerResponse Handle(ServerRequest request)
     {
         Log.Add(request);
+        request.Server = this;
         var response = new ServerResponse();
         var path = request.Path;
 
@@ -186,9 +187,20 @@ internal sealed partial class WptServer(string root)
                 sent["Cookie"] = string.Join("; ", jar.Select(c => c.Key + "=" + c.Value));
             sent.TryAdd("Host", uri.Authority);
 
+            if (Referer(request.Referrer, request.ReferrerPolicy, uri) is { } referer)
+                sent["Referer"] = referer;
+
+            // A browser names the page's origin on a request that is not a plain same-origin GET or HEAD.
+            if (!sent.ContainsKey("Origin") && (method is not ("GET" or "HEAD") || !string.Equals(uri.GetLeftPart(UriPartial.Authority), Origin, StringComparison.OrdinalIgnoreCase)))
+                sent["Origin"] = Origin;
+
             var response = Handle(new ServerRequest(method, uri, sent, body));
             foreach (var (_, value) in response.Headers.Where(h => h.Key.Equals("Set-Cookie", StringComparison.OrdinalIgnoreCase)))
                 StoreCookie(uri.Host, value);
+
+            // A response can change the policy for what follows it (Referrer-Policy, a list of which the last known value wins).
+            if (response.Get("Referrer-Policy") is { } declared && declared.Split(',', StringSplitOptions.TrimEntries).LastOrDefault(KnownPolicies.Contains) is { } policy)
+                request = request with { ReferrerPolicy = policy };
 
             if (response.IsRedirect && request.FollowRedirects)
             {
@@ -205,10 +217,36 @@ internal sealed partial class WptServer(string root)
             }
 
             var payload = method == "HEAD" ? [] : response.Body;
-            return new ScriptNetworkResponse(response.Status, ReasonPhrase(response.Status), [.. response.Headers], payload, uri);
+            return new ScriptNetworkResponse(response.Status, response.StatusText ?? ReasonPhrase(response.Status), [.. response.Headers], payload, uri);
         }
 
         return null;
+    }
+
+    private static readonly HashSet<string> KnownPolicies =
+        ["no-referrer", "no-referrer-when-downgrade", "same-origin", "origin", "strict-origin", "origin-when-cross-origin", "strict-origin-when-cross-origin", "unsafe-url"];
+
+    // The Referer a request to <target> carries: the referrer address cut down as the policy says (URL without fragment or credentials, or just its origin).
+    private static string? Referer(string? referrer, string policy, Uri target)
+    {
+        if (referrer is null || !Uri.TryCreate(referrer, UriKind.Absolute, out var source) || source.Scheme is not ("http" or "https"))
+            return null;
+
+        var full = new UriBuilder(source) { Fragment = string.Empty, UserName = string.Empty, Password = string.Empty }.Uri.AbsoluteUri.TrimEnd('#');
+        var origin = source.GetLeftPart(UriPartial.Authority) + "/";
+        var sameOrigin = string.Equals(source.GetLeftPart(UriPartial.Authority), target.GetLeftPart(UriPartial.Authority), StringComparison.OrdinalIgnoreCase);
+        var downgrade = source.Scheme == "https" && target.Scheme == "http";
+        return (policy.Length == 0 ? "strict-origin-when-cross-origin" : policy) switch
+        {
+            "no-referrer" => null,
+            "no-referrer-when-downgrade" => downgrade ? null : full,
+            "same-origin" => sameOrigin ? full : null,
+            "origin" => origin,
+            "strict-origin" => downgrade ? null : origin,
+            "origin-when-cross-origin" => sameOrigin ? full : origin,
+            "unsafe-url" => full,
+            _ => sameOrigin ? full : downgrade ? null : origin,
+        };
     }
 
     private static string ReasonPhrase(int status) => status switch

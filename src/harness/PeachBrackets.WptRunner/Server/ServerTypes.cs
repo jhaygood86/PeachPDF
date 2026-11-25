@@ -18,6 +18,9 @@ internal sealed class ServerRequest
 
     public string Method { get; }
 
+    /// <summary>The server answering the request (for its stash), set when it handles it.</summary>
+    public WptServer? Server { get; set; }
+
     public Uri Url { get; }
 
     /// <summary>The request headers, names compared without regard to case.</summary>
@@ -60,6 +63,9 @@ internal sealed class ServerResponse
 
     public int Status { get; set; } = 200;
 
+    /// <summary>The reason phrase a handler chose (<c>status.py</c> lets a test pick one), or null for the standard one.</summary>
+    public string? StatusText { get; set; }
+
     public byte[] Body { get; set; } = [];
 
     public IReadOnlyList<KeyValuePair<string, string>> Headers => _headers;
@@ -90,4 +96,17 @@ internal sealed class ServerResponse
     public void SetText(string text) => Body = Encoding.UTF8.GetBytes(text);
 
     public bool IsRedirect => Status is 301 or 302 or 303 or 307 or 308 && Get("Location") is not null;
+}
+
+/// <summary>
+/// The server's stash: values a test keeps between its requests, by key and the directory of the handler that stored them, the way <c>wptserve</c>'s
+/// is. <see cref="Take"/> removes the value it returns.
+/// </summary>
+internal sealed class ServerStash
+{
+    private readonly Dictionary<(string Path, string Key), object?> _values = [];
+
+    public void Put(string key, object? value, string path = "/") => _values[(path, key)] = value;
+
+    public object? Take(string key, string path = "/") => _values.Remove((path, key), out var value) ? value : null;
 }

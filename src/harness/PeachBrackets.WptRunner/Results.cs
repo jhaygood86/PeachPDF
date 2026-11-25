@@ -121,6 +121,12 @@ internal sealed class Floors
     [JsonPropertyName("wptCommit")] public string WptCommit { get; set; } = "";
     [JsonPropertyName("floors")] public SortedDictionary<string, int> Modules { get; set; } = new(StringComparer.Ordinal);
 
+    /// <summary>
+    /// How far below a measured count a module's floor is written, for the modules whose count varies from run to run under load (a test that races a timer,
+    /// a script that nears its memory limit). <c>--update-floors</c> writes <c>measured - margin</c>, and still never lowers a floor.
+    /// </summary>
+    [JsonPropertyName("margins")] public SortedDictionary<string, int> Margins { get; set; } = new(StringComparer.Ordinal);
+
     private static readonly JsonSerializerOptions Options = new() { WriteIndented = true };
 
     public static Floors Load(string file) =>

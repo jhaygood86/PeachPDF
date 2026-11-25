@@ -73,8 +73,8 @@ internal sealed partial class TestharnessEvaluator(string wptRoot) : IWptEvaluat
 
         var server = new WptServer(wptRoot);
         server.Override("resources/testharnessreport.js", ReportScript);
-        // The vendor file wires testdriver.js to a browser's automation; there is none here, so it is empty and the actions fail when used.
-        server.Override("resources/testdriver-vendor.js", string.Empty);
+        // The vendor file wires testdriver.js to a browser's automation; here the actions dispatch the events in the page (see TestdriverVendor).
+        server.Override("resources/testdriver-vendor.js", TestdriverVendor.Script);
 
         // A .any.js or .window.js file stands for the page the server generates; any other test is the page itself, with .sub. substitution done.
         var served = wptPath.EndsWith(".js", StringComparison.Ordinal) ? wptPath[..^3] + ".html" : wptPath;
@@ -102,6 +102,7 @@ internal sealed partial class TestharnessEvaluator(string wptRoot) : IWptEvaluat
             ScriptHost = new JintScriptHost(new JintScriptOptions
             {
                 ScriptTimeout = TimeSpan.FromSeconds(20),
+                MemoryLimitBytes = 1L << 30,
                 MaxVirtualTime = TimeSpan.FromSeconds(60),
                 MaxCallbacks = 100_000,
                 Logger = new CollectingLogger(lines, errors),
