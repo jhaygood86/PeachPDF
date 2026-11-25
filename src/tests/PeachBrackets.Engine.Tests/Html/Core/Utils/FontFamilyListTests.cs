@@ -11,6 +11,8 @@ namespace PeachBrackets.Engine.Tests.Html.Core.Utils
         [InlineData("'Lato'", "Lato")]
         [InlineData("  \"Lato\"  ", "Lato")]
         [InlineData("Open   Sans", "Open Sans")]
+        [InlineData(".PingFang UI MO", ".PingFang UI MO")]
+        [InlineData("Foo.Bar Baz", "Foo.Bar Baz")]
         [InlineData("  Open \t Sans  ", "Open Sans")]
         [InlineData("\"Open   Sans\"", "Open   Sans")]
         [InlineData("\"La\\74o\"", "Lato")]

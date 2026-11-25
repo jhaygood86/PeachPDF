@@ -49,10 +49,11 @@ namespace PeachBrackets.Html.Utils
             if (string.IsNullOrWhiteSpace(value))
                 return [];
 
-            using var pooled = CssValueParser.GetCssTokensPooled(value);
+            using var pooled = CssValueParser.GetCssTokensPooled(value, preserveWhitespace: true);
             var entries = new List<FontFamilyEntry>();
             var name = new StringBuilder();
             var quoted = false;
+            var gap = false;
 
             void Flush()
             {
@@ -61,6 +62,7 @@ namespace PeachBrackets.Html.Utils
 
                 name.Clear();
                 quoted = false;
+                gap = false;
             }
 
             foreach (var token in (List<Token>)pooled)
@@ -71,6 +73,7 @@ namespace PeachBrackets.Html.Utils
                         Flush();
                         break;
                     case TokenType.Whitespace:
+                        gap = true;
                         break;
                     default:
                         var text = token.Data.ToString();
@@ -78,10 +81,11 @@ namespace PeachBrackets.Html.Utils
                         // A string standing alone is the whole name; anything mixed into an identifier run is joined as written.
                         quoted = name.Length == 0 && token.Type == TokenType.String;
 
-                        if (name.Length > 0 && text.Length > 0)
+                        if (name.Length > 0 && gap && text.Length > 0)
                             name.Append(' ');
 
                         name.Append(text);
+                        gap = false;
                         break;
                 }
             }
