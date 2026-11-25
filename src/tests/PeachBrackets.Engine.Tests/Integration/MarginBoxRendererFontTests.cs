@@ -143,6 +143,60 @@ namespace PeachBrackets.Engine.Tests.Integration
             Assert.Equal(direct, viaSharedTable);
         }
 
+        [Theory]
+        [InlineData("\"Peach Sans\"")]
+        [InlineData("'Peach Sans'")]
+        [InlineData("Peach   Sans")]
+        [InlineData("\"Peach \\53 ans\"")]
+        [InlineData("\"Nonexistent, Name\", \"Peach Sans\"")]
+        public async Task QuotedOrEscapedFamilyName_SelectsTheSameFaceAsTheUnquotedName(string familyValue)
+        {
+            var renderContext = await NewRenderContextWithFontAsync("Peach Sans");
+            var unquoted = MarginBoxRenderer.BuildFont(ParseDeclarations("font-family: Peach Sans;"), null, renderContext);
+            var defaultFont = renderContext.GetFont(DefaultFontResolver.DefaultFont, DefaultFontResolver.FontSize, PaintFontStyle.Regular);
+
+            var font = MarginBoxRenderer.BuildFont(ParseDeclarations($"font-family: {familyValue};"), null, renderContext);
+
+            Assert.NotEqual(defaultFont!.Typeface!.FamilyName, unquoted.Typeface!.FamilyName);
+            Assert.Equal(unquoted.Typeface!.FamilyName, font.Typeface!.FamilyName);
+        }
+
+        [Fact]
+        public async Task QuotedGenericKeyword_IsNotTheGenericFamily()
+        {
+            var renderContext = await NewRenderContextWithFontAsync("Peach Sans");
+            var generic = renderContext.GetFont("serif", DefaultFontResolver.FontSize, PaintFontStyle.Regular);
+            var peach = renderContext.GetFont("Peach Sans", DefaultFontResolver.FontSize, PaintFontStyle.Regular);
+            Assert.NotEqual(generic!.Typeface!.FamilyName, peach!.Typeface!.FamilyName);
+
+            // No family is registered under the name "serif", so the quoted spelling is skipped and the next family wins.
+            var quoted = MarginBoxRenderer.BuildFont(ParseDeclarations("font-family: \"serif\", \"Peach Sans\";"), null, renderContext);
+            var unquoted = MarginBoxRenderer.BuildFont(ParseDeclarations("font-family: serif, \"Peach Sans\";"), null, renderContext);
+
+            Assert.Equal(peach.Typeface!.FamilyName, quoted.Typeface!.FamilyName);
+            Assert.Equal(generic.Typeface!.FamilyName, unquoted.Typeface!.FamilyName);
+        }
+
+        [Fact]
+        public async Task QuotedGenericKeyword_MatchesAFamilyRegisteredUnderThatName()
+        {
+            var renderContext = await NewRenderContextWithFontAsync("serif");
+            var registered = renderContext.GetFont("serif", DefaultFontResolver.FontSize, PaintFontStyle.Regular);
+
+            var font = MarginBoxRenderer.BuildFont(ParseDeclarations("font-family: \"serif\";"), null, renderContext);
+
+            Assert.True(renderContext.IsRegisteredFontFamily("serif"));
+            Assert.Equal(registered!.Typeface!.FamilyName, font.Typeface!.FamilyName);
+        }
+
+        private static async Task<HtmlRenderContext> NewRenderContextWithFontAsync(string family)
+        {
+            var renderContext = NewRenderContext();
+            Assert.False(renderContext.IsRegisteredFontFamily(family));
+            Assert.True(await renderContext.AddFontFromBytes(family, await File.ReadAllBytesAsync(BundledFonts.Ttf)));
+            return renderContext;
+        }
+
         // ─── Helpers ─────────────────────────────────────────────────────────────
 
         private static HtmlRenderContext NewRenderContext()

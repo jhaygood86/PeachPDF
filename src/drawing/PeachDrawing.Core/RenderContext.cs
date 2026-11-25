@@ -252,6 +252,18 @@ namespace PeachDrawing.Core
         }
 
         /// <summary>
+        /// Check if a font family is registered under exactly the given name. Unlike <see cref="IsFontExists"/>, a family-name
+        /// mapping added with <see cref="AddFontFamilyMapping"/> does not count, so a quoted CSS family name can be told apart from a
+        /// generic family keyword.
+        /// </summary>
+        /// <param name="family">the family name</param>
+        /// <returns>true when a family is registered under that name, false otherwise</returns>
+        public bool IsRegisteredFontFamily(string family)
+        {
+            return _fontsHandler.IsRegisteredFontFamily(family);
+        }
+
+        /// <summary>
         /// Adds a font family to be used.
         /// </summary>
         /// <param name="fontFamily">The font family to add.</param>

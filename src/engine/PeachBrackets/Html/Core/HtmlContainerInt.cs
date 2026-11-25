@@ -316,11 +316,11 @@ namespace PeachBrackets.Html
         {
             if (_familyNames.TryGetValue(familyList, out var names)) return names;
 
-            var parts = familyList.Split(',');
-            names = new string[parts.Length];
+            var entries = FontFamilyList.Parse(familyList);
+            names = new string[entries.Length];
 
-            for (var i = 0; i < parts.Length; i++)
-                names[i] = parts[i].Trim().TrimStart('"', '\'').TrimEnd('"', '\'');
+            for (var i = 0; i < entries.Length; i++)
+                names[i] = entries[i].Name;
 
             // Bounded: a document that varies the list per box is not worth remembering.
             if (_familyNames.Count < 1024) _familyNames[familyList] = names;

@@ -986,26 +986,12 @@ namespace PeachBrackets.Html.Parse
         /// </returns>
         public string? GetFontFamilyByName(string propValue)
         {
-            int start = 0;
-            while (start < propValue.Length)
+            foreach (var family in FontFamilyList.Parse(propValue))
             {
-                while (char.IsWhiteSpace(propValue[start]) || propValue[start] == ',' || propValue[start] == '\'' || propValue[start] == '"')
-                    start++;
-                var end = propValue.IndexOf(',', start);
-                if (end < 0)
-                    end = propValue.Length;
-                var adjEnd = end - 1;
-                while (char.IsWhiteSpace(propValue[adjEnd]) || propValue[adjEnd] == '\'' || propValue[adjEnd] == '"')
-                    adjEnd--;
-
-                var font = propValue.Substring(start, adjEnd - start + 1);
-
-                if (_renderContext.IsFontExists(font))
+                if (family.IsQuotedGenericSpelling ? _renderContext.IsRegisteredFontFamily(family.Name) : _renderContext.IsFontExists(family.Name))
                 {
-                    return font;
+                    return family.Name;
                 }
-
-                start = end;
             }
 
             return null;

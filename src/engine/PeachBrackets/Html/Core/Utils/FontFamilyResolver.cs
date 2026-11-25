@@ -13,20 +13,16 @@ namespace PeachBrackets.Html.Utils
     {
         internal static Font? Resolve(RenderContext renderContext, string fontFamilyList, double fsize, PaintFontStyle style, double? weight = null, double? stretch = null, double? obliqueSkewSinus = null, string? variations = null)
         {
-            var families = fontFamilyList.Split(',');
-
-            if (families.Length == 1)
-            {
-                return renderContext.GetFont(fontFamilyList, fsize, style, weight, stretch, obliqueSkewSinus, variations);
-            }
-
             Font? selectedFont = null;
 
-            foreach (var family in families)
+            foreach (var family in FontFamilyList.Parse(fontFamilyList))
             {
-                var selectedFamily = family.Trim().TrimStart('"', '\'').TrimEnd('"', '\'');
+                // A quoted "serif" names a family called serif, not the generic: it matches only a family registered
+                // under exactly that name (CSS Fonts 4 §2.1).
+                if (family.IsQuotedGenericSpelling && !renderContext.IsRegisteredFontFamily(family.Name))
+                    continue;
 
-                selectedFont = renderContext.GetFont(selectedFamily, fsize, style, weight, stretch, obliqueSkewSinus, variations);
+                selectedFont = renderContext.GetFont(family.Name, fsize, style, weight, stretch, obliqueSkewSinus, variations);
 
                 if (selectedFont is not null)
                 {
@@ -59,11 +55,12 @@ namespace PeachBrackets.Html.Utils
             // character used. A covering font that does not match is therefore remembered, not returned.
             Font? firstCoveringFont = null;
 
-            foreach (var family in fontFamilyList.Split(','))
+            foreach (var family in FontFamilyList.Parse(fontFamilyList))
             {
-                var selectedFamily = family.Trim().TrimStart('"', '\'').TrimEnd('"', '\'');
+                if (family.IsQuotedGenericSpelling && !renderContext.IsRegisteredFontFamily(family.Name))
+                    continue;
 
-                var font = renderContext.GetFontForCodepoint(selectedFamily, fsize, style, codepoint, weight, stretch, obliqueSkewSinus, variations);
+                var font = renderContext.GetFontForCodepoint(family.Name, fsize, style, codepoint, weight, stretch, obliqueSkewSinus, variations);
 
                 if (font is null || !font.HasGlyph(codepoint))
                     continue;
