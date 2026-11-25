@@ -10,9 +10,9 @@
     "domparsing": 184,
     "fetch-api": 1078,
     "fileapi": 452,
-    "html-canvas": 668,
-    "html-dom": 33750,
-    "html-img-canvas-elements": 450,
+    "html-canvas": 767,
+    "html-dom": 34085,
+    "html-img-canvas-elements": 1452,
     "url": 8516,
     "xhr": 700
   },

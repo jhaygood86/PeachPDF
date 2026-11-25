@@ -1,6 +1,7 @@
 using Jint;
 using Jint.Native;
 using Jint.Native.Object;
+using Jint.Runtime;
 using PeachBrackets.ScriptHosting;
 using System;
 using System.Collections.Generic;
@@ -36,115 +37,160 @@ internal sealed partial class ScriptRuntime
 
     private static bool IsImage(ScriptNode node) => node.Kind == ScriptNodeKind.Element && string.Equals(node.TagName, "img", StringComparison.OrdinalIgnoreCase);
 
-    private const double ViewportWidth = 800;
+    private static readonly string[] ImageTypes = ["image/png", "image/jpeg", "image/jpg", "image/gif", "image/webp", "image/svg+xml", "image/bmp", "image/avif", "image/apng", "image/x-icon", "image/vnd.microsoft.icon"];
 
-    private static readonly string[] ImageTypes = ["image/png", "image/jpeg", "image/jpg", "image/gif", "image/webp", "image/svg+xml", "image/bmp", "image/avif", "image/apng", "image/x-icon"];
+    // The viewport each document's images are chosen for: the page's is the window's; a frame's is its frame's size.
+    private readonly Dictionary<ScriptDocument, ImageViewport> _viewports = [];
 
-    // A media query the image sources use, as far as the width of the viewport answers it.
-    private static bool MediaMatches(string? media)
+    private ImageViewport ViewportOf(ScriptDocument document) => _viewports.TryGetValue(document, out var viewport) ? viewport : new ImageViewport(800, 600);
+
+    // The address an img element loads, by the HTML algorithm: a picture's first matching source, else the element's own srcset with its src.
+    private string? SelectImageSource(ScriptNode image)
     {
-        if (string.IsNullOrWhiteSpace(media) || media.Trim().Equals("all", StringComparison.OrdinalIgnoreCase))
-            return true;
-
-        var matches = System.Text.RegularExpressions.Regex.Matches(media, @"\(\s*(min|max)-width\s*:\s*([0-9.]+)px\s*\)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
-        if (matches.Count == 0 || media.Contains(',') || media.Contains("not ", StringComparison.OrdinalIgnoreCase))
-            return false;
-
-        return matches.All(m =>
-        {
-            var limit = double.Parse(m.Groups[2].Value, CultureInfo.InvariantCulture);
-            return m.Groups[1].Value.Equals("min", StringComparison.OrdinalIgnoreCase) ? ViewportWidth >= limit : ViewportWidth <= limit;
-        });
-    }
-
-    // The width the image is laid out at, from a sizes attribute: px and vw lengths, 100vw when there is none.
-    private static double SourceSize(string? sizes)
-    {
-        foreach (var entry in (sizes ?? string.Empty).Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
-        {
-            var match = System.Text.RegularExpressions.Regex.Match(entry, @"^(?:(\(.*\))\s*)?([0-9.]+)(px|vw)$", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
-            if (!match.Success || (match.Groups[1].Success && !MediaMatches(match.Groups[1].Value)))
-                continue;
-
-            var number = double.Parse(match.Groups[2].Value, CultureInfo.InvariantCulture);
-            return match.Groups[3].Value.Equals("vw", StringComparison.OrdinalIgnoreCase) ? number / 100 * ViewportWidth : number;
-        }
-
-        return ViewportWidth;
-    }
-
-    // The candidate a srcset gives for a one-to-one screen: the smallest that is at least as dense as the screen, else the densest.
-    private static string? PickCandidate(string srcset, string? sizes)
-    {
-        var candidates = new List<(string Url, double Density)>();
-        var width = SourceSize(sizes);
-        var text = srcset.Trim();
-        var position = 0;
-        while (position < text.Length)
-        {
-            while (position < text.Length && (char.IsWhiteSpace(text[position]) || text[position] == ','))
-                position++;
-
-            var start = position;
-            while (position < text.Length && !char.IsWhiteSpace(text[position]))
-                position++;
-
-            var url = text[start..position];
-            var descriptor = string.Empty;
-            if (url.EndsWith(','))
-            {
-                url = url.TrimEnd(',');
-            }
-            else
-            {
-                var end = text.IndexOf(',', position);
-                descriptor = (end < 0 ? text[position..] : text[position..end]).Trim();
-                position = end < 0 ? text.Length : end + 1;
-            }
-
-            var density = 1.0;
-            if (descriptor.Length > 0)
-            {
-                var d = descriptor.ToLowerInvariant();
-                if (d.EndsWith('w') && double.TryParse(d[..^1], NumberStyles.Float, CultureInfo.InvariantCulture, out var w) && w > 0) density = w / width;
-                else if (d.EndsWith('x') && double.TryParse(d[..^1], NumberStyles.Float, CultureInfo.InvariantCulture, out var x) && x > 0) density = x;
-                else continue;
-            }
-
-            if (url.Length > 0)
-                candidates.Add((url, density));
-        }
-
-        if (candidates.Count == 0)
-            return null;
-
-        var denser = candidates.Where(c => c.Density >= 1).OrderBy(c => c.Density).ToList();
-        return (denser.Count > 0 ? denser[0] : candidates.OrderByDescending(c => c.Density).First()).Url;
-    }
-
-    // The address an img element loads: from a source element of its picture, else its own srcset, else src.
-    private static string? SelectImageSource(ScriptNode image)
-    {
+        var viewport = ViewportOf(image.OwnerDocument);
         if (image.Parent is { Kind: ScriptNodeKind.Element } parent && string.Equals(parent.TagName, "picture", StringComparison.OrdinalIgnoreCase))
         {
             foreach (var sibling in parent.ChildElements.TakeWhile(c => !ReferenceEquals(c, image)))
             {
-                if (!string.Equals(sibling.TagName, "source", StringComparison.OrdinalIgnoreCase) || string.IsNullOrWhiteSpace(sibling.GetAttribute("srcset")))
+                if (!string.Equals(sibling.TagName, "source", StringComparison.OrdinalIgnoreCase) || string.IsNullOrEmpty(sibling.GetAttribute("srcset")))
                     continue;
                 if (sibling.GetAttribute("type") is { } type && !ImageTypes.Contains(type.Trim().ToLowerInvariant()))
                     continue;
-                if (!MediaMatches(sibling.GetAttribute("media")))
+                if (!ImageSources.MediaMatches(sibling.GetAttribute("media"), viewport))
                     continue;
 
-                if (PickCandidate(sibling.GetAttribute("srcset")!, sibling.GetAttribute("sizes")) is { } fromSource)
-                    return fromSource;
+                var fromSource = ImageSources.ParseSrcset(sibling.GetAttribute("srcset")!);
+                if (fromSource.Count == 0)
+                    continue;
+
+                return ImageSources.Select(fromSource, null, SizeFor(sibling, image, viewport), viewport.DevicePixelRatio);
             }
         }
 
-        if (!string.IsNullOrWhiteSpace(image.GetAttribute("srcset")) && PickCandidate(image.GetAttribute("srcset")!, image.GetAttribute("sizes")) is { } picked)
-            return picked;
+        var candidates = ImageSources.ParseSrcset(image.GetAttribute("srcset") ?? string.Empty);
+        return ImageSources.Select(candidates, image.GetAttribute("src"), SizeFor(image, image, viewport), viewport.DevicePixelRatio);
+    }
 
-        return image.GetAttribute("src");
+    // The source size of an img or picture source: its sizes attribute, where auto means the width the image is laid out at.
+    private static double SizeFor(ScriptNode holder, ScriptNode image, ImageViewport viewport)
+    {
+        var size = ImageSources.SourceSize(holder.GetAttribute("sizes"), viewport, out var auto);
+        if (auto)
+        {
+            var lazy = string.Equals(image.GetAttribute("loading")?.Trim(), "lazy", StringComparison.OrdinalIgnoreCase);
+            size = lazy && image.OwnerDocument.GetLayoutBox(image) is { Width: > 0 } box ? box.Width : viewport.Width;
+        }
+
+        return size;
+    }
+
+    private static bool IsPicture(ScriptNode? node) => node is { Kind: ScriptNodeKind.Element } && string.Equals(node.TagName, "picture", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsSource(ScriptNode node) => node.Kind == ScriptNodeKind.Element && string.Equals(node.TagName, "source", StringComparison.OrdinalIgnoreCase);
+
+    private static bool HasSource(ScriptNode image) => image.GetAttribute("src") is not null || image.GetAttribute("srcset") is not null;
+
+    // The crossorigin attribute's state: none, anonymous (empty, anonymous or anything else), use-credentials.
+    private static string CorsState(string? value) => value is null ? "none" : string.Equals(value, "use-credentials", StringComparison.OrdinalIgnoreCase) ? "credentials" : "anonymous";
+
+    private static readonly string[] ReferrerPolicies = ["no-referrer", "no-referrer-when-downgrade", "same-origin", "origin", "strict-origin", "origin-when-cross-origin", "strict-origin-when-cross-origin", "unsafe-url"];
+
+    private static string ReferrerState(string? value) => value is not null && ReferrerPolicies.Contains(value.ToLowerInvariant()) ? value.ToLowerInvariant() : string.Empty;
+
+    // The img elements that come after a node among its parent's children, which a picture's sources before them change the choice of.
+    private static IEnumerable<ScriptNode> ImagesAfter(ScriptNode parent, ScriptNode? previous)
+    {
+        var children = parent.ChildElements.ToList();
+        var from = previous is null ? 0 : children.IndexOf(previous) + 1;
+        return children.Skip(Math.Max(0, from)).Where(IsImage);
+    }
+
+    // The mutations that count as relevant to an img element (HTML, "relevant mutations"): its src, srcset and sizes; a crossorigin or referrerpolicy
+    // change of state while it has a source; a picture's sources before it; the img entering or leaving a picture.
+    private void HandleImageMutation(ScriptMutation mutation)
+    {
+        var target = mutation.Target;
+        if (mutation.Kind == ScriptMutationKind.Attributes && mutation.AttributeName is { } name)
+        {
+            var lower = name.ToLowerInvariant();
+            if (IsImage(target))
+            {
+                switch (lower)
+                {
+                    case "src" or "srcset" or "sizes":
+                        QueueImageUpdate(target);
+                        break;
+                    case "crossorigin" when HasSource(target) && CorsState(mutation.OldValue) != CorsState(target.GetAttribute("crossorigin")):
+                    case "referrerpolicy" when HasSource(target) && ReferrerState(mutation.OldValue) != ReferrerState(target.GetAttribute("referrerpolicy")):
+                        QueueImageUpdate(target);
+                        break;
+                }
+            }
+            else if (IsSource(target) && target.Parent is { } holder && IsPicture(holder) && lower is "srcset" or "sizes" or "media" or "type")
+            {
+                foreach (var following in ImagesAfter(holder, target))
+                    QueueImageUpdate(following);
+            }
+
+            return;
+        }
+
+        if (mutation.Kind != ScriptMutationKind.ChildList)
+            return;
+
+        foreach (var added in mutation.Added ?? [])
+        {
+            if (IsPicture(target) && IsImage(added))
+                QueueImageUpdate(added);
+            else if (IsPicture(target) && IsSource(added))
+                foreach (var following in ImagesAfter(target, added)) QueueImageUpdate(following);
+            else if (IsPicture(added))
+                foreach (var inside in added.ChildElements.Where(IsImage)) QueueImageUpdate(inside);
+        }
+
+        foreach (var removed in mutation.Removed ?? [])
+        {
+            if (IsPicture(target) && IsImage(removed))
+                QueueImageUpdate(removed);
+            else if (IsPicture(target) && IsSource(removed))
+                foreach (var following in ImagesAfter(target, mutation.Previous)) QueueImageUpdate(following);
+            else if (IsPicture(removed))
+                foreach (var inside in removed.ChildElements.Where(IsImage)) QueueImageUpdate(inside);
+        }
+    }
+
+    private readonly HashSet<ScriptNode> _updateQueue = [];
+    private bool _updateScheduled;
+
+    // The relevant mutations ask for "update the image data", which runs once the current script is done (a stable state), in the order they were asked.
+    private void QueueImageUpdate(ScriptNode image)
+    {
+        if (!_updateQueue.Add(image) || _updateScheduled)
+            return;
+
+        _updateScheduled = true;
+        Engine.Evaluate("(function (f) { Promise.resolve().then(f); })").Call(JsValue.Undefined, [Js.Function(Engine, "updateImages", 0, (_, _) =>
+        {
+            _updateScheduled = false;
+            var queued = _updateQueue.ToArray();
+            _updateQueue.Clear();
+            foreach (var node in queued)
+                StartImageLoad(node);
+
+            return JsValue.Undefined;
+        })]);
+    }
+
+    // The first time an img's state is asked for it is made, as the update that ran when the parser made the element would have.
+    private ImageState StateOf(ScriptNode image)
+    {
+        if (!_images.TryGetValue(image, out var state))
+        {
+            StartImageLoad(image);
+            state = _images[image];
+        }
+
+        return state;
     }
 
     private void StartImageLoad(ScriptNode image)
@@ -159,10 +205,24 @@ internal sealed partial class ScriptRuntime
         if (string.IsNullOrEmpty(source))
         {
             state.Status = 0;
+            // An img whose src is present but empty has no image to load, and says so.
+            if (image.GetAttribute("src") is { Length: 0 } && string.IsNullOrWhiteSpace(image.GetAttribute("srcset")))
+            {
+                var token = state.Token;
+                AddTimer(Js.Function(Engine, "emptySource", 0, (_, _) =>
+                {
+                    if (_images.TryGetValue(image, out var current) && current.Token == token)
+                        FireEvent(Wrap(image), "error", bubbles: false, cancelable: false);
+
+                    return JsValue.Undefined;
+                }), 0, [], repeat: false, frame: false);
+            }
+
             return;
         }
 
         state.Status = 1;
+        state.CurrentSource = ResolveAddress(image, source);
         _pendingImages.Add((image.OwnerDocument.LoadImageAsync(source).AsTask(), image, state.Token));
     }
 
@@ -177,7 +237,9 @@ internal sealed partial class ScriptRuntime
     }
 
     // Waits for the images the scripts asked for and queues each result as a zero-delay timer, like a network answer.
-    private async ValueTask DeliverImagesAsync()
+    // Waits for the images asked for. Normally each result is queued as a timer (it arrives after what is already due); the images the page began with are
+    // applied at once, so their load events come before the window's, as a page's load waits for its images.
+    private async ValueTask DeliverImagesAsync(bool immediate = false)
     {
         var batch = _pendingImages.ToArray();
         _pendingImages.Clear();
@@ -193,7 +255,7 @@ internal sealed partial class ScriptRuntime
             {
             }
 
-            AddTimer(Js.Function(Engine, "imageLoaded", 0, (_, _) =>
+            JsValue Apply(JsValue self, JsValue[] arguments)
             {
                 if (!_images.TryGetValue(node, out var state) || state.Token != token)
                     return JsValue.Undefined;
@@ -214,8 +276,21 @@ internal sealed partial class ScriptRuntime
 
                 FireEvent(Wrap(node), info is null ? "error" : "load", bubbles: false, cancelable: false);
                 return JsValue.Undefined;
-            }), 0, [], repeat: false, frame: false);
+            }
+
+            if (immediate)
+                Apply(JsValue.Undefined, []);
+            else
+                AddTimer(Js.Function(Engine, "imageLoaded", 0, Apply), 0, [], repeat: false, frame: false);
         }
+    }
+
+    /// <summary>Loads the images the page began with and delivers their load and error events.</summary>
+    private async ValueTask LoadInitialImagesAsync()
+    {
+        StartInitialImages();
+        while (_pendingImages.Count > 0)
+            await DeliverImagesAsync(immediate: true);
     }
 
     private string ResolveAddress(ScriptNode node, string address) =>
@@ -227,10 +302,19 @@ internal sealed partial class ScriptRuntime
         ImageState State(JsValue self)
         {
             StartInitialImages();
-            return _images.TryGetValue(Sn(self), out var state) ? state : new ImageState();
+            return StateOf(Sn(self));
         }
 
-        Js.Accessor(Engine, prototype, "complete", self => Js.Bool(State(self).Status != 1));
+        // complete: nothing to load, or the current request has finished (loaded or broken); a source just set and not yet updated is still to be loaded.
+        Js.Accessor(Engine, prototype, "complete", self =>
+        {
+            var image = Sn(self);
+            var state = State(self);
+            if (string.IsNullOrEmpty(image.GetAttribute("src")) && string.IsNullOrWhiteSpace(image.GetAttribute("srcset")))
+                return JsBoolean.True;
+
+            return Js.Bool(state.Status is 2 or 3 && !_updateQueue.Contains(image));
+        });
         Js.Accessor(Engine, prototype, "naturalWidth", self => Js.Num(Math.Round(State(self).Width)));
         Js.Accessor(Engine, prototype, "naturalHeight", self => Js.Num(Math.Round(State(self).Height)));
         Js.Accessor(Engine, prototype, "currentSrc", self => Js.Str(State(self).CurrentSource));
@@ -243,6 +327,34 @@ internal sealed partial class ScriptRuntime
                     : Js.Num(Math.Round(size(State(self)))),
                 (self, value) => Sn(self).SetAttribute(attribute, Js.AsText(value)));
         }
+
+        // Reflected attributes with a limited set of values: an unknown value reads as the attribute's default.
+        void Enumerated(string property, string attribute, string[] values, string missing, string invalid)
+        {
+            Js.Accessor(Engine, prototype, property,
+                self => Js.Str(Sn(self).GetAttribute(attribute) is { } raw ? (values.FirstOrDefault(v => string.Equals(v, raw, StringComparison.OrdinalIgnoreCase)) ?? invalid) : missing),
+                (self, value) => Sn(self).SetAttribute(attribute, Js.AsText(value)));
+        }
+
+        Enumerated("loading", "loading", ["eager", "lazy"], "eager", "eager");
+        Enumerated("decoding", "decoding", ["sync", "async", "auto"], "auto", "auto");
+        Enumerated("fetchPriority", "fetchpriority", ["high", "low", "auto"], "auto", "auto");
+        Enumerated("referrerPolicy", "referrerpolicy", ReferrerPolicies, string.Empty, string.Empty);
+        Js.Accessor(Engine, prototype, "crossOrigin",
+            self => Sn(self).GetAttribute("crossorigin") is { } cors ? Js.Str(string.Equals(cors, "use-credentials", StringComparison.OrdinalIgnoreCase) ? "use-credentials" : "anonymous") : JsValue.Null,
+            (self, value) =>
+            {
+                if (value.IsNull()) Sn(self).RemoveAttribute("crossorigin");
+                else Sn(self).SetAttribute("crossorigin", Js.AsText(value));
+            });
+        Js.Accessor(Engine, prototype, "useMap", self => Js.Str(Sn(self).GetAttribute("usemap") ?? string.Empty), (self, value) => Sn(self).SetAttribute("usemap", Js.AsText(value)));
+        Js.Accessor(Engine, prototype, "isMap", self => Js.Bool(Sn(self).HasAttribute("ismap")), (self, value) =>
+        {
+            if (TypeConverter.ToBoolean(value)) Sn(self).SetAttribute("ismap", string.Empty);
+            else Sn(self).RemoveAttribute("ismap");
+        });
+        Js.Accessor(Engine, prototype, "x", _ => Js.Num(0));
+        Js.Accessor(Engine, prototype, "y", _ => Js.Num(0));
 
         Js.Method(Engine, prototype, "decode", 0, (self, _) =>
         {

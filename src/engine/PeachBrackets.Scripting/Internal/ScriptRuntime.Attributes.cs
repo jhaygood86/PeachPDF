@@ -7,6 +7,7 @@ using Jint.Runtime.Descriptors;
 using PeachBrackets.ScriptHosting;
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 
 namespace PeachBrackets.Scripting.Internal;
@@ -450,6 +451,22 @@ internal sealed partial class ScriptRuntime
 
     private readonly Dictionary<NodeObject, (ObjectInstance Window, ScriptDocument Document)> _frames = [];
 
+    // The size an iframe gives its document: its style or width and height attributes, else the 300 by 150 a frame has by default.
+    private static ImageViewport FrameViewport(ScriptNode frame)
+    {
+        double Read(string property, string attribute, double fallback)
+        {
+            var style = frame.GetAttribute("style") ?? string.Empty;
+            var match = System.Text.RegularExpressions.Regex.Match(style, @"(?:^|;)\s*" + property + @"\s*:\s*([0-9.]+)px", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            if (match.Success && double.TryParse(match.Groups[1].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var fromStyle))
+                return fromStyle;
+
+            return double.TryParse(frame.GetAttribute(attribute), NumberStyles.Float, CultureInfo.InvariantCulture, out var fromAttribute) ? fromAttribute : fallback;
+        }
+
+        return new ImageViewport(Read("width", "width", 300), Read("height", "height", 150));
+    }
+
     // An iframe's document: loaded from its src the first time a script asks (a blank one without a src, or when it cannot be read).
     private void InstallFrames()
     {
@@ -502,6 +519,7 @@ internal sealed partial class ScriptRuntime
             }
 
             Js.Value(window, "window", window);
+            _viewports[loaded] = FrameViewport(element.Node);
             var frameDocument = loaded;
             window.FastSetProperty("location", new GetSetPropertyDescriptor(
                 Js.Function(Engine, "get location", 0, (_, _) => Js.Str(frameDocument.BaseUri?.AbsoluteUri ?? "about:blank")),

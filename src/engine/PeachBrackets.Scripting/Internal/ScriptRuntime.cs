@@ -181,6 +181,9 @@ internal sealed partial class ScriptRuntime
         FireEvent(DocumentObject, "DOMContentLoaded", bubbles: true, cancelable: false);
         RunMicrotasks();
 
+        await LoadInitialImagesAsync();
+        RunMicrotasks();
+
         ReadyState = "complete";
         FireEvent(DocumentObject, "readystatechange", bubbles: false, cancelable: false);
         FireEvent(Window, "load", bubbles: false, cancelable: false);
