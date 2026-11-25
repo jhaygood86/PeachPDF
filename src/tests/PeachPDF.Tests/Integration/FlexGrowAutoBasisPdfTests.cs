@@ -36,6 +36,20 @@ namespace PeachPDF.Tests.Integration
         private static string Block(int width) => $"<div style='width:{width}px;height:10px'></div>";
 
         [Fact]
+        public async Task AnAutoWidthItemIsAsWideAsItsInlineBoxMarginsToo()
+        {
+            static string Item(string span) =>
+                $"<div style='display:flex;width:500px;font:16px Arial'><div style='background:#fcc'>{span}Invoice</span> request</div><div>x</div></div>";
+
+            var narrow = await FillWidthsAsync(Item("<span style='margin-right:10px'>"));
+            var wide = await FillWidthsAsync(Item("<span style='margin-right:30px'>"));
+            var plain = await FillWidthsAsync(Item("<span>"));
+
+            Assert.Equal(narrow[Red] + 20, wide[Red], 0.5);
+            Assert.True(plain[Red] > 0);
+        }
+
+        [Fact]
         public async Task TwoGrowingItemsShareTheFreeSpaceOnTopOfTheirContent()
         {
             var widths = await FillWidthsAsync(Row(Block(100), Block(40)));
