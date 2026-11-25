@@ -46,6 +46,8 @@ internal sealed class NodeObject : TargetObject
     /// <summary>The element's <c>classList</c> and <c>style</c> objects, made when first read so the same object comes back each time.</summary>
     public ObjectInstance? ClassList { get; set; }
 
+    public Dictionary<string, ObjectInstance>? TokenLists { get; set; }
+
     public ObjectInstance? Style { get; set; }
 
     /// <summary>The namespace, prefix and local name of an element made with <c>createElementNS</c>; null for one the parser made.</summary>

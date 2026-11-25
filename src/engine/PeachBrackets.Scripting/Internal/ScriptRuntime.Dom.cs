@@ -29,7 +29,7 @@ internal sealed partial class ScriptRuntime
     // Attributes a script reads and writes as properties of the element: the property name and the attribute it stands for.
     private static readonly (string Property, string Attribute)[] TextAttributes =
     [
-        ("title", "title"), ("lang", "lang"), ("dir", "dir"), ("name", "name"), ("type", "type"), ("value", "value"), ("href", "href"), ("src", "src"),
+        ("title", "title"), ("lang", "lang"), ("dir", "dir"), ("type", "type"), ("value", "value"), ("href", "href"), ("src", "src"),
         ("alt", "alt"), ("placeholder", "placeholder"), ("rel", "rel"), ("target", "target"), ("role", "role"), ("htmlFor", "for"), ("action", "action"),
         ("method", "method"), ("media", "media"), ("charset", "charset"), ("srcset", "srcset"), ("sizes", "sizes"), ("min", "min"), ("max", "max"),
         ("step", "step"), ("content", "content"), ("accept", "accept"), ("pattern", "pattern"), ("label", "label"), ("scope", "scope"), ("headers", "headers"),
@@ -47,15 +47,27 @@ internal sealed partial class ScriptRuntime
     // The element interfaces a page checks with instanceof, by element name.
     private static readonly Dictionary<string, string> ElementInterfaces = new(StringComparer.OrdinalIgnoreCase)
     {
-        ["iframe"] = "HTMLIFrameElement", ["div"] = "HTMLDivElement", ["span"] = "HTMLSpanElement", ["a"] = "HTMLAnchorElement", ["img"] = "HTMLImageElement",
-        ["input"] = "HTMLInputElement", ["button"] = "HTMLButtonElement", ["form"] = "HTMLFormElement", ["table"] = "HTMLTableElement",
-        ["tr"] = "HTMLTableRowElement", ["td"] = "HTMLTableCellElement", ["th"] = "HTMLTableCellElement", ["script"] = "HTMLScriptElement",
-        ["style"] = "HTMLStyleElement", ["body"] = "HTMLBodyElement", ["head"] = "HTMLHeadElement", ["html"] = "HTMLHtmlElement",
-        ["p"] = "HTMLParagraphElement", ["canvas"] = "HTMLCanvasElement", ["select"] = "HTMLSelectElement", ["option"] = "HTMLOptionElement",
-        ["textarea"] = "HTMLTextAreaElement", ["label"] = "HTMLLabelElement", ["ul"] = "HTMLUListElement", ["ol"] = "HTMLOListElement",
-        ["li"] = "HTMLLIElement", ["h1"] = "HTMLHeadingElement", ["h2"] = "HTMLHeadingElement", ["h3"] = "HTMLHeadingElement",
-        ["h4"] = "HTMLHeadingElement", ["h5"] = "HTMLHeadingElement", ["h6"] = "HTMLHeadingElement", ["link"] = "HTMLLinkElement",
-        ["meta"] = "HTMLMetaElement", ["area"] = "HTMLAreaElement", ["title"] = "HTMLTitleElement", ["br"] = "HTMLBRElement", ["pre"] = "HTMLPreElement",
+        ["a"] = "HTMLAnchorElement", ["area"] = "HTMLAreaElement", ["audio"] = "HTMLAudioElement", ["base"] = "HTMLBaseElement",
+        ["body"] = "HTMLBodyElement", ["br"] = "HTMLBRElement", ["button"] = "HTMLButtonElement", ["canvas"] = "HTMLCanvasElement",
+        ["data"] = "HTMLDataElement", ["datalist"] = "HTMLDataListElement", ["details"] = "HTMLDetailsElement", ["dialog"] = "HTMLDialogElement",
+        ["dir"] = "HTMLDirectoryElement", ["div"] = "HTMLDivElement", ["dl"] = "HTMLDListElement", ["embed"] = "HTMLEmbedElement",
+        ["fieldset"] = "HTMLFieldSetElement", ["font"] = "HTMLFontElement", ["form"] = "HTMLFormElement", ["frame"] = "HTMLFrameElement",
+        ["frameset"] = "HTMLFrameSetElement", ["head"] = "HTMLHeadElement", ["hr"] = "HTMLHRElement", ["html"] = "HTMLHtmlElement",
+        ["iframe"] = "HTMLIFrameElement", ["img"] = "HTMLImageElement", ["input"] = "HTMLInputElement", ["label"] = "HTMLLabelElement",
+        ["legend"] = "HTMLLegendElement", ["li"] = "HTMLLIElement", ["link"] = "HTMLLinkElement", ["map"] = "HTMLMapElement",
+        ["marquee"] = "HTMLMarqueeElement", ["menu"] = "HTMLMenuElement", ["meta"] = "HTMLMetaElement", ["meter"] = "HTMLMeterElement",
+        ["ins"] = "HTMLModElement", ["del"] = "HTMLModElement", ["object"] = "HTMLObjectElement", ["ol"] = "HTMLOListElement",
+        ["optgroup"] = "HTMLOptGroupElement", ["option"] = "HTMLOptionElement", ["output"] = "HTMLOutputElement", ["p"] = "HTMLParagraphElement",
+        ["param"] = "HTMLParamElement", ["picture"] = "HTMLPictureElement", ["pre"] = "HTMLPreElement", ["listing"] = "HTMLPreElement",
+        ["xmp"] = "HTMLPreElement", ["progress"] = "HTMLProgressElement", ["q"] = "HTMLQuoteElement", ["blockquote"] = "HTMLQuoteElement",
+        ["script"] = "HTMLScriptElement", ["select"] = "HTMLSelectElement", ["slot"] = "HTMLSlotElement", ["source"] = "HTMLSourceElement",
+        ["span"] = "HTMLSpanElement", ["style"] = "HTMLStyleElement", ["caption"] = "HTMLTableCaptionElement", ["td"] = "HTMLTableCellElement",
+        ["th"] = "HTMLTableCellElement", ["col"] = "HTMLTableColElement", ["colgroup"] = "HTMLTableColElement", ["table"] = "HTMLTableElement",
+        ["tr"] = "HTMLTableRowElement", ["tbody"] = "HTMLTableSectionElement", ["thead"] = "HTMLTableSectionElement", ["tfoot"] = "HTMLTableSectionElement",
+        ["template"] = "HTMLTemplateElement", ["textarea"] = "HTMLTextAreaElement", ["time"] = "HTMLTimeElement", ["title"] = "HTMLTitleElement",
+        ["track"] = "HTMLTrackElement", ["ul"] = "HTMLUListElement", ["video"] = "HTMLVideoElement", ["h1"] = "HTMLHeadingElement",
+        ["h2"] = "HTMLHeadingElement", ["h3"] = "HTMLHeadingElement", ["h4"] = "HTMLHeadingElement", ["h5"] = "HTMLHeadingElement",
+        ["h6"] = "HTMLHeadingElement",
     };
 
     private readonly Dictionary<string, ObjectInstance> _interfacePrototypes = [];
@@ -69,6 +81,7 @@ internal sealed partial class ScriptRuntime
         {
             prototype = new JsObject(Engine) { Prototype = ElementPrototype };
             _interfacePrototypes[name] = prototype;
+            InstallReflected(prototype, ReflectedFor(name));
         }
 
         return prototype;
@@ -446,6 +459,8 @@ internal sealed partial class ScriptRuntime
             });
         }
 
+        InstallReflected(p, GlobalReflected());
+
         // A form control's value is the attribute here: there is no user to change it.
         Js.Accessor(Engine, p, "dataset", self =>
         {
@@ -560,7 +575,10 @@ internal sealed partial class ScriptRuntime
             var created = Wrap(D(self).CreateElement(name));
             // In an XML document that is not XHTML an element made by createElement has no namespace.
             if (!D(self).IsHtml && D(self).ContentType != "application/xhtml+xml")
+            {
                 created.NamespaceInfo = new ElementNamespace(null, null, name);
+                created.Prototype = ElementPrototype;
+            }
 
             return created;
         });
@@ -664,19 +682,22 @@ internal sealed partial class ScriptRuntime
     /// <summary>A <c>DOMTokenList</c> over an element's classes, with indexed access.</summary>
     private sealed class TokenListObject : ObjectInstance
     {
-        public TokenListObject(ScriptRuntime runtime, ScriptNode node) : base(runtime.Engine)
+        public TokenListObject(ScriptRuntime runtime, ScriptNode node, string attribute = "class") : base(runtime.Engine)
         {
             Prototype = runtime.TokenListPrototype;
             Node = node;
+            Attribute = attribute;
         }
 
         public ScriptNode Node { get; }
+
+        public string Attribute { get; }
 
         public override JsValue Get(JsValue property, JsValue receiver)
         {
             if (property.IsString() && int.TryParse(property.AsString(), out var index))
             {
-                var classes = ParseTokens(Node.GetAttribute("class"));
+                var classes = ParseTokens(Node.GetAttribute(Attribute));
                 return index >= 0 && index < classes.Count ? Js.Str(classes[index]) : JsValue.Undefined;
             }
 

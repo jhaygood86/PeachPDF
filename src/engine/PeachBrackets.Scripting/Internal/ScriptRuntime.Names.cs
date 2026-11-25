@@ -93,6 +93,9 @@ internal sealed partial class ScriptRuntime
 
         var element = Wrap(document.CreateElement(local));
         element.NamespaceInfo = new ElementNamespace(ns, prefix, local);
+        // The interface of an HTML element belongs to the HTML namespace only.
+        if (ns != HtmlNamespace)
+            element.Prototype = ElementPrototype;
         return element;
     }
 
@@ -124,24 +127,25 @@ internal sealed partial class ScriptRuntime
         return token;
     }
 
-    private static List<string> Tokens(JsValue self) => ParseTokens(((TokenListObject)self).Node.GetAttribute("class"));
+    private static List<string> Tokens(JsValue self) => ParseTokens(((TokenListObject)self).Node.GetAttribute(((TokenListObject)self).Attribute));
 
     // The update steps: the attribute is written back as the tokens, unless there is neither an attribute nor a token.
     private static void SaveTokens(JsValue self, List<string> tokens)
     {
-        var node = ((TokenListObject)self).Node;
-        if (tokens.Count == 0 && !node.HasAttribute("class"))
+        var list = (TokenListObject)self;
+        var node = list.Node;
+        if (tokens.Count == 0 && !node.HasAttribute(list.Attribute))
             return;
 
-        node.SetAttribute("class", string.Join(' ', tokens));
+        node.SetAttribute(list.Attribute, string.Join(' ', tokens));
     }
 
     private void InstallTokenList()
     {
         var p = TokenListPrototype;
         Js.Accessor(Engine, p, "length", self => Js.Num(Tokens(self).Count));
-        Js.Accessor(Engine, p, "value", self => Js.Str(((TokenListObject)self).Node.GetAttribute("class") ?? string.Empty),
-            (self, value) => ((TokenListObject)self).Node.SetAttribute("class", Js.AsText(value)));
+        Js.Accessor(Engine, p, "value", self => Js.Str(((TokenListObject)self).Node.GetAttribute(((TokenListObject)self).Attribute) ?? string.Empty),
+            (self, value) => ((TokenListObject)self).Node.SetAttribute(((TokenListObject)self).Attribute, Js.AsText(value)));
         Js.Method(Engine, p, "item", 1, (self, args) =>
         {
             var tokens = Tokens(self);
@@ -224,6 +228,6 @@ internal sealed partial class ScriptRuntime
             foreach (var token in Tokens(self)) Call(Js.Arg(args, 0), Js.Arg(args, 1), Js.Str(token), Js.Num(i++), self);
             return JsValue.Undefined;
         });
-        Js.Method(Engine, p, "toString", 0, (self, _) => Js.Str(((TokenListObject)self).Node.GetAttribute("class") ?? string.Empty));
+        Js.Method(Engine, p, "toString", 0, (self, _) => Js.Str(((TokenListObject)self).Node.GetAttribute(((TokenListObject)self).Attribute) ?? string.Empty));
     }
 }
