@@ -172,7 +172,9 @@ Every call is recorded and replayed onto the page's canvas, so a PDF or SVG gets
 
 Pixels can be read and written: `getImageData`, `putImageData`, `createImageData`, `ImageData`, `toDataURL` (PNG), `toBlob`, `isPointInPath`/`isPointInStroke`, `createImageBitmap` (a blob, image, canvas or `ImageData`) and `OffscreenCanvas` (no workers). Reading a canvas replays its drawing onto a bitmap, so text drawn with a font from another backend may not show in it. Elements with an `id` are properties of `window`.
 
-Not provided yet: `putImageData` does not replace pixels (it draws them over), patterns as a fill, color spaces (`display-p3`), the Porter-Duff compositing modes (`source-in`, `destination-out`, `xor`, `copy`...; they draw as `source-over`), `clearRect` of part of the canvas (clearing all of it works), `filter`, `letterSpacing`/`fontKerning` and the other text properties beyond `font`, `textAlign`, `textBaseline` and `direction`.
+The Porter-Duff compositing modes (`source-in`, `source-out`, `source-atop`, `destination-over`, `destination-in`, `destination-out`, `destination-atop`, `copy`, `xor`) and `clearRect` of part of the canvas have no vector form, so the drawing so far is turned into a bitmap, the new shape is combined with it pixel by pixel (inside the clip), and the result stands for everything drawn before; the page, PDF and SVG still get the canvas, but that part of it as an image. `createPattern` (an image or another canvas; `repeat`, `repeat-x`, `repeat-y`, `no-repeat`) fills a shape by drawing the tile as often as the shape needs; a pattern's own `setTransform` and a pattern as a stroke or text paint are not done. `getContext("2d", settings)` takes and reports `alpha`, `desynchronized`, `willReadFrequently`, `colorSpace` (`srgb`, `display-p3` and their linear forms), `colorType` and `toneMapping`; the canvas keeps its pixels as sRGB, so `colorSpace` shows in the `ImageData` a script reads and writes (converted at `getImageData` and `putImageData`) but colors outside the sRGB gamut are clipped when drawn, and `alpha: false` does not paint an opaque black background. `getTransform` returns a `DOMMatrix`, `setTransform` takes one, and `DOMMatrix`, `DOMMatrixReadOnly`, `DOMPoint`, `DOMRect` (and their read-only forms) are provided, as is a `DOMRect` from `getBoundingClientRect`.
+
+Not provided yet: `putImageData` does not replace pixels (it draws them over), `filter`, `letterSpacing`/`fontKerning` and the other text properties beyond `font`, `textAlign`, `textBaseline` and `direction`, float16 canvases, and wide-gamut images (an image with a Display P3 profile is drawn as sRGB).
 
 ## Limits
 
@@ -181,8 +183,8 @@ Not provided yet: `putImageData` does not replace pixels (it draws them over), p
 - A document with scripts that changed it is written back out as HTML and loaded again; constructs the HTML parser cannot round-trip exactly (some
   foreign content in `<svg>` and `<math>`) may differ. A page the scripts did not change keeps its own source.
 - `<script type="module">` has no `import`; Web APIs outside the DOM (`Worker`, Web Animations, custom elements,
-  shadow DOM, streams) are not provided; `document.cookie` and `location` are inert.
-- Shadow DOM, custom elements, `Observable`, `StaticRange`, `moveBefore` and `ProcessingInstruction` pseudo-attributes are not provided. Namespaces are tracked per element and attribute on the script side, so a script's namespaced markup keeps its names but an XML document is written back as HTML when it is the page's own. A document made by a script is never styled or laid out (`getComputedStyle` and `getBoundingClientRect` read the page only), has no `window` unless it is an iframe's, and fires no load events.
+  shadow DOM) are not provided; `document.cookie` and `location` are inert.
+- Shadow DOM, custom elements, `StaticRange` and `moveBefore` are not provided. Namespaces are tracked per element and attribute on the script side, so a script's namespaced markup keeps its names but an XML document is written back as HTML when it is the page's own. A document made by a script is never styled or laid out (`getComputedStyle` and `getBoundingClientRect` read the page only), has no `window` unless it is an iframe's, and fires no load events.
 
 ## Testing
 

@@ -11,13 +11,12 @@ Raster, CoreGraphics) needed a change in this phase.
 - text drawn as strings or as glyph outlines (`GetTextOutline`), which carry `fillText` and `strokeText`.
 
 **Gaps, each needing new `Canvas` API and an implementation in all six backends:**
-- **Porter-Duff compositing** (`source-in`, `source-out`, `source-atop`, `destination-over`, `destination-in`, `destination-out`, `destination-atop`, `copy`, `xor`): `PaintBlendMode`
-  has only the CSS separable and non-separable modes plus `Plus`. They draw as `source-over` today. The raster package already has `FilterOps.PorterDuff` on surfaces, so a
-  raster fallback for a canvas that uses them is the likely route (a temporary surface per operation), the way `BeginRasterSurface` is used elsewhere.
-- **Erasing**: `clearRect` of part of the canvas has no vector form (no "clear" primitive), so only a clear of the whole canvas is honored (it drops what was drawn).
-- **Patterns as a fill** (`createPattern`): `TileBrush` exists but is made by a `Canvas` from a tile of drawing, which the recorded form does not yet build.
+- **Porter-Duff compositing and partial `clearRect`**: done as a raster fallback inside the canvas model (`CanvasBitmap.RecordComposite`), not as Core API: the drawing so far is
+  rendered, combined with the new shape pixel by pixel, and kept as one image operation. The result is correct but not vector, and a canvas that composites every frame re-renders
+  each time. A `PaintCompositeMode` and an erase primitive in `PeachDrawing.Core` (six backends) would keep it vector; nothing needs it yet.
+- **Patterns as a fill** (`createPattern`): done by clipping to the path and drawing the tile repeatedly (not a `TileBrush`); the pattern matrix and stroke/text pattern paint are not.
 - **Reading pixels**: done (see docs); `putImageData` draws over instead of replacing, and a canvas read back is replayed on a bitmap, so fonts from another backend may not show.
-- **`filter`** (a CSS filter list on the context), `letterSpacing`, `wordSpacing`, `fontKerning`, `fontStretch`, `fontVariantCaps`, `textRendering`, text `lang`, color spaces and `willReadFrequently`.
+- **`filter`** (a CSS filter list on the context), `letterSpacing`, `wordSpacing`, `fontKerning`, `fontStretch`, `fontVariantCaps`, `textRendering`, text `lang`, wide-gamut storage (the canvas keeps sRGB; `colorSpace` converts at the `ImageData` boundary) and `alpha: false`.
 - **A canvas drawn on after layout** (timer, post-layout function) is not repainted: its drawing is attached to the element when the scripts finish loading.
 
 No GitHub issue is filed yet: file one for the compositing/raster path and one for pixel reads before building them. Not verified in this environment: the Win2D and

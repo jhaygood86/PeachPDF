@@ -733,13 +733,6 @@ internal sealed partial class ScriptRuntime
     private (double X, double Y, double Width, double Height) LayoutOf(ScriptNode node) =>
         Document.GetLayoutBox(node) is { } box ? (box.X, box.Y, box.Width, box.Height) : (0, 0, 0, 0);
 
-    private JsValue RectObject((double X, double Y, double Width, double Height) rect)
-    {
-        var result = Js.NewObject(Engine);
-        foreach (var (name, value) in new[] { ("x", rect.X), ("y", rect.Y), ("left", rect.X), ("top", rect.Y), ("width", rect.Width), ("height", rect.Height),
-            ("right", rect.X + rect.Width), ("bottom", rect.Y + rect.Height) })
-            result.FastSetProperty(name, new PropertyDescriptor(Js.Num(value), PropertyFlag.ConfigurableEnumerableWritable));
-
-        return result;
-    }
+    private JsValue RectObject((double X, double Y, double Width, double Height) rect) =>
+        Engine.Evaluate("(function (x, y, w, h) { return new DOMRect(x, y, w, h); })").Call(JsValue.Undefined, [Js.Num(rect.X), Js.Num(rect.Y), Js.Num(rect.Width), Js.Num(rect.Height)]);
 }

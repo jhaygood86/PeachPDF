@@ -106,6 +106,7 @@ internal sealed partial class ScriptRuntime
         // The interfaces written in script: AbortController/AbortSignal, NodeFilter, TreeWalker and NodeIterator.
         Engine.Execute(ExtrasScripts.Interfaces);
         Engine.Execute(ObservableScripts.Source);
+        Engine.Execute(GeometryScripts.Source);
 
         // Object.prototype.toString shows the interface a page's object has.
         foreach (var (name, prototype) in new (string, ObjectInstance)[]

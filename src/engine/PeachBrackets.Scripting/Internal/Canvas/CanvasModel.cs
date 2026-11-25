@@ -406,6 +406,12 @@ internal sealed class CanvasBitmap(ScriptDocument document, double width, double
     /// </summary>
     public void Record(Action<PeachDrawing.Core.Canvas> draw)
     {
+        if (IsPorterDuff(State.Composite))
+        {
+            RecordComposite(State, State.Composite, draw);
+            return;
+        }
+
         Revision++;
         var state = State;
         var (clips, matrix) = (state.Clips.ToArray(), state.Transform);
@@ -457,6 +463,79 @@ internal sealed class CanvasBitmap(ScriptDocument document, double width, double
                     canvas.PopClip();
             }
         });
+    }
+
+    private static bool IsPorterDuff(string composite) =>
+        composite is "source-in" or "source-out" or "source-atop" or "destination-over" or "destination-in" or "destination-out" or "destination-atop" or "copy" or "xor";
+
+    /// <summary>
+    /// The Porter-Duff operations (and erasing part of the canvas) have no vector form, so the drawing so far becomes a bitmap: the new shape is drawn alone,
+    /// each pixel is combined with what was there as the operation says (only inside the clip), and the result stands for everything drawn before.
+    /// </summary>
+    private void RecordComposite(CanvasState state, string composite, Action<PeachDrawing.Core.Canvas> draw)
+    {
+        var (width, height) = ((int)Width, (int)Height);
+        if (width <= 0 || height <= 0 || (long)width * height * 4 > (1 << 26))
+            return;
+
+        var plain = state.Clone();
+        plain.Composite = "source-over";
+        var source = new CanvasBitmap(Document, Width, Height) { State = plain };
+        source.Record(draw);
+        var src = source.RenderPixels();
+        var dst = this.RenderPixels();
+        if (src.Length != dst.Length)
+            return;
+
+        byte[]? mask = null;
+        if (state.Clips.Count > 0)
+        {
+            var bounds = state.Clone();
+            bounds.Composite = "source-over";
+            bounds.Transform = Matrix3x2.Identity;
+            bounds.GlobalAlpha = 1;
+            bounds.ShadowColor = PaintColor.Transparent;
+            bounds.FillStyle = new PaintSource.ColorSource(PaintColor.Black, "#000000");
+            var everywhere = new CanvasBitmap(Document, Width, Height) { State = bounds };
+            everywhere.Record(canvas => canvas.DrawRectangle(new SolidBrush(PaintColor.Black), 0, 0, width, height));
+            mask = everywhere.RenderPixels();
+        }
+
+        var result = new byte[dst.Length];
+        for (var i = 0; i + 3 < dst.Length; i += 4)
+        {
+            double aS = src[i + 3] / 255.0, aD = dst[i + 3] / 255.0;
+            var (fs, fd) = composite switch
+            {
+                "source-in" => (aD, 0.0),
+                "source-out" => (1 - aD, 0.0),
+                "source-atop" => (aD, 1 - aS),
+                "destination-over" => (1 - aD, 1.0),
+                "destination-in" => (0.0, aS),
+                "destination-out" => (0.0, 1 - aS),
+                "destination-atop" => (1 - aD, aS),
+                "xor" => (1 - aD, 1 - aS),
+                _ => (1.0, 0.0),
+            };
+
+            var inside = mask is null ? 1.0 : mask[i + 3] / 255.0;
+            var alpha = (aS * fs) + (aD * fd);
+            alpha = (alpha * inside) + (aD * (1 - inside));
+            result[i + 3] = (byte)Math.Round(Math.Clamp(alpha, 0, 1) * 255);
+            for (var c = 0; c < 3; c++)
+            {
+                var premultiplied = (src[i + c] / 255.0 * aS * fs) + (dst[i + c] / 255.0 * aD * fd);
+                premultiplied = (premultiplied * inside) + (dst[i + c] / 255.0 * aD * (1 - inside));
+                result[i + c] = alpha <= 0 ? (byte)0 : (byte)Math.Round(Math.Clamp(premultiplied / alpha, 0, 1) * 255);
+            }
+        }
+
+        if (Document.DecodeImage(PngWriter.Encode(width, height, result)) is not { } image)
+            return;
+
+        Revision++;
+        _ops.Clear();
+        _ops.Add(canvas => canvas.DrawImage(image, new Rect(0, 0, width, height), new Rect(0, 0, width, height), ImageSampling.Pixelated));
     }
 
     /// <summary>Starts over: everything drawn so far is dropped (what <c>clearRect</c> over the whole canvas comes to).</summary>
@@ -533,8 +612,52 @@ internal sealed class CanvasBitmap(ScriptDocument document, double width, double
         Record(canvas =>
         {
             using var built = user.Build(canvas, rule);
-            canvas.DrawPath(MakeBrush(brush, alpha), built);
+            if (brush is PaintSource.PatternSource pattern)
+                FillWithPattern(canvas, pattern.Pattern, built, user);
+            else
+                canvas.DrawPath(MakeBrush(brush, alpha), built);
         });
+    }
+
+    // A pattern fill: the path is the clip, and the image is drawn as many times as covers the path's bounds, as the repetition says.
+    private static void FillWithPattern(PeachDrawing.Core.Canvas canvas, CanvasPattern pattern, GraphicsPath clip, PathData bounds)
+    {
+        double minX = double.MaxValue, minY = double.MaxValue, maxX = double.MinValue, maxY = double.MinValue;
+        foreach (var segment in bounds.Segments)
+        {
+            foreach (var (x, y) in new[] { (segment.X1, segment.Y1), (segment.X2, segment.Y2), (segment.X3, segment.Y3) })
+            {
+                minX = Math.Min(minX, x); maxX = Math.Max(maxX, x);
+                minY = Math.Min(minY, y); maxY = Math.Max(maxY, y);
+            }
+        }
+
+        double w = pattern.Image.Width, h = pattern.Image.Height;
+        if (w <= 0 || h <= 0 || minX > maxX)
+            return;
+
+        var repeatX = pattern.Repetition is "repeat" or "repeat-x";
+        var repeatY = pattern.Repetition is "repeat" or "repeat-y";
+        var (startX, endX) = repeatX ? (Math.Floor(minX / w) * w, maxX) : (0.0, 0.0);
+        var (startY, endY) = repeatY ? (Math.Floor(minY / h) * h, maxY) : (0.0, 0.0);
+        if ((endX - startX) / w * ((endY - startY) / h) > 40_000)
+            return;
+
+        canvas.PushClip(clip);
+        try
+        {
+            for (var y = startY; y <= endY; y += h)
+            {
+                for (var x = startX; x <= endX; x += w)
+                    canvas.DrawImage(pattern.Image, new Rect(x, y, w, h), new Rect(0, 0, w, h), ImageSampling.Automatic);
+                if (!repeatX && !repeatY)
+                    break;
+            }
+        }
+        finally
+        {
+            canvas.PopClip();
+        }
     }
 
     public void StrokePath(PathData path)
@@ -558,6 +681,14 @@ internal sealed class CanvasBitmap(ScriptDocument document, double width, double
             return;
 
         var brush = State.FillStyle;
+        if (brush is PaintSource.PatternSource)
+        {
+            var rectangle = new PathData();
+            rectangle.AddRect(Math.Min(x, x + w), Math.Min(y, y + h), Math.Abs(w), Math.Abs(h), Matrix3x2.Identity);
+            FillPath(rectangle.Transformed(State.Transform), FillMode.Nonzero);
+            return;
+        }
+
         Record(canvas => canvas.DrawRectangle(MakeBrush(brush), Math.Min(x, x + w), Math.Min(y, y + h), Math.Abs(w), Math.Abs(h)));
     }
 
@@ -577,7 +708,17 @@ internal sealed class CanvasBitmap(ScriptDocument document, double width, double
         var corners = new[] { PathData.T(m, x, y), PathData.T(m, x + w, y), PathData.T(m, x, y + h), PathData.T(m, x + w, y + h) };
         if (m.M12 == 0 && m.M21 == 0 && State.Clips.Count == 0
             && corners.Min(c => c.X) <= 0 && corners.Min(c => c.Y) <= 0 && corners.Max(c => c.X) >= Width && corners.Max(c => c.Y) >= Height)
+        {
             ClearDrawing();
+            return;
+        }
+
+        // Part of the canvas: erase it, as destination-out with an opaque shape does.
+        var eraser = State.Clone();
+        eraser.FillStyle = new PaintSource.ColorSource(PaintColor.Black, "#000000");
+        eraser.GlobalAlpha = 1;
+        eraser.ShadowColor = PaintColor.Transparent;
+        RecordComposite(eraser, "destination-out", canvas => canvas.DrawRectangle(new SolidBrush(PaintColor.Black), Math.Min(x, x + w), Math.Min(y, y + h), Math.Abs(w), Math.Abs(h)));
     }
 
     public void ClipPath(PathData path, FillMode rule) => State.Clips = [.. State.Clips, (path.Clone(), rule)];

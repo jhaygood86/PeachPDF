@@ -28,7 +28,12 @@ internal sealed class ContextObject : ObjectInstance
     public ScriptNode Canvas { get; }
 
     public CanvasBitmap Bitmap { get; set; }
+
+    public ContextSettings Settings { get; set; } = new();
 }
+
+/// <summary>The creation attributes of a 2D context (<c>getContext("2d", settings)</c>).</summary>
+internal sealed record ContextSettings(bool Alpha = true, bool Desynchronized = false, bool WillReadFrequently = false, string ColorSpace = "srgb", string ColorType = "unorm8", string ToneMapping = "standard");
 
 /// <summary>A <c>Path2D</c>: a path that is not tied to a canvas.</summary>
 internal sealed class Path2DObject : ObjectInstance
@@ -207,13 +212,45 @@ internal sealed partial class ScriptRuntime
             if (_contexts.TryGetValue(node, out var existing))
                 return existing;
 
+            var settings = ReadContextSettings(Js.Arg(args, 1));
             var (width, height) = CanvasSize(node);
-            var context = new ContextObject(Engine, ContextPrototype, node, new CanvasBitmap(node.OwnerDocument, width, height));
+            var context = new ContextObject(Engine, ContextPrototype, node, new CanvasBitmap(node.OwnerDocument, width, height)) { Settings = settings };
             _contexts[node] = context;
             node.OwnerDocument.SetCanvasPainting(node, context.Bitmap.Painting);
             return context;
         });
         Js.Accessor(Engine, ContextPrototype, "canvas", self => Wrap(Cx(self).Canvas));
+    }
+
+    private static readonly string[] ColorSpaces = ["srgb", "display-p3", "srgb-linear", "display-p3-linear"];
+
+    private ContextSettings ReadContextSettings(JsValue options)
+    {
+        if (options is not ObjectInstance dictionary)
+            return new ContextSettings();
+
+        string Choice(string name, string[] allowed, string fallback)
+        {
+            var value = dictionary.Get(name);
+            if (value.IsUndefined())
+                return fallback;
+
+            var text = Js.AsText(value);
+            return Array.IndexOf(allowed, text) >= 0 ? text : throw TypeError($"The provided value '{text}' is not a valid enum value of type {name}.");
+        }
+
+        bool Flag(string name, bool fallback) => dictionary.Get(name) is { } value && !value.IsUndefined() ? TypeConverter.ToBoolean(value) : fallback;
+
+        var tone = "standard";
+        if (dictionary.Get("toneMapping") is ObjectInstance mapping && mapping.Get("mode") is { } mode && !mode.IsUndefined())
+        {
+            tone = Js.AsText(mode);
+            if (tone is not ("standard" or "extended"))
+                throw TypeError($"The provided value '{tone}' is not a valid enum value of type CanvasToneMappingMode.");
+        }
+
+        return new ContextSettings(Flag("alpha", true), Flag("desynchronized", false), Flag("willReadFrequently", false),
+            Choice("colorSpace", ColorSpaces, "srgb"), Choice("colorType", ["unorm8", "float16"], "unorm8"), tone);
     }
 
     // Setting width or height gives the canvas a new, empty bitmap.
@@ -302,12 +339,7 @@ internal sealed partial class ScriptRuntime
         Js.Method(Engine, p, "getTransform", 0, (self, _) =>
         {
             var m = S(self).Transform;
-            var result = Js.NewObject(Engine);
-            foreach (var (name, value) in new[] { ("a", m.M11), ("b", m.M12), ("c", m.M21), ("d", m.M22), ("e", m.M31), ("f", m.M32) })
-                Js.Value(result, name, Js.Num(value));
-            foreach (var (name, value) in new[] { ("m11", m.M11), ("m12", m.M12), ("m21", m.M21), ("m22", m.M22), ("m41", m.M31), ("m42", m.M32) })
-                Js.Value(result, name, Js.Num(value));
-            return result;
+            return Engine.Evaluate("(function (a) { return new DOMMatrix(a); })").Call(JsValue.Undefined, [Js.Array(Engine, [Js.Num(m.M11), Js.Num(m.M12), Js.Num(m.M21), Js.Num(m.M22), Js.Num(m.M31), Js.Num(m.M32)])]);
         });
 
         Js.Accessor(Engine, p, "fillStyle", self => StyleValue(S(self).FillStyle), (self, value) => S(self).FillStyle = StyleFrom(value, S(self).FillStyle));
@@ -725,7 +757,9 @@ internal sealed partial class ScriptRuntime
         });
         Js.Method(Engine, p, "createPattern", 2, (self, args) =>
         {
-            var image = ImageOf(Js.Arg(args, 0));
+            var image = Js.Arg(args, 0) is NodeObject { Node: { Kind: ScriptNodeKind.Element } canvasNode } && string.Equals(canvasNode.TagName, "canvas", StringComparison.OrdinalIgnoreCase)
+                ? SnapshotOf(canvasNode)
+                : ImageOf(Js.Arg(args, 0));
             var repetition = Js.IsNullish(Js.Arg(args, 1)) ? "repeat" : Js.AsText(Js.Arg(args, 1));
             if (repetition is not ("repeat" or "repeat-x" or "repeat-y" or "no-repeat"))
                 throw DomError("SyntaxError", "The repetition is not valid.");
@@ -827,6 +861,19 @@ internal sealed partial class ScriptRuntime
     }
 
     // The decoded picture an image element, a pattern source or drawImage argument stands for, or null while it is not loaded.
+    // A canvas as a picture of what it shows now (a pattern keeps the pixels it was made from).
+    private Image? SnapshotOf(ScriptNode canvasNode)
+    {
+        if (!_contexts.TryGetValue(canvasNode, out var context))
+        {
+            var (w, h) = CanvasSize(canvasNode);
+            return w <= 0 || h <= 0 ? null : canvasNode.OwnerDocument.DecodeImage(PngWriter.Encode((int)w, (int)h, new byte[(int)w * (int)h * 4]));
+        }
+
+        var pixels = context.Bitmap.Pixels();
+        return pixels.Length == 0 ? null : canvasNode.OwnerDocument.DecodeImage(PngWriter.Encode((int)context.Bitmap.Width, (int)context.Bitmap.Height, pixels));
+    }
+
     private Image? ImageOf(JsValue source)
     {
         if (source is BitmapObject { Image: { } bitmapImage })

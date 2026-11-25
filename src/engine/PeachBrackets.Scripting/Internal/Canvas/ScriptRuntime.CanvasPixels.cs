@@ -98,15 +98,17 @@ internal sealed partial class ScriptRuntime
         Js.Method(Engine, p, "createImageData", 1, (self, args) =>
         {
             if (Js.Arg(args, 0) is ObjectInstance source && source.HasProperty("data"))
-                return MakeImageData(TypeConverter.ToInt32(source.Get("width")), TypeConverter.ToInt32(source.Get("height")), null);
+                return MakeImageData(TypeConverter.ToInt32(source.Get("width")), TypeConverter.ToInt32(source.Get("height")), null, Js.AsText(source.Get("colorSpace")));
 
+            var settingsIndex = Js.Arg(args, 0) is ObjectInstance ? 1 : 2;
+            var space = ImageDataSpace(Js.Arg(args, settingsIndex), Cx(self).Settings.ColorSpace);
             var (w, h) = (Num(args, 0), Num(args, 1));
             if (!double.IsFinite(w) || !double.IsFinite(h))
                 throw TypeError("The size is not finite.");
             if (w == 0 || h == 0)
                 throw DomError("IndexSizeError", "The size is zero.");
 
-            return MakeImageData((int)Math.Abs(Math.Truncate(w)), (int)Math.Abs(Math.Truncate(h)), null);
+            return MakeImageData((int)Math.Abs(Math.Truncate(w)), (int)Math.Abs(Math.Truncate(h)), null, space);
         });
         Js.Method(Engine, p, "getImageData", 4, (self, args) =>
         {
@@ -136,7 +138,9 @@ internal sealed partial class ScriptRuntime
                 }
             }
 
-            return MakeImageData(sw, sh, pixels);
+            var space = ImageDataSpace(Js.Arg(args, 4), Cx(self).Settings.ColorSpace);
+            ConvertColorSpace(pixels, "srgb", space);
+            return MakeImageData(sw, sh, pixels, space);
         });
         Js.Method(Engine, p, "putImageData", 3, (self, args) =>
         {
@@ -171,6 +175,7 @@ internal sealed partial class ScriptRuntime
             for (var i = 0; i < bytes.Length; i++)
                 bytes[i] = (byte)TypeConverter.ToInt32(array.Get(i.ToString(CultureInfo.InvariantCulture)));
 
+            ConvertColorSpace(bytes, data.Get("colorSpace") is { } dataSpace && !dataSpace.IsUndefined() ? Js.AsText(dataSpace) : "srgb", "srgb");
             if (Cx(self).Canvas.OwnerDocument.DecodeImage(PngWriter.Encode(w, h, bytes)) is { } image)
                 B(self).PutPixels(image, new Rect(rx, ry, rw, rh), new Rect(dx + rx, dy + ry, rw, rh));
 
@@ -214,14 +219,14 @@ internal sealed partial class ScriptRuntime
                 if (height <= 0 || (long)width * height != pixels)
                     throw DomError("IndexSizeError", "The data length does not match the size.");
 
-                return BuildImageData(width, height, array);
+                return BuildImageData(width, height, array, ImageDataSpace(Js.Arg(args, 3), "srgb"));
             }
 
             var (w, h) = (TypeConverter.ToInt32(Js.Arg(args, 0)), TypeConverter.ToInt32(Js.Arg(args, 1)));
             if (w <= 0 || h <= 0)
                 throw DomError("IndexSizeError", "The size is zero.");
 
-            return MakeImageData(w, h, null);
+            return MakeImageData(w, h, null, ImageDataSpace(Js.Arg(args, 2), "srgb"));
         }));
 
         InstallBitmaps();
@@ -230,12 +235,18 @@ internal sealed partial class ScriptRuntime
         foreach (var named in Document.QuerySelectorAll("[id]"))
             NameElement(named);
 
-        Js.Method(Engine, ContextPrototype, "getContextAttributes", 0, (_, _) =>
+        Js.Method(Engine, ContextPrototype, "getContextAttributes", 0, (self, _) =>
         {
+            var settings = Cx(self).Settings;
             var attributes = Js.NewObject(Engine);
-            foreach (var (name, value) in new[] { ("alpha", true), ("desynchronized", false), ("willReadFrequently", false) })
-                Js.Value(attributes, name, Js.Bool(value));
-            Js.Value(attributes, "colorSpace", Js.Str("srgb"));
+            Visible(attributes, "alpha", Js.Bool(settings.Alpha));
+            Visible(attributes, "desynchronized", Js.Bool(settings.Desynchronized));
+            Visible(attributes, "willReadFrequently", Js.Bool(settings.WillReadFrequently));
+            Visible(attributes, "colorSpace", Js.Str(settings.ColorSpace));
+            Visible(attributes, "colorType", Js.Str(settings.ColorType));
+            var tone = Js.NewObject(Engine);
+            Visible(tone, "mode", Js.Str(settings.ToneMapping));
+            Visible(attributes, "toneMapping", tone);
             return attributes;
         });
     }
@@ -285,7 +296,7 @@ internal sealed partial class ScriptRuntime
     }
 
     // An ImageData of a size, filled from straight RGBA bytes (or transparent black).
-    private JsValue MakeImageData(int width, int height, byte[]? pixels)
+    private JsValue MakeImageData(int width, int height, byte[]? pixels, string colorSpace = "srgb")
     {
         var array = (ObjectInstance)Engine.Evaluate("(function (n) { return new Uint8ClampedArray(n); })").Call(JsValue.Undefined, [Js.Num(PixelBytes(width, height))]);
         if (pixels is not null)
@@ -293,18 +304,70 @@ internal sealed partial class ScriptRuntime
             Engine.Evaluate("(function (a, s) { for (var i = 0; i < s.length; i++) a[i] = s.charCodeAt(i); })").Call(JsValue.Undefined, [array, Js.Str(Latin1(pixels))]);
         }
 
-        return BuildImageData(width, height, array);
+        return BuildImageData(width, height, array, colorSpace);
     }
 
-    private JsValue BuildImageData(int width, int height, ObjectInstance data)
+    private JsValue BuildImageData(int width, int height, ObjectInstance data, string colorSpace = "srgb")
     {
         var result = new JsObject(Engine) { Prototype = ImageDataPrototype() };
         void Set(string name, JsValue value) => result.FastSetProperty(name, new PropertyDescriptor(value, PropertyFlag.Configurable | PropertyFlag.Enumerable));
         Set("width", Js.Num(width));
         Set("height", Js.Num(height));
         Set("data", data);
-        Set("colorSpace", Js.Str("srgb"));
+        Set("colorSpace", Js.Str(colorSpace));
+        Set("pixelFormat", Js.Str("rgba-unorm8"));
         return result;
+    }
+
+    private static void Visible(ObjectInstance target, string name, JsValue value) =>
+        target.FastSetProperty(name, new PropertyDescriptor(value, PropertyFlag.ConfigurableEnumerableWritable));
+
+    // The color space an ImageData settings dictionary names (the fallback when it names none).
+    private string ImageDataSpace(JsValue settings, string fallback)
+    {
+        if (settings is not ObjectInstance dictionary || dictionary.Get("colorSpace") is not { } value || value.IsUndefined())
+            return fallback;
+
+        var text = Js.AsText(value);
+        return Array.IndexOf(ColorSpaces, text) >= 0 ? text : throw TypeError($"The provided value '{text}' is not a valid enum value of type PredefinedColorSpace.");
+    }
+
+    private static double Decode(double v) => v <= 0.04045 ? v / 12.92 : Math.Pow((v + 0.055) / 1.055, 2.4);
+
+    private static double Encode(double v) => v <= 0.0031308 ? v * 12.92 : (1.055 * Math.Pow(v, 1 / 2.4)) - 0.055;
+
+    private static readonly double[] SrgbToP3 = [0.8224621, 0.1775380, 0.0000000, 0.0331941, 0.9668058, 0.0000000, 0.0170827, 0.0723974, 0.9105199];
+
+    private static readonly double[] P3ToSrgb = [1.2249401, -0.2249404, 0.0000000, -0.0420569, 1.0420571, 0.0000000, -0.0196376, -0.0786361, 1.0982735];
+
+    // Converts straight RGBA bytes between the predefined color spaces (the canvas keeps its pixels as sRGB).
+    private static void ConvertColorSpace(byte[] pixels, string from, string to)
+    {
+        if (from == to)
+            return;
+
+        var fromP3 = from.StartsWith("display-p3", StringComparison.Ordinal);
+        var toP3 = to.StartsWith("display-p3", StringComparison.Ordinal);
+        var fromLinear = from.EndsWith("-linear", StringComparison.Ordinal);
+        var toLinear = to.EndsWith("-linear", StringComparison.Ordinal);
+        var rgb = new double[3];
+        for (var i = 0; i + 3 < pixels.Length; i += 4)
+        {
+            for (var c = 0; c < 3; c++)
+                rgb[c] = fromLinear ? pixels[i + c] / 255.0 : Decode(pixels[i + c] / 255.0);
+
+            if (fromP3 != toP3)
+            {
+                var m = fromP3 ? P3ToSrgb : SrgbToP3;
+                (rgb[0], rgb[1], rgb[2]) = ((m[0] * rgb[0]) + (m[1] * rgb[1]) + (m[2] * rgb[2]), (m[3] * rgb[0]) + (m[4] * rgb[1]) + (m[5] * rgb[2]), (m[6] * rgb[0]) + (m[7] * rgb[1]) + (m[8] * rgb[2]));
+            }
+
+            for (var c = 0; c < 3; c++)
+            {
+                var value = Math.Clamp(rgb[c], 0, 1);
+                pixels[i + c] = (byte)Math.Round((toLinear ? value : Encode(value)) * 255);
+            }
+        }
     }
 
     private string DataUrlOf(ScriptNode element)
