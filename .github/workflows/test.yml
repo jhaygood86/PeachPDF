@@ -234,6 +234,10 @@ jobs:
       if: matrix.suite == 'small'
       run: dotnet test --project ${{ github.workspace }}/src/tests/PeachBrackets.Tests/PeachBrackets.Tests.csproj --no-build --configuration Release --report-trx --report-trx-filename brackets-test-results.trx --coverlet --coverlet-output-format cobertura --coverlet-exclude-by-file "**/PeachPdfProductInfo.g.cs" --coverlet-exclude-by-file "**/PeachPDF.Cli/Program.cs" --coverlet-file-prefix brackets-test-results --results-directory coverage
 
+    - name: Test scripting (PeachBrackets.Scripting)
+      if: matrix.suite == 'small'
+      run: dotnet test --project ${{ github.workspace }}/src/tests/PeachBrackets.Scripting.Tests/PeachBrackets.Scripting.Tests.csproj --no-build --configuration Release --report-trx --report-trx-filename scripting-test-results.trx --coverlet --coverlet-output-format cobertura --coverlet-exclude-by-file "**/PeachPdfProductInfo.g.cs" --coverlet-exclude-by-file "**/PeachPDF.Cli/Program.cs" --coverlet-file-prefix scripting-test-results --results-directory coverage
+
     - name: Test WPT reftest runner (PeachBrackets.WptRunner)
       if: matrix.suite == 'small'
       run: dotnet test --project ${{ github.workspace }}/src/tests/PeachBrackets.WptRunner.Tests/PeachBrackets.WptRunner.Tests.csproj --no-build --configuration Release --report-trx --report-trx-filename wpt-runner-test-results.trx --coverlet --coverlet-output-format cobertura --coverlet-exclude-by-file "**/PeachPdfProductInfo.g.cs" --coverlet-exclude-by-file "**/PeachPDF.Cli/Program.cs" --coverlet-file-prefix wpt-runner-test-results --results-directory coverage

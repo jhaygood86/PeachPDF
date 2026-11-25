@@ -26,6 +26,7 @@ public class PdfViewerSettingsTests
     [InlineData(PdfPageMode.UseThumbs, "/UseThumbs")]
     [InlineData(PdfPageMode.FullScreen, "/FullScreen")]
     [InlineData(PdfPageMode.UseAttachments, "/UseAttachments")]
+    [InlineData(PdfPageMode.UseNone, "/UseNone")]
     public void PageMode_IsWrittenToTheCatalog(PdfPageMode mode, string name)
     {
         var pdf = Write(o => o.PageMode = mode);
@@ -37,6 +38,9 @@ public class PdfViewerSettingsTests
     [InlineData(PdfPageLayout.OneColumn, "/OneColumn")]
     [InlineData(PdfPageLayout.TwoColumnLeft, "/TwoColumnLeft")]
     [InlineData(PdfPageLayout.TwoPageRight, "/TwoPageRight")]
+    [InlineData(PdfPageLayout.TwoPageLeft, "/TwoPageLeft")]
+    [InlineData(PdfPageLayout.TwoColumnRight, "/TwoColumnRight")]
+    [InlineData(PdfPageLayout.SinglePage, "/SinglePage")]
     public void PageLayout_IsWrittenToTheCatalog(PdfPageLayout layout, string name)
     {
         var pdf = Write(o => o.PageLayout = layout);
