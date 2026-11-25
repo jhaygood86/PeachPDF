@@ -116,6 +116,14 @@ namespace PeachDrawing.Core
         }
 
         /// <summary>
+        /// Whether a family is registered under exactly this name - unlike <see cref="IsFontExists"/>, a family-name
+        /// mapping (such as a generic <c>serif</c> mapped to a real family) does not count.
+        /// </summary>
+        /// <param name="family">the family name</param>
+        /// <returns>true when a family was registered under the name</returns>
+        public bool IsRegisteredFontFamily(string family) => _existingFontFamilies.ContainsKey(family);
+
+        /// <summary>
         /// Adds a font family to be used.
         /// </summary>
         /// <param name="fontFamily">The font family to add.</param>
