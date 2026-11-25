@@ -388,6 +388,45 @@ public sealed class ScriptDocument
         return network.SendAsync(request, cancellationToken);
     }
 
+    /// <summary>Loads an image a script asked for (<c>new Image()</c>, an <c>img</c> element's <c>src</c>) to find out whether it can be decoded and how large it is.</summary>
+    /// <param name="address">the address as written, absolute or relative</param>
+    /// <returns>the image's size and address, or null when it could not be loaded or decoded</returns>
+    public async ValueTask<ScriptImageInfo?> LoadImageAsync(string address)
+    {
+        ArgumentNullException.ThrowIfNull(address);
+
+        try
+        {
+            // A data: address carries its bytes; everything else goes through the document's resource loader.
+            if (!address.StartsWith("data:image/svg", StringComparison.OrdinalIgnoreCase) && DataUriUtils.TryDecodeDataUri(address, out _, out var bytes))
+            {
+                using var stream = new MemoryStream(bytes);
+                var decoded = _container.RenderContext.ImageFromStream(stream);
+                return new ScriptImageInfo(decoded.Width, decoded.Height, address);
+            }
+
+            using var handler = new ImageLoadHandler(_container);
+            await handler.LoadImage(address);
+            var resolved = CommonUtils.ResolveAgainstDocumentBase(_container, address);
+            var url = resolved?.IsAbsoluteUri == true ? resolved.AbsoluteUri : address;
+            if (handler.Image is { } image)
+                return new ScriptImageInfo(image.Width, image.Height, url);
+
+            if (handler.SvgDocument is { } svg)
+            {
+                var width = svg.Width ?? svg.ViewBox?.Width ?? 300;
+                var height = svg.Height ?? svg.ViewBox?.Height ?? 150;
+                return new ScriptImageInfo(width, height, url);
+            }
+
+            return null;
+        }
+        catch (Exception ex) when (ex is not SynchronousOnlyViolationException and not OutOfMemoryException)
+        {
+            return null;
+        }
+    }
+
     /// <summary>Reads the text of a resource: an external script. It resolves against <see cref="BaseUri"/>.</summary>
     /// <param name="address">the address as written, absolute or relative</param>
     /// <returns>the text, or null when it could not be read</returns>

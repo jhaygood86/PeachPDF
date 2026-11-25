@@ -845,6 +845,7 @@ PeachBrackets.ScriptHosting.ScriptDocument : sealed class
   method ScriptNode GetElementById(String id)
   method ScriptNode QuerySelector(String selector)
   method String GetComputedValue(ScriptNode element, String property)
+  method ValueTask<ScriptImageInfo> LoadImageAsync(String address)
   method ValueTask<ScriptNetworkResponse> SendAsync(ScriptNetworkRequest request, CancellationToken cancellationToken = null)
   method ValueTask<String> LoadTextAsync(String address)
   property Boolean CanMeasure { get; }
@@ -864,6 +865,17 @@ PeachBrackets.ScriptHosting.ScriptDocument : sealed class
   property String Title { get; }
   property Uri BaseAddress { get; }
   property Uri BaseUri { get; }
+PeachBrackets.ScriptHosting.ScriptImageInfo : sealed class
+  ctor(Double Width, Double Height, String Address)
+  method ScriptImageInfo <Clone>$()
+  method Void Deconstruct(out Double Width, out Double Height, out String Address)
+  method virtual Boolean Equals(Object obj)
+  method virtual Boolean Equals(ScriptImageInfo other)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property Double Height { get; init; }
+  property Double Width { get; init; }
+  property String Address { get; init; }
 PeachBrackets.ScriptHosting.ScriptLayout : sealed class
   method IReadOnlyList<BoxReport> GetBoxes(ScriptNode element)
   property IReadOnlyList<BoxReport> Pages { get; }

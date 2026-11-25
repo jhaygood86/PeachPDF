@@ -154,6 +154,10 @@ All script output goes to `JintScriptOptions.Logger`; with none set it is discar
 
 `XMLHttpRequest`, `fetch`, `Request`, `Response`, `Headers`, `URL`, `URLSearchParams`, `Blob`, `File`, `FormData`, `FileReader`, `TextEncoder` and `TextDecoder` are provided. They are defined by a script bundle that is evaluated the first time a script names one of them, so a document that uses none pays nothing. Requests go to `HtmlDocumentOptions.ScriptNetwork` (an `IScriptNetwork`: method, URL, headers and body in, status, headers and body out); without one a script can only `GET` what the document's resource loader can fetch, and `data:` addresses are read in the package. Answers are delivered as timers: the virtual clock does not move past a request until its answer has arrived, so a script that waits for a response with a timer sees it. A synchronous `XMLHttpRequest` blocks the calling thread on the answer. Streams (`ReadableStream`, `response.body`), CORS enforcement, cookies and `FormData` parsing of a response are not provided.
 
+## Images scripts load
+
+`new Image(width, height)` makes an `img` element, and setting an `img` element's `src` (the property or `setAttribute`) loads it, as does an `img` already in the page. The image is fetched and decoded through the document's resource loader (data: addresses included, SVG too); the result is delivered the way a network answer is, before the virtual clock moves on, as a `load` or `error` event on the element. `complete`, `naturalWidth`, `naturalHeight`, `currentSrc`, `width`, `height` and `decode()` report it. `srcset`, `sizes`, `<picture>`, `crossOrigin`, `loading` and `fetchpriority` have no effect on the load, and an image a script loads is decoded only to learn its size: it is not drawn into anything (there is no canvas yet).
+
 ## Limits
 
 - A page's scripts run once at load. Nothing replays input into the document afterwards, so there is no pointer or keyboard event unless a script

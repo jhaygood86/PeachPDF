@@ -77,6 +77,7 @@ internal sealed partial class ScriptRuntime
         InstallMutationObserver();
         InstallRanges();
         InstallSelection();
+        InstallImages();
         InstallNodeOrdering();
 
         // The ChildNode and NonDocumentTypeChildNode operations text has as well as elements.

@@ -167,6 +167,10 @@ internal sealed partial class ScriptRuntime
     // A change was made: queue a record for each observer watching the node or an ancestor that watches its subtree.
     private void OnMutated(ScriptMutation mutation)
     {
+        // An img element given a source loads it.
+        if (mutation.Kind == ScriptMutationKind.Attributes && IsImage(mutation.Target) && string.Equals(mutation.AttributeName, "src", StringComparison.OrdinalIgnoreCase))
+            StartImageLoad(mutation.Target);
+
         if (_ranges.Count > 0)
             AdjustRanges(mutation);
 

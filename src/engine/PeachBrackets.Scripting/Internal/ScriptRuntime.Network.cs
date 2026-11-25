@@ -207,8 +207,13 @@ internal sealed partial class ScriptRuntime
     /// <summary>Waits for the requests the scripts have sent and queues each answer as a zero-delay timer, so it runs after what was already due and before time moves on.</summary>
     private async ValueTask DeliverRequestsAsync()
     {
-        while (_pendingRequests.Count > 0)
+        StartInitialImages();
+        while (_pendingRequests.Count > 0 || _pendingImages.Count > 0)
         {
+            await DeliverImagesAsync();
+            if (_pendingRequests.Count == 0)
+                continue;
+
             var batch = _pendingRequests.ToArray();
             _pendingRequests.Clear();
             foreach (var (task, callback, url) in batch)
