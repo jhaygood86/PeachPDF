@@ -78,6 +78,7 @@ internal sealed partial class ScriptRuntime
         InstallRanges();
         InstallSelection();
         InstallImages();
+        InstallCanvas();
         InstallNodeOrdering();
 
         // The ChildNode and NonDocumentTypeChildNode operations text has as well as elements.

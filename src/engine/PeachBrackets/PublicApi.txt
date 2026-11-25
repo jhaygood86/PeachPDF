@@ -825,10 +825,25 @@ PeachBrackets.ScriptHosting.ScriptBox : struct
 PeachBrackets.ScriptHosting.ScriptCallback : sealed class
   ctor(Func<IReadOnlyList<ScriptValue>, ScriptValue> invoke)
   method ScriptValue Invoke(ScriptValue[] arguments)
+PeachBrackets.ScriptHosting.ScriptCanvasPainting : sealed class
+  ctor(Double Width, Double Height, Action<Canvas> Paint)
+  method ScriptCanvasPainting <Clone>$()
+  method Void Deconstruct(out Double Width, out Double Height, out Action<Canvas> Paint)
+  method virtual Boolean Equals(Object obj)
+  method virtual Boolean Equals(ScriptCanvasPainting other)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property Action<Canvas> Paint { get; init; }
+  property Double Height { get; init; }
+  property Double Width { get; init; }
 PeachBrackets.ScriptHosting.ScriptDocument : sealed class
+  method Boolean TryParseColor(String css, out PaintColor color)
+  method Canvas CreateMeasuringCanvas()
+  method Font GetFont(String family, Double sizePixels, PaintFontStyle style, Double weight)
   method IReadOnlyList<ScriptNode> GetElementsByClassName(String classNames)
   method IReadOnlyList<ScriptNode> GetElementsByTagName(String tagName)
   method IReadOnlyList<ScriptNode> QuerySelectorAll(String selector)
+  method Image GetLoadedImage(String address)
   method Int32 OrdinalOf(ScriptNode element)
   method ScriptBox? GetLayoutBox(ScriptNode element)
   method ScriptDocument CreateDocument(Boolean html, Boolean withDocumentType, String contentType = null)
@@ -848,6 +863,7 @@ PeachBrackets.ScriptHosting.ScriptDocument : sealed class
   method ValueTask<ScriptImageInfo> LoadImageAsync(String address)
   method ValueTask<ScriptNetworkResponse> SendAsync(ScriptNetworkRequest request, CancellationToken cancellationToken = null)
   method ValueTask<String> LoadTextAsync(String address)
+  method Void SetCanvasPainting(ScriptNode canvas, ScriptCanvasPainting painting)
   property Boolean CanMeasure { get; }
   property Boolean IsHtml { get; }
   property Boolean KeepAlive { get; set; }

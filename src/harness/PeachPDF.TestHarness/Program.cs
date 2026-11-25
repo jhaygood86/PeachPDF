@@ -978,6 +978,33 @@ const string pointerHtml = """
         """, scriptingConfig);
 }
 
+{
+    var canvasConfig = new PdfGenerateConfig { ScriptHost = new PeachBrackets.Scripting.JintScriptHost() };
+    await SaveShowcaseAsync("canvas_2d", "Layout", "Canvas 2D drawn by JavaScript",
+        "A canvas element a script draws on with the 2D context (gradient fill, a translucent circle, a dashed round-capped curve, a shadow and text). The drawing is replayed as vector content in the PDF, not rasterized.",
+        """
+        <!DOCTYPE html><html><head><style>
+          @page { size: a4; margin: 15mm }
+          body { font: 10pt Arial, sans-serif; margin: 0 }
+          canvas { border: 1px solid #888; width: 100%; height: auto }
+        </style></head><body>
+        <h1>Canvas 2D</h1>
+        <canvas id="c" width="600" height="320"></canvas>
+        <script>
+          var g = document.getElementById('c').getContext('2d');
+          var grad = g.createLinearGradient(0, 0, 600, 0); grad.addColorStop(0, '#ff8a00'); grad.addColorStop(1, '#e52e71');
+          g.fillStyle = grad; g.fillRect(20, 20, 560, 110);
+          g.fillStyle = 'rgba(0, 80, 200, 0.6)'; g.beginPath(); g.arc(150, 230, 70, 0, Math.PI * 2); g.fill();
+          g.strokeStyle = '#222'; g.lineWidth = 10; g.lineCap = 'round'; g.setLineDash([22, 14]);
+          g.beginPath(); g.moveTo(300, 290); g.bezierCurveTo(380, 150, 480, 330, 570, 200); g.stroke(); g.setLineDash([]);
+          g.shadowColor = 'rgba(0,0,0,0.5)'; g.shadowBlur = 10; g.shadowOffsetX = 5; g.shadowOffsetY = 5;
+          g.fillStyle = '#2a9d3f'; g.fillRect(240, 180, 60, 60);
+          g.shadowColor = 'transparent'; g.font = 'bold 44px serif'; g.fillStyle = '#fff'; g.fillText('Canvas 2D', 80, 90);
+        </script>
+        </body></html>
+        """, canvasConfig);
+}
+
 await SaveShowcaseAsync("progress_meter", "Forms & Interaction", "Progress & Meter",
     "<progress> bars filled to their value in the accent color (a blue by default), an indeterminate bar, and <meter> gauges that turn green, yellow or red by the region their value is in.",
     """

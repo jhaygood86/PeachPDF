@@ -1795,7 +1795,7 @@ namespace PeachBrackets.Html.Parse
         {
             if (box.Display.Value != DisplayMode.Contents) return;
 
-            if (box is CssBoxImage or CssBoxFrame or CssBoxSvg or CssBoxMath or CssBoxObject or CssBoxVideo or CssBoxFormField
+            if (box is CssBoxImage or CssBoxFrame or CssBoxCanvas or CssBoxSvg or CssBoxMath or CssBoxObject or CssBoxVideo or CssBoxFormField
                 || (box.HtmlTag is { } tag && DisplayContentsComputesToNoneTags.Contains(tag.Name)))
             {
                 box.Display = CssProperty<DisplayMode>.FromValue(Keywords.None, DisplayMode.None);

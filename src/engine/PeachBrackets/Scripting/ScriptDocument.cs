@@ -388,6 +388,78 @@ public sealed class ScriptDocument
         return network.SendAsync(request, cancellationToken);
     }
 
+    private readonly Dictionary<ScriptNode, ScriptCanvasPainting> _canvases = new(ReferenceEqualityComparer.Instance as IEqualityComparer<ScriptNode>);
+    private readonly Dictionary<string, PeachDrawing.Core.Image> _loadedImages = [];
+
+    /// <summary>Sets what a <c>canvas</c> element shows: a drawing a script made, replacing any earlier one. Null clears it.</summary>
+    /// <param name="canvas">the <c>canvas</c> element</param>
+    /// <param name="painting">the drawing, or null</param>
+    public void SetCanvasPainting(ScriptNode canvas, ScriptCanvasPainting? painting)
+    {
+        ArgumentNullException.ThrowIfNull(canvas);
+        if (painting is null)
+            _canvases.Remove(canvas);
+        else
+            _canvases[canvas] = painting;
+    }
+
+    // The drawings of the canvas elements still in the tree, by the position the layout knows each element by.
+    internal void PublishCanvasPaintings(Dictionary<int, ScriptCanvasPainting> target)
+    {
+        target.Clear();
+        if (_canvases.Count == 0)
+            return;
+
+        var index = 0;
+        foreach (var element in Descendants(Root))
+        {
+            if (_canvases.TryGetValue(element, out var painting))
+                target[index] = painting;
+
+            index++;
+        }
+    }
+
+    /// <summary>Reads a CSS color (<c>#f00</c>, <c>rgb(...)</c>, a name, <c>transparent</c>...) as a script's style strings spell it.</summary>
+    /// <param name="css">the text</param>
+    /// <param name="color">the color</param>
+    /// <returns>whether the text is a color</returns>
+    public bool TryParseColor(string css, out PeachDrawing.Core.PaintColor color)
+    {
+        ArgumentNullException.ThrowIfNull(css);
+        var parser = new Html.Parse.CssValueParser(_container.RenderContext);
+        var text = css.Trim();
+        if (!parser.IsColorValid(text))
+        {
+            color = default;
+            return false;
+        }
+
+        color = parser.GetActualColor(text);
+        return true;
+    }
+
+    /// <summary>Finds a font by family name, as the document's render context knows it.</summary>
+    /// <param name="family">one family name or a generic one</param>
+    /// <param name="sizePixels">the size in CSS pixels</param>
+    /// <param name="style">normal, italic or oblique</param>
+    /// <param name="weight">the weight, 400 for normal and 700 for bold</param>
+    /// <returns>the font, or null when there is none</returns>
+    public PeachDrawing.Core.Font? GetFont(string family, double sizePixels, PeachDrawing.Core.PaintFontStyle style, double weight)
+    {
+        ArgumentNullException.ThrowIfNull(family);
+        return _container.RenderContext.GetFont(family, sizePixels, style, weight);
+    }
+
+    /// <summary>Makes a small canvas text can be measured on (what the host gave as <see cref="HtmlDocumentOptions.MeasuringCanvasFactory"/>), or null when it gave none.</summary>
+    /// <returns>the canvas, which the caller disposes</returns>
+    public PeachDrawing.Core.Canvas? CreateMeasuringCanvas() => _container.MeasuringCanvasFactory?.Invoke();
+
+    /// <summary>The decoded image an earlier <see cref="LoadImageAsync"/> of this address made, or null.</summary>
+    /// <param name="address">the address as it was given to <see cref="LoadImageAsync"/></param>
+    /// <returns>the image, or null</returns>
+    public PeachDrawing.Core.Image? GetLoadedImage(string address) => _loadedImages.GetValueOrDefault(address);
+
     /// <summary>Loads an image a script asked for (<c>new Image()</c>, an <c>img</c> element's <c>src</c>) to find out whether it can be decoded and how large it is.</summary>
     /// <param name="address">the address as written, absolute or relative</param>
     /// <returns>the image's size and address, or null when it could not be loaded or decoded</returns>
@@ -402,6 +474,7 @@ public sealed class ScriptDocument
             {
                 using var stream = new MemoryStream(bytes);
                 var decoded = _container.RenderContext.ImageFromStream(stream);
+                _loadedImages[address] = decoded;
                 return new ScriptImageInfo(decoded.Width, decoded.Height, address);
             }
 
@@ -410,7 +483,10 @@ public sealed class ScriptDocument
             var resolved = CommonUtils.ResolveAgainstDocumentBase(_container, address);
             var url = resolved?.IsAbsoluteUri == true ? resolved.AbsoluteUri : address;
             if (handler.Image is { } image)
+            {
+                _loadedImages[address] = image;
                 return new ScriptImageInfo(image.Width, image.Height, url);
+            }
 
             if (handler.SvgDocument is { } svg)
             {

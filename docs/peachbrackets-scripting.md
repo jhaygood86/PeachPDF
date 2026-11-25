@@ -158,13 +158,21 @@ All script output goes to `JintScriptOptions.Logger`; with none set it is discar
 
 `new Image(width, height)` makes an `img` element, and setting an `img` element's `src` (the property or `setAttribute`) loads it, as does an `img` already in the page. The image is fetched and decoded through the document's resource loader (data: addresses included, SVG too); the result is delivered the way a network answer is, before the virtual clock moves on, as a `load` or `error` event on the element. `complete`, `naturalWidth`, `naturalHeight`, `currentSrc`, `width`, `height` and `decode()` report it. `srcset`, `sizes`, `<picture>`, `crossOrigin`, `loading` and `fetchpriority` have no effect on the load, and an image a script loads is decoded only to learn its size: it is not drawn into anything (there is no canvas yet).
 
+## Canvas 2D
+
+A `<canvas>` is a replaced element as large as its `width` and `height` attributes (300 by 150 CSS pixels by default), and `getContext('2d')` gives scripts a `CanvasRenderingContext2D`: `save`/`restore`/`reset`, the transform methods, `fillStyle` and `strokeStyle` (colors and linear, radial and conic gradients), line settings with dashes, `globalAlpha`, `globalCompositeOperation` (the blend modes and `lighter`), shadows, paths (`arc`, `arcTo`, `ellipse`, `rect`, `roundRect`, Bezier curves, `Path2D`), `fill`, `stroke`, `clip`, the rectangle methods, `drawImage` (a loaded `img` or another canvas), `fillText`/`strokeText`/`measureText`, and `imageSmoothingEnabled`.
+
+Every call is recorded and replayed onto the page's canvas, so a PDF or SVG gets the shapes and text as **vector content**, scaled from the bitmap's size to the box's. What a script draws before layout is what the box shows; a canvas drawn on by a timer or a post-layout function after the document has been laid out is not repainted.
+
+Not provided yet: reading pixels back (`getImageData`, `toDataURL`, `isPointInPath`), `putImageData`/`ImageData`, `OffscreenCanvas`, patterns as a fill, the Porter-Duff compositing modes (`source-in`, `destination-out`, `xor`, `copy`...; they draw as `source-over`), `clearRect` of part of the canvas (clearing all of it works), `filter`, `letterSpacing`/`fontKerning` and the other text properties beyond `font`, `textAlign`, `textBaseline` and `direction`.
+
 ## Limits
 
 - A page's scripts run once at load. Nothing replays input into the document afterwards, so there is no pointer or keyboard event unless a script
   dispatches one itself.
 - A document with scripts that changed it is written back out as HTML and loaded again; constructs the HTML parser cannot round-trip exactly (some
   foreign content in `<svg>` and `<math>`) may differ. A page the scripts did not change keeps its own source.
-- `<script type="module">` has no `import`; Web APIs outside the DOM (`Worker`, canvas, Web Animations, custom elements,
+- `<script type="module">` has no `import`; Web APIs outside the DOM (`Worker`, Web Animations, custom elements,
   shadow DOM, streams) are not provided; `document.cookie` and `location` are inert.
 - Shadow DOM, custom elements, `Observable`, `StaticRange`, `moveBefore` and `ProcessingInstruction` pseudo-attributes are not provided. Namespaces are tracked per element and attribute on the script side, so a script's namespaced markup keeps its names but an XML document is written back as HTML when it is the page's own. A document made by a script is never styled or laid out (`getComputedStyle` and `getBoundingClientRect` read the page only), has no `window` unless it is an iframe's, and fires no load events.
 

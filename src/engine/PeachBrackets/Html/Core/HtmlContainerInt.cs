@@ -1603,6 +1603,12 @@ namespace PeachBrackets.Html
         /// <summary>How the document's scripts reach the network; null for the render context's loader.</summary>
         internal IScriptNetwork? ScriptNetwork { get; set; }
 
+        /// <summary>Makes the canvas scripts measure text on, when the host gave one.</summary>
+        internal System.Func<PeachDrawing.Core.Canvas>? MeasuringCanvasFactory { get; set; }
+
+        /// <summary>What scripts drew on <c>canvas</c> elements, by the element's source ordinal.</summary>
+        internal System.Collections.Generic.Dictionary<int, ScriptHosting.ScriptCanvasPainting> CanvasPaintings { get; } = [];
+
         private bool _apisStarted;
 
         /// <summary>The script document the host kept live after its scripts ran (see <see cref="ScriptDocument.KeepAlive"/>), or null.</summary>
@@ -1673,6 +1679,8 @@ namespace PeachBrackets.Html
                 await host.RunAsync(document, ScriptCancellation);
                 foreach (var api in ScriptApis)
                     api.NoteScriptsCompleted(document);
+
+                document.PublishCanvasPaintings(CanvasPaintings);
 
                 // A page the scripts left as it was keeps its own source: writing the tree back out is not exact for every construct (foreign content),
                 // and a page that changed nothing gains nothing from it.

@@ -273,7 +273,7 @@ namespace PeachBrackets.Html.Handlers
             foreach (var child in box.Boxes)
             {
                 if (child.HtmlTag is not null && !child.IsClickable
-                    && child is not (CssBoxImage or CssBoxSvg or CssBoxMath or CssBoxObject or CssBoxFrame or CssBoxFormField))
+                    && child is not (CssBoxImage or CssBoxSvg or CssBoxMath or CssBoxObject or CssBoxFrame or CssBoxCanvas or CssBoxFormField))
                 {
                     return true;
                 }

@@ -132,6 +132,7 @@ public sealed partial class HtmlDocument : IDisposable
             container.ScriptHost = options.ScriptHost;
             container.ScriptApis = [.. options.ScriptApis];
             container.ScriptNetwork = options.ScriptNetwork;
+            container.MeasuringCanvasFactory = options.MeasuringCanvasFactory;
             container.MaxLayoutPasses = options.MaxLayoutPasses;
             if (options.ScriptHost is not null && options.MeasuringCanvasFactory is { } canvasFactory)
             {
