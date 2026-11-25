@@ -54,7 +54,8 @@ namespace PeachBrackets.Engine.Tests.Html.Core
                 "<style>@font-face { font-family: A; src: url(https://fonts.test/a.woff2) } @font-face { font-family: B; src: local(Nope), url(https://fonts.test/b.woff2), url(https://fonts.test/b.woff) } @font-face { font-family: C; src: url(relative.woff2) }</style>");
 
             var call = Assert.Single(context.Calls);
-            Assert.Equal(["https://fonts.test/a.woff2", "https://fonts.test/b.woff2"], [.. call.Select(a => a.AbsoluteUri)]);
+            // A relative url() in an inline sheet resolves against the document base, as the registration does.
+            Assert.Equal(["https://fonts.test/a.woff2", "https://fonts.test/b.woff2", "https://example.test/dir/relative.woff2"], [.. call.Select(a => a.AbsoluteUri)]);
         }
 
         [Fact]

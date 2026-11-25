@@ -184,6 +184,43 @@ body {{ font-size: 20pt; }}
             Assert.True(doc.PageCount >= 1);
         }
 
+        [Fact]
+        public async Task FontFaceInInlineStyle_RelativeUrl_ResolvesAgainstDocumentLocation()
+        {
+            var loader = new InMemoryNetworkLoader(DocumentUri, primaryHtml: @"<!DOCTYPE html>
+<html><head><style>
+@font-face { font-family: 'InlineFont'; src: url('fonts/font.ttf') format('truetype'); }
+body { font-family: 'InlineFont', serif; font-size: 14pt; }
+</style></head>
+<body>Hello Inline</body>
+</html>");
+
+            loader.AddResource("https://example.test/docs/fonts/font.ttf", File.ReadAllBytes(BundledFonts.Ttf), "font/ttf");
+
+            var doc = await new PdfGenerator().GeneratePdf(null, new PdfGenerateConfig { NetworkLoader = loader, PageSize = PageSize.A4 });
+
+            Assert.Contains("/FontFile2", GetPdfText(doc));
+        }
+
+        [Fact]
+        public async Task FontFaceInInlineStyle_RelativeUrl_ResolvesAgainstBaseHref()
+        {
+            var loader = new InMemoryNetworkLoader(DocumentUri, primaryHtml: @"<!DOCTYPE html>
+<html><head><base href=""https://example.test/other/"">
+<style>
+@font-face { font-family: 'InlineFont'; src: url('font.ttf') format('truetype'); }
+body { font-family: 'InlineFont', serif; font-size: 14pt; }
+</style></head>
+<body>Hello Base</body>
+</html>");
+
+            loader.AddResource("https://example.test/other/font.ttf", File.ReadAllBytes(BundledFonts.Ttf), "font/ttf");
+
+            var doc = await new PdfGenerator().GeneratePdf(null, new PdfGenerateConfig { NetworkLoader = loader, PageSize = PageSize.A4 });
+
+            Assert.Contains("/FontFile2", GetPdfText(doc));
+        }
+
         private static string GetPdfText(PeachPdfDocument doc)
         {
             var ms = new MemoryStream();
