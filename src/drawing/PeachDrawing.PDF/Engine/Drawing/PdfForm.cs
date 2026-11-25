@@ -53,7 +53,8 @@ internal class PdfForm : PdfRasterImage, IContentStream
     /// <param name="viewBox">The view box of the page.</param>
     public PdfForm(PdfDocument document, Rect viewBox)
     {
-        if (viewBox.Width < 1 || viewBox.Height < 1)
+        // A hairline tile (a 0.25pt gradient strip) is a valid /BBox; only an empty or non-finite one is not.
+        if (!(viewBox.Width > 0) || !(viewBox.Height > 0) || !double.IsFinite(viewBox.Width) || !double.IsFinite(viewBox.Height))
             throw new ArgumentNullException("viewBox", "The size of the PdfForm is to small.");
         // I must tie the PdfForm to a document immediately, because otherwise I would have no place where
         // to store the resources.
