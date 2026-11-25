@@ -25,6 +25,9 @@ namespace PeachBrackets.Html.Paint
 
         private static readonly Rect Unbounded = new(-1e9, -1e9, 2e9, 2e9);
 
+        /// <summary>A clip wider than this is a canvas's initial, unbounded one, not a real page area.</summary>
+        private const double UnboundedClipThreshold = 1e8;
+
         /// <summary>
         /// The clip to cull against. <see cref="Canvas.GetClip"/> is the latest rectangle pushed, in the frame it was pushed in, so after a scroll container
         /// has carried its content back by how far it is scrolled it is no longer in the frame the fragments are in: inside such a frame nothing is culled
