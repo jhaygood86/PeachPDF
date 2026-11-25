@@ -56,6 +56,8 @@ internal sealed partial class ScriptRuntime
     [
         "URL", "URLSearchParams", "Headers", "Request", "Response", "fetch", "XMLHttpRequest", "XMLHttpRequestEventTarget", "XMLHttpRequestUpload",
         "Blob", "File", "FormData", "TextEncoder", "TextDecoder", "FileReader",
+        "ReadableStream", "ReadableStreamDefaultReader", "ReadableStreamDefaultController", "WritableStream", "WritableStreamDefaultWriter", "WritableStreamDefaultController",
+        "TransformStream", "TransformStreamDefaultController", "TextEncoderStream", "TextDecoderStream", "CountQueuingStrategy", "ByteLengthQueuingStrategy",
     ];
 
     private void InstallLazyWebGlobals()
@@ -95,7 +97,7 @@ internal sealed partial class ScriptRuntime
         _webLoaded = true;
         try
         {
-            Engine.Evaluate(WebPlatformScripts.Bundle).Call(JsValue.Undefined, [NetObject(), Engine.Global]);
+            Engine.Evaluate(WebPlatformScripts.Bundle.Replace(WebPlatformScripts.StreamsMarker, WebStreamsScripts.Source, StringComparison.Ordinal)).Call(JsValue.Undefined, [NetObject(), Engine.Global]);
         }
         catch (Exception error) when (IsScriptFailure(error))
         {

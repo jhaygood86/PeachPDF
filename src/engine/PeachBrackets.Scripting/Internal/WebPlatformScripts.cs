@@ -7,6 +7,9 @@ namespace PeachBrackets.Scripting.Internal;
 /// </summary>
 internal static class WebPlatformScripts
 {
+    /// <summary>Where <see cref="WebStreamsScripts.Source"/> goes in <see cref="Bundle"/>.</summary>
+    public const string StreamsMarker = "/*STREAMS*/";
+
     public const string Bundle = """
         (function (net, global) {
             "use strict";
@@ -89,12 +92,30 @@ internal static class WebPlatformScripts
             readonly(TextDecoder.prototype, "encoding", function () { return decoderState.get(this).name; });
             readonly(TextDecoder.prototype, "fatal", function () { return decoderState.get(this).fatal; });
             readonly(TextDecoder.prototype, "ignoreBOM", function () { return decoderState.get(this).ignoreBOM; });
-            method(TextDecoder.prototype, "decode", function decode(input) {
+            method(TextDecoder.prototype, "decode", function decode(input, options) {
                 var state = decoderState.get(this);
                 var bytes = input === undefined ? new Uint8Array(0) : isBufferSource(input) ? copyBytes(input) : (function () { throw new TypeError("The provided value is not of type '(ArrayBuffer or ArrayBufferView)'."); })();
+                var streaming = !!(options && options.stream);
+                if (state.pending && state.pending.length) {
+                    var joined = new Uint8Array(state.pending.length + bytes.length);
+                    joined.set(state.pending, 0); joined.set(bytes, state.pending.length);
+                    bytes = joined; state.pending = null;
+                }
+                if (streaming && state.name === "utf-8") {
+                    // A sequence cut off at the end of the chunk waits for the next one.
+                    var cut = bytes.length, back = 0;
+                    while (back < 3 && cut - 1 - back >= 0 && (bytes[cut - 1 - back] & 0xC0) === 0x80) back++;
+                    var lead = cut - 1 - back;
+                    if (lead >= 0) {
+                        var b0 = bytes[lead], need = b0 >= 0xF0 && b0 < 0xF8 ? 4 : b0 >= 0xE0 ? 3 : b0 >= 0xC2 && b0 < 0xE0 ? 2 : 1;
+                        if (b0 >= 0xC2 && need > back + 1) { state.pending = bytes.slice(lead); bytes = bytes.slice(0, lead); }
+                    }
+                }
                 var binary = bytesToBinary(bytes);
                 if (state.name === "utf-8") {
-                    var text = net.utf8Decode(binary, !state.ignoreBOM);
+                    var skipBom = !state.ignoreBOM && !state.started;
+                    if (bytes.length > 0 || !streaming) state.started = streaming;
+                    var text = net.utf8Decode(binary, skipBom);
                     if (state.fatal && text.indexOf("�") >= 0 && utf8(text).length !== bytes.length) throw new TypeError("The encoded data was not valid for encoding utf-8");
                     return text;
                 }
@@ -729,6 +750,7 @@ internal static class WebPlatformScripts
             };
             net.registerHyperlink(hyperlink);
 
+            /*STREAMS*/
             // ---------------------------------------------------------------- Blob, File, FormData
             var blobState = new WeakMap();
             function Blob(parts, options) {
@@ -766,6 +788,7 @@ internal static class WebPlatformScripts
             method(Blob.prototype, "text", function text() { var s = blobOf(this); return Promise.resolve(utf8Decode(s.bytes)); });
             method(Blob.prototype, "arrayBuffer", function arrayBuffer() { return Promise.resolve(toArrayBuffer(blobOf(this).bytes)); });
             method(Blob.prototype, "bytes", function bytes() { return Promise.resolve(new Uint8Array(blobOf(this).bytes)); });
+            method(Blob.prototype, "stream", function stream() { return streamOfBytes(blobOf(this).bytes); });
             tag(Blob, "Blob");
 
             function File(parts, name, options) {
@@ -863,12 +886,19 @@ internal static class WebPlatformScripts
             }
             function headersOf(self) { var s = headersState.get(self); if (!s) throw new TypeError("Illegal invocation"); return s; }
             var forbiddenRequestHeaders = /^(accept-charset|accept-encoding|access-control-request-headers|access-control-request-method|connection|content-length|cookie|cookie2|date|dnt|expect|host|keep-alive|origin|referer|set-cookie|te|trailer|transfer-encoding|upgrade|via)$/i;
+            // A request header a script may not set: the forbidden names, the proxy- and sec- prefixes, and a method-override header that names a forbidden method.
+            function isForbiddenRequestHeader(name, value) {
+                if (forbiddenRequestHeaders.test(name) || /^(proxy-|sec-)/i.test(name)) return true;
+                if (/^(x-http-method|x-http-method-override|x-method-override)$/i.test(name))
+                    return String(value).split(",").some(function (v) { return /^(connect|trace|track)$/i.test(v.trim()); });
+                return false;
+            }
             function appendHeader(headers, name, value) {
                 name = String(name); value = normalizeValue(value);
                 checkHeader(name, value);
                 var s = headersOf(headers);
                 if (s.guard === "immutable") throw new TypeError("Headers are immutable");
-                if (s.guard === "request" && (forbiddenRequestHeaders.test(name) || /^(proxy-|sec-)/i.test(name))) return;
+                if (s.guard === "request" && isForbiddenRequestHeader(name, value)) return;
                 if (s.guard === "response" && /^set-cookie2?$/i.test(name)) return;
                 s.list.push([name.toLowerCase(), value]);
             }
@@ -882,7 +912,7 @@ internal static class WebPlatformScripts
                 checkHeader(name, "");
                 var s = headersOf(this);
                 if (s.guard === "immutable") throw new TypeError("Headers are immutable");
-                if (s.guard === "request" && (forbiddenRequestHeaders.test(name) || /^(proxy-|sec-)/i.test(name))) return;
+                if (s.guard === "request" && isForbiddenRequestHeader(name, "")) return;
                 var lower = name.toLowerCase();
                 s.list = s.list.filter(function (h) { return h[0] !== lower; });
             });
@@ -908,7 +938,7 @@ internal static class WebPlatformScripts
                 checkHeader(name, value);
                 var s = headersOf(this);
                 if (s.guard === "immutable") throw new TypeError("Headers are immutable");
-                if (s.guard === "request" && (forbiddenRequestHeaders.test(name) || /^(proxy-|sec-)/i.test(name))) return;
+                if (s.guard === "request" && isForbiddenRequestHeader(name, value)) return;
                 var lower = name.toLowerCase(), done = false, out = [];
                 s.list.forEach(function (h) { if (h[0] !== lower) out.push(h); else if (!done) { done = true; out.push([lower, value]); } });
                 if (!done) out.push([lower, value]);
@@ -950,20 +980,75 @@ internal static class WebPlatformScripts
                 if (body instanceof Blob) return { bytes: new Uint8Array(blobOf(body).bytes), type: blobOf(body).type || null };
                 if (isBufferSource(body)) return { bytes: copyBytes(body), type: null };
                 if (body instanceof FormData) return encodeMultipart(body);
+                if (body instanceof ReadableStream) {
+                    var rs_ = readableOf(body);
+                    if (rs_.reader || rs_.disturbed) throw new TypeError("Response body object should not be disturbed or locked");
+                    return { bytes: null, stream: body, type: null };
+                }
                 return { bytes: utf8(USVString(String(body))), type: "text/plain;charset=UTF-8" };
             }
             var bodyState = new WeakMap();
             function bodyOf(self) { var s = bodyState.get(self); if (!s) throw new TypeError("Illegal invocation"); return s; }
+            function bodyIsUsed(s) { return s.used || (s.stream ? readableOf(s.stream).disturbed : false); }
             function consume(self) {
                 var s = bodyOf(self);
-                if (s.used) return Promise.reject(new TypeError("Body has already been consumed."));
+                if (bodyIsUsed(s)) return Promise.reject(new TypeError("Body has already been consumed."));
+                if (s.stream) {
+                    if (readableOf(s.stream).reader) return Promise.reject(new TypeError("Body is locked"));
+                    s.used = true;
+                    return readAllBytes(s.stream);
+                }
                 s.used = true;
                 return Promise.resolve(s.bytes || new Uint8Array(0));
             }
+            // A multipart/form-data body read back into the entries it was made from.
+            function parseMultipart(bytes, boundary) {
+                var data = bytesToBinary(bytes), delimiter = "--" + boundary, form = new FormData();
+                var pos = data.indexOf(delimiter);
+                if (pos < 0) throw new TypeError("Could not parse content as FormData.");
+                function unescapeName(text) { return text.replace(/%0A/g, "\n").replace(/%0D/g, "\r").replace(/%22/g, '"'); }
+                for (;;) {
+                    pos += delimiter.length;
+                    if (data.substr(pos, 2) === "--") break;
+                    if (data.substr(pos, 2) !== "\r\n") throw new TypeError("Could not parse content as FormData.");
+                    pos += 2;
+                    var headers, start;
+                    if (data.substr(pos, 2) === "\r\n") { headers = ""; start = pos + 2; }
+                    else {
+                        var end = data.indexOf("\r\n\r\n", pos);
+                        if (end < 0) throw new TypeError("Could not parse content as FormData.");
+                        headers = data.slice(pos, end); start = end + 4;
+                    }
+                    var next = data.indexOf("\r\n" + delimiter, start);
+                    if (next < 0) throw new TypeError("Could not parse content as FormData.");
+                    var content = data.slice(start, next);
+                    pos = next + 2;
+                    var name = null, filename = null, type = "";
+                    headers.split("\r\n").forEach(function (line) {
+                        var colon = line.indexOf(":");
+                        if (colon < 0) return;
+                        var key = line.slice(0, colon).trim().toLowerCase(), value = line.slice(colon + 1).trim();
+                        if (key === "content-disposition") {
+                            var n = /[;\s]name="([^"]*)"/i.exec(value), f = /[;\s]filename="([^"]*)"/i.exec(value);
+                            if (n) name = unescapeName(net.utf8Decode(n[1], false));
+                            if (f) filename = unescapeName(net.utf8Decode(f[1], false));
+                        } else if (key === "content-type") type = value;
+                    });
+                    if (name === null) throw new TypeError("Could not parse content as FormData.");
+                    if (filename !== null) form.append(name, new File([binaryToBytes(content)], filename, { type: type || "application/octet-stream" }));
+                    else form.append(name, net.utf8Decode(content, false));
+                }
+                return form;
+            }
             function mimeOf(self) { return self.headers.get("content-type") || ""; }
             function installBodyMixin(proto) {
-                readonly(proto, "bodyUsed", function () { return bodyOf(this).used; });
-                readonly(proto, "body", function () { return bodyOf(this).bytes === null ? null : undefined; });
+                readonly(proto, "bodyUsed", function () { return bodyIsUsed(bodyOf(this)); });
+                readonly(proto, "body", function () {
+                    var s = bodyOf(this);
+                    if (s.bytes === null && !s.stream) return null;
+                    if (!s.stream) s.stream = streamOfBytes(s.bytes);
+                    return s.stream;
+                });
                 method(proto, "text", function text() { return consume(this).then(utf8Decode); });
                 method(proto, "json", function json() { return consume(this).then(function (b) { return JSON.parse(utf8Decode(b)); }); });
                 method(proto, "arrayBuffer", function arrayBuffer() { return consume(this).then(toArrayBuffer); });
@@ -980,6 +1065,8 @@ internal static class WebPlatformScripts
                             parseUrlencoded(utf8Decode(b)).forEach(function (p) { form.append(p[0], p[1]); });
                             return form;
                         }
+                        var multipart = /^multipart\/form-data\s*;(?:[^;]*;)*\s*boundary\s*=\s*(?:"([^"]*)"|([^;\s"]+))/i.exec(type);
+                        if (multipart) return parseMultipart(b, multipart[1] !== undefined ? multipart[1] : multipart[2]);
                         throw new TypeError("Could not parse content as FormData.");
                     }.bind(this));
                 });
@@ -1008,7 +1095,7 @@ internal static class WebPlatformScripts
                     var other = requestState.get(input);
                     if (bodyOf(input).used) throw new TypeError("Cannot construct a Request with a Request object that has already been used.");
                     state = { url: other.url, method: other.method, headers: null, mode: other.mode, credentials: other.credentials, cache: other.cache, redirect: other.redirect, referrer: other.referrer, referrerPolicy: other.referrerPolicy, integrity: other.integrity, keepalive: other.keepalive, signal: other.signal };
-                    var inherited = { bytes: bodyOf(input).bytes, used: false };
+                    var inherited = { bytes: bodyOf(input).bytes, stream: bodyOf(input).stream || null, used: false };
                     var inheritedHeaders = input.headers;
                 } else {
                     var parsed;
@@ -1016,7 +1103,7 @@ internal static class WebPlatformScripts
                     if (parsed === null) throw new TypeError("Failed to construct 'Request': Failed to parse URL from " + input);
                     if (parsed.username !== "" || parsed.password !== "") throw new TypeError("Failed to construct 'Request': Request cannot be constructed from a URL that includes credentials: " + input);
                     state = { url: serialize(parsed, true), method: "GET", headers: null, mode: "cors", credentials: "same-origin", cache: "default", redirect: "follow", referrer: "about:client", referrerPolicy: "", integrity: "", keepalive: false, signal: null };
-                    inherited = { bytes: null, used: false };
+                    inherited = { bytes: null, stream: null, used: false };
                     inheritedHeaders = null;
                 }
                 if (init.method !== undefined) state.method = normalizeMethod(init.method);
@@ -1040,12 +1127,12 @@ internal static class WebPlatformScripts
                 if (init.body !== undefined && init.body !== null) {
                     if (state.method === "GET" || state.method === "HEAD") throw new TypeError("Failed to construct 'Request': Request with GET/HEAD method cannot have body.");
                     var extracted = extractBody(init.body);
-                    body = { bytes: extracted.bytes, used: false };
+                    body = { bytes: extracted.bytes, stream: extracted.stream || null, used: false };
                     if (extracted.type && !headersOf(headers).list.some(function (h) { return h[0] === "content-type"; })) appendHeader(headers, "Content-Type", extracted.type);
-                } else if (inherited.bytes !== null && (state.method === "GET" || state.method === "HEAD")) {
+                } else if ((inherited.bytes !== null || inherited.stream) && (state.method === "GET" || state.method === "HEAD")) {
                     throw new TypeError("Failed to construct 'Request': Request with GET/HEAD method cannot have body.");
                 }
-                if (input instanceof Request && init.body === undefined && inherited.bytes !== null) bodyOf(input).used = true;
+                if (input instanceof Request && init.body === undefined && (inherited.bytes !== null || inherited.stream)) bodyOf(input).used = true;
                 state.headers = headers;
                 requestState.set(this, state);
                 bodyState.set(this, body);
@@ -1068,8 +1155,13 @@ internal static class WebPlatformScripts
             readonly(Request.prototype, "signal", function () { var s = requestOf(this); return s.signal || (s.signal = new AbortController().signal); });
             readonly(Request.prototype, "duplex", function () { return "half"; });
             method(Request.prototype, "clone", function clone() {
-                if (bodyOf(this).used) throw new TypeError("Failed to execute 'clone' on 'Request': Request body is already used");
-                return new Request(this);
+                if (bodyIsUsed(bodyOf(this))) throw new TypeError("Failed to execute 'clone' on 'Request': Request body is already used");
+                var source = bodyOf(this), pair = source.stream ? teeReadable(source.stream) : null;
+                if (pair) source.stream = pair[0];
+                var copy = new Request(this);
+                source.used = false;
+                if (pair) bodyOf(copy).stream = pair[1];
+                return copy;
             });
             installBodyMixin(Request.prototype);
             tag(Request, "Request");
@@ -1089,15 +1181,15 @@ internal static class WebPlatformScripts
                 var headers = new Headers();
                 fillHeaders(headers, init.headers);
                 headersOf(headers).guard = "response";
-                var bytes = null;
+                var bytes = null, stream = null;
                 if (body !== undefined && body !== null) {
                     if (nullBodyStatus[status]) throw new TypeError("Failed to construct 'Response': Response with null body status cannot have body");
                     var extracted = extractBody(body);
-                    bytes = extracted.bytes;
+                    bytes = extracted.bytes; stream = extracted.stream || null;
                     if (extracted.type && !headersOf(headers).list.some(function (h) { return h[0] === "content-type"; })) appendHeader(headers, "Content-Type", extracted.type);
                 }
                 responseState.set(this, { type: "default", url: "", redirected: false, status: status, statusText: statusText, headers: headers });
-                bodyState.set(this, { bytes: bytes, used: false });
+                bodyState.set(this, { bytes: bytes, stream: stream, used: false });
             }
             function responseOf(self) { var s = responseState.get(self); if (!s) throw new TypeError("Illegal invocation"); return s; }
             readonly(Response.prototype, "type", function () { return responseOf(this).type; });
@@ -1109,10 +1201,12 @@ internal static class WebPlatformScripts
             readonly(Response.prototype, "headers", function () { return responseOf(this).headers; });
             method(Response.prototype, "clone", function clone() {
                 var s = responseOf(this);
-                if (bodyOf(this).used) throw new TypeError("Failed to execute 'clone' on 'Response': Response body is already used");
+                if (bodyIsUsed(bodyOf(this))) throw new TypeError("Failed to execute 'clone' on 'Response': Response body is already used");
                 var copy = Object.create(Response.prototype);
                 responseState.set(copy, { type: s.type, url: s.url, redirected: s.redirected, status: s.status, statusText: s.statusText, headers: makeHeaders(headerPairs(s.headers), "response") });
-                bodyState.set(copy, { bytes: bodyOf(this).bytes === null ? null : new Uint8Array(bodyOf(this).bytes), used: false });
+                var original = bodyOf(this), tee = original.stream ? teeReadable(original.stream) : null;
+                if (tee) original.stream = tee[0];
+                bodyState.set(copy, { bytes: original.bytes === null ? null : new Uint8Array(original.bytes), stream: tee ? tee[1] : null, used: false });
                 return copy;
             });
             method(Response, "error", function error() {
@@ -1147,12 +1241,45 @@ internal static class WebPlatformScripts
             tag(Response, "Response");
 
             // A Response made from the answer to a request.
-            function responseFrom(result, requestUrl) {
+            function responseFrom(result, requestUrl, type, exposed) {
                 var r = Object.create(Response.prototype);
-                var headers = makeHeaders(result[2], "immutable");
-                responseState.set(r, { type: "basic", url: result[4], redirected: result[5], status: result[0], statusText: result[1], headers: headers });
+                var list = result[2];
+                if (type === "cors") {
+                    // A cross-origin response shows the CORS-safelisted headers and those Access-Control-Expose-Headers names.
+                    var safe = ["cache-control", "content-language", "content-length", "content-type", "expires", "last-modified", "pragma"];
+                    list = list.filter(function (h) { var n = h[0].toLowerCase(); return safe.indexOf(n) >= 0 || exposed.indexOf(n) >= 0 || (exposed.indexOf("*") >= 0 && exposed.wildcard); });
+                }
+                if (type === "opaque") {
+                    responseState.set(r, { type: "opaque", url: "", redirected: false, status: 0, statusText: "", headers: makeHeaders([], "immutable") });
+                    bodyState.set(r, { bytes: null, used: false });
+                    return r;
+                }
+                var headers = makeHeaders(list, "immutable");
+                responseState.set(r, { type: type || "basic", url: result[4], redirected: result[5], status: result[0], statusText: result[1], headers: headers });
                 bodyState.set(r, { bytes: nullBodyStatus[result[0]] ? null : binaryToBytes(result[3]), used: false });
                 return r;
+            }
+
+            // CORS (the Fetch standard): the origin of an address, which requests need a preflight and the checks on the answers.
+            function addressOrigin(address) { try { var u = new URL(address); return /^https?:$/.test(u.protocol) ? u.origin : "null"; } catch (e) { return "null"; } }
+            function headerValue(list, name) {
+                var values = list.filter(function (h) { return h[0].toLowerCase() === name; }).map(function (h) { return h[1]; });
+                return values.length ? values.join(", ") : null;
+            }
+            function splitList(value) { return value === null ? [] : value.split(",").map(function (v) { return v.trim(); }).filter(function (v) { return v !== ""; }); }
+            var simpleContentTypes = /^(application\/x-www-form-urlencoded|multipart\/form-data|text\/plain)$/i;
+            function isSafelistedRequestHeader(name, value) {
+                name = name.toLowerCase();
+                if (value.length > 128) return false;
+                if (name === "accept") return !/[\u0000-\u0008\u000a-\u001f"():<>?@\[\\\]{}\u007f]/.test(value);
+                if (name === "accept-language" || name === "content-language") return /^[0-9A-Za-z *,\-.;=]*$/.test(value);
+                if (name === "content-type") return simpleContentTypes.test(value.split(";")[0].trim());
+                if (name === "range") return /^bytes=\d+-\d*$/.test(value);
+                return false;
+            }
+            function needsPreflight(method, pairs) {
+                if (method !== "GET" && method !== "HEAD" && method !== "POST") return true;
+                return pairs.some(function (h) { return !isSafelistedRequestHeader(h[0], h[1]); });
             }
 
             // blob: addresses the scripts made are answered here, without the network.
@@ -1194,8 +1321,106 @@ internal static class WebPlatformScripts
                         Promise.resolve().then(function () { finish(blobResult); });
                         return;
                     }
-                    var body = bodyOf(request).bytes;
-                    net.send(state.method, state.url, headerPairs(state.headers), body === null ? null : bytesToBinary(body), state.redirect === "follow", finish, referrerOf(state.referrer), state.referrerPolicy);
+                    var bodyRecord = bodyOf(request);
+                    if (bodyRecord.stream && bodyRecord.bytes === null) {
+                        // A stream given as an upload body is read to its end first (the transport takes whole bodies).
+                        if (readableOf(bodyRecord.stream).reader) { settled = true; reject(new TypeError("Failed to fetch: the body is locked")); return; }
+                        bodyRecord.used = true;
+                        readAllBytes(bodyRecord.stream).then(function (all) { bodyRecord.bytes = all; startFetch(all); }, function (e) { if (settled) return; settled = true; reject(e); });
+                        return;
+                    }
+                    startFetch(bodyRecord.bytes);
+                    function startFetch(body) {
+                    var page = addressOrigin(net.documentUrl());
+                    var referrer = referrerOf(state.referrer);
+                    var withCredentials = state.credentials === "include";
+                    var opaque = false, corsSeen = false;
+                    function fail(message) { if (settled) return; settled = true; reject(new TypeError(message === "network error" ? "Failed to fetch" : "Failed to fetch: " + message)); }
+                    function allowedOrigin(list) {
+                        var allow = headerValue(list, "access-control-allow-origin");
+                        if (allow === null) return "the response has no Access-Control-Allow-Origin header";
+                        if (allow === "*" && !withCredentials) return null;
+                        if (allow !== page) return "Access-Control-Allow-Origin does not match the origin";
+                        if (withCredentials && headerValue(list, "access-control-allow-credentials") !== "true") return "credentials need Access-Control-Allow-Credentials";
+                        return null;
+                    }
+                    var redirectStatuses = { 301: true, 302: true, 303: true, 307: true, 308: true };
+                    var bodyHeaders = /^(content-encoding|content-language|content-location|content-type|content-length)$/i;
+
+                    // One hop of the request: the address, its CORS checks (and preflight), and, for a redirect, the next hop.
+                    function perform(url, method, pairs, sendBody, hops, redirected) {
+                        var cross = /^https?:/i.test(url) && addressOrigin(url) !== page;
+                        if (cross && state.mode === "same-origin") { fail("same-origin mode forbids a cross-origin request"); return; }
+                        var useCors = cross && state.mode === "cors";
+                        if (cross && state.mode === "no-cors") opaque = true;
+                        if (useCors) corsSeen = true;
+
+                        function actual() {
+                            net.send(method, url, pairs, sendBody, false, function (result) {
+                                if (settled) return;
+                                if (result === null) { fail("network error"); return; }
+                                if (useCors) {
+                                    var problem = allowedOrigin(result[2]);
+                                    if (problem !== null) { fail(problem); return; }
+                                }
+                                var location = redirectStatuses[result[0]] ? headerValue(result[2], "location") : null;
+                                if (location !== null) {
+                                    if (state.redirect === "error") { fail("redirect mode is error"); return; }
+                                    if (state.redirect === "manual") {
+                                        settled = true;
+                                        var manual = Object.create(Response.prototype);
+                                        responseState.set(manual, { type: "opaqueredirect", url: url, redirected: redirected, status: 0, statusText: "", headers: makeHeaders([], "immutable") });
+                                        bodyState.set(manual, { bytes: null, used: false });
+                                        resolve(manual);
+                                        return;
+                                    }
+                                    if (hops >= 20) { fail("too many redirects"); return; }
+                                    var next;
+                                    try { next = new URL(location, url); } catch (e) { fail("invalid redirect location"); return; }
+                                    if (!/^https?:$/.test(next.protocol)) { fail("redirect to a non-http address"); return; }
+                                    if (addressOrigin(next.href) !== page && (next.username !== "" || next.password !== "")) { fail("redirect to an address with credentials"); return; }
+                                    var nextMethod = method, nextBody = sendBody, nextPairs = pairs;
+                                    var status = result[0];
+                                    if (((status === 301 || status === 302) && method === "POST") || (status === 303 && method !== "GET" && method !== "HEAD")) {
+                                        nextMethod = "GET"; nextBody = null;
+                                        nextPairs = pairs.filter(function (h) { return !bodyHeaders.test(h[0]); });
+                                    }
+                                    perform(next.href, nextMethod, nextPairs, nextBody, hops + 1, true);
+                                    return;
+                                }
+                                settled = true;
+                                var answer = [result[0], result[1], result[2], result[3], url, redirected];
+                                if (opaque) { resolve(responseFrom(answer, url, "opaque")); return; }
+                                if (!corsSeen) { resolve(responseFrom(answer, url, "basic")); return; }
+                                var exposed = splitList(headerValue(result[2], "access-control-expose-headers")).map(function (n) { return n.toLowerCase(); });
+                                exposed.wildcard = !withCredentials;
+                                resolve(responseFrom(answer, url, "cors", exposed));
+                            }, referrer, state.referrerPolicy);
+                        }
+
+                        if (!useCors || !needsPreflight(method, pairs)) { actual(); return; }
+                        var unsafe = [];
+                        pairs.forEach(function (h) { if (!isSafelistedRequestHeader(h[0], h[1]) && unsafe.indexOf(h[0].toLowerCase()) < 0) unsafe.push(h[0].toLowerCase()); });
+                        unsafe.sort();
+                        var preflight = [["accept", "*/*"], ["access-control-request-method", method]];
+                        if (unsafe.length) preflight.push(["access-control-request-headers", unsafe.join(",")]);
+                        net.send("OPTIONS", url, preflight, null, false, function (result) {
+                            if (settled) return;
+                            if (result === null) { fail("preflight network error"); return; }
+                            if (result[0] < 200 || result[0] > 299) { fail("preflight response is not ok"); return; }
+                            var problem = allowedOrigin(result[2]);
+                            if (problem !== null) { fail("preflight: " + problem); return; }
+                            var methods = splitList(headerValue(result[2], "access-control-allow-methods"));
+                            var headers = splitList(headerValue(result[2], "access-control-allow-headers")).map(function (n) { return n.toLowerCase(); });
+                            var star = !withCredentials;
+                            if (method !== "GET" && method !== "HEAD" && method !== "POST" && methods.indexOf(method) < 0 && !(star && methods.indexOf("*") >= 0)) { fail("preflight does not allow the method"); return; }
+                            for (var i = 0; i < unsafe.length; i++)
+                                if (headers.indexOf(unsafe[i]) < 0 && !(star && headers.indexOf("*") >= 0 && unsafe[i] !== "authorization")) { fail("preflight does not allow the header " + unsafe[i]); return; }
+                            actual();
+                        }, referrer, state.referrerPolicy);
+                    }
+                    perform(state.url, state.method, headerPairs(state.headers), body === null ? null : bytesToBinary(body), 0, false);
+                    }
                 });
             }
 
@@ -1314,7 +1539,7 @@ internal static class WebPlatformScripts
                 if (s.state !== 1 || s.sendFlag) throw new DOMException("The object's state must be OPENED.", "InvalidStateError");
                 name = String(name); value = normalizeValue(value);
                 if (!tokenPattern.test(name) || /[\u0000\r\n]/.test(value)) throw new DOMException("'" + name + "' is not a valid HTTP header field name or value.", "SyntaxError");
-                if (forbiddenRequestHeaders.test(name) || /^(proxy-|sec-)/i.test(name)) return;
+                if (isForbiddenRequestHeader(name, value)) return;
                 var lower = name.toLowerCase(), existing = s.headers.filter(function (h) { return h[0] === lower; })[0];
                 if (existing) existing[1] += ", " + value; else s.headers.push([lower, value]);
             });
@@ -1486,7 +1711,11 @@ internal static class WebPlatformScripts
 
             [["URL", URL], ["URLSearchParams", URLSearchParams], ["Headers", Headers], ["Request", Request], ["Response", Response], ["fetch", fetch],
                 ["XMLHttpRequest", XMLHttpRequest], ["XMLHttpRequestEventTarget", XMLHttpRequestEventTarget], ["XMLHttpRequestUpload", XMLHttpRequestUpload],
-                ["Blob", Blob], ["File", File], ["FormData", FormData], ["TextEncoder", TextEncoder], ["TextDecoder", TextDecoder], ["FileReader", FileReader]
+                ["Blob", Blob], ["File", File], ["FormData", FormData], ["TextEncoder", TextEncoder], ["TextDecoder", TextDecoder], ["FileReader", FileReader],
+                ["ReadableStream", ReadableStream], ["ReadableStreamDefaultReader", ReadableStreamDefaultReader], ["ReadableStreamDefaultController", ReadableStreamDefaultController],
+                ["WritableStream", WritableStream], ["WritableStreamDefaultWriter", WritableStreamDefaultWriter], ["WritableStreamDefaultController", WritableStreamDefaultController],
+                ["TransformStream", TransformStream], ["TransformStreamDefaultController", TransformStreamDefaultController], ["TextEncoderStream", TextEncoderStream],
+                ["TextDecoderStream", TextDecoderStream], ["CountQueuingStrategy", CountQueuingStrategy], ["ByteLengthQueuingStrategy", ByteLengthQueuingStrategy]
             ].forEach(function (pair) { define(pair[0], pair[1]); });
         })
         """;
