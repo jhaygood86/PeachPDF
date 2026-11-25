@@ -407,4 +407,55 @@ public class StreamsAndCorsTests
 
         Assert.Equal(["b:{\"n\":1} InvalidStateError", "aab YWI=", "InvalidCharacterError", "InvalidCharacterError", "SecurityError", "SyntaxError", "SecurityError", "1 Object boom why true 2", "false"], log);
     }
+
+    [Fact]
+    public async Task Popover_ShowsAndHides_WithEventsInvokersAndTheStack()
+    {
+        var (log, _) = await RunAsync("""
+            (async function () { try {
+                var a = document.createElement('div'), b = document.createElement('div'), button = document.createElement('button'), events = [];
+                a.popover = 'auto'; b.setAttribute('popover', 'auto'); a.id = 'pa'; b.id = 'pb'; button.type = 'button';
+                document.body.append(a, b, button);
+                ['beforetoggle', 'toggle'].forEach(function (t) { a.addEventListener(t, function (e) { events.push(t + ':' + e.oldState + '>' + e.newState); }); });
+                Log.info(a.popover + ' ' + document.createElement('div').popover + ' ' + a.matches(':popover-open'));
+                a.showPopover();
+                Log.info(a.matches(':popover-open') + ' ' + document.querySelectorAll(':popover-open').length);
+                b.showPopover();
+                Log.info(a.matches(':popover-open') + ' ' + b.matches(':popover-open'));
+                await new Promise(function (r) { setTimeout(r, 10); });
+                Log.info(events.join(' '));
+                button.setAttribute('popovertarget', 'pa');
+                Log.info(String(button.popoverTargetElement === a) + ' ' + button.popoverTargetAction);
+                button.click();
+                Log.info(a.matches(':popover-open') + ' ' + b.matches(':popover-open'));
+                a.hidePopover();
+                try { a.hidePopover(); } catch (e) { Log.info(e.name); }
+                try { document.createElement('p').showPopover(); } catch (e) { Log.info(e.name); }
+                Log.info('' + a.togglePopover() + ' ' + a.togglePopover());
+            } catch (e) { Log.info('threw ' + e + ' ' + e.stack); } })();
+            """);
+
+        Assert.Equal(["auto null false", "true 1", "false true", "beforetoggle:closed>open beforetoggle:open>closed toggle:closed>closed", "true toggle", "true false", "NotSupportedError", "true false"], log);
+    }
+
+    [Fact]
+    public async Task AppendingToBodyInnerHtml_FromAScriptAfterTheBodyEnded_Finishes()
+    {
+        var logger = new CollectingLogger();
+        var context = await TestDocument.NewContextAsync();
+        var options = new HtmlDocumentOptions
+        {
+            MediaType = MediaType.Screen,
+            PageWidthPoints = 400,
+            ScriptHost = new JintScriptHost(new JintScriptOptions { Logger = logger }),
+            MeasuringCanvasFactory = () => context.CreateCanvas(1, 1),
+        };
+        const string Html = "<!DOCTYPE html><html><title>t</title><style>.row { display: flex; } .v { writing-mode: vertical-rl; }</style><body><p>start</p></body>"
+            + "<script>var rows = ''; ['a', 'b'].forEach(function (m) { rows += \"<div class='row'><div class='v'><div></div></div></div>\"; }); document.body.innerHTML += rows;</script></body></html>";
+        var load = HtmlDocument.LoadAsync(Html, context, options).AsTask();
+        var finished = await Task.WhenAny(load, Task.Delay(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken));
+        Assert.Same(load, finished);
+        using var document = await load;
+        Assert.Empty(logger.Errors);
+    }
 }

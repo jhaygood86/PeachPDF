@@ -244,7 +244,7 @@ internal sealed partial class ScriptRuntime
 
     private bool IsRunnable(ScriptNode script)
     {
-        if (!script.IsConnected)
+        if (!script.IsConnected || script.ScriptAlreadyStarted)
             return false;
 
         var type = script.GetAttribute("type")?.Trim().ToLowerInvariant();

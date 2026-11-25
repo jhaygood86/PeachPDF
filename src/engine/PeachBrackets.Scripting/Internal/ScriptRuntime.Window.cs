@@ -162,6 +162,7 @@ internal sealed partial class ScriptRuntime
         Define("location", LocationObject());
         Define("navigator", NavigatorObject());
         Engine.Execute(ExtrasScripts.NavigatorHandlers);
+        InstallPopover();
         Define("console", ConsoleObject());
         if (_options.PrinceCompatibility)
         {

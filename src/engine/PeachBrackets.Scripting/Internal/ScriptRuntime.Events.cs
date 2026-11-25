@@ -219,7 +219,7 @@ internal sealed partial class ScriptRuntime
         ("TouchEvent", "UIEvent", "ctrlKey:f shiftKey:f altKey:f metaKey:f"), ("CompositionEvent", "UIEvent", "data:e"), ("TextEvent", "UIEvent", "data:e"),
         ("TransitionEvent", "Event", "propertyName:e elapsedTime:0 pseudoElement:e"), ("AnimationEvent", "Event", "animationName:e elapsedTime:0 pseudoElement:e"),
         ("ErrorEvent", "Event", "message:e filename:e lineno:0 colno:0 error:n"), ("MessageEvent", "Event", "data:n origin:e lastEventId:e source:n ports:a"),
-        ("ProgressEvent", "Event", "lengthComputable:f loaded:0 total:0"), ("HashChangeEvent", "Event", "oldURL:e newURL:e"),
+        ("ProgressEvent", "Event", "lengthComputable:f loaded:0 total:0"), ("ToggleEvent", "Event", "oldState:e newState:e source:n"), ("HashChangeEvent", "Event", "oldURL:e newURL:e"),
         ("PageTransitionEvent", "Event", "persisted:f"), ("StorageEvent", "Event", "key:n oldValue:n newValue:n url:e storageArea:n"),
         ("BeforeUnloadEvent", "Event", "returnValue:e"), ("DeviceMotionEvent", "Event", "acceleration:n accelerationIncludingGravity:n rotationRate:n interval:0"),
         ("DeviceOrientationEvent", "Event", "alpha:n beta:n gamma:n absolute:f"),

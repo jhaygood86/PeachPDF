@@ -452,7 +452,7 @@ internal sealed partial class ScriptRuntime
             DispatchEvent(Node(self), click);
             return JsValue.Undefined;
         });
-        foreach (var focus in new[] { "focus", "blur", "scrollIntoView", "scrollTo", "scroll", "select" })
+        foreach (var focus in new[] { "scrollIntoView", "scrollTo", "scroll", "select" })
             Js.Method(Engine, p, focus, 0, (_, _) => JsValue.Undefined);
 
         foreach (var (property, attribute) in TextAttributes)

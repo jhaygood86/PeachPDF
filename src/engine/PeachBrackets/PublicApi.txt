@@ -965,6 +965,8 @@ PeachBrackets.ScriptHosting.ScriptNode : sealed class
   property Boolean IsCDataSection { get; }
   property Boolean IsConnected { get; }
   property Boolean IsLeaf { get; }
+  property Boolean IsPopoverOpen { get; set; }
+  property Boolean ScriptAlreadyStarted { get; set; }
   property IReadOnlyList<ScriptNode> ChildElements { get; }
   property IReadOnlyList<ScriptNode> Children { get; }
   property IReadOnlyList<String> AttributeNames { get; }

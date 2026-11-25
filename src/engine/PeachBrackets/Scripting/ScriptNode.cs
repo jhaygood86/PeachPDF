@@ -198,6 +198,13 @@ public sealed class ScriptNode
     /// <summary>The names of the element's attributes, in the order they were set.</summary>
     public IReadOnlyList<string> AttributeNames => Box.HtmlTag?.Attributes is { } attributes ? [.. attributes.Keys] : [];
 
+    /// <summary>Whether the element is a popover that is showing, which <c>:popover-open</c> matches. A script host keeps it up to date.</summary>
+    public bool IsPopoverOpen
+    {
+        get => Box.PopoverOpen;
+        set => Box.PopoverOpen = value;
+    }
+
     /// <summary>The value of an attribute, or null when the element has none by that name. The name is matched without regard to case.</summary>
     /// <param name="name">the attribute name</param>
     /// <returns>the value, or null</returns>
@@ -519,7 +526,7 @@ public sealed class ScriptNode
         };
 
         if (chain.Length == 0)
-            return HtmlParser.ParseDocument(markup, out _, null, document: false, scripting: true);
+            return MarkScriptsStarted(HtmlParser.ParseDocument(markup, out _, null, document: false, scripting: true));
 
         var wrapped = HtmlParser.ParseDocument(
             string.Concat(chain.Select(t => $"<{t}>")) + markup, out _, null, document: false, scripting: true);
@@ -528,7 +535,27 @@ public sealed class ScriptNode
         foreach (var _ in chain)
             holder = holder.Boxes.FirstOrDefault(b => b.HtmlTag is not null) ?? holder;
 
-        return holder;
+        return MarkScriptsStarted(holder);
+    }
+
+    // The fragment parsing algorithm sets "already started" on the scripts it makes, so markup given to innerHTML never runs a script.
+    private static CssBox MarkScriptsStarted(CssBox root)
+    {
+        foreach (var box in root.Boxes)
+        {
+            if (box.HtmlTag is { } tag && tag.Name.Equals("script", StringComparison.OrdinalIgnoreCase))
+                box.ScriptStarted = true;
+            MarkScriptsStarted(box);
+        }
+
+        return root;
+    }
+
+    /// <summary>Whether a <c>script</c> element has run or was made by the fragment parser, so that it does not run (again).</summary>
+    public bool ScriptAlreadyStarted
+    {
+        get => Box.ScriptStarted;
+        set => Box.ScriptStarted = value;
     }
 
     /// <summary>The HTML of the node itself and its children.</summary>

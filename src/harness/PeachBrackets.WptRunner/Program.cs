@@ -94,7 +94,7 @@ namespace PeachBrackets.WptRunner
             var commit = PinnedCommit();
             var cache = o.GetValueOrDefault("cache") ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".peachbrackets-wpt");
             var dest = Path.Combine(cache, "wpt", commit);
-            string[] wanted = ["css/", "fonts/", "images/", "common/", "resources/", "dom/", "html/resources/", "interfaces/", "xhr/", "fetch/", "url/", "FileAPI/", "webidl/", "domparsing/", "html/canvas/", "html/semantics/embedded-content/", "html/dom/", "streams/", "html/webappapis/", "html/infrastructure/", "webmessaging/", "encoding/"];
+            string[] wanted = ["css/", "fonts/", "images/", "common/", "resources/", "dom/", "html/resources/", "interfaces/", "xhr/", "fetch/", "url/", "FileAPI/", "webidl/", "domparsing/", "html/canvas/", "html/semantics/", "html/dom/", "streams/", "html/webappapis/", "html/infrastructure/", "webmessaging/", "encoding/"];
 
             // The marker names what the checkout holds, so a checkout fetched before a directory was added is fetched again.
             var marker = string.Join(',', wanted);
@@ -261,7 +261,15 @@ namespace PeachBrackets.WptRunner
 
         private static async Task<TestResult> EvaluateWithTimeoutAsync(IWptEvaluator evaluator, string path, TimeSpan timeout)
         {
-            var work = Task.Run(() => evaluator.EvaluateAsync(path));
+            // A page that recurses deeply (up to the engine's depth limit) needs more stack than a pool thread has, so each test runs on a thread of its own.
+            var completion = new TaskCompletionSource<TestResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var thread = new Thread(() =>
+            {
+                try { completion.SetResult(evaluator.EvaluateAsync(path).GetAwaiter().GetResult()); }
+                catch (Exception ex) { completion.SetException(ex); }
+            }, 128 * 1024 * 1024) { IsBackground = true };
+            thread.Start();
+            var work = completion.Task;
             if (await Task.WhenAny(work, Task.Delay(timeout)) == work)
                 return await work;
             return new TestResult(Outcome.Fail, $"error: timeout after {timeout.TotalSeconds:0}s");
