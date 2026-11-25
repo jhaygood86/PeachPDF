@@ -18,6 +18,12 @@ public static class ScriptLogEvents
 
     /// <summary>A <c>Log.data(name, value)</c> call; the state is a <see cref="ScriptDataEntry"/>.</summary>
     public static EventId Data { get; } = new(10, "ScriptData");
+
+    /// <summary>
+    /// The scripts stopped running. The text says what a page that is still waiting was waiting for: timers left past the virtual time limit, requests and
+    /// images not answered, and the last events delivered. Information when work is left, debug otherwise.
+    /// </summary>
+    public static EventId PendingWork { get; } = new(11, "ScriptPendingWork");
 }
 
 /// <summary>

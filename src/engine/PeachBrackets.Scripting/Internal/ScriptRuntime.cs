@@ -192,6 +192,7 @@ internal sealed partial class ScriptRuntime
         RunMicrotasks();
 
         await PlayTimersAsync();
+        ReportPendingWork();
     }
 
     private async ValueTask RunPendingScriptsAsync(bool deferred)

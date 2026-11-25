@@ -35,6 +35,7 @@ PeachBrackets.Scripting.ScriptDataEntry : sealed class
 PeachBrackets.Scripting.ScriptLogEvents : static class
   property static EventId Data { get; }
   property static EventId Message { get; }
+  property static EventId PendingWork { get; }
   property static EventId ScriptFailed { get; }
   property static EventId ScriptLoadFailed { get; }
 PeachBrackets.Scripting.UserScript : sealed class

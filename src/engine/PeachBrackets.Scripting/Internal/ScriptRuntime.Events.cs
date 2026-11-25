@@ -270,11 +270,37 @@ internal sealed partial class ScriptRuntime
 
     /// <summary>Sends an event along its path: the capturing listeners from the outside in, the target's, and the bubbling ones from the inside out.</summary>
     /// <returns>false when a listener cancelled it</returns>
+    // The last events delivered, newest last, for the diagnostic a run ends with.
+    private readonly Queue<string> _recentEvents = new();
+
+    private string DescribeTarget(TargetObject target) => target switch
+    {
+        WindowObject => "window",
+        NodeObject { Node.Kind: ScriptNodeKind.Document } => "document",
+        NodeObject { Node: var node } => (node.TagName ?? node.Kind.ToString().ToLowerInvariant()) + (node.Id.Length > 0 ? "#" + node.Id : string.Empty),
+        _ => "target",
+    };
+
     public bool DispatchEvent(TargetObject target, EventObject ev)
     {
+        _recentEvents.Enqueue(ev.EventType + "@" + DescribeTarget(target));
+        while (_recentEvents.Count > 8)
+            _recentEvents.Dequeue();
+
         ev.Target = target;
         ev.Dispatching = true;
         var path = PathOf(target);
+
+        // A click on (or, when it bubbles, inside) a checkbox is its activation: the box is toggled before the listeners run and put back if one cancels it.
+        var activation = ev.EventType == "click" && IsMouseEvent(ev) ? ActivationTarget(path, ev.Bubbles) : null;
+        var toggled = activation is { Node: var box } && string.Equals(box.TagName, "input", StringComparison.OrdinalIgnoreCase)
+            && string.Equals(box.GetAttribute("type"), "checkbox", StringComparison.OrdinalIgnoreCase);
+        var wasChecked = toggled && activation!.Node.HasAttribute("checked");
+        if (toggled)
+        {
+            if (wasChecked) activation!.Node.RemoveAttribute("checked");
+            else activation!.Node.SetAttribute("checked", string.Empty);
+        }
 
         ev.Phase = 1;
         for (var i = path.Count - 1; i >= 1 && !ev.PropagationStopped; i--)
@@ -296,7 +322,52 @@ internal sealed partial class ScriptRuntime
         ev.Phase = 0;
         ev.Dispatching = false;
         ev.CurrentTarget = null;
+        if (toggled)
+        {
+            if (ev.DefaultPrevented)
+            {
+                if (wasChecked) activation!.Node.SetAttribute("checked", string.Empty);
+                else activation!.Node.RemoveAttribute("checked");
+            }
+            else
+            {
+                FireEvent(activation!, "input", bubbles: true, cancelable: false);
+                FireEvent(activation!, "change", bubbles: true, cancelable: false);
+            }
+        }
+
         return !ev.DefaultPrevented;
+    }
+
+    private bool IsMouseEvent(EventObject ev)
+    {
+        for (var prototype = ev.Prototype; prototype is not null; prototype = prototype.Prototype)
+        {
+            if (ReferenceEquals(prototype, _eventPrototypes["MouseEvent"]))
+                return true;
+        }
+
+        return false;
+    }
+
+    // The first node on the way out from the target with an activation behavior (a link, a button, a form control); only the target when the event does not bubble.
+    private static NodeObject? ActivationTarget(List<TargetObject> path, bool bubbles)
+    {
+        foreach (var candidate in path)
+        {
+            if (candidate is NodeObject { Node: { Kind: ScriptNodeKind.Element } node } element)
+            {
+                var tag = node.TagName?.ToLowerInvariant();
+                var enabled = !node.HasAttribute("disabled");
+                if (enabled && (tag is "button" or "select" or "textarea" or "summary" or "label" || (tag == "input" && !string.Equals(node.GetAttribute("type"), "hidden", StringComparison.OrdinalIgnoreCase)) || (tag is "a" or "area" && node.HasAttribute("href"))))
+                    return element;
+            }
+
+            if (!bubbles)
+                break;
+        }
+
+        return null;
     }
 
     // capturing: true runs the capture listeners, false the others, null (at the target) all of them.

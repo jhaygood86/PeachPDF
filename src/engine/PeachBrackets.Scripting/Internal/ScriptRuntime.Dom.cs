@@ -440,7 +440,19 @@ internal sealed partial class ScriptRuntime
         Js.Method(Engine, p, "insertAdjacentHTML", 2, (self, args) => InsertAdjacent(Sn(self), Js.AsText(Js.Arg(args, 0)), Sn(self).OwnerDocument.CreateFragment(Js.AsText(Js.Arg(args, 1))), JsValue.Undefined, markup: true));
         Js.Method(Engine, p, "insertAdjacentElement", 2, (self, args) => InsertAdjacent(Sn(self), Js.AsText(Js.Arg(args, 0)), NodeArg(args, 1), Js.Arg(args, 1)));
         Js.Method(Engine, p, "insertAdjacentText", 2, (self, args) => InsertAdjacent(Sn(self), Js.AsText(Js.Arg(args, 0)), Sn(self).OwnerDocument.CreateTextNode(Js.AsText(Js.Arg(args, 1))), JsValue.Undefined));
-        foreach (var focus in new[] { "focus", "blur", "click", "scrollIntoView", "scrollTo", "scroll", "select" })
+        // click() sends the click a user would: a bubbling, cancelable mouse event, unless the element is a disabled control.
+        Js.Method(Engine, p, "click", 0, (self, _) =>
+        {
+            var node = Sn(self);
+            if (node.HasAttribute("disabled") && node.TagName?.ToLowerInvariant() is "button" or "input" or "select" or "textarea")
+                return JsValue.Undefined;
+
+            var click = (EventObject)Engine.Evaluate("(function () { return new MouseEvent('click', { bubbles: true, cancelable: true, composed: true }); })").Call(JsValue.Undefined, []);
+            click.IsTrusted = false;
+            DispatchEvent(Node(self), click);
+            return JsValue.Undefined;
+        });
+        foreach (var focus in new[] { "focus", "blur", "scrollIntoView", "scrollTo", "scroll", "select" })
             Js.Method(Engine, p, focus, 0, (_, _) => JsValue.Undefined);
 
         foreach (var (property, attribute) in TextAttributes)

@@ -94,6 +94,7 @@ internal sealed partial class TestharnessEvaluator(string wptRoot) : IWptEvaluat
 
         var lines = new List<string>();
         var errors = new List<string>();
+        var diagnostics = new List<string>();
         var context = new RasterRenderContext { DocumentAddress = pageAddress, ResourceLoader = uri => LoadAsync(server, uri) };
         var options = new HtmlDocumentOptions
         {
@@ -107,7 +108,7 @@ internal sealed partial class TestharnessEvaluator(string wptRoot) : IWptEvaluat
                 MemoryLimitBytes = 1L << 30,
                 MaxVirtualTime = TimeSpan.FromSeconds(60),
                 MaxCallbacks = 100_000,
-                Logger = new CollectingLogger(lines, errors),
+                Logger = new CollectingLogger(lines, errors, diagnostics),
             }),
             MeasuringCanvasFactory = () => context.CreateCanvas(1, 1),
             ScriptNetwork = new ServerNetwork(server),
@@ -126,11 +127,11 @@ internal sealed partial class TestharnessEvaluator(string wptRoot) : IWptEvaluat
                 return new TestResult(Outcome.Fail, "error: no result: " + Trim(why));
             }
 
-            return Interpret(wptPath, lines[^1], errors);
+            return Interpret(wptPath, lines[^1], errors, diagnostics);
         }
     }
 
-    private static TestResult Interpret(string wptPath, string json, List<string> errors)
+    private static TestResult Interpret(string wptPath, string json, List<string> errors, List<string> diagnostics)
     {
         using var doc = JsonDocument.Parse(json);
         var root = doc.RootElement;
@@ -150,6 +151,9 @@ internal sealed partial class TestharnessEvaluator(string wptRoot) : IWptEvaluat
 
             var name = t.GetProperty("name").GetString();
             var message = t.TryGetProperty("message", out var m) && m.ValueKind == JsonValueKind.String ? m.GetString() : null;
+            // A test that timed out was waiting for something: what the scripts were left waiting for says what.
+            if (status == 2 && diagnostics.Count > 0)
+                message += " [" + diagnostics[^1] + "]";
             if (Environment.GetEnvironmentVariable("PEACHBRACKETS_WPT_SUBTESTS") is { Length: > 0 } log)
                 lock (SubtestLogLock) File.AppendAllText(log, $"{wptPath}\t{status}\t{name?.ReplaceLineEndings(" ")}\t{message?.ReplaceLineEndings(" ")}\n");
             firstFailure ??= $"{SubtestStatuses[Math.Clamp(status, 0, SubtestStatuses.Length - 1)]}: {name}: {message}";
@@ -160,6 +164,8 @@ internal sealed partial class TestharnessEvaluator(string wptRoot) : IWptEvaluat
         {
             var message = root.TryGetProperty("message", out var m) && m.ValueKind == JsonValueKind.String ? m.GetString() : null;
             var reason = $"harness {HarnessStatuses[Math.Clamp(harness, 0, HarnessStatuses.Length - 1)]}: {message ?? (errors.Count > 0 ? errors[0] : "")}";
+            if (harness == 2 && diagnostics.Count > 0)
+                reason += " [" + diagnostics[^1] + "]";
             return new TestResult(Outcome.Fail, Trim(reason), subtests);
         }
 
@@ -171,7 +177,7 @@ internal sealed partial class TestharnessEvaluator(string wptRoot) : IWptEvaluat
     }
 
     // Reads the harness's result line out of what the scripts log, and keeps the script errors for the reason a test gives when it never reports.
-    private sealed class CollectingLogger(List<string> lines, List<string> errors) : ILogger
+    private sealed class CollectingLogger(List<string> lines, List<string> errors, List<string> diagnostics) : ILogger
     {
         public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
 
@@ -182,6 +188,8 @@ internal sealed partial class TestharnessEvaluator(string wptRoot) : IWptEvaluat
             var text = formatter(state, exception);
             if (eventId == ScriptLogEvents.ScriptFailed || eventId == ScriptLogEvents.ScriptLoadFailed)
                 lock (errors) errors.Add(text);
+            else if (eventId == ScriptLogEvents.PendingWork)
+                lock (diagnostics) diagnostics.Add(text);
             else if (text.StartsWith(ResultPrefix, StringComparison.Ordinal))
                 lock (lines) lines.Add(text[ResultPrefix.Length..]);
         }

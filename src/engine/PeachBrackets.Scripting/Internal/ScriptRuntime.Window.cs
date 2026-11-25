@@ -86,6 +86,29 @@ internal sealed partial class ScriptRuntime
         }
     }
 
+    /// <summary>Says what the page was left waiting for when the scripts stopped, or null when nothing was; see <see cref="ScriptLogEvents.PendingWork"/>.</summary>
+    private void ReportPendingWork()
+    {
+        var parts = new List<string>();
+        var limit = _options.MaxVirtualTime.TotalMilliseconds;
+        if (_timers.Count > 0)
+        {
+            var next = _timers.OrderBy(t => t.Due).ThenBy(t => t.Order).First();
+            var names = _timers.OrderBy(t => t.Due).Take(3).Select(t => t.IsFrame ? "animation frame" : (t.Callback.IsObject() && t.Callback.AsObject().Get("name") is { } n && n.IsString() && n.AsString().Length > 0 ? n.AsString() : "anonymous")).ToList();
+            var why = next.Due > limit ? $", past the {limit:0} ms virtual limit" : _callbacks >= _options.MaxCallbacks ? ", callback limit reached" : string.Empty;
+            parts.Add($"{_timers.Count} timers waiting (next at {next.Due - NowMs:0} ms{why}: {string.Join(", ", names)})");
+        }
+
+        if (_pendingRequests.Count > 0)
+            parts.Add($"{_pendingRequests.Count} requests unanswered ({string.Join(", ", _pendingRequests.Take(3).Select(r => r.Url.AbsoluteUri))})");
+        if (_pendingImages.Count > 0)
+            parts.Add($"{_pendingImages.Count} images not loaded");
+
+        var recent = _recentEvents.Count == 0 ? "no events" : string.Join(", ", _recentEvents);
+        var text = (parts.Count == 0 ? "nothing scheduled" : string.Join("; ", parts)) + "; last events: " + recent;
+        WriteLog(parts.Count == 0 ? LogLevel.Debug : LogLevel.Information, ScriptLogEvents.PendingWork, text);
+    }
+
     private WindowObject InstallWindow()
     {
         var global = Engine.Global;
