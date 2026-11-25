@@ -458,4 +458,40 @@ public class StreamsAndCorsTests
         using var document = await load;
         Assert.Empty(logger.Errors);
     }
+
+    [Fact]
+    public async Task ConstraintValidation_ReportsValidityStateFlags_AndFiresInvalid()
+    {
+        var (log, _) = await RunAsync("""
+            (async function () { try {
+                var form = document.createElement('form'), i = document.createElement('input'), n = document.createElement('input'), t = document.createElement('textarea'), invalid = [];
+                form.append(i, n, t); document.body.append(form);
+                i.required = true;
+                Log.info(i.validity.valueMissing + ' ' + i.validity.valid + ' ' + i.willValidate + ' ' + (i.form === form) + ' ' + (form.elements.length));
+                i.addEventListener('invalid', function (e) { invalid.push(e.isTrusted + ':' + e.cancelable); });
+                Log.info(i.checkValidity() + ' ' + form.checkValidity() + ' ' + invalid.join());
+                i.value = 'x'; i.setCustomValidity('bad');
+                Log.info(i.validity.customError + ' ' + i.validationMessage + ' ' + i.validity.valid);
+                i.setCustomValidity('');
+                n.type = 'number'; n.min = '5'; n.max = '10'; n.step = '2';
+                n.value = '4'; var a = n.validity.rangeUnderflow;
+                n.value = '11'; var b = n.validity.rangeOverflow;
+                n.value = '6'; var c = n.validity.valid;
+                n.value = '7'; var d = n.validity.stepMismatch;
+                Log.info([a, b, c, d, n.valueAsNumber].join());
+                n.stepUp(); Log.info(n.value);
+                n.type = 'email'; n.value = 'nope'; var e1 = n.validity.typeMismatch; n.value = 'a@b.example'; Log.info(e1 + ' ' + n.validity.typeMismatch);
+                n.removeAttribute('min'); n.type = 'text'; n.pattern = '[a-z]+'; n.value = 'abc1'; Log.info(n.validity.patternMismatch + ' ' + (n.willValidate));
+                t.value = 'hello'; t.setSelectionRange(1, 3); Log.info(t.selectionStart + ',' + t.selectionEnd + ' ' + t.value.slice(t.selectionStart, t.selectionEnd));
+                t.setRangeText('XY', 1, 3, 'end'); Log.info(t.value + ' ' + t.selectionStart);
+                var fired = 0; t.addEventListener('select', function (ev) { fired += ev.isTrusted ? 1 : 100; });
+                t.select(); t.select();
+                await new Promise(function (r) { setTimeout(r, 10); });
+                Log.info(String(fired));
+                var dis = document.createElement('input'); dis.required = true; dis.disabled = true; Log.info(dis.willValidate + ' ' + dis.validity.valueMissing + ' ' + dis.checkValidity());
+            } catch (e) { Log.info('threw ' + e + ' ' + e.stack); } })();
+            """);
+
+        Assert.Equal(["true false true true 3", "false false true:true,true:true", "true bad false", "true,true,false,false,7", "9", "true false", "true true", "1,3 el", "hXYlo 3", "2", "false false true"], log);
+    }
 }

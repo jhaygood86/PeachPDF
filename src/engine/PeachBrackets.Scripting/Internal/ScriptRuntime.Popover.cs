@@ -14,6 +14,13 @@ internal sealed partial class ScriptRuntime
             return JsValue.Undefined;
         });
         Engine.Invoke(Engine.Evaluate(PopoverScripts.Focus), JsValue.Undefined, [Engine.Global]);
+        Engine.Invoke(Engine.Evaluate(FormScripts.Source), JsValue.Undefined, [native, Engine.Global]);
+        Js.Method(Engine, native, "fire", 4, (_, args) =>
+        {
+            var ev = CreateEvent(Js.AsText(Js.Arg(args, 1)), Jint.Runtime.TypeConverter.ToBoolean(Js.Arg(args, 2)), Jint.Runtime.TypeConverter.ToBoolean(Js.Arg(args, 3)));
+            ev.IsTrusted = true;
+            return Js.Bool(DispatchEvent((TargetObject)Js.Arg(args, 0), ev));
+        });
         Engine.Invoke(Engine.Evaluate(PopoverScripts.Source), JsValue.Undefined, [native, Engine.Global]);
     }
 }
