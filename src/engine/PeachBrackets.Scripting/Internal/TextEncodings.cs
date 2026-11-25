@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Threading;
 using System.Text;
 
 namespace PeachBrackets.Scripting.Internal;
@@ -48,8 +50,11 @@ internal static class TextEncodings
         ["x-mac-cyrillic"] = [(0xA2, 'Ґ'), (0xB6, 'ґ'), (0xFF, '€')],
     };
 
-    private static readonly Dictionary<int, IChunkDecoder> Decoders = [];
+    // Documents are rendered on several threads, so everything shared here is safe to use from all of them: the live decoders in a concurrent
+    // dictionary (each decoder is only ever used by the runtime that made it), the tables and the provider registration under a lock.
+    private static readonly ConcurrentDictionary<int, IChunkDecoder> Decoders = new();
     private static readonly Dictionary<string, char[]> Tables = new(StringComparer.Ordinal);
+    private static readonly object Gate = new();
     private static int _nextId;
     private static bool _registered;
 
@@ -77,7 +82,7 @@ internal static class TextEncodings
         if (decoder is null)
             return -1;
 
-        var id = ++_nextId;
+        var id = Interlocked.Increment(ref _nextId);
         Decoders[id] = decoder;
         return id;
     }
@@ -90,7 +95,7 @@ internal static class TextEncodings
 
         var text = decoder.Decode(bytes, flush);
         if (flush || text is null)
-            Decoders.Remove(id);
+            Decoders.TryRemove(id, out _);
 
         return text;
     }
@@ -111,22 +116,28 @@ internal static class TextEncodings
 
     private static void EnsureProvider()
     {
-        if (_registered)
-            return;
+        lock (Gate)
+        {
+            if (_registered)
+                return;
 
-        Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
-        _registered = true;
+            Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+            _registered = true;
+        }
     }
 
     private static char[] TableFor(string name)
     {
-        if (Tables.TryGetValue(name, out var table))
-            return table;
+        lock (Gate)
+        {
+            if (Tables.TryGetValue(name, out var cached))
+                return cached;
+        }
 
         EnsureProvider();
         var encoding = Encoding.GetEncoding(CodePages[name]);
         var undefined = Undefined.TryGetValue(name, out var list) ? new HashSet<int>(list) : [];
-        table = new char[256];
+        var table = new char[256];
         for (var b = 0; b < 256; b++)
         {
             if (undefined.Contains(b))
@@ -149,7 +160,9 @@ internal static class TextEncodings
         foreach (var (b, c) in Overrides.GetValueOrDefault(name, []))
             table[b] = c;
 
-        Tables[name] = table;
+        lock (Gate)
+            Tables[name] = table;
+
         return table;
     }
 
@@ -201,7 +214,9 @@ internal static class TextEncodings
                 var count = decoder.GetChars(bytes, 0, bytes.Length, chars, 0, flush);
                 return new string(chars, 0, count);
             }
-            catch (DecoderFallbackException)
+            // A code page decoder can throw more than the fallback exception on malformed input (an IndexOutOfRangeException on the Linux ICU-backed ones),
+            // and a page must never be able to take the host down with its bytes.
+            catch (Exception ex) when (ex is not OutOfMemoryException)
             {
                 return null;
             }

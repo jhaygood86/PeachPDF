@@ -18,8 +18,7 @@ public class PdfScriptObjectTests
         using var stream = new MemoryStream();
         document.Save(stream);
         // A long hex string is wrapped over several lines in the file; its digits are what is compared.
-        return Regex.Replace(Encoding.Latin1.GetString(stream.ToArray()), @"(?<=[0-9A-Fa-f])
-?
+        return Regex.Replace(Encoding.Latin1.GetString(stream.ToArray()), @"(?<=[0-9A-Fa-f])?
 (?=[0-9A-Fa-f])", string.Empty);
     }
 
