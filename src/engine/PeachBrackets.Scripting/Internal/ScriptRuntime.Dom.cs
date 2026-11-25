@@ -351,8 +351,17 @@ internal sealed partial class ScriptRuntime
             return node.Style ??= new StyleObject(Engine, StylePrototype, node.Node);
         }, (self, value) => new StyleObject(Engine, StylePrototype, Sn(self)).CssText = Js.AsText(value));
 
-        Js.Accessor(Engine, p, "innerHTML", self => Js.Str(Sn(self).InnerHtml), (self, value) => Sn(self).InnerHtml = Js.IsNullish(value) ? string.Empty : Js.AsText(value));
-        Js.Accessor(Engine, p, "outerHTML", self => Js.Str(Sn(self).OuterHtml));
+        Js.Accessor(Engine, p, "innerHTML", self => Js.Str(Sn(self).InnerHtml), (self, value) => Sn(self).InnerHtml = value.IsNull() ? string.Empty : Js.AsText(value));
+        Js.Accessor(Engine, p, "outerHTML", self => Js.Str(Sn(self).OuterHtml), (self, value) =>
+        {
+            var element = Sn(self);
+            var parent = element.Parent;
+            if (parent is null)
+                return;
+            if (parent.Kind == ScriptNodeKind.Document)
+                throw DomError("NoModificationAllowedError", "The element's parent is a document.");
+            parent.ReplaceChild(element.OwnerDocument.CreateFragment(value.IsNull() ? string.Empty : Js.AsText(value)), element);
+        });
         Js.Accessor(Engine, p, "innerText", self => Js.Str(Sn(self).TextContent), (self, value) => Sn(self).TextContent = Js.AsText(value));
         Js.Accessor(Engine, p, "previousElementSibling", self => WrapOrNull(ElementSibling(Sn(self), -1)));
         Js.Accessor(Engine, p, "nextElementSibling", self => WrapOrNull(ElementSibling(Sn(self), 1)));
@@ -415,7 +424,7 @@ internal sealed partial class ScriptRuntime
             Sn(self).Parent?.ReplaceChild(ToNode(Sn(self).OwnerDocument, args), Sn(self));
             return JsValue.Undefined;
         });
-        Js.Method(Engine, p, "insertAdjacentHTML", 2, (self, args) => InsertAdjacent(Sn(self), Js.AsText(Js.Arg(args, 0)), Sn(self).OwnerDocument.CreateFragment(Js.AsText(Js.Arg(args, 1))), JsValue.Undefined));
+        Js.Method(Engine, p, "insertAdjacentHTML", 2, (self, args) => InsertAdjacent(Sn(self), Js.AsText(Js.Arg(args, 0)), Sn(self).OwnerDocument.CreateFragment(Js.AsText(Js.Arg(args, 1))), JsValue.Undefined, markup: true));
         Js.Method(Engine, p, "insertAdjacentElement", 2, (self, args) => InsertAdjacent(Sn(self), Js.AsText(Js.Arg(args, 0)), NodeArg(args, 1), Js.Arg(args, 1)));
         Js.Method(Engine, p, "insertAdjacentText", 2, (self, args) => InsertAdjacent(Sn(self), Js.AsText(Js.Arg(args, 0)), Sn(self).OwnerDocument.CreateTextNode(Js.AsText(Js.Arg(args, 1))), JsValue.Undefined));
         foreach (var focus in new[] { "focus", "blur", "click", "scrollIntoView", "scrollTo", "scroll", "select" })
@@ -488,8 +497,11 @@ internal sealed partial class ScriptRuntime
         return index >= 0 && index < siblings.Count ? siblings[index] : null;
     }
 
-    private JsValue InsertAdjacent(ScriptNode element, string where, ScriptNode node, JsValue result)
+    private JsValue InsertAdjacent(ScriptNode element, string where, ScriptNode node, JsValue result, bool markup = false)
     {
+        if (markup && where.ToLowerInvariant() is "beforebegin" or "afterend" && (element.Parent is null || element.Parent.Kind == ScriptNodeKind.Document))
+            throw DomError("NoModificationAllowedError", "The element has no parent that can take the markup.");
+
         switch (where.ToLowerInvariant())
         {
             case "beforebegin": element.Parent?.InsertBefore(node, element); break;
@@ -527,6 +539,7 @@ internal sealed partial class ScriptRuntime
         Js.Accessor(Engine, p, "URL", self => Js.Str(D(self).BaseUri?.AbsoluteUri ?? "about:blank"));
         Js.Accessor(Engine, p, "documentURI", self => Js.Str(D(self).BaseUri?.AbsoluteUri ?? "about:blank"));
         Js.Accessor(Engine, p, "baseURI", self => Js.Str(BaseOf(Sn(self).OwnerDocument)));
+        Js.Accessor(Engine, p, "location", self => ReferenceEquals(D(self), Document) ? Engine.Global.Get("location") : _windows.TryGetValue(D(self), out var frame) && frame is ObjectInstance frameWindow ? frameWindow.Get("location") : JsValue.Null);
         Js.Accessor(Engine, p, "defaultView", self => ReferenceEquals(D(self), Document) ? Engine.Global : _windows.TryGetValue(D(self), out var window) ? window : JsValue.Null);
         Js.Accessor(Engine, p, "currentScript", self => WrapOrNull(CurrentScript));
         Js.Accessor(Engine, p, "visibilityState", self => Js.Str("visible"));
@@ -544,7 +557,12 @@ internal sealed partial class ScriptRuntime
             var name = Js.AsText(Js.Arg(args, 0));
             if (!XmlNames.IsName(name))
                 throw DomError("InvalidCharacterError", $"'{name}' is not a valid element name.");
-            return Wrap(D(self).CreateElement(name));
+            var created = Wrap(D(self).CreateElement(name));
+            // In an XML document that is not XHTML an element made by createElement has no namespace.
+            if (!D(self).IsHtml && D(self).ContentType != "application/xhtml+xml")
+                created.NamespaceInfo = new ElementNamespace(null, null, name);
+
+            return created;
         });
         Js.Method(Engine, p, "createElementNS", 2, (self, args) => CreateElementNs(D(self), Js.Arg(args, 0), Js.AsText(Js.Arg(args, 1))));
         Js.Method(Engine, p, "createTextNode", 1, (self, args) => Wrap(D(self).CreateTextNode(Js.AsText(Js.Arg(args, 0)))));

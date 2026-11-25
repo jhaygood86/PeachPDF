@@ -56,7 +56,7 @@ public class NodeModelTests
             console.log([a.ownerDocument === document, h.body.childNodes.length].join());
             """);
 
-        Assert.Equal(["T,true,true,false,true", "a,false,1,application/xml,true", "hey,html,CSS1Compat", "true,0"], log);
+        Assert.Equal(["T,true,true,false,true", "a,false,1,application/xml,false", "hey,html,CSS1Compat", "true,0"], log);
     }
 
     [Fact]

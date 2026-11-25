@@ -60,7 +60,7 @@ internal sealed partial class ScriptRuntime
 
         var prototype = node.Kind switch
         {
-            ScriptNodeKind.Document => node.OwnerDocument.IsHtml ? DocumentPrototype : XmlDocumentPrototype,
+            ScriptNodeKind.Document => node.OwnerDocument.IsHtml || _plainDocuments.Contains(node.OwnerDocument) ? DocumentPrototype : XmlDocumentPrototype,
             ScriptNodeKind.Element => ElementPrototypeFor(node.TagName),
             ScriptNodeKind.Text => node.IsCDataSection ? CDataPrototype : TextPrototype,
             ScriptNodeKind.Comment => CommentPrototype,

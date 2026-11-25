@@ -10,6 +10,9 @@ internal static class WebPlatformScripts
     /// <summary>Where <see cref="WebStreamsScripts.Source"/> goes in <see cref="Bundle"/>.</summary>
     public const string StreamsMarker = "/*STREAMS*/";
 
+    /// <summary>Where <see cref="XmlSerializerScripts.Source"/> goes in <see cref="Bundle"/>.</summary>
+    public const string XmlSerializerMarker = "/*XMLSERIALIZER*/";
+
     public const string Bundle = """
         (function (net, global) {
             "use strict";
@@ -751,6 +754,7 @@ internal static class WebPlatformScripts
             net.registerHyperlink(hyperlink);
 
             /*STREAMS*/
+            /*XMLSERIALIZER*/
             // ---------------------------------------------------------------- Blob, File, FormData
             var blobState = new WeakMap();
             function Blob(parts, options) {
@@ -1715,7 +1719,7 @@ internal static class WebPlatformScripts
                 ["ReadableStream", ReadableStream], ["ReadableStreamDefaultReader", ReadableStreamDefaultReader], ["ReadableStreamDefaultController", ReadableStreamDefaultController],
                 ["WritableStream", WritableStream], ["WritableStreamDefaultWriter", WritableStreamDefaultWriter], ["WritableStreamDefaultController", WritableStreamDefaultController],
                 ["TransformStream", TransformStream], ["TransformStreamDefaultController", TransformStreamDefaultController], ["TextEncoderStream", TextEncoderStream],
-                ["TextDecoderStream", TextDecoderStream], ["CountQueuingStrategy", CountQueuingStrategy], ["ByteLengthQueuingStrategy", ByteLengthQueuingStrategy]
+                ["TextDecoderStream", TextDecoderStream], ["CountQueuingStrategy", CountQueuingStrategy], ["ByteLengthQueuingStrategy", ByteLengthQueuingStrategy], ["XMLSerializer", XMLSerializer]
             ].forEach(function (pair) { define(pair[0], pair[1]); });
         })
         """;

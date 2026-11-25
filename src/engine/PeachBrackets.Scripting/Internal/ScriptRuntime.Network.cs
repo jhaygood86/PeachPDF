@@ -20,6 +20,7 @@ internal sealed partial class ScriptRuntime
     private readonly List<(Task<ScriptNetworkResponse?> Task, JsValue Callback, Uri Url)> _pendingRequests = [];
     private bool _webLoaded;
     private ObjectInstance? _hyperlink;
+    private ObjectInstance? _htmlStream;
 
     // a and area elements have the parts of their href as properties, worked out by the script bundle's URL parser (loaded when first asked).
     private void InstallHyperlinks()
@@ -57,7 +58,7 @@ internal sealed partial class ScriptRuntime
         "URL", "URLSearchParams", "Headers", "Request", "Response", "fetch", "XMLHttpRequest", "XMLHttpRequestEventTarget", "XMLHttpRequestUpload",
         "Blob", "File", "FormData", "TextEncoder", "TextDecoder", "FileReader",
         "ReadableStream", "ReadableStreamDefaultReader", "ReadableStreamDefaultController", "WritableStream", "WritableStreamDefaultWriter", "WritableStreamDefaultController",
-        "TransformStream", "TransformStreamDefaultController", "TextEncoderStream", "TextDecoderStream", "CountQueuingStrategy", "ByteLengthQueuingStrategy",
+        "TransformStream", "TransformStreamDefaultController", "TextEncoderStream", "TextDecoderStream", "CountQueuingStrategy", "ByteLengthQueuingStrategy", "XMLSerializer",
     ];
 
     private void InstallLazyWebGlobals()
@@ -97,7 +98,7 @@ internal sealed partial class ScriptRuntime
         _webLoaded = true;
         try
         {
-            Engine.Evaluate(WebPlatformScripts.Bundle.Replace(WebPlatformScripts.StreamsMarker, WebStreamsScripts.Source, StringComparison.Ordinal)).Call(JsValue.Undefined, [NetObject(), Engine.Global]);
+            Engine.Evaluate(WebPlatformScripts.Bundle.Replace(WebPlatformScripts.StreamsMarker, WebStreamsScripts.Source, StringComparison.Ordinal).Replace(WebPlatformScripts.XmlSerializerMarker, XmlSerializerScripts.Source, StringComparison.Ordinal)).Call(JsValue.Undefined, [NetObject(), Engine.Global]);
         }
         catch (Exception error) when (IsScriptFailure(error))
         {
@@ -109,6 +110,11 @@ internal sealed partial class ScriptRuntime
     {
         var net = Js.NewObject(Engine);
 
+        Js.Method(Engine, net, "registerHtmlStream", 1, (_, args) =>
+        {
+            _htmlStream = Js.Arg(args, 0) as ObjectInstance;
+            return JsValue.Undefined;
+        });
         Js.Method(Engine, net, "registerHyperlink", 1, (_, args) =>
         {
             _hyperlink = Js.Arg(args, 0) as ObjectInstance;

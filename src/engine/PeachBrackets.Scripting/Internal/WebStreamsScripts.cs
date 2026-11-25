@@ -752,5 +752,29 @@ internal static class WebStreamsScripts
                 });
             }
 
+            // ---- streamHTMLUnsafe and its positional relatives: a writable stream whose text is parsed as markup into the tree.
+            net.registerHtmlStream(function (target, position) {
+                var parent = position === "replace" || position === "append" || position === "prepend" ? target : target.parentNode;
+                var anchor = null, accumulated = "", inserted = [];
+                if (position === "replace") { while (target.firstChild) target.removeChild(target.firstChild); }
+                else if (position === "prepend") anchor = target.firstChild;
+                else if (position === "before") anchor = target;
+                else if (position === "after") anchor = target.nextSibling;
+                else if (position === "replaceWith") { anchor = target.nextSibling; if (parent) parent.removeChild(target); }
+                function apply() {
+                    inserted.forEach(function (n) { if (n.parentNode) n.parentNode.removeChild(n); });
+                    inserted = [];
+                    if (!parent) return;
+                    var holder = target.ownerDocument.createElement("div");
+                    holder.innerHTML = accumulated;
+                    var end = anchor && anchor.parentNode === parent ? anchor : null;
+                    while (holder.firstChild) { var n = holder.firstChild; parent.insertBefore(n, end); inserted.push(n); }
+                }
+                return new WritableStream({
+                    write: function (chunk) { accumulated += String(chunk); apply(); },
+                    close: function () { apply(); }
+                });
+            });
+
         """;
 }

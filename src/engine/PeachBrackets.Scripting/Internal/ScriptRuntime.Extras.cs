@@ -65,7 +65,11 @@ internal sealed partial class ScriptRuntime
         Define(global, "DocumentFragment", Js.Constructor(Engine, "DocumentFragment", FragmentPrototype, 0, (_, _, _) => Wrap(Document.CreateEmptyFragment())));
 
         Define(global, "Document", Js.Constructor(Engine, "Document", DocumentPrototype, 0, (_, _, _) =>
-            Wrap(Document.CreateDocument(html: false, withDocumentType: false).Root)));
+        {
+            var made = Document.CreateDocument(html: false, withDocumentType: false);
+            _plainDocuments.Add(made);
+            return Wrap(made.Root);
+        }));
         Define(global, "DOMParser", Js.Constructor(Engine, "DOMParser", ParserPrototype(), 0, (self, _, _) =>
             new JsObject(Engine) { Prototype = ParserPrototype() }));
         Define(global, "Comment", Js.Constructor(Engine, "Comment", CommentPrototype, 0, (_, args, _) =>
@@ -82,6 +86,7 @@ internal sealed partial class ScriptRuntime
         InstallCanvas();
         InstallCanvasPixels();
         InstallNodeOrdering();
+        InstallParsingMethods();
 
         // The ChildNode and NonDocumentTypeChildNode operations text has as well as elements.
         foreach (var name in new[] { "remove", "before", "after", "replaceWith", "previousElementSibling", "nextElementSibling" })
@@ -203,6 +208,7 @@ internal sealed partial class ScriptRuntime
     private ScriptDocument ParseXml(string markup, string type)
     {
         var made = Document.CreateDocument(html: false, withDocumentType: false, contentType: type);
+        _plainDocuments.Add(made);
         try
         {
             var settings = new System.Xml.XmlReaderSettings { DtdProcessing = System.Xml.DtdProcessing.Ignore, XmlResolver = null };
@@ -215,12 +221,19 @@ internal sealed partial class ScriptRuntime
                 {
                     case System.Xml.XmlNodeType.Element:
                     {
-                        var element = ((NodeObject)CreateElementNs(made, reader.NamespaceURI.Length == 0 ? JsValue.Null : Js.Str(reader.NamespaceURI), reader.Name)).Node;
+                        var elementObject = (NodeObject)CreateElementNs(made, reader.NamespaceURI.Length == 0 ? JsValue.Null : Js.Str(reader.NamespaceURI), reader.Name);
+                        var element = elementObject.Node;
                         var empty = reader.IsEmptyElement;
                         if (reader.HasAttributes)
                         {
+                            // Each attribute keeps its namespace, prefix and local name (the xmlns declarations are in the XMLNS namespace).
                             while (reader.MoveToNextAttribute())
-                                element.SetAttribute(reader.Name, reader.Value);
+                            {
+                                var attributeNamespace = reader.NamespaceURI.Length == 0 ? null : reader.NamespaceURI;
+                                var attributePrefix = reader.Prefix.Length == 0 ? null : reader.Prefix;
+                                SetAttributeValue(elementObject, new ElementNamespace(attributeNamespace, attributePrefix, reader.LocalName), reader.Value);
+                            }
+
                             reader.MoveToElement();
                         }
 

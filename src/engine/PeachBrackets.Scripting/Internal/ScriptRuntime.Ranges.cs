@@ -656,7 +656,7 @@ internal sealed partial class ScriptRuntime
         });
         Js.Method(Engine, p, "toString", 0, (self, _) => Js.Str(RangeText(Rg(self))));
         Js.Method(Engine, p, "createContextualFragment", 1, (self, args) =>
-            Wrap(Rg(self).StartNode.OwnerDocument.CreateFragment(Js.AsText(Js.Arg(args, 0)))));
+            args.Length == 0 ? throw TypeError("Failed to execute 'createContextualFragment' on 'Range': 1 argument required, but only 0 present.") : Wrap(Rg(self).StartNode.OwnerDocument.CreateFragment(Js.AsText(Js.Arg(args, 0)))));
 
         var constructor = Js.Constructor(Engine, "Range", RangePrototype, 0, (_, _, _) => MakeRange(Document.Root));
         foreach (var (name, value) in new[] { ("START_TO_START", 0), ("START_TO_END", 1), ("END_TO_END", 2), ("END_TO_START", 3) })
