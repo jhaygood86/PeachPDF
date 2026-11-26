@@ -93,4 +93,29 @@ public class ReflectionTests
 
         Assert.Equal(["2 a b a a b a true", "allow-forms allow-forms", "true"], log);
     }
+
+    [Fact]
+    public async Task EveryReflectedProperty_ReadsAndWritesForEachShapeOfAttributeValue()
+    {
+        var log = await LogAsync("""
+            var tags = ['a','img','input','td','ol','meter','progress','textarea','iframe','canvas','button','script'];
+            var values = [' 12.5e1abc', '-3', '', '7', '.5', 'abc'];
+            var reads = 0, errors = [];
+            tags.forEach(function (tag) {
+                var el = document.createElement(tag);
+                var names = [];
+                for (var proto = Object.getPrototypeOf(el); proto && proto !== Object.prototype; proto = Object.getPrototypeOf(proto))
+                    names = names.concat(Object.getOwnPropertyNames(proto));
+                names.forEach(function (name) {
+                    if (/^(on|inner|outer|text|children|first|last|next|previous|parent|child|remove|append|prepend|replace|before|after|click|focus|blur|submit|reset|close|show|play|pause|load|stop|decode|requestSubmit|showModal|showPicker|select|constructor|nodeValue|clone|insert|normalize|contains|compare|lookup|is|has|get|set|add|toggle|dispatch|attach|animate|scroll|query|matches|closest|webkit|length|span)/.test(name)) return;
+                    values.forEach(function (v) {
+                        try { el.setAttribute(name.toLowerCase(), v); el[name]; reads++; el[name] = v; el[name]; } catch (e) { }
+                    });
+                });
+            });
+            Log.info(reads > 100);
+            """);
+
+        Assert.Equal(["true"], log);
+    }
 }
