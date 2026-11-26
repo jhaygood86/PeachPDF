@@ -292,12 +292,44 @@ PeachDrawing.Core.ColorMatrixEffect : sealed class
   method virtual Int32 GetHashCode()
   method virtual String ToString()
   property ColorMatrix Matrix { get; init; }
+PeachDrawing.Core.ComponentTransferEffect : sealed class
+  ctor(Byte[] Red, Byte[] Green, Byte[] Blue, Byte[] Alpha)
+  method Void Deconstruct(out Byte[] Red, out Byte[] Green, out Byte[] Blue, out Byte[] Alpha)
+  method static Byte[] BuildTable(TransferFunctionKind kind, IReadOnlyList<Double> tableValues, Double slope, Double intercept, Double amplitude, Double exponent, Double offset)
+  method virtual Boolean Equals(ComponentTransferEffect other)
+  method virtual Boolean Equals(LayerEffect other)
+  method virtual Boolean Equals(Object obj)
+  method virtual ComponentTransferEffect <Clone>$()
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property Byte[] Alpha { get; init; }
+  property Byte[] Blue { get; init; }
+  property Byte[] Green { get; init; }
+  property Byte[] Red { get; init; }
 PeachDrawing.Core.ConicGradientBrush : sealed class
   ctor(PaintPoint center, Double outerRadius, IReadOnlyList<GradientStop> stops, IReadOnlyList<Double> anglesRadians)
   property Double OuterRadius { get; }
   property IReadOnlyList<Double> AnglesRadians { get; }
   property IReadOnlyList<GradientStop> Stops { get; }
   property PaintPoint Center { get; }
+PeachDrawing.Core.ConvolveMatrixEffect : sealed class
+  ctor(Int32 Columns, Int32 Rows, IReadOnlyList<Double> Kernel, Double Divisor, Double Bias, Int32 TargetX, Int32 TargetY, FilterEdgeMode EdgeMode, Boolean PreserveAlpha)
+  method Void Deconstruct(out Int32 Columns, out Int32 Rows, out IReadOnlyList<Double> Kernel, out Double Divisor, out Double Bias, out Int32 TargetX, out Int32 TargetY, out FilterEdgeMode EdgeMode, out Boolean PreserveAlpha)
+  method virtual Boolean Equals(ConvolveMatrixEffect other)
+  method virtual Boolean Equals(LayerEffect other)
+  method virtual Boolean Equals(Object obj)
+  method virtual ConvolveMatrixEffect <Clone>$()
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property Boolean PreserveAlpha { get; init; }
+  property Double Bias { get; init; }
+  property Double Divisor { get; init; }
+  property FilterEdgeMode EdgeMode { get; init; }
+  property IReadOnlyList<Double> Kernel { get; init; }
+  property Int32 Columns { get; init; }
+  property Int32 Rows { get; init; }
+  property Int32 TargetX { get; init; }
+  property Int32 TargetY { get; init; }
 PeachDrawing.Core.CursorImage : sealed class
   ctor(String Uri, Double? HotspotX, Double? HotspotY)
   method CursorImage <Clone>$()
@@ -396,6 +428,10 @@ PeachDrawing.Core.EllipticalArcCenter : struct
 PeachDrawing.Core.FillMode : enum Int32
   EvenOdd = 1
   Nonzero = 0
+PeachDrawing.Core.FilterEdgeMode : enum Int32
+  Duplicate = 0
+  None = 2
+  Wrap = 1
 PeachDrawing.Core.FilterList : static class
   method static Boolean TryParse(String text, Func<String, PaintColor?> parseColor, PaintColor currentColor, Double fontSize, out IReadOnlyList<LayerEffect> effects)
 PeachDrawing.Core.Font : abstract class
@@ -980,6 +1016,27 @@ PeachDrawing.Core.TileBrush : sealed class
   property Image Tile { get; }
   property ImageSampling Sampling { get; }
   property Matrix3x2 Transform { get; }
+PeachDrawing.Core.TransferFunctionKind : enum Int32
+  Discrete = 2
+  Gamma = 4
+  Identity = 0
+  Linear = 3
+  Table = 1
+PeachDrawing.Core.TurbulenceEffect : sealed class
+  ctor(Double BaseFrequencyX, Double BaseFrequencyY, Int32 Octaves, Int64 Seed, Boolean FractalNoise, Boolean Stitch)
+  method Void Deconstruct(out Double BaseFrequencyX, out Double BaseFrequencyY, out Int32 Octaves, out Int64 Seed, out Boolean FractalNoise, out Boolean Stitch)
+  method virtual Boolean Equals(LayerEffect other)
+  method virtual Boolean Equals(Object obj)
+  method virtual Boolean Equals(TurbulenceEffect other)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  method virtual TurbulenceEffect <Clone>$()
+  property Boolean FractalNoise { get; init; }
+  property Boolean Stitch { get; init; }
+  property Double BaseFrequencyX { get; init; }
+  property Double BaseFrequencyY { get; init; }
+  property Int32 Octaves { get; init; }
+  property Int64 Seed { get; init; }
 PeachDrawing.Core.TypefaceFont : sealed class
   ctor(Typeface typeface, Double size, SyntheticStyle syntheticStyle = None, Double? obliqueSkewSinus = null)
   method virtual Boolean HasGlyph(Rune rune)

@@ -60,4 +60,23 @@ public class CanvasFilterTests
 
         Assert.Equal(["TypeError TypeError TypeError TypeError TypeError true"], log);
     }
+
+    [Fact]
+    public async Task TheComponentTransferConvolveAndTurbulencePrimitives_DrawWhatTheySay()
+    {
+        var log = await LogAsync("""
+            g.fillStyle = '#f00';
+            g.filter = new CanvasFilter({ name: 'componentTransfer', funcR: { type: 'table', tableValues: [1, 0] } }); g.fillRect(0, 0, 10, 10);
+            var inverted = Array.from(g.getImageData(5, 5, 1, 1).data);
+            g.reset(); g.fillStyle = '#f00';
+            g.filter = new CanvasFilter({ name: 'convolveMatrix', kernelMatrix: [[1, 0, 0]], edgeMode: 'none' }); g.fillRect(10, 5, 10, 5);
+            var shifted = [g.getImageData(9, 7, 1, 1).data[3], g.getImageData(19, 7, 1, 1).data[3]];
+            g.reset();
+            g.filter = new CanvasFilter({ name: 'turbulence', baseFrequency: 0.1, numOctaves: 2, seed: 3 }); g.fillRect(0, 0, 40, 20);
+            var noise = new Set(); for (var x = 0; x < 40; x += 4) noise.add(g.getImageData(x, 10, 1, 1).data[3]);
+            Log.info([inverted.join(','), shifted.join(','), noise.size > 3].join(' '));
+            """);
+
+        Assert.Equal(["0,0,0,255 255,0 true"], log);
+    }
 }

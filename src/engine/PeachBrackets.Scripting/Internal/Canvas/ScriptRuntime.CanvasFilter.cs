@@ -169,13 +169,14 @@ internal sealed partial class ScriptRuntime
                 return [new DropShadowEffect(dx, dy, Math.Max(0, sx), Math.Max(0, sy), color)];
             }
 
+            case "componentTransfer":
+                return [ComponentTransfer(description)];
+
             case "convolveMatrix":
-                ValidateKernel(description);
-                return [];
+                return ConvolveMatrix(description);
 
             case "turbulence":
-                ValidateTurbulence(description);
-                return [];
+                return [Turbulence(description)];
 
             default:
                 return [];
@@ -229,8 +230,55 @@ internal sealed partial class ScriptRuntime
         return (number, number);
     }
 
-    // A convolution kernel is a list of rows of numbers, all as long as each other.
-    private void ValidateKernel(ObjectInstance description)
+    // feComponentTransfer: a function for each channel that has one.
+    private LayerEffect ComponentTransfer(ObjectInstance description)
+    {
+        byte[]? Channel(string key)
+        {
+            if (!description.HasProperty(key))
+                return null;
+
+            if (description.Get(key) is not ObjectInstance function)
+                throw TypeError($"The {key} of the componentTransfer filter is not an object.");
+
+            var type = function.HasProperty("type") ? TypeConverter.ToString(function.Get("type")) : "identity";
+            var kind = type switch
+            {
+                "identity" => TransferFunctionKind.Identity,
+                "table" => TransferFunctionKind.Table,
+                "discrete" => TransferFunctionKind.Discrete,
+                "linear" => TransferFunctionKind.Linear,
+                "gamma" => TransferFunctionKind.Gamma,
+                _ => throw TypeError($"The {key} type is not one of identity, table, discrete, linear or gamma."),
+            };
+
+            var table = new List<double>();
+            if (function.HasProperty("tableValues"))
+            {
+                // A sequence: an array. Anything else, a number or an object that only yields one when asked, is not.
+                if (function.Get("tableValues") is not ObjectInstance list || !list.IsArray())
+                    throw TypeError("The tableValues are not a list of numbers.");
+
+                var count = (int)TypeConverter.ToNumber(list.Get("length"));
+                for (var i = 0; i < count; i++)
+                {
+                    var number = TypeConverter.ToNumber(list.Get(i.ToString(System.Globalization.CultureInfo.InvariantCulture)));
+                    if (!double.IsFinite(number))
+                        throw TypeError("A value of the tableValues is not finite.");
+
+                    table.Add(number);
+                }
+            }
+
+            return ComponentTransferEffect.BuildTable(kind, table, FilterNumber(function, "slope", 1), FilterNumber(function, "intercept", 0),
+                FilterNumber(function, "amplitude", 1), FilterNumber(function, "exponent", 1), FilterNumber(function, "offset", 0));
+        }
+
+        return new ComponentTransferEffect(Channel("funcR"), Channel("funcG"), Channel("funcB"), Channel("funcA"));
+    }
+
+    // A convolution kernel is a list of rows of numbers, all as long as each other; one with no columns convolves nothing.
+    private LayerEffect[] ConvolveMatrix(ObjectInstance description)
     {
         if (!description.HasProperty("kernelMatrix") || description.Get("kernelMatrix") is not ObjectInstance rows || !rows.IsArray())
             throw TypeError("The convolveMatrix filter needs a kernelMatrix.");
@@ -239,6 +287,7 @@ internal sealed partial class ScriptRuntime
         if (rowCount == 0)
             throw TypeError("The kernelMatrix has no rows.");
 
+        var kernel = new List<double>();
         var width = -1;
         for (var r = 0; r < rowCount; r++)
         {
@@ -252,33 +301,69 @@ internal sealed partial class ScriptRuntime
             width = count;
             for (var c = 0; c < count; c++)
             {
-                if (!double.IsFinite(TypeConverter.ToNumber(row.Get(c.ToString(System.Globalization.CultureInfo.InvariantCulture)))))
+                var number = TypeConverter.ToNumber(row.Get(c.ToString(System.Globalization.CultureInfo.InvariantCulture)));
+                if (!double.IsFinite(number))
                     throw TypeError("A value of the kernelMatrix is not finite.");
+
+                kernel.Add(number);
             }
         }
 
         if (width == 0 && rowCount > 1)
             throw TypeError("The rows of the kernelMatrix are empty.");
 
-        foreach (var key in new[] { "divisor", "bias", "targetX", "targetY" })
-            FilterNumber(description, key, 0);
+        var sum = kernel.Sum();
+        var divisor = FilterNumber(description, "divisor", sum == 0 ? 1 : sum);
+        var bias = FilterNumber(description, "bias", 0);
+        var targetX = (int)FilterNumber(description, "targetX", Math.Floor(width / 2.0));
+        var targetY = (int)FilterNumber(description, "targetY", Math.Floor(rowCount / 2.0));
+        var edge = description.HasProperty("edgeMode") ? TypeConverter.ToString(description.Get("edgeMode")) : "duplicate";
+        var mode = edge switch
+        {
+            "duplicate" => FilterEdgeMode.Duplicate,
+            "wrap" => FilterEdgeMode.Wrap,
+            "none" => FilterEdgeMode.None,
+            _ => throw TypeError("The edgeMode is not one of duplicate, wrap or none."),
+        };
+        var preserveAlpha = description.HasProperty("preserveAlpha") && TypeConverter.ToBoolean(description.Get("preserveAlpha"));
+
+        // Nothing to convolve with, or a divisor or a target that cannot work: the filter does nothing.
+        if (width == 0 || divisor == 0 || targetX < 0 || targetX >= width || targetY < 0 || targetY >= rowCount)
+            return [];
+
+        return [new ConvolveMatrixEffect(width, rowCount, kernel, divisor, bias, targetX, targetY, mode, preserveAlpha)];
     }
 
-    private void ValidateTurbulence(ObjectInstance description)
+    private LayerEffect Turbulence(ObjectInstance description)
     {
         var (fx, fy) = FilterPair(description, "baseFrequency", 0, 0);
         if (fx < 0 || fy < 0)
             throw TypeError("The baseFrequency is negative.");
 
-        if (FilterNumber(description, "numOctaves", 1) < 0)
+        var octaves = FilterNumber(description, "numOctaves", 1);
+        if (octaves < 0)
             throw TypeError("The numOctaves is negative.");
 
-        FilterNumber(description, "seed", 0);
+        var seed = FilterNumber(description, "seed", 0);
 
-        if (description.HasProperty("stitchTiles") && (description.Get("stitchTiles") is not JsString stitch || stitch.ToString() is not ("stitch" or "noStitch")))
-            throw TypeError("The stitchTiles is not stitch or noStitch.");
+        var stitch = false;
+        if (description.HasProperty("stitchTiles"))
+        {
+            if (description.Get("stitchTiles") is not JsString stitchText || stitchText.ToString() is not ("stitch" or "noStitch"))
+                throw TypeError("The stitchTiles is not stitch or noStitch.");
 
-        if (description.HasProperty("type") && (description.Get("type") is not JsString type || type.ToString() is not ("fractalNoise" or "turbulence")))
-            throw TypeError("The turbulence type is not fractalNoise or turbulence.");
+            stitch = stitchText.ToString() == "stitch";
+        }
+
+        var fractal = false;
+        if (description.HasProperty("type"))
+        {
+            if (description.Get("type") is not JsString typeText || typeText.ToString() is not ("fractalNoise" or "turbulence"))
+                throw TypeError("The turbulence type is not fractalNoise or turbulence.");
+
+            fractal = typeText.ToString() == "fractalNoise";
+        }
+
+        return new TurbulenceEffect(fx, fy, (int)Math.Min(octaves, 24), (long)Math.Truncate(Math.Clamp(seed, -2147483648.0, 2147483647.0)), fractal, stitch);
     }
 }

@@ -25,6 +25,7 @@ PeachDrawing.Filters.FilterOps : static class
   method static Void ClipTo(RasterSurface surface, IntRect keep)
   method static Void ComponentTransfer(RasterSurface source, RasterSurface destination, Byte[] r, Byte[] g, Byte[] b, Byte[] a)
   method static Void ConvertColorSpace(RasterSurface surface, Boolean toLinear)
+  method static Void ConvolveMatrix(RasterSurface source, RasterSurface destination, ConvolveMatrixEffect p)
   method static Void CopyCentre(RasterSurface padded, RasterSurface destination, Int32 padX, Int32 padY)
   method static Void Displace(RasterSurface source, RasterSurface map, RasterSurface destination, Double scaleX, Double scaleY, Int32 xChannel, Int32 yChannel)
   method static Void Fill(RasterSurface surface, PaintColor color, Double opacity)

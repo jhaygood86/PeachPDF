@@ -2,6 +2,7 @@ using PeachDrawing.Core;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using System.Numerics;
 using System.Text;
 
@@ -457,6 +458,20 @@ public sealed partial class SvgCanvas : Canvas
                         break;
                     case ColorMatrixEffect colorMatrix:
                         primitives.Append(ColorMatrixPrimitive(colorMatrix.Matrix));
+                        break;
+                    case ComponentTransferEffect transfer:
+                    {
+                        // A table of every value a channel can hold is the function exactly (a lookup, with 256 entries, steps nowhere).
+                        string Func(string name, byte[]? table) =>
+                            table is null ? "" : $"<feFunc{name} type=\"discrete\" tableValues=\"{string.Join(' ', table.Select(v => N(v / 255.0)))}\"/>";
+                        primitives.Append($"<feComponentTransfer>{Func("R", transfer.Red)}{Func("G", transfer.Green)}{Func("B", transfer.Blue)}{Func("A", transfer.Alpha)}</feComponentTransfer>");
+                        break;
+                    }
+                    case ConvolveMatrixEffect convolve:
+                        primitives.Append($"<feConvolveMatrix order=\"{convolve.Columns} {convolve.Rows}\" kernelMatrix=\"{string.Join(' ', convolve.Kernel.Select(N))}\" divisor=\"{N(convolve.Divisor)}\" bias=\"{N(convolve.Bias)}\" targetX=\"{convolve.TargetX}\" targetY=\"{convolve.TargetY}\" edgeMode=\"{convolve.EdgeMode.ToString().ToLowerInvariant()}\" preserveAlpha=\"{(convolve.PreserveAlpha ? "true" : "false")}\"/>");
+                        break;
+                    case TurbulenceEffect turbulence when turbulence.Octaves > 0:
+                        primitives.Append($"<feTurbulence baseFrequency=\"{N(turbulence.BaseFrequencyX)} {N(turbulence.BaseFrequencyY)}\" numOctaves=\"{turbulence.Octaves}\" seed=\"{turbulence.Seed}\" stitchTiles=\"{(turbulence.Stitch ? "stitch" : "noStitch")}\" type=\"{(turbulence.FractalNoise ? "fractalNoise" : "turbulence")}\"/>");
                         break;
                 }
             }

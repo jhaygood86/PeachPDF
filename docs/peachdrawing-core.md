@@ -287,6 +287,10 @@ canvas that can apply effects overrides `SupportsLayerEffects` and `ApplyLayerEf
 package's `RasterLayerEffects.Apply` does the work on a `RasterSurface`). A canvas whose layers apply their effects itself, on the
 graphics hardware, says so with `HasNativeLayerEffects` (`Win2dCanvas`, `SkiaCanvas` and `CoreGraphicsCanvas` do), and a caller that can express a blurred
 shadow, a filter or a blurred backdrop either way draws it as a layer with effects when that is true instead of rendering it into a bitmap.
+`ComponentTransferEffect` (a 256-entry table per channel; `ComponentTransferEffect.BuildTable` makes one from an `feComponentTransfer`
+function), `ConvolveMatrixEffect` and `TurbulenceEffect` (the specification's Perlin noise, replacing the layer) are the SVG filter
+primitives of the same name. The raster canvas applies all three; Skia applies all three itself; Win2D applies the first two (its
+turbulence effect takes no seed); the SVG canvas writes the primitives; the CoreGraphics canvas does not apply them yet.
 `BlurEffect.ClampEdges` asks for the layer's edge pixels to be held rather than faded, for content that continues past the layer's bounds.
 
 ### CSS filter lists

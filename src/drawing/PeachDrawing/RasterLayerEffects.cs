@@ -2,6 +2,7 @@ using PeachDrawing.Core;
 using PeachDrawing.Filters;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace PeachDrawing;
 
@@ -11,6 +12,8 @@ namespace PeachDrawing;
 /// </summary>
 public static class RasterLayerEffects
 {
+    private static readonly byte[] Identity = Enumerable.Range(0, 256).Select(i => (byte)i).ToArray();
+
     /// <summary>
     /// How far, on each axis, the given effects can spread ink beyond the shape they are applied to, in the canvas's units: three
     /// standard deviations of a blur (past which a Gaussian is invisible), plus an offset for a drop shadow. Grow a layer's region
@@ -50,6 +53,28 @@ public static class RasterLayerEffects
                     break;
                 case ColorMatrixEffect matrix:
                     ColorMatrixFilter.ApplyInPlace(surface, matrix.Matrix);
+                    break;
+                case ComponentTransferEffect transfer:
+                {
+                    var input = FilterOps.Clone(surface);
+                    FilterOps.ComponentTransfer(input, surface, transfer.Red ?? Identity, transfer.Green ?? Identity, transfer.Blue ?? Identity, transfer.Alpha ?? Identity);
+                    break;
+                }
+                case ConvolveMatrixEffect convolve:
+                {
+                    var input = FilterOps.Clone(surface);
+                    FilterOps.ConvolveMatrix(input, surface, convolve);
+                    break;
+                }
+                case TurbulenceEffect turbulence:
+                    // The noise replaces what the layer held.
+                    surface.Clear();
+                    if (turbulence.Octaves > 0)
+                    {
+                        new Turbulence(turbulence.Seed).Render(surface, surface.PixelsPerUnitX, surface.PixelsPerUnitY, turbulence.BaseFrequencyX, turbulence.BaseFrequencyY,
+                            turbulence.Octaves, turbulence.FractalNoise, turbulence.Stitch, 0, 0, surface.Width / surface.PixelsPerUnitX, surface.Height / surface.PixelsPerUnitY);
+                    }
+
                     break;
             }
         }

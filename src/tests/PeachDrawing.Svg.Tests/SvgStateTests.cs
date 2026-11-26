@@ -411,6 +411,28 @@ public class SvgStateTests
     }
 
     [Fact]
+    public void TheFilterPrimitivesOfALayerAreTheSvgPrimitivesOfTheSameName()
+    {
+        using var scene = Create();
+        using (var layer = scene.Canvas.BeginLayer(new LayerOptions(Bounds: new Rect(0, 0, 50, 50), Effects:
+                   [new ComponentTransferEffect(Enumerable.Range(0, 256).Select(i => (byte)(255 - i)).ToArray(), null, null, null),
+                    new ConvolveMatrixEffect(3, 1, [1, 0, 0], 1, 0, 1, 0, FilterEdgeMode.Wrap, true),
+                    new TurbulenceEffect(0.5, 0.25, 2, 9, true, true)])))
+        {
+            layer!.Canvas.DrawRectangle(scene.Solid(0, 0, 0), 5, 5, 20, 20);
+        }
+
+        var primitives = scene.Defs().Single(e => e.Name == Ns + "filter").Elements().ToList();
+        Assert.Equal([Ns + "feComponentTransfer", Ns + "feConvolveMatrix", Ns + "feTurbulence"], primitives.Select(p => p.Name).ToArray());
+        var red = Assert.Single(primitives[0].Elements());
+        Assert.Equal(Ns + "feFuncR", red.Name);
+        Assert.Equal(256, Attr(red, "tableValues").Split(' ').Length);
+        Assert.Equal(("3 1", "1 0 0", "wrap", "true"), (Attr(primitives[1], "order"), Attr(primitives[1], "kernelMatrix"), Attr(primitives[1], "edgeMode"), Attr(primitives[1], "preserveAlpha")));
+        Assert.Equal(("0.5 0.25", "2", "9", "stitch", "fractalNoise"),
+            (Attr(primitives[2], "baseFrequency"), Attr(primitives[2], "numOctaves"), Attr(primitives[2], "seed"), Attr(primitives[2], "stitchTiles"), Attr(primitives[2], "type")));
+    }
+
+    [Fact]
     public void ADropShadowEffectIsAFeDropShadowWithTheShadowsColourAndOffset()
     {
         using var scene = Create();

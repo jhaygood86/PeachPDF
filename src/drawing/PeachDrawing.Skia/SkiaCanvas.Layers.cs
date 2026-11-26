@@ -2,6 +2,7 @@ using PeachDrawing.Core;
 using SkiaSharp;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace PeachDrawing.Skia;
 
@@ -123,6 +124,40 @@ public sealed partial class SkiaCanvas
                     made.Add(colorFilter);
                     filter = SKImageFilter.CreateColorFilter(colorFilter, filter);
                     break;
+
+                case ComponentTransferEffect transfer:
+                {
+                    var identity = Enumerable.Range(0, 256).Select(i => (byte)i).ToArray();
+                    var table = SKColorFilter.CreateTable(transfer.Alpha ?? identity, transfer.Red ?? identity, transfer.Green ?? identity, transfer.Blue ?? identity);
+                    made.Add(table);
+                    filter = SKImageFilter.CreateColorFilter(table, filter);
+                    break;
+                }
+
+                case ConvolveMatrixEffect convolve:
+                {
+                    // SVG convolves (the kernel is turned half way round), and Skia correlates.
+                    var kernel = new float[convolve.Kernel.Count];
+                    for (var i = 0; i < kernel.Length; i++)
+                        kernel[i] = (float)convolve.Kernel[kernel.Length - 1 - i];
+
+                    filter = SKImageFilter.CreateMatrixConvolution(new SKSizeI(convolve.Columns, convolve.Rows), kernel, (float)(1 / convolve.Divisor), (float)convolve.Bias,
+                        new SKPointI(convolve.TargetX, convolve.TargetY),
+                        convolve.EdgeMode switch { FilterEdgeMode.Wrap => SKShaderTileMode.Repeat, FilterEdgeMode.None => SKShaderTileMode.Decal, _ => SKShaderTileMode.Clamp },
+                        !convolve.PreserveAlpha, filter);
+                    break;
+                }
+
+                case TurbulenceEffect turbulence when turbulence.Octaves > 0:
+                {
+                    // The noise replaces the layer, so what came before it is not an input.
+                    var shader = turbulence.FractalNoise
+                        ? SKShader.CreatePerlinNoiseFractalNoise((float)turbulence.BaseFrequencyX, (float)turbulence.BaseFrequencyY, turbulence.Octaves, turbulence.Seed)
+                        : SKShader.CreatePerlinNoiseTurbulence((float)turbulence.BaseFrequencyX, (float)turbulence.BaseFrequencyY, turbulence.Octaves, turbulence.Seed);
+                    made.Add(shader);
+                    filter = SKImageFilter.CreateShader(shader);
+                    break;
+                }
             }
 
             if (filter is not null && !ReferenceEquals(filter, before))
