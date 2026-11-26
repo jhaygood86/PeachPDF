@@ -93,6 +93,16 @@ public sealed class HtmlDocumentOptions
     public double FontScale { get; set; } = 1;
 
     /// <summary>
+    /// How much larger than the sheet the document lays itself out, for a host that then draws every page at <c>1 / PageScale</c> of its size:
+    /// 1 (the default) lays out on the sheet as it is, 2 lays out on a sheet twice as wide and as tall (with margins twice as wide) so twice as much fits
+    /// across and down, which is how a web browser's print "scale" shrinks content that is too wide. The page size, margins and an <c>@page</c> rule's
+    /// size and margins are all multiplied, so the pages <see cref="HtmlDocument.Pages"/> reports are <see cref="PageScale"/> times the configured
+    /// sheet; <c>vw</c>/<c>vh</c> and media queries see the larger sheet. A per-page <c>@page</c> rule (<c>:first</c>, a named page) is not scaled. Ignored
+    /// for a <see cref="MediaType.Screen"/> document, which has no sheet. A value that is not a positive finite number is treated as 1.
+    /// </summary>
+    public double PageScale { get; set; } = 1;
+
+    /// <summary>
     /// Whether form controls are drawn with their look: the check mark of a checked check box, the dot of a radio button, the value or placeholder
     /// of a text field, the label of a button, the chosen option and arrow of a drop-down, the track and thumb of a range. All of it is drawn from the
     /// control's own CSS (border, background, padding, font, colour, <c>accent-color</c>). Off by default, which leaves a control the plain box it

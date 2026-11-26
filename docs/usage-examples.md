@@ -23,6 +23,7 @@ using PeachPDF.Network;
 - [Sharing a parsed CSS context across renders](#sharing-a-parsed-css-context-across-renders)
 - [Saving a PDF to a file](#saving-a-pdf-to-a-file)
 - [Detecting text that was clipped away](#detecting-text-that-was-clipped-away)
+- [Fitting wide content on the page](#fitting-wide-content-on-the-page)
 - [Crisp 1px borders at 100% zoom](#crisp-1px-borders-at-100-zoom)
 - [Whole-pixel border widths](#whole-pixel-border-widths)
 - [Rendering CSS animations as a still frame](#rendering-css-animations-as-a-still-frame)
@@ -362,12 +363,36 @@ Each `ClippedWord` carries the geometry rather than a verdict — `DrawnWidth`, 
 
 The report **accumulates** across repeated `AddPdfPages` calls, so a document assembled from several calls carries every call's findings rather than only the last one's.
 
-Two things are deliberately **not** reported:
+**Content wider than the page is reported too.** A word that lies wholly past the end of the page's content area — beyond the right edge for left-to-right text, the left edge for right-to-left — is not drawn at all, so the output holds no trace of it. It is reported with a `VisibleWidth` of `0` (and a `KeptFraction` of `0`), so a wide table or a line that cannot wrap shows up as every word that was lost, not only the one the edge cut through. To keep such content rather than detect the loss, see [Fitting wide content on the page](#fitting-wide-content-on-the-page).
+
+Some things are deliberately **not** reported:
 
 - **`text-overflow: ellipsis`.** That is truncation the author asked for and the reader can see, which is the opposite of the silent loss this exists for.
 - **Whitespace.** A clipped space is not something anyone can see or act on.
+- **Words wholly outside an `overflow` clip the document asked for.** An `overflow: hidden` box that hides some of its content is the author's doing; only the words it cuts through are reported.
+- **Words above or below the page, or before its start.** A word moved to the next page by a break is not lost, and text positioned off the start of the page (`left: -9999px`) is the usual way to hide it.
 
-**The report under-reports, and that is the safe direction rather than completeness.** It measures against the renderer's tracked clip-rect stack, and two clips never reach it: a `border-radius` or `clip-path` clip, and the page-level clip applied outside that stack. An empty report is therefore a weaker statement than "nothing was clipped". A word that fell *entirely* outside its clip is not reported here either — it is never drawn at all, so reading the output back detects it as missing text.
+**The report under-reports, and that is the safe direction rather than completeness.** It measures against the renderer's tracked clip-rect stack, and two clips never reach it: a `border-radius` or `clip-path` clip, and the page-level clip applied outside that stack. An empty report is therefore a weaker statement than "nothing was clipped". A word that fell *entirely* outside an `overflow` clip is not reported either — it is never drawn at all, so reading the output back detects it as missing text.
+
+## Fitting wide content on the page
+
+A web browser's print dialog has a scale: content wider than the page is laid out as if the page were wider, then drawn smaller, so nothing is cut off at the right edge. PeachPDF does the same, and everything on a page — text, images, links, form fields, bookmarks — is drawn at that scale while the page keeps its size and its margins.
+
+```csharp
+var config = new PdfGenerateConfig { PageSize = PageSize.A4, ShrinkToFit = true };
+var document = await generator.GeneratePdf(html, config);
+```
+
+| Setting | What it does |
+| --- | --- |
+| `ShrinkToFit` | Lays the document out once to measure it and, if anything is wider than the page's content area, draws it smaller by as much as it takes to fit across. Content that already fits is left at its CSS size. |
+| `ScaleToPageSize` | The same, and (with `MinContentWidth` set below the page's width) also draws content that is narrower than the page larger, to fill it. |
+| `MinContentWidth` | Lays the document out at least this many points wide, however narrow the page is, and draws it smaller to fit. Without `ShrinkToFit`/`ScaleToPageSize` it only ever shrinks. |
+| `PixelsPerInch` | How many CSS pixels fit an inch of the page. The default, `96`, draws content at its CSS size: a pixel is 0.75pt, so `16px` text is 12pt. `72` makes a pixel one point (`16px` text is 16pt, and less fits across), `144` makes it half a point (`16px` text is 8pt, and half again as much fits across and down). It is the starting scale the others fit from, and must be positive. |
+
+The scale applies to content, not to the sheet: `PageSize`, the margins and an `@page` rule's `size` and `margin` are the printed page's, and are kept as they are. `vw`/`vh` and media queries see the wider sheet the content is laid out on, as they do in a browser. A per-page `@page` rule (`:first`, a named page) is scaled with the rest. Bleed and printer's marks are meant for content at its CSS size: at any other scale the marks are drawn at the scale, while the bleed and media boxes the file declares keep their size. Bitmaps made for effects PDF cannot express keep their `RasterizationDpi` on the paper whatever the scale.
+
+Use [`ClipReport`](#detecting-text-that-was-clipped-away) to find out whether anything was left out when you do not scale.
 
 ## Crisp 1px borders at 100% zoom
 

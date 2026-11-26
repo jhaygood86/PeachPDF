@@ -500,6 +500,11 @@ namespace PeachBrackets.Html.Paint
                 if (!visible && (_mapped || box.IsTransformed))
                     RecordHiddenSubtree(fragment);
 
+                // Its text is not drawn either, and it never reaches the word loop that reports a word the clip cuts, so a word lost past the edge of
+                // the page would go unreported.
+                if (!visible && !_textOnly)
+                    RecordWordsPastPageEnd(fragment);
+
                 if (visible && !paintedAsContext)
                 {
                     // A transform that is not affine once projected onto the element's plane (perspective, or a 3D transform under a

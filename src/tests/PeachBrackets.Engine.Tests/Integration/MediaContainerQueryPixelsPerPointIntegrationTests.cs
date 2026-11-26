@@ -41,7 +41,6 @@ namespace PeachBrackets.Engine.Tests.Integration
             {
                 ManualPageWidth = 400,
                 ManualPageHeight = 600,
-                PixelsPerInch = 144,
             };
             config.SetMargins(0);
 
@@ -53,7 +52,7 @@ namespace PeachBrackets.Engine.Tests.Integration
                 </style></head><body><div id="el">text</div></body></html>
                 """;
 
-            var (root, _) = await PdfGeneratorLayoutHarness.LayoutAsync(html, config);
+            var (root, _) = await PdfGeneratorLayoutHarness.LayoutAsync(html, config, pixelsPerPoint: 2);
             var el = DomUtils.GetBoxByTagName(root, "div");
 
             Assert.NotNull(el);
@@ -70,7 +69,6 @@ namespace PeachBrackets.Engine.Tests.Integration
             {
                 ManualPageWidth = 400,
                 ManualPageHeight = 600,
-                PixelsPerInch = 144,
             };
             config.SetMargins(0);
 
@@ -82,7 +80,7 @@ namespace PeachBrackets.Engine.Tests.Integration
                 </style></head><body><div id="el">text</div></body></html>
                 """;
 
-            var (root, _) = await PdfGeneratorLayoutHarness.LayoutAsync(html, config);
+            var (root, _) = await PdfGeneratorLayoutHarness.LayoutAsync(html, config, pixelsPerPoint: 2);
             var el = DomUtils.GetBoxByTagName(root, "div");
 
             Assert.NotNull(el);
@@ -99,7 +97,6 @@ namespace PeachBrackets.Engine.Tests.Integration
             {
                 ManualPageWidth = 400,
                 ManualPageHeight = 600,
-                PixelsPerInch = 72,
             };
             config.SetMargins(0);
 

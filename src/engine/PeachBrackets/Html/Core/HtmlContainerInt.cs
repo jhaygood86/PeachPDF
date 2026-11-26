@@ -1015,6 +1015,12 @@ namespace PeachBrackets.Html
         public Size? CssPageSize { get; set; }
 
         /// <summary>
+        /// How much larger than the sheet it is drawn on the document lays itself out (<see cref="HtmlDocumentOptions.PageScale"/>); 1 for none.
+        /// Margins and sizes an <c>@page</c> rule declares are multiplied by it where per-page geometry is resolved.
+        /// </summary>
+        internal double PageScale { get; set; } = 1;
+
+        /// <summary>
         /// All @page rules parsed from the document's stylesheets, in cascade order.
         /// </summary>
         public IReadOnlyList<PageRule> PageRules { get; internal set; } = [];

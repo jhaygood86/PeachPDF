@@ -102,10 +102,12 @@ public sealed partial class HtmlDocument : IDisposable
 
         try
         {
-            container.MarginTop = options.MarginTopPoints * unitsPerPoint;
-            container.MarginRight = options.MarginRightPoints * unitsPerPoint;
-            container.MarginBottom = options.MarginBottomPoints * unitsPerPoint;
-            container.MarginLeft = options.MarginLeftPoints * unitsPerPoint;
+            var pageScale = PageScaleOf(options);
+            container.MarginTop = options.MarginTopPoints * unitsPerPoint * pageScale;
+            container.MarginRight = options.MarginRightPoints * unitsPerPoint * pageScale;
+            container.MarginBottom = options.MarginBottomPoints * unitsPerPoint * pageScale;
+            container.MarginLeft = options.MarginLeftPoints * unitsPerPoint * pageScale;
+            container.PageScale = pageScale;
 
             container.MediaType = options.MediaType;
             container.ViewportHeight = options.MediaType == MediaType.Screen && options.ViewportHeightPoints is > 0 and var viewportHeight
@@ -171,8 +173,8 @@ public sealed partial class HtmlDocument : IDisposable
             await container.SetHtml(html, userStyles);
 
             // An @page { size } rule in the document replaces the configured sheet; the content area is what is left inside the margins.
-            var resolvedSheet = container.CssPageSize ?? sheet;
             // The margins are read back from the container, since an @page margin rule corrects them in place while the document is parsed.
+            var resolvedSheet = ResolveSheet(container, sheet);
             var content = new Size(
                 resolvedSheet.Width - ((container.MarginLeft + container.MarginRight) / unitsPerPoint),
                 resolvedSheet.Height - ((container.MarginTop + container.MarginBottom) / unitsPerPoint));
@@ -233,10 +235,12 @@ public sealed partial class HtmlDocument : IDisposable
 
         try
         {
-            container.MarginTop = options.MarginTopPoints * unitsPerPoint;
-            container.MarginRight = options.MarginRightPoints * unitsPerPoint;
-            container.MarginBottom = options.MarginBottomPoints * unitsPerPoint;
-            container.MarginLeft = options.MarginLeftPoints * unitsPerPoint;
+            var pageScale = PageScaleOf(options);
+            container.MarginTop = options.MarginTopPoints * unitsPerPoint * pageScale;
+            container.MarginRight = options.MarginRightPoints * unitsPerPoint * pageScale;
+            container.MarginBottom = options.MarginBottomPoints * unitsPerPoint * pageScale;
+            container.MarginLeft = options.MarginLeftPoints * unitsPerPoint * pageScale;
+            container.PageScale = pageScale;
 
             container.PageRules = DomParser.BuildDeclarativePageRules(
                 page.BuildPageRules(), styleSheet?.Data,
@@ -246,7 +250,7 @@ public sealed partial class HtmlDocument : IDisposable
                 marginBottomIsExplicit: overrides.HasFlag(PageGeometryOverrides.MarginBottom),
                 sizeIsExplicit: overrides.HasFlag(PageGeometryOverrides.Size));
 
-            var sheet = new Size(options.PageWidthPoints, options.PageHeightPoints);
+            var sheet = new Size(options.PageWidthPoints * pageScale, options.PageHeightPoints * pageScale);
             container.PageSize = Utils.ToPixels(sheet, unitsPerPoint);
             container.SnapBoxDecorationsToCssPixels = options.SnapBoxDecorationsToCssPixels;
             container.SnapBorderWidthsToCssPixels = options.SnapBorderWidthsToCssPixels;
@@ -266,9 +270,9 @@ public sealed partial class HtmlDocument : IDisposable
                     allowMarginBottom: !overrides.HasFlag(PageGeometryOverrides.MarginBottom),
                     allowSize: !overrides.HasFlag(PageGeometryOverrides.Size));
 
-                if (container.CssPageSize.HasValue)
-                    sheet = container.CssPageSize.Value;
             }
+
+            sheet = ResolveSheet(container, sheet, readRuleSize: styleSheet is not null);
 
             // The content page size is the sheet less its margins, and the document origin sits at the top-left of that band.
             var content = new Size(
@@ -1907,8 +1911,22 @@ public sealed partial class HtmlDocument : IDisposable
 
     // A paged document is as tall as the configured page. A screen document has no pages: it is laid out against a band nothing can
     // overflow, and given its real height when layout has finished.
-    private static Size SheetOf(HtmlDocumentOptions options) =>
-        new(options.PageWidthPoints, options.MediaType == MediaType.Screen ? HtmlContainerInt.ContinuousBandPoints : options.PageHeightPoints);
+    private static Size SheetOf(HtmlDocumentOptions options)
+    {
+        var scale = PageScaleOf(options);
+        return new(options.PageWidthPoints * scale, options.MediaType == MediaType.Screen ? HtmlContainerInt.ContinuousBandPoints : options.PageHeightPoints * scale);
+    }
+
+    /// <summary><see cref="HtmlDocumentOptions.PageScale"/> as it applies: 1 for a screen document or a value that is not a positive finite number.</summary>
+    private static double PageScaleOf(HtmlDocumentOptions options) =>
+        options.MediaType != MediaType.Screen && options.PageScale > 0 && double.IsFinite(options.PageScale) ? options.PageScale : 1;
+
+    /// <summary>
+    /// The sheet once the document's own <c>@page</c> rule has been read: the configured sheet, or the rule's <c>size</c>. Both are already multiplied by
+    /// the page scale (the configured sheet by <see cref="SheetOf"/>, the rule's by the parser that read it).
+    /// </summary>
+    private static Size ResolveSheet(HtmlContainerInt container, Size scaledSheet, bool readRuleSize = true) =>
+        readRuleSize && container.CssPageSize is { } cssSheet ? cssSheet : scaledSheet;
 
     private async ValueTask ReloadAsync(Canvas measuringCanvas)
     {
@@ -1916,10 +1934,12 @@ public sealed partial class HtmlDocument : IDisposable
         var units = _unitsPerPoint;
 
         // As LoadAsync does before it parses: the physical sheet and the configured margins, which an @page rule then corrects in place.
-        _container.MarginTop = options.MarginTopPoints * units;
-        _container.MarginRight = options.MarginRightPoints * units;
-        _container.MarginBottom = options.MarginBottomPoints * units;
-        _container.MarginLeft = options.MarginLeftPoints * units;
+        var pageScale = PageScaleOf(options);
+        _container.MarginTop = options.MarginTopPoints * units * pageScale;
+        _container.MarginRight = options.MarginRightPoints * units * pageScale;
+        _container.MarginBottom = options.MarginBottomPoints * units * pageScale;
+        _container.MarginLeft = options.MarginLeftPoints * units * pageScale;
+        _container.PageScale = pageScale;
         var sheet = SheetOf(options);
         _container.PageSize = Utils.ToPixels(sheet, units);
         _container.CssPageSize = null;
@@ -1938,7 +1958,7 @@ public sealed partial class HtmlDocument : IDisposable
         if (before is not null)
             StartTransitionsFrom(before);
 
-        var resolvedSheet = _container.CssPageSize ?? sheet;
+        var resolvedSheet = ResolveSheet(_container, sheet);
         var content = new Size(
             resolvedSheet.Width - ((_container.MarginLeft + _container.MarginRight) / units),
             resolvedSheet.Height - ((_container.MarginTop + _container.MarginBottom) / units));

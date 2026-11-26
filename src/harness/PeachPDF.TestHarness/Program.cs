@@ -1291,17 +1291,38 @@ await SaveShowcaseAsync("shape_outside", "Layout", "Shape Outside",
 // and mis-positioned relative to everything else on the page. ShrinkToFit is deliberately left off here
 // (unlike pdfConfig above) since it recomputes its own effective PixelsPerPoint from content
 // measurement and would make the two renders an apples-to-oranges comparison rather than isolating
-// the PixelsPerInch=96-vs-72 difference this showcase exists to demonstrate.
-PdfGenerateConfig pdfConfig96 = new()
+// the PixelsPerInch difference this showcase exists to demonstrate.
+PdfGenerateConfig pdfConfigScaled = new()
 {
     PageSize = PageSize.A4,
     PageOrientation = PageOrientation.Portrait,
-    PixelsPerInch = 96
+    PixelsPerInch = 144
 };
 
-await SaveShowcaseAsync("border_radius_96dpi", "Backgrounds & Borders", "Border Radius (96 DPI)",
-    "The same border-radius coverage as the Border Radius showcase, rendered at PixelsPerInch=96 instead of the library's default 72 — confirms rounded borders, backgrounds, and overflow-clip curves render identically regardless of PixelsPerInch.",
-    radiusHtml, pdfConfig96);
+await SaveShowcaseAsync("border_radius_scaled", "Backgrounds & Borders", "Border Radius (PixelsPerInch 144)",
+    "The same border-radius coverage as the Border Radius showcase, rendered at PixelsPerInch=144 instead of the default 96: a CSS pixel is half a point rather than three quarters, so the whole page is drawn at two thirds the size and every rounded border, background and overflow-clip curve scales with it.",
+    radiusHtml, pdfConfigScaled);
+
+// Content wider than the page: a 1200px table and a line that cannot wrap. ShrinkToFit lays the document out on a wider sheet and draws each page
+// smaller, so every word is on the page (and the link over LINK-TEXT is over it); without it everything past the right edge is left out of the file.
+const string WideContentHtml = """
+    <!DOCTYPE html><html><head><style>
+      @page { size: A4; margin: 20mm; }
+      body { font: 14px/1.4 sans-serif; }
+      td { border: 1px solid #999; padding: 4px 8px; }
+    </style></head><body>
+      <h1>Wide content, shrunk to fit</h1>
+      <table style="width: 1200px; border-collapse: collapse; margin-bottom: 12px;">
+        <tr><td style="width: 1000px;">LEFT-CELL</td><td>RIGHT-EDGE-CELL</td></tr>
+      </table>
+      <p style="white-space: nowrap;">NOWRAP-START aaaa bbbb cccc dddd eeee ffff gggg hhhh iiii jjjj kkkk llll mmmm nnnn oooo pppp qqqq rrrr ssss tttt uuuu vvvv wwww xxxx NOWRAP-END</p>
+      <p><a href="https://example.com/">LINK-TEXT</a> keeps its clickable rectangle over the shrunk text.</p>
+    </body></html>
+    """;
+
+await SaveShowcaseAsync("shrink_to_fit", "Layout", "Shrink to Fit",
+    "Content wider than the page - a 1200px table and a line that cannot wrap - laid out on a wider sheet and drawn at the scale that fits it across the page, with the page size and its 20mm margins kept: every word is on the page, and the link, as on every shrunk page, stays over its text.",
+    WideContentHtml, new PdfGenerateConfig { PageSize = PageSize.A4, PageOrientation = PageOrientation.Portrait, ShrinkToFit = true });
 
 // --- Border pixel snapping showcases ---
 //

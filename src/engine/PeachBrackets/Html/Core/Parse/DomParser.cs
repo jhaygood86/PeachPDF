@@ -953,11 +953,14 @@ namespace PeachBrackets.Html.Parse
                 ? rootFontPt ?? root.GetEmHeight()
                 : MarginBoxRenderer.ResolveFontSizePt(basePageFontSize);
 
+            // A page scale (HtmlDocumentOptions.PageScale) makes the sheet that many times larger; what an @page rule declares is multiplied by it
+            // (below), so a percentage is measured against the sheet as it would be unscaled and scaled with the rest.
+            var pageScale = htmlContainer.PageScale;
             var lengthContext = new PageLengthContext(
                 emPt,
                 rootFontPt ?? root.GetRemHeight(),
-                htmlContainer.PageSize.Width / pixelsPerPoint,
-                htmlContainer.PageSize.Height / pixelsPerPoint);
+                htmlContainer.PageSize.Width / pixelsPerPoint / pageScale,
+                htmlContainer.PageSize.Height / pixelsPerPoint / pageScale);
             htmlContainer.PageLengthContext = lengthContext;
 
             // Resolve through the same null-aware overload the per-page path uses (see
@@ -970,7 +973,7 @@ namespace PeachBrackets.Html.Parse
             double? ParseMarginLength(string value, bool vertical = false)
             {
                 var pt = ParseLengthToPdfPoints(value, vertical ? lengthContext.ForVertical() : lengthContext);
-                return pt.HasValue ? pt.Value * pixelsPerPoint : null;
+                return pt.HasValue ? pt.Value * pixelsPerPoint * pageScale : null;
             }
 
             // Descend into @layer/@media/@supports/@container so a base @page nested in a layer applies.
@@ -1009,7 +1012,10 @@ namespace PeachBrackets.Html.Parse
                     // caller-configured PdfGenerateConfig size, reconstructed the same way the retry
                     // check above does.
                     var baseSizePt = PeachBrackets.Utilities.Utils.ToPoints(htmlContainer.PageSize, pixelsPerPoint);
-                    htmlContainer.CssPageSize = ParsePageSizeToPdfPoints(pageRule.Style.Size, lengthContext, baseSizePt);
+                    var unscaledBase = new Size(baseSizePt.Width / pageScale, baseSizePt.Height / pageScale);
+                    htmlContainer.CssPageSize = ParsePageSizeToPdfPoints(pageRule.Style.Size, lengthContext, unscaledBase) is { } declared
+                        ? new Size(declared.Width * pageScale, declared.Height * pageScale)
+                        : null;
                 }
             }
         }

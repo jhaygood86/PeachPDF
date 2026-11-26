@@ -73,8 +73,10 @@ namespace PeachPDF.Tests.Integration
             var matrix72 = ExtractPatternMatrix(pdfText72);
             var matrix96 = ExtractPatternMatrix(pdfText96);
 
-            Assert.Equal(matrix72.a, matrix96.a, 2);
-            Assert.Equal(matrix72.d, matrix96.d, 2);
+            // The pattern's matrix maps to the page's own space, which a page drawn at another content scale carries: a pixel is 72 / PixelsPerInch
+            // points, so the shape is 96 / 72 times as large at 72 as at 96.
+            Assert.Equal(matrix96.a * 96d / 72d, matrix72.a, 2);
+            Assert.Equal(matrix96.d * 96d / 72d, matrix72.d, 2);
         }
 
         [Fact]

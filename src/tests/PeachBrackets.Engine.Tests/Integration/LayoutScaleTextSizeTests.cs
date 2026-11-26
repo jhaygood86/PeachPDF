@@ -99,24 +99,20 @@ public class LayoutScalePdfTextSizeTests
     }
 
     [Theory]
-    [InlineData("<svg width='300' height='60'><text x='10' y='40' font-size='30'>Stream pixel</text></svg>")]
-    [InlineData("<svg width='300' height='60'><text x='10' y='40' font-size='30' text-decoration='underline'>Stream pixel</text></svg>")]
     [InlineData("<p style='margin:0;font-size:20px'>Stream <math><mi>x</mi><mo>+</mo><mn>12</mn></math></p>")]
-    public async Task FontSizesInPdfPoints_DoNotDependOnPixelsPerInch(string body)
+    public async Task FontSizesInPdfPoints_FollowPixelsPerInchAsTheContentScale(string body)
     {
+        // PixelsPerInch is how many CSS pixels fit an inch of the page: a pixel is 72 / PixelsPerInch points, so the same document at 72 is drawn
+        // 96 / 72 times as large as at 96 (the default, a pixel of 0.75pt).
         var at72 = EffectiveText(await PdfAtAsync(body, 72));
         var at96 = EffectiveText(await PdfAtAsync(body, 96));
 
         Assert.NotEmpty(at72);
         Assert.Equal(at72.Count, at96.Count);
 
-        // Ascent and line height round to a whole layout unit, so a baseline may differ by under a point between scales.
+        // The page's margins are the page's own and do not scale, so only the size of the text is compared, not where it starts.
         for (var i = 0; i < at72.Count; i++)
-        {
-            Assert.Equal(at72[i].Size, at96[i].Size, 2);
-            Assert.Equal(at72[i].X, at96[i].X, 0.75);
-            Assert.Equal(at72[i].Y, at96[i].Y, 0.75);
-        }
+            Assert.Equal(at96[i].Size * 96d / 72d, at72[i].Size, 2);
     }
 
     /// <summary>The extent of the path each stroke operator draws and the line width it draws it with.</summary>

@@ -31,7 +31,7 @@ namespace PeachPDF.Tests.Integration
         private static string GradientHtml(string css) =>
             $"<!DOCTYPE html><html><head><style>body {{ margin: 0; }} div {{ width: 200px; height: 100px; {css} }}</style></head><body><div></div></body></html>";
 
-        private static async Task<string> GetPdfText(string html, double pixelsPerInch = 72)
+        private static async Task<string> GetPdfText(string html, double pixelsPerInch = 96)
         {
             var config = new PdfGenerateConfig
             {

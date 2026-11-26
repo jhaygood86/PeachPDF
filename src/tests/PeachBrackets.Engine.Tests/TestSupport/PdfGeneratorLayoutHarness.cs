@@ -56,9 +56,10 @@ namespace PeachBrackets.Engine.Tests.TestSupport
         /// <param name="html">the document to lay out</param>
         /// <param name="config">the generator configuration whose page size and margins apply</param>
         internal static async Task<(CssBox Root, HtmlContainerInt Container)> LayoutAsync(
-            string html, PdfGenerateConfig config, Func<HtmlRenderContext, Task>? configureRenderContext = null)
+            string html, PdfGenerateConfig config, Func<HtmlRenderContext, Task>? configureRenderContext = null, double pixelsPerPoint = 1d)
         {
-            var renderContext = new HtmlRenderContext { PixelsPerPoint = config.PixelsPerInch / 72d };
+            // The layout unit is a parameter of the engine, not of the generator: a test of how the engine behaves at a non-default unit sets it here.
+            var renderContext = new HtmlRenderContext { PixelsPerPoint = pixelsPerPoint };
 
             if (configureRenderContext is not null)
             {
@@ -79,68 +80,21 @@ namespace PeachBrackets.Engine.Tests.TestSupport
         /// <c>ScaleToPageSize</c>/<c>ShrinkToFit</c> arm <see cref="LayoutAsync"/>'s own doc comment says
         /// it deliberately skips: the measuring layout pass, and the reload that <c>PdfGenerator.AddPdfPages</c>
         /// only runs when <see cref="PdfGenerator.NeedsRescale"/> says the measured content actually needs a
-        /// different <c>PixelsPerPoint</c> than the one the measuring pass already used. Returns whether that
+        /// different page scale than the one the measuring pass already used (it calls the same <see cref="PdfGenerator.LoadAtScaleAsync"/>). Returns whether that
         /// second pass ran, so a test can assert directly that ordinary non-overflowing content skips it (the
         /// common case a caller pays for on every <c>ShrinkToFit</c> render otherwise) without duplicating
         /// <c>AddPdfPages</c>' own decision inside the assertion itself.
         /// </summary>
-        internal static async Task<(CssBox Root, HtmlContainerInt Container, bool Rescaled, double PixelsPerPoint)> LayoutWithRescaleAsync(
+        internal static async Task<(CssBox Root, HtmlContainerInt Container, bool Rescaled, double PageScale)> LayoutWithRescaleAsync(
             string html, PdfGenerateConfig config)
         {
-            var renderContext = new HtmlRenderContext { PixelsPerPoint = config.PixelsPerInch / 72d };
+            var renderContext = new HtmlRenderContext { PixelsPerPoint = 1d };
             var options = PdfGenerator.ToDocumentOptions(config, SheetSize(config));
 
-            var document = await HtmlDocument.LoadAsync(html, renderContext, options);
-            var contentArea = document.ContentArea;
-            var measure = PdfCanvas.CreateMeasuring(renderContext, contentArea.Width, contentArea.Height);
-
-            var basePixelsPerPoint = config.PixelsPerInch / 72d;
-            var minPixelsPerPoint = config.MinContentWidth > 0
-                ? config.MinContentWidth / contentArea.Width
-                : basePixelsPerPoint;
-            var pixelsPerPoint = minPixelsPerPoint;
-            var needsRescale = true;
-
-            if (config.ScaleToPageSize || config.ShrinkToFit)
-            {
-                await document.LayoutAsync(measure);
-
-                var actualWidth = document.ContentExtent.Width;
-                var candidatePixelsPerPoint = pixelsPerPoint * (actualWidth / contentArea.Width);
-
-                if (candidatePixelsPerPoint < minPixelsPerPoint)
-                {
-                    candidatePixelsPerPoint = minPixelsPerPoint;
-                }
-
-                var effectivePixelsPerPoint = (config.ShrinkToFit && candidatePixelsPerPoint > 1) || config.ScaleToPageSize
-                    ? candidatePixelsPerPoint
-                    : renderContext.PixelsPerPoint;
-
-                needsRescale = PdfGenerator.NeedsRescale(renderContext.PixelsPerPoint, effectivePixelsPerPoint);
-
-                if (needsRescale)
-                {
-                    renderContext.ClearFontCache();
-                    renderContext.PixelsPerPoint = effectivePixelsPerPoint;
-
-                    document.Dispose();
-                    document = await HtmlDocument.LoadAsync(html, renderContext, options);
-
-                    measure.Dispose();
-                    contentArea = document.ContentArea;
-                    measure = PdfCanvas.CreateMeasuring(renderContext, contentArea.Width, contentArea.Height);
-                }
-            }
-
-            if (needsRescale)
-            {
-                await document.LayoutAsync(measure);
-            }
-
+            var (document, measure, pageScale, rescaled) = await PdfGenerator.LoadAtScaleAsync(renderContext, html, config, options);
             measure.Dispose();
 
-            return (document.Container.Root!, document.Container, needsRescale, renderContext.PixelsPerPoint);
+            return (document.Container.Root!, document.Container, rescaled, pageScale);
         }
 
         internal static HtmlDocumentOptions ZeroMargins() => new()

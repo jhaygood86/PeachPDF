@@ -267,7 +267,8 @@ namespace PeachPDF
 
             _renderContext.NetworkLoader = config.NetworkLoader ?? new DataUriNetworkLoader();
             _renderContext.AllowLocalFileAccess = config.AllowLocalFileAccess;
-            _renderContext.PixelsPerPoint = config.PixelsPerInch / 72d;
+            // A layout unit is a point; PixelsPerInch is a scale of the content (see PageScaleFor), not a finer unit.
+            _renderContext.PixelsPerPoint = 1d;
             ApplyRasterizationSettings(config);
 
             // A document the loader supplies says what it is; a string the caller hands over has no type, so it is HTML unless the config says so.
@@ -293,7 +294,33 @@ namespace PeachPDF
             if (config.ScriptHost is not null)
                 options.MeasuringCanvasFactory = () => PdfCanvas.CreateMeasuring(_renderContext, orgPageSize);
 
-            var htmlDocument = await HtmlDocument.LoadAsync(html, _renderContext, options);
+            var (htmlDocument, measure, pageScale, _) = await LoadAtScaleAsync(_renderContext, html, config, options);
+
+            try
+            {
+                await RenderPagesCore(document, htmlDocument, config, scriptSettings: scriptSettings, pageScale: pageScale);
+            }
+            finally
+            {
+                measure.Dispose();
+                htmlDocument.Dispose();
+            }
+        }
+
+        /// <summary>
+        /// Loads <paramref name="html"/> and lays it out at the scale <paramref name="config"/> asks for: <see cref="PdfGenerateConfig.PixelsPerInch"/>,
+        /// then - for <see cref="PdfGenerateConfig.ShrinkToFit"/>, <see cref="PdfGenerateConfig.ScaleToPageSize"/> and
+        /// <see cref="PdfGenerateConfig.MinContentWidth"/> - whatever scale makes the content fit across. A scale of 2 lays the document out on a sheet
+        /// twice as wide and as tall; each page is then drawn at half size. The document is laid out and the measuring canvas it was laid out with is
+        /// handed back; the caller owns both.
+        /// </summary>
+        /// <returns>the laid-out document, its measuring canvas, the scale it was laid out at, and whether it was loaded a second time to get there</returns>
+        internal static async Task<(HtmlDocument Document, PdfCanvas Measure, double PageScale, bool Rescaled)> LoadAtScaleAsync(
+            HtmlRenderContext renderContext, string html, PdfGenerateConfig config, HtmlDocumentOptions options)
+        {
+            var pageScale = options.PageScale;
+            var rescaled = false;
+            var htmlDocument = await HtmlDocument.LoadAsync(html, renderContext, options);
             PdfCanvas? measure = null;
 
             try
@@ -301,49 +328,65 @@ namespace PeachPDF
                 // An @page { size } rule in the document corrects the page size while the document is loaded, so the content area is read back
                 // from the document rather than derived from the configured size.
                 var contentArea = htmlDocument.ContentArea;
-                measure = PdfCanvas.CreateMeasuring(_renderContext, contentArea.Width, contentArea.Height);
+                measure = PdfCanvas.CreateMeasuring(renderContext, contentArea.Width, contentArea.Height);
 
-                var basePixelsPerPoint = config.PixelsPerInch / 72d;
-                var minPixelsPerPoint = config.MinContentWidth > 0 ? config.MinContentWidth / contentArea.Width : basePixelsPerPoint;
-                var pixelsPerPoint = minPixelsPerPoint;
+                // The content area at a scale of 1: what the scales below are measured against, whatever scale the document was just loaded at.
+                var baseContentWidth = contentArea.Width / pageScale;
 
                 // Whether the document has already been laid out at its final scale. A plain render lays out once, below. For
                 // ShrinkToFit/ScaleToPageSize the measurement pass is itself a layout, and is kept when no rescale turns out to be needed.
                 var laidOut = false;
 
+                // The scale content is shrunk by: a scale of 2 lays the document out on a sheet twice as wide and as tall, then draws each page at half
+                // size. MinContentWidth is a floor under the width the content is laid out in.
+                var minScale = config.MinContentWidth > 0 ? config.MinContentWidth / baseContentWidth : pageScale;
+                var targetScale = pageScale;
+
                 if (config.ScaleToPageSize || config.ShrinkToFit)
                 {
-                    await htmlDocument.LayoutAsync(measure);
-
-                    var actualWidth = htmlDocument.ContentExtent.Width;
-
-                    var candidatePixelsPerPoint = pixelsPerPoint * (actualWidth / contentArea.Width);
-
-                    if (candidatePixelsPerPoint < minPixelsPerPoint)
+                    // The measurement pass runs at the floor, so a content width the caller asked for is what overflow is measured against.
+                    if (NeedsRescale(pageScale, minScale))
                     {
-                        candidatePixelsPerPoint = minPixelsPerPoint;
-                    }
-
-                    var effectivePixelsPerPoint = (config.ShrinkToFit && candidatePixelsPerPoint > 1) || config.ScaleToPageSize
-                        ? candidatePixelsPerPoint
-                        : _renderContext.PixelsPerPoint;
-
-                    if (NeedsRescale(_renderContext.PixelsPerPoint, effectivePixelsPerPoint))
-                    {
-                        _renderContext.ClearFontCache();
-                        _renderContext.PixelsPerPoint = effectivePixelsPerPoint;
-
+                        pageScale = minScale;
+                    rescaled = true;
+                        options.PageScale = pageScale;
                         htmlDocument.Dispose();
-                        htmlDocument = await HtmlDocument.LoadAsync(html, _renderContext, options);
+                        htmlDocument = await HtmlDocument.LoadAsync(html, renderContext, options);
 
                         measure.Dispose();
                         contentArea = htmlDocument.ContentArea;
-                        measure = PdfCanvas.CreateMeasuring(_renderContext, contentArea.Width, contentArea.Height);
+                        measure = PdfCanvas.CreateMeasuring(renderContext, contentArea.Width, contentArea.Height);
                     }
-                    else
-                    {
-                        laidOut = true;
-                    }
+
+                    await htmlDocument.LayoutAsync(measure);
+                    laidOut = true;
+
+                    var actualWidth = htmlDocument.ContentExtent.Width;
+
+                    // The scale at which what was measured just fits, with a hair of room so content that fills the width exactly does not wrap. Content
+                    // that fits as it is (an ordinary block stretches to the width it is given) keeps the scale it was measured at.
+                    var neededScale = actualWidth / baseContentWidth;
+                    var candidateScale = neededScale > minScale * (1 + 1e-9) ? neededScale * (1 + 1e-6) : Math.Max(neededScale, minScale);
+
+                    targetScale = (config.ShrinkToFit && candidateScale > minScale) || config.ScaleToPageSize ? candidateScale : pageScale;
+                }
+                else if (config.MinContentWidth > 0)
+                {
+                    targetScale = Math.Max(pageScale, minScale);
+                }
+
+                if (NeedsRescale(pageScale, targetScale))
+                {
+                    pageScale = targetScale;
+                rescaled = true;
+                    options.PageScale = pageScale;
+                    htmlDocument.Dispose();
+                    htmlDocument = await HtmlDocument.LoadAsync(html, renderContext, options);
+
+                    measure.Dispose();
+                    contentArea = htmlDocument.ContentArea;
+                    measure = PdfCanvas.CreateMeasuring(renderContext, contentArea.Width, contentArea.Height);
+                    laidOut = false;
                 }
 
                 if (!laidOut)
@@ -351,12 +394,13 @@ namespace PeachPDF
                     await htmlDocument.LayoutAsync(measure);
                 }
 
-                await RenderPagesCore(document, htmlDocument, config, scriptSettings: scriptSettings);
+                return (htmlDocument, measure!, pageScale, rescaled);
             }
-            finally
+            catch
             {
                 measure?.Dispose();
                 htmlDocument.Dispose();
+                throw;
             }
         }
 
@@ -648,13 +692,16 @@ namespace PeachPDF
 
             _renderContext.NetworkLoader = config.NetworkLoader ?? new DataUriNetworkLoader();
             _renderContext.AllowLocalFileAccess = config.AllowLocalFileAccess;
-            _renderContext.PixelsPerPoint = config.PixelsPerInch / 72d;
+            // A layout unit is a point; PixelsPerInch is a scale of the content (see PageScaleFor), not a finer unit.
+            _renderContext.PixelsPerPoint = 1d;
             ApplyRasterizationSettings(config);
 
+            var pageScale = PageScaleFor(config);
             var options = new HtmlDocumentOptions
             {
                 PageWidthPoints = orgPageSize.Width,
                 PageHeightPoints = orgPageSize.Height,
+                PageScale = pageScale,
                 MarginTopPoints = pageDescriptor.MarginTopOverride ?? config.MarginTop,
                 MarginBottomPoints = pageDescriptor.MarginBottomOverride ?? config.MarginBottom,
                 MarginLeftPoints = pageDescriptor.MarginLeftOverride ?? config.MarginLeft,
@@ -706,6 +753,7 @@ namespace PeachPDF
             {
                 PageWidthPoints = sheet.Width,
                 PageHeightPoints = sheet.Height,
+                PageScale = PageScaleFor(config),
                 MarginTopPoints = config.MarginTop,
                 MarginRightPoints = config.MarginRight,
                 MarginBottomPoints = config.MarginBottom,
@@ -743,7 +791,7 @@ namespace PeachPDF
         /// document-building path that builds a <c>Html.Dom.CssBox</c> tree directly instead
         /// of parsing HTML. The caller owns its own measure context and disposes it after this returns.
         /// </summary>
-        private async Task RenderPagesCore(PeachPdfDocument document, HtmlDocument htmlDocument, PdfGenerateConfig config, FileLayerPlan? fileLayers = null, PdfScriptSettings? scriptSettings = null)
+        private async Task RenderPagesCore(PeachPdfDocument document, HtmlDocument htmlDocument, PdfGenerateConfig config, FileLayerPlan? fileLayers = null, PdfScriptSettings? scriptSettings = null, double? pageScale = null)
         {
             // The scripts have all run and the layout is final: a script that asked for the conversion to fail ends it before anything is written,
             // and the files a script asked to attach are read now, while this call can still wait for them.
@@ -782,10 +830,13 @@ namespace PeachPDF
             // The outline entries and form fields below name pages of this section, which are not the document's first pages when an earlier
             // section or an added PDF came before it.
             var pageBase = document.Composer.Pages.Count;
+            var scale = pageScale ?? PageScaleFor(config);
             foreach (var htmlPage in htmlDocument.Pages)
             {
                 var pageNumber = document.Composer.Pages.Count + 1;
-                var page = document.Composer.AddPage(htmlPage.WidthPoints, htmlPage.HeightPoints);
+                // A page laid out on a sheet `scale` times the size of the one it is drawn on is drawn at 1 / scale of its size.
+                var page = document.Composer.AddPage(htmlPage.WidthPoints / scale, htmlPage.HeightPoints / scale);
+                page.SetContentScale(1 / scale);
                 if (htmlPage.HasPrintBoxes)
                     page.SetPrintBoxes(htmlPage.BleedPoints, htmlPage.MarksPoints);
 
@@ -1015,6 +1066,23 @@ namespace PeachPDF
             config.PageSize != PageSize.Undefined ? PageSizeConverter.ToSize(config.PageSize)
             : config.ManualPageWidth > 0 && config.ManualPageHeight > 0 ? new Size(config.ManualPageWidth, config.ManualPageHeight)
             : PageSizeConverter.ToSize(PageSize.Letter);
+
+        /// <summary>
+        /// How much content is shrunk by, as <see cref="PdfGenerateConfig.PixelsPerInch"/> asks for it: a CSS pixel is 1/96 inch, so 96 (the
+        /// default) leaves content at its CSS size (0.75pt to the pixel), 144 draws it two thirds the size (a pixel is 0.5pt) and 72 at four thirds
+        /// (a pixel is 1pt). <see cref="PdfGenerateConfig.ShrinkToFit"/>, <see cref="PdfGenerateConfig.ScaleToPageSize"/> and
+        /// <see cref="PdfGenerateConfig.MinContentWidth"/> go on from there.
+        /// </summary>
+        internal static double PageScaleFor(PdfGenerateConfig config)
+        {
+            if (!(config.PixelsPerInch > 0) || double.IsInfinity(config.PixelsPerInch))
+            {
+                throw new ArgumentOutOfRangeException(nameof(config), config.PixelsPerInch,
+                    "PdfGenerateConfig.PixelsPerInch must be a positive, finite number.");
+            }
+
+            return config.PixelsPerInch / PdfGenerateConfig.CssPixelsPerInch;
+        }
 
         /// <summary>
         /// Whether a <c>ScaleToPageSize</c>/<c>ShrinkToFit</c> render needs its font-cache clear,

@@ -72,7 +72,7 @@ public sealed partial class PdfFormBuilder
         var contentName = $"{_generatedNamePrefix}Disclosure{id}Content";
         var openName = $"{_generatedNamePrefix}Disclosure{id}Open";
 
-        PdfRectangle ToPdf(Rect bounds) => new(new Rect(bounds.X, page.HeightPoints - (bounds.Y + bounds.Height), bounds.Width, bounds.Height));
+        PdfRectangle ToPdf(Rect bounds) => new(page.ToPageSpace(bounds));
 
         if (disclosure.InitiallyOpen)
         {

@@ -137,11 +137,12 @@ public sealed class PdfAnnotationBuilder
         ArgumentNullException.ThrowIfNull(page);
         ArgumentNullException.ThrowIfNull(annotation);
 
+        var scale = page.ContentScale;
         var height = page.HeightPoints;
         var bounds = annotation.Bounds;
         var engine = new PdfGenericAnnotation(_document, annotation.Subtype)
         {
-            Rectangle = new PdfRectangle(new Rect(bounds.X, height - (bounds.Y + bounds.Height), bounds.Width, bounds.Height)),
+            Rectangle = new PdfRectangle(page.ToPageSpace(bounds)),
             Text = annotation.Contents,
         };
 
@@ -159,13 +160,13 @@ public sealed class PdfAnnotationBuilder
             engine.SetName("/Name", icon);
 
         if (annotation.QuadPoints.Count > 0)
-            engine.SetNumbers("/QuadPoints", Flip(annotation.QuadPoints, height));
+            engine.SetNumbers("/QuadPoints", Flip(annotation.QuadPoints, height, scale));
         if (annotation.InkStrokes.Count > 0)
-            engine.SetNumberLists("/InkList", annotation.InkStrokes.Select(stroke => Flip(stroke, height)));
+            engine.SetNumberLists("/InkList", annotation.InkStrokes.Select(stroke => Flip(stroke, height, scale)));
         if (annotation.Vertices.Count > 0)
-            engine.SetNumbers("/Vertices", Flip(annotation.Vertices, height));
+            engine.SetNumbers("/Vertices", Flip(annotation.Vertices, height, scale));
         if (annotation.LineEnds.Count == 2)
-            engine.SetNumbers("/L", Flip(annotation.LineEnds, height));
+            engine.SetNumbers("/L", Flip(annotation.LineEnds, height, scale));
 
         var flags = annotation.NotPrinted ? (PdfAnnotationFlags)0 : PdfAnnotationFlags.Print;
         if (annotation.ReadOnly) flags |= PdfAnnotationFlags.ReadOnly;
@@ -230,12 +231,12 @@ public sealed class PdfAnnotationBuilder
         return [r / 255.0, g / 255.0, b / 255.0];
     }
 
-    private static IEnumerable<double> Flip(IEnumerable<PaintPoint> points, double pageHeight)
+    private static IEnumerable<double> Flip(IEnumerable<PaintPoint> points, double pageHeight, double scale)
     {
         foreach (var point in points)
         {
-            yield return point.X;
-            yield return pageHeight - point.Y;
+            yield return point.X * scale;
+            yield return pageHeight - (point.Y * scale);
         }
     }
 }
