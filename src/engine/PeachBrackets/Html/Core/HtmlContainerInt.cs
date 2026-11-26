@@ -1609,6 +1609,9 @@ namespace PeachBrackets.Html
         /// <summary>Whether a script's canvas keeps a bitmap of the host's backend (<see cref="HtmlDocumentOptions.CanvasSurfaces"/>).</summary>
         internal bool CanvasSurfaces { get; set; }
 
+        /// <summary>Whether a canvas whose children are drawable is a box that holds them (see <see cref="HtmlDocumentOptions.LayoutCanvasSubtrees"/>).</summary>
+        internal bool LayoutCanvasSubtrees { get; set; }
+
         /// <summary>What scripts drew on <c>canvas</c> elements, by the element's source ordinal.</summary>
         internal System.Collections.Generic.Dictionary<int, ScriptHosting.ScriptCanvasPainting> CanvasPaintings { get; } = [];
 

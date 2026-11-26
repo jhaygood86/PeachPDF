@@ -330,3 +330,59 @@ public class CanvasWideGamutTests
         Assert.Equal(["2,0.5,0,1 234,51,35,255 255,0,0,255"], log);
     }
 }
+
+/// <summary>HTML in canvas: the children of a canvas with content="drawable" are laid out, painted on request and drawn onto its 2D context.</summary>
+public class HtmlInCanvasTests
+{
+    private static async Task<List<string>> LogAsync(string body, string script)
+    {
+        var (_, log) = await CanvasParityTests.PaintAsync("var c = document.getElementById('c'); var g = c.getContext('2d'); function name(f) { try { f(); return 'none'; } catch (e) { return e.name; } } " + script, "width=4 height=4");
+        return log;
+    }
+
+    private const string Setup = """
+        var host = document.createElement('div');
+        host.innerHTML = '<canvas id="k" width="60" height="40" content="drawable"><div id="kid" drawable style="width:30px;height:20px;background:#0f0"></div><div id="plain" style="width:5px;height:5px"></div></canvas>';
+        document.body.appendChild(host);
+        var k = document.getElementById('k'), kid = document.getElementById('kid'), kg = k.getContext('2d');
+        function paint() { return new Promise(function (resolve) { k.addEventListener('paint', resolve, { once: true }); k.requestPaint(); }); }
+        """;
+
+    [Fact]
+    public async Task ADrawableChild_HasASizeOnceTheCanvasHasPainted_AndIsDrawnWithItsOwnPixels()
+    {
+        var log = await LogAsync("", Setup + """
+            var before = name(function () { k.getElementImageDefaultSize(kid); });
+            paint().then(function (event) {
+                var size = k.getElementImageDefaultSize(kid);
+                kg.drawElementImage(kid, 5, 6);
+                var pixel = Array.from(kg.getImageData(10, 10, 1, 1).data).join(',');
+                var outside = Array.from(kg.getImageData(40, 10, 1, 1).data).join(',');
+                Log.info([before, size.width, size.height, event instanceof CanvasPaintEvent, event.changedElements.length, pixel, outside, k.getElementTransform(kid).e, k.getElementTransform(kid).f].join(' '));
+            });
+            """);
+
+        Assert.Equal(["InvalidStateError 30 20 true 0 0,255,0,255 0,0,0,0 5 6"], log);
+    }
+
+    [Fact]
+    public async Task OnlyDrawableChildrenOfAContentDrawableCanvas_CanBeCapturedOrDrawn_AndAChangeIsReportedAsOne()
+    {
+        var log = await LogAsync("", Setup + """
+            paint().then(function () {
+                var plain = document.getElementById('plain');
+                var errors = [name(function () { k.captureElementImage(plain); }), name(function () { kg.drawElementImage(plain, 0, 0); }), name(function () { k.updateElementGeometry(document.body); })].join(',');
+                var image = k.captureElementImage(kid);
+                var other = document.createElement('canvas').getContext('2d');
+                var changed;
+                k.onpaint = function (e) { changed = e.changedElements; };
+                kid.style.height = '25px';
+                new Promise(function (resolve) { requestAnimationFrame(function () { setTimeout(resolve, 0); }); }).then(function () {
+                    Log.info([errors, 'width' in image, changed.length, changed[0] === kid, k.getElementImageDefaultSize(kid).height].join(' '));
+                });
+            });
+            """);
+
+        Assert.Equal(["InvalidStateError,InvalidStateError,InvalidStateError false 1 true 25"], log);
+    }
+}

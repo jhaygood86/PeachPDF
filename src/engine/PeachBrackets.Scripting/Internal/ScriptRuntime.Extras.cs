@@ -88,6 +88,7 @@ internal sealed partial class ScriptRuntime
         InstallCanvas();
         InstallCanvasPixels();
         InstallOffscreenContext();
+        InstallHtmlInCanvas();
         InstallNodeOrdering();
         InstallParsingMethods();
         InstallPseudoAttributes();

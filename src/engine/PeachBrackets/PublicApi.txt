@@ -862,6 +862,7 @@ PeachBrackets.ScriptHosting.ScriptDocument : sealed class
   method ScriptBox? GetLayoutBox(ScriptNode element)
   method ScriptDocument CreateDocument(Boolean html, Boolean withDocumentType, String contentType = null)
   method ScriptDocument ParseDocument(String html)
+  method ScriptElementPicture RenderElement(ScriptNode element)
   method ScriptNode AdoptNode(ScriptNode node)
   method ScriptNode CreateCDataSection(String data)
   method ScriptNode CreateComment(String data)
@@ -901,6 +902,17 @@ PeachBrackets.ScriptHosting.ScriptDocument : sealed class
   property String Title { get; }
   property Uri BaseAddress { get; }
   property Uri BaseUri { get; }
+PeachBrackets.ScriptHosting.ScriptElementPicture : sealed class
+  ctor(Image Image, Double Width, Double Height)
+  method ScriptElementPicture <Clone>$()
+  method Void Deconstruct(out Image Image, out Double Width, out Double Height)
+  method virtual Boolean Equals(Object obj)
+  method virtual Boolean Equals(ScriptElementPicture other)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property Double Height { get; init; }
+  property Double Width { get; init; }
+  property Image Image { get; init; }
 PeachBrackets.ScriptHosting.ScriptImageInfo : sealed class
   ctor(Double Width, Double Height, String Address)
   method ScriptImageInfo <Clone>$()

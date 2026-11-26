@@ -290,6 +290,12 @@ public sealed class HtmlDocumentOptions
     /// </summary>
     public IList<PeachBrackets.ScriptHosting.ScriptApi> ScriptApis { get; private set; } = [];
 
+    /// <summary>
+    /// Whether a <c>canvas</c> that makes its children drawable (<c>content="drawable"</c>) is laid out as a box that holds them, instead of as a replaced element showing what a script drew.
+    /// The script probe answers where the children are and draws them from such a document; the document a page is shown from does not.
+    /// </summary>
+    internal bool LayoutCanvasSubtrees { get; set; }
+
     internal HtmlDocumentOptions CloneWithoutScripts()
     {
         var copy = (HtmlDocumentOptions)MemberwiseClone();
@@ -300,6 +306,10 @@ public sealed class HtmlDocumentOptions
 
         // The probe answers where text is (the rectangles of a range, the character at a point), which the text runs have.
         copy.RecordTextRuns = true;
+
+        // ... and where the children of a canvas are, which the canvas itself does not lay out.
+        copy.LayoutCanvasSubtrees = true;
+        copy.UserStyleSheet += "\ncanvas[content=drawable] { display: inline-block; background: transparent !important; border-color: transparent !important; box-shadow: none !important; outline: none !important; }\n";
         return copy;
     }
 

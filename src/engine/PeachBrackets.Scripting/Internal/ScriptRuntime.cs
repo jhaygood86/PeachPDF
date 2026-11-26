@@ -197,6 +197,8 @@ internal sealed partial class ScriptRuntime
         FireEvent(Window, "load", bubbles: false, cancelable: false);
         RunMicrotasks();
 
+        // The canvases that make their children drawable paint once the page has loaded.
+        StartInitialCanvasPaints();
         await PlayTimersAsync();
         ReportPendingWork();
     }

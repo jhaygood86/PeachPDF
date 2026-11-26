@@ -111,6 +111,7 @@ internal sealed partial class ScriptRuntime
     {
         HandleMediaMutation(mutation);
         HandleSvgImageMutation(mutation);
+        HandleCanvasSubtreeMutation(mutation);
         var target = mutation.Target;
         if (mutation.Kind == ScriptMutationKind.Attributes && mutation.AttributeName is { } name)
         {

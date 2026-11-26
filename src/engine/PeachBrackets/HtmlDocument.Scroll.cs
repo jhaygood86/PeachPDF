@@ -106,6 +106,44 @@ public sealed partial class HtmlDocument
         return (points.X / pointsPerPixel, points.Y / pointsPerPixel, points.Width / pointsPerPixel, points.Height / pointsPerPixel);
     }
 
+    /// <summary>
+    /// Draws the element that is the <paramref name="ordinal"/>-th element of the source, as it is laid out here, onto a new surface of its own size (one device pixel to a CSS pixel) and gives
+    /// the picture. What overlaps the element on the page is drawn with it. Null when there is no such element or it has no area to draw.
+    /// </summary>
+    internal async System.Threading.Tasks.ValueTask<(PeachDrawing.Core.Image Image, double Width, double Height)?> ProbeRenderAsync(int ordinal, Func<int, int, PeachDrawing.Core.OffscreenSurface?> makeSurface)
+    {
+        _ = Pages;
+        if (FindByOrdinal(_container.Root, ordinal) is not { } found)
+            return null;
+
+        var box = PeachBrackets.Html.Utils.DomUtils.ResolveGeometryBox(found);
+        var rect = PeachBrackets.Html.Utils.CommonUtils.GetFirstValueOrDefault(box.Rectangles, box.Bounds);
+        var layoutPerPixel = _unitsPerPoint * 0.75;
+        var (width, height) = (rect.Width / layoutPerPixel, rect.Height / layoutPerPixel);
+        if (!(width > 0) || !(height > 0) || width > 16384 || height > 16384)
+            return null;
+
+        var (pixelsWide, pixelsHigh) = ((int)Math.Ceiling(width - 1e-6), (int)Math.Ceiling(height - 1e-6));
+        using var surface = makeSurface(Math.Max(1, pixelsWide), Math.Max(1, pixelsHigh));
+        if (surface is null)
+            return null;
+
+        // The page's layout units become pixels, and the element's corner the picture's.
+        var canvas = surface.Canvas;
+        canvas.PushTransform(System.Numerics.Matrix3x2.CreateTranslation((float)-rect.X, (float)-rect.Y) * System.Numerics.Matrix3x2.CreateScale((float)(1 / layoutPerPixel)));
+        try
+        {
+            var region = new Rect(rect.X / _unitsPerPoint, rect.Y / _unitsPerPoint, rect.Width / _unitsPerPoint, rect.Height / _unitsPerPoint);
+            await PaintPageRegionAsync(0, canvas, region);
+        }
+        finally
+        {
+            canvas.PopTransform();
+        }
+
+        return (surface.CreateSnapshot(), width, height);
+    }
+
     // The text runs that lie in the element that is the ordinal-th of the source, in the order they are in the document.
     private List<TextRun> RunsIn(int ordinal)
     {

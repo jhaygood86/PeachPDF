@@ -185,6 +185,47 @@ public sealed class ScriptDocument
         return new ScriptBox(bounds.X, bounds.Y, bounds.Width, bounds.Height);
     }
 
+    private readonly Dictionary<int, ScriptElementPicture?> _pictures = [];
+    private int _picturesVersion = -1;
+
+    /// <summary>
+    /// A picture of an element as it is laid out in the document now (drawn from the probe, which lays out the children of a canvas that makes them drawable), at one pixel to a CSS pixel.
+    /// Kept until the document changes; the document owns it.
+    /// </summary>
+    /// <param name="element">the element</param>
+    /// <returns>the picture, or null when there is no layout to draw from (see <see cref="CanMeasure"/>) or the element has no area</returns>
+    public ScriptElementPicture? RenderElement(ScriptNode element)
+    {
+        ArgumentNullException.ThrowIfNull(element);
+        var ordinal = OrdinalOf(element);
+        if (ordinal < 0 || CurrentProbe() is not { } probe || !_container.CanvasSurfaces && _container.MeasuringCanvasFactory is null)
+            return null;
+
+        if (_picturesVersion != Version)
+        {
+            foreach (var old in _pictures.Values)
+                old?.Image.Dispose();
+
+            _pictures.Clear();
+            _picturesVersion = Version;
+        }
+
+        if (_pictures.TryGetValue(ordinal, out var cached))
+            return cached;
+
+        using var measuring = CreateMeasuringCanvas();
+        ScriptElementPicture? made = null;
+        if (measuring is not null)
+        {
+            var rendered = probe.ProbeRenderAsync(ordinal, (w, h) => measuring.CreateOffscreenSurface(w, h)).AsTask().GetAwaiter().GetResult();
+            if (rendered is { } picture)
+                made = new ScriptElementPicture(picture.Image, picture.Width, picture.Height);
+        }
+
+        _pictures[ordinal] = made;
+        return made;
+    }
+
     /// <summary>The rectangles the characters from <paramref name="from"/> to <paramref name="to"/> of an element's text take in the document as it is now, one for each stretch of a line, in CSS pixels.</summary>
     /// <param name="element">the element that holds the text</param>
     /// <param name="from">the index of the first character</param>

@@ -125,9 +125,18 @@ namespace PeachBrackets.Html.Parse
             DocumentMode mode;
             using (EngineTelemetry.Source.StartActivity("html.parse"))
             {
-                root = htmlContainer.DocumentSyntax == DocumentSyntax.Xml
-                    ? XhtmlParser.ParseDocument(html, out mode)
-                    : HtmlParser.ParseDocument(html, out mode, document: true, scripting: htmlContainer.ScriptHost is not null);
+                // The boxes are made while the text is parsed, before they belong to the container, so what they need of it is said here (the parse does not yield).
+                CssBox.CanvasSubtreesWanted = htmlContainer.LayoutCanvasSubtrees;
+                try
+                {
+                    root = htmlContainer.DocumentSyntax == DocumentSyntax.Xml
+                        ? XhtmlParser.ParseDocument(html, out mode)
+                        : HtmlParser.ParseDocument(html, out mode, document: true, scripting: htmlContainer.ScriptHost is not null);
+                }
+                finally
+                {
+                    CssBox.CanvasSubtreesWanted = false;
+                }
             }
 
             // Before anything reads it: the style sheets' @media block for quirks mode, selector matching and layout all go by it.
