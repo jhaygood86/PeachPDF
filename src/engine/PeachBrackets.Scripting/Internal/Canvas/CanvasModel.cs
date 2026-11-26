@@ -363,6 +363,12 @@ internal sealed class CanvasState
 
     public string Filter { get; set; } = "none";
 
+    /// <summary>The effects <see cref="Filter"/> (or <see cref="FilterObject"/>) stands for.</summary>
+    public LayerEffect[] FilterEffects { get; set; } = [];
+
+    /// <summary>The <c>CanvasFilter</c> the filter was set to, which is what reading <c>filter</c> gives back, when it was set to one.</summary>
+    public object? FilterObject { get; set; }
+
     public List<(PathData Path, FillMode Rule)> Clips { get; set; } = [];
 
     public CanvasState Clone() => new()
@@ -371,7 +377,7 @@ internal sealed class CanvasState
         MiterLimit = MiterLimit, LineDash = LineDash, LineDashOffset = LineDashOffset, GlobalAlpha = GlobalAlpha, Composite = Composite,
         ShadowColor = ShadowColor, ShadowColorText = ShadowColorText, ShadowBlur = ShadowBlur, ShadowOffsetX = ShadowOffsetX, ShadowOffsetY = ShadowOffsetY,
         Font = Font, TextAlign = TextAlign, TextBaseline = TextBaseline, Direction = Direction, ImageSmoothing = ImageSmoothing,
-        ImageSmoothingQuality = ImageSmoothingQuality, Filter = Filter, Clips = [.. Clips],
+        ImageSmoothingQuality = ImageSmoothingQuality, Filter = Filter, FilterEffects = FilterEffects, FilterObject = FilterObject, Clips = [.. Clips],
     };
 }
 
@@ -470,6 +476,8 @@ internal sealed class CanvasBitmap(ScriptDocument document, double width, double
         State.ShadowOffsetX = 0;
         State.ShadowOffsetY = 0;
         State.Filter = "none";
+        State.FilterEffects = [];
+        State.FilterObject = null;
     }
 
     /// <summary>Whether <see cref="EndLayer"/> can close a layer here: one is open and no <c>save()</c> made inside it is still waiting for its restore.</summary>
@@ -483,7 +491,8 @@ internal sealed class CanvasBitmap(ScriptDocument document, double width, double
 
         var ops = frame.Ops.ToArray();
         var effects = frame.Effects;
-        var bounds = new Rect(0, 0, Width, Height);
+        var margin = FilterMargin(effects);
+        var bounds = new Rect(-margin, -margin, Width + 2 * margin, Height + 2 * margin);
 
         // The layer's own transform is already in each operation; the state's alpha, operator, shadow and clips composite the whole.
         var composite = State.Clone();
@@ -734,6 +743,26 @@ internal sealed class CanvasBitmap(ScriptDocument document, double width, double
         var (shadowDx, shadowDy, sigma, shadowColor) = (state.ShadowOffsetX, state.ShadowOffsetY, state.ShadowBlur / 2, state.ShadowColor);
         var (width, height) = (Width, Height);
 
+        // The filter acts on the shape alone: before the shadow (which is the filtered shape's) and before alpha and compositing.
+        var filterEffects = state.FilterEffects;
+        var filterMargin = FilterMargin(filterEffects);
+        void Content(PeachDrawing.Core.Canvas target)
+        {
+            using var filter = filterEffects.Length > 0
+                ? target.BeginLayer(new LayerOptions(1.0, PaintBlendMode.Normal, null, new Rect(-filterMargin, -filterMargin, width + 2 * filterMargin, height + 2 * filterMargin), filterEffects))
+                : null;
+            var inner = filter?.Canvas ?? target;
+            inner.PushTransform(matrix);
+            try
+            {
+                draw(inner);
+            }
+            finally
+            {
+                inner.PopTransform();
+            }
+        }
+
         AddOp(canvas =>
         {
             foreach (var (clip, rule) in clips)
@@ -745,7 +774,7 @@ internal sealed class CanvasBitmap(ScriptDocument document, double width, double
             try
             {
                 if (hasShadow)
-                    DrawShadow(canvas, draw, matrix, (shadowDx, shadowDy), sigma, shadowColor, alpha, blend, width, height);
+                    DrawShadow(canvas, Content, (shadowDx, shadowDy), sigma, shadowColor, alpha, blend, width, height);
 
                 CanvasLayer? layer = null;
                 if (alpha < 1 || blend != PaintBlendMode.Normal)
@@ -753,16 +782,7 @@ internal sealed class CanvasBitmap(ScriptDocument document, double width, double
 
                 try
                 {
-                    var target = layer?.Canvas ?? canvas;
-                    target.PushTransform(matrix);
-                    try
-                    {
-                        draw(target);
-                    }
-                    finally
-                    {
-                        target.PopTransform();
-                    }
+                    Content(layer?.Canvas ?? canvas);
                 }
                 finally
                 {
@@ -780,7 +800,7 @@ internal sealed class CanvasBitmap(ScriptDocument document, double width, double
     // The shadow of one drawing: the drawing in a layer over the visible canvas (and as far beyond it as the blur reaches), moved by the offset first so that a shape outside
     // the canvas whose shadow falls inside it is still drawn, recolored to the shadow color with the shape's alpha kept, and blurred. A backend that cannot make the layer
     // draws no shadow.
-    private static void DrawShadow(PeachDrawing.Core.Canvas canvas, Action<PeachDrawing.Core.Canvas> draw, Matrix3x2 matrix, (double X, double Y) offset, double sigma, PaintColor color,
+    private static void DrawShadow(PeachDrawing.Core.Canvas canvas, Action<PeachDrawing.Core.Canvas> draw, (double X, double Y) offset, double sigma, PaintColor color,
         double alpha, PaintBlendMode blend, double width, double height)
     {
         // Every color becomes the shadow color and the alpha is the shape's times the shadow color's.
@@ -797,7 +817,6 @@ internal sealed class CanvasBitmap(ScriptDocument document, double width, double
 
         var target = layer.Canvas;
         target.PushTransform(Matrix3x2.CreateTranslation((float)offset.X, (float)offset.Y));
-        target.PushTransform(matrix);
         try
         {
             draw(target);
@@ -805,8 +824,24 @@ internal sealed class CanvasBitmap(ScriptDocument document, double width, double
         finally
         {
             target.PopTransform();
-            target.PopTransform();
         }
+    }
+
+    // How far beyond the canvas what a filter draws can reach, so a layer is cut wide enough that a blur or a shadow is not clipped at the canvas's edge.
+    private static double FilterMargin(LayerEffect[] effects)
+    {
+        double margin = 0;
+        foreach (var effect in effects)
+        {
+            margin += effect switch
+            {
+                BlurEffect blur => 3 * Math.Max(blur.SigmaX, blur.SigmaY),
+                DropShadowEffect shadow => Math.Abs(shadow.OffsetX) + Math.Abs(shadow.OffsetY) + 3 * Math.Max(shadow.SigmaX, shadow.SigmaY),
+                _ => 0,
+            };
+        }
+
+        return effects.Length == 0 ? 0 : margin + 2;
     }
 
     /// <summary>Starts over: everything drawn so far is dropped (what <c>clearRect</c> over the whole canvas comes to).</summary>

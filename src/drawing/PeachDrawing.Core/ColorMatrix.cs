@@ -1,3 +1,5 @@
+using System;
+using System.Collections.Generic;
 using System.Numerics;
 
 namespace PeachDrawing.Core
@@ -143,5 +145,121 @@ namespace PeachDrawing.Core
                     System.MathF.Abs(Linear.M41) < epsilon && System.MathF.Abs(Linear.M42) < epsilon && System.MathF.Abs(Linear.M43) < epsilon;
             }
         }
+
+        // ---- the matrices CSS Filter Effects 1 section 3 gives its color functions
+
+        /// <summary>The matrix of CSS <c>brightness()</c>: every color channel is multiplied by <paramref name="amount"/>.</summary>
+        public static ColorMatrix Brightness(double amount)
+        {
+            var a = (float)amount;
+            return new ColorMatrix(Matrix4x4.CreateScale(a, a, a), Vector4.Zero);
+        }
+
+        /// <summary>The matrix of CSS <c>contrast()</c>: each color channel's distance from the middle grey is multiplied by <paramref name="amount"/>.</summary>
+        public static ColorMatrix Contrast(double amount)
+        {
+            var a = (float)amount;
+            var intercept = 0.5f - 0.5f * a;
+            return new ColorMatrix(Matrix4x4.CreateScale(a, a, a), new Vector4(intercept, intercept, intercept, 0f));
+        }
+
+        /// <summary>The matrix of CSS <c>invert()</c>; <paramref name="amount"/> is the share of the way to the negative, 0 to 1.</summary>
+        public static ColorMatrix Invert(double amount)
+        {
+            var a = (float)Math.Clamp(amount, 0.0, 1.0);
+            var slope = 1f - 2f * a;
+            return new ColorMatrix(Matrix4x4.CreateScale(slope, slope, slope), new Vector4(a, a, a, 0f));
+        }
+
+        /// <summary>The matrix of CSS <c>opacity()</c>: the alpha is multiplied by <paramref name="amount"/> (0 to 1).</summary>
+        public static ColorMatrix Opacity(double amount)
+        {
+            var matrix = Matrix4x4.Identity;
+            matrix.M44 = (float)Math.Clamp(amount, 0.0, 1.0);
+            return new ColorMatrix(matrix, Vector4.Zero);
+        }
+
+        /// <summary>The matrix of CSS <c>grayscale()</c>; <paramref name="amount"/> is the share of the way to grey, 0 to 1.</summary>
+        public static ColorMatrix Grayscale(double amount)
+        {
+            var i = (float)(1 - Math.Clamp(amount, 0.0, 1.0));
+            return FromRows(
+                0.2126f + 0.7874f * i, 0.7152f - 0.7152f * i, 0.0722f - 0.0722f * i,
+                0.2126f - 0.2126f * i, 0.7152f + 0.2848f * i, 0.0722f - 0.0722f * i,
+                0.2126f - 0.2126f * i, 0.7152f - 0.7152f * i, 0.0722f + 0.9278f * i);
+        }
+
+        /// <summary>The matrix of CSS <c>sepia()</c>; <paramref name="amount"/> is the share of the way to sepia, 0 to 1.</summary>
+        public static ColorMatrix Sepia(double amount)
+        {
+            var i = (float)(1 - Math.Clamp(amount, 0.0, 1.0));
+            return FromRows(
+                0.393f + 0.607f * i, 0.769f - 0.769f * i, 0.189f - 0.189f * i,
+                0.349f - 0.349f * i, 0.686f + 0.314f * i, 0.168f - 0.168f * i,
+                0.272f - 0.272f * i, 0.534f - 0.534f * i, 0.131f + 0.869f * i);
+        }
+
+        /// <summary>The matrix of CSS <c>saturate()</c> and of <c>feColorMatrix type="saturate"</c>: 1 leaves the colors, 0 is grey, more than 1 oversaturates.</summary>
+        public static ColorMatrix Saturate(double amount)
+        {
+            var s = (float)amount;
+            return FromRows(
+                0.213f + 0.787f * s, 0.715f - 0.715f * s, 0.072f - 0.072f * s,
+                0.213f - 0.213f * s, 0.715f + 0.285f * s, 0.072f - 0.072f * s,
+                0.213f - 0.213f * s, 0.715f - 0.715f * s, 0.072f + 0.928f * s);
+        }
+
+        /// <summary>The matrix of CSS <c>hue-rotate()</c> and of <c>feColorMatrix type="hueRotate"</c>.</summary>
+        /// <param name="radians">the angle to turn the hue by</param>
+        public static ColorMatrix HueRotate(double radians)
+        {
+            var c = (float)Math.Cos(radians);
+            var n = (float)Math.Sin(radians);
+            return FromRows(
+                0.213f + c * 0.787f - n * 0.213f, 0.715f - c * 0.715f - n * 0.715f, 0.072f - c * 0.072f + n * 0.928f,
+                0.213f - c * 0.213f + n * 0.143f, 0.715f + c * 0.285f + n * 0.140f, 0.072f - c * 0.072f - n * 0.283f,
+                0.213f - c * 0.213f - n * 0.787f, 0.715f - c * 0.715f + n * 0.715f, 0.072f + c * 0.928f + n * 0.072f);
+        }
+
+        /// <summary>The matrix of <c>feColorMatrix type="luminanceToAlpha"</c>: the color goes, and the alpha becomes the color's luminance.</summary>
+        public static ColorMatrix LuminanceToAlpha() =>
+            new(new Matrix4x4(
+                    0, 0, 0, 0.2125f,
+                    0, 0, 0, 0.7154f,
+                    0, 0, 0, 0.0721f,
+                    0, 0, 0, 0),
+                Vector4.Zero);
+
+        /// <summary>
+        /// A matrix from the 20 numbers of <c>feColorMatrix type="matrix"</c>: four rows (the red, green, blue and alpha that come out) of five (the red, green, blue and
+        /// alpha that went in, then a constant), in row order.
+        /// </summary>
+        /// <param name="values">the 20 numbers</param>
+        /// <exception cref="ArgumentException"><paramref name="values"/> does not have 20 numbers</exception>
+        public static ColorMatrix FromTable(IReadOnlyList<double> values)
+        {
+            ArgumentNullException.ThrowIfNull(values);
+            if (values.Count != 20)
+                throw new ArgumentException("A color matrix table has 20 numbers.", nameof(values));
+
+            // The table has the outputs as rows; this type has the inputs as rows.
+            float V(int row, int column) => (float)values[row * 5 + column];
+            return new ColorMatrix(
+                new Matrix4x4(
+                    V(0, 0), V(1, 0), V(2, 0), V(3, 0),
+                    V(0, 1), V(1, 1), V(2, 1), V(3, 1),
+                    V(0, 2), V(1, 2), V(2, 2), V(3, 2),
+                    V(0, 3), V(1, 3), V(2, 3), V(3, 3)),
+                new Vector4(V(0, 4), V(1, 4), V(2, 4), V(3, 4)));
+        }
+
+        // The 3 x 3 table the specification gives (a row per output channel) as this type's matrix (a row per input channel); alpha passes through.
+        private static ColorMatrix FromRows(float r0, float r1, float r2, float g0, float g1, float g2, float b0, float b1, float b2) =>
+            new(new Matrix4x4(
+                    r0, g0, b0, 0,
+                    r1, g1, b1, 0,
+                    r2, g2, b2, 0,
+                    0, 0, 0, 1),
+                Vector4.Zero);
     }
 }

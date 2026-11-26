@@ -140,6 +140,7 @@ internal sealed partial class ScriptRuntime
         Tag(GradientPrototype, "CanvasGradient");
         Tag(PatternPrototype, "CanvasPattern");
 
+        InstallCanvasFilter();
         InstallCanvasElement();
         InstallContextState();
         InstallPathMethods(ContextPrototype, self => (Cx(self).Bitmap.Path, Cx(self).Bitmap.State.Transform));
@@ -509,7 +510,17 @@ internal sealed partial class ScriptRuntime
             var text = Js.AsText(value);
             if (text is "low" or "medium" or "high") S(self).ImageSmoothingQuality = text;
         });
-        Js.Accessor(Engine, p, "filter", self => Js.Str(S(self).Filter), (self, value) => S(self).Filter = Js.AsText(value));
+        // What was assigned that is not a filter is ignored; a CanvasFilter is kept and given back as it is; text is given back as it was written.
+        Js.Accessor(Engine, p, "filter", self => S(self).FilterObject as JsValue ?? Js.Str(S(self).Filter), (self, value) =>
+        {
+            if (!TryFilterEffects(value, Cx(self).Canvas, out var effects, out var text))
+                return;
+
+            var state = S(self);
+            state.FilterEffects = effects;
+            state.FilterObject = value as CanvasFilterObject;
+            state.Filter = value is CanvasFilterObject ? "none" : text;
+        });
     }
 
     // ---- fonts

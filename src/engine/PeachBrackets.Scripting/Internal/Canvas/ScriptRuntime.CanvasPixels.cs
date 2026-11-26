@@ -309,7 +309,17 @@ internal sealed partial class ScriptRuntime
             BitmapFrom(Wrap(Sn(self)), []));
         Js.StrictMethod(Engine, OffscreenPrototype, "convertToBlob", 0, (self, _) =>
         {
-            var url = DataUrlOf(Sn(self));
+            // A promise-returning method does not throw: what would have been thrown is what the promise is rejected with.
+            string url;
+            try
+            {
+                url = DataUrlOf(Sn(self));
+            }
+            catch (JavaScriptException error)
+            {
+                return Engine.Evaluate("(function (reason) { return Promise.reject(reason); })").Call(JsValue.Undefined, [error.Error]);
+            }
+
             return Engine.Evaluate("(function (url) { return new Promise(function (resolve) { var s = atob(url.slice(url.indexOf(',') + 1)); var b = new Uint8Array(s.length); for (var i = 0; i < s.length; i++) b[i] = s.charCodeAt(i); resolve(new Blob([b], { type: 'image/png' })); }); })")
                 .Call(JsValue.Undefined, [Js.Str(url)]);
         });

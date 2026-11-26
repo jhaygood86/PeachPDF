@@ -289,6 +289,24 @@ graphics hardware, says so with `HasNativeLayerEffects` (`Win2dCanvas`, `SkiaCan
 shadow, a filter or a blurred backdrop either way draws it as a layer with effects when that is true instead of rendering it into a bitmap.
 `BlurEffect.ClampEdges` asks for the layer's edge pixels to be held rather than faded, for content that continues past the layer's bounds.
 
+### CSS filter lists
+
+`FilterList.TryParse` reads the text of a CSS filter list (`blur(5px) grayscale(50%) drop-shadow(2px 2px 4px red)`) into the
+effects above, in the order written, so a host that takes a filter as text (a canvas's `filter`, a view's styling) does not
+write its own grammar. A text that is not valid, or is a `url()` reference to an SVG filter, gives `false` and no effects; `none`
+is valid and gives none. The color of a `drop-shadow()` is read by a function the caller supplies, which keeps the package free of
+a CSS color parser. The matrices behind the color functions are public too: `ColorMatrix.Brightness`, `Contrast`, `Invert`,
+`Opacity`, `Grayscale`, `Sepia`, `Saturate`, `HueRotate`, `LuminanceToAlpha`, and `FromTable` for the 20 numbers of an
+`feColorMatrix`.
+
+```csharp
+if (FilterList.TryParse("blur(3px) sepia(80%)", parseColor: null, PaintColor.Black, fontSize: 16, out var effects))
+{
+    using var layer = canvas.BeginLayer(new LayerOptions(Bounds: bounds, Effects: effects));
+    layer?.Canvas.DrawImage(picture, bounds);
+}
+```
+
 ### Retained layers
 
 A layer from `BeginLayer` is composited once, when it is disposed. A `RetainedLayer` is for content that stays the same while the way it is placed changes, such as a box

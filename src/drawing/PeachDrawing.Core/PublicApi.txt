@@ -269,6 +269,16 @@ PeachDrawing.Core.ColorMatrix : struct
   field static ColorMatrix Identity
   method ColorMatrix Compose(ColorMatrix appliedAfterThis)
   method Vector4 Apply(Vector4 color)
+  method static ColorMatrix Brightness(Double amount)
+  method static ColorMatrix Contrast(Double amount)
+  method static ColorMatrix FromTable(IReadOnlyList<Double> values)
+  method static ColorMatrix Grayscale(Double amount)
+  method static ColorMatrix HueRotate(Double radians)
+  method static ColorMatrix Invert(Double amount)
+  method static ColorMatrix LuminanceToAlpha()
+  method static ColorMatrix Opacity(Double amount)
+  method static ColorMatrix Saturate(Double amount)
+  method static ColorMatrix Sepia(Double amount)
   property Boolean IsChannelIndependent { get; }
   property Matrix4x4 Linear { get; }
   property Vector4 Offset { get; }
@@ -386,6 +396,8 @@ PeachDrawing.Core.EllipticalArcCenter : struct
 PeachDrawing.Core.FillMode : enum Int32
   EvenOdd = 1
   Nonzero = 0
+PeachDrawing.Core.FilterList : static class
+  method static Boolean TryParse(String text, Func<String, PaintColor?> parseColor, PaintColor currentColor, Double fontSize, out IReadOnlyList<LayerEffect> effects)
 PeachDrawing.Core.Font : abstract class
   method Double? GetAdvanceEm(Rune rune)
   method abstract Boolean HasGlyph(Rune rune)
