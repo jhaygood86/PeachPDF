@@ -128,4 +128,104 @@ public class CanvasTests
         Assert.Equal(["300x150", "10x150 10"], log);
         Assert.Equal((255, 255, 255), At(empty, 5, 5));
     }
+
+    [Theory]
+    [InlineData("g.roundRect(2, 2, 30, 14, 5);")]
+    [InlineData("g.roundRect(2, 2, 30, 14, [3, 6]);")]
+    [InlineData("g.roundRect(2, 2, 30, 14, [3, 6, 9]);")]
+    [InlineData("g.roundRect(2, 2, 30, 14, [1, 2, 3, 4]);")]
+    [InlineData("g.roundRect(32, 16, -30, -14, [1, 2, 3, 4, 5]);")]
+    [InlineData("g.roundRect(2, 2, 30, 14);")]
+    public async Task ARoundedRectangleIsFilled(string path)
+    {
+        var (page, log) = await PaintAsync($"g.fillStyle = '#00ff00'; g.beginPath(); {path} g.fill();");
+
+        Assert.Empty(log);
+        Assert.Equal((0, 255, 0), At(page, 12, 7));
+    }
+
+    [Fact]
+    public async Task ArcToRoundsACorner_AndFallsBackToALineWhenItCannot()
+    {
+        var (page, _) = await PaintAsync("""
+            g.strokeStyle = '#0000ff'; g.lineWidth = 3;
+            g.beginPath(); g.arcTo(2, 2, 30, 2, 5);
+            g.beginPath(); g.moveTo(2, 10); g.arcTo(30, 10, 30, 18, 6); g.stroke();
+            g.beginPath(); g.moveTo(2, 18); g.arcTo(10, 18, 20, 18, 4); g.arcTo(10, 18, 10, 18, 4); g.arcTo(1, 1, 2, 2, 0); g.stroke();
+            g.ellipse(20, 10, 8, 4, 0.3, 0, Math.PI * 2); g.quadraticCurveTo(1, 1, 2, 2); g.bezierCurveTo(1, 1, 2, 2, 3, 3); g.stroke();
+            """);
+
+        Assert.Equal((0, 0, 255), At(page, 15, 10));
+    }
+
+    [Theory]
+    [InlineData("lighter")]
+    [InlineData("multiply")]
+    [InlineData("screen")]
+    [InlineData("overlay")]
+    [InlineData("darken")]
+    [InlineData("lighten")]
+    [InlineData("color-dodge")]
+    [InlineData("color-burn")]
+    [InlineData("hard-light")]
+    [InlineData("soft-light")]
+    [InlineData("difference")]
+    [InlineData("exclusion")]
+    [InlineData("hue")]
+    [InlineData("saturation")]
+    [InlineData("color")]
+    [InlineData("luminosity")]
+    [InlineData("source-in")]
+    [InlineData("destination-over")]
+    [InlineData("xor")]
+    [InlineData("copy")]
+    public async Task EveryCompositeOperationDrawsWithoutAnError(string mode)
+    {
+        var (_, log) = await PaintAsync($"g.fillStyle = '#ff0000'; g.fillRect(0, 0, 20, 20); g.globalCompositeOperation = '{mode}'; g.fillStyle = '#0000ff'; g.fillRect(5, 5, 20, 10); console.log(g.globalCompositeOperation);");
+
+        Assert.Equal([mode], log);
+    }
+
+    [Fact]
+    public async Task AClipLimitsLaterDrawing_AndResetStartsOver()
+    {
+        var (page, _) = await PaintAsync("""
+            g.save(); g.beginPath(); g.rect(0, 0, 10, 10); g.clip();
+            g.fillStyle = '#ff0000'; g.fillRect(0, 0, 40, 20);
+            g.globalCompositeOperation = 'source-over'; g.shadowColor = 'rgba(0,0,0,0.5)'; g.shadowBlur = 2; g.shadowOffsetX = 3; g.fillRect(0, 0, 8, 8);
+            g.restore();
+            g.fillStyle = '#00ff00'; g.fillRect(30, 0, 5, 5);
+            g.reset();
+            g.fillStyle = '#0000ff'; g.fillRect(0, 12, 5, 5);
+            """);
+
+        Assert.Equal((255, 255, 255), At(page, 3, 3));
+        Assert.Equal((0, 0, 255), At(page, 2, 11));
+    }
+
+    [Theory]
+    [InlineData("center", "top")]
+    [InlineData("right", "hanging")]
+    [InlineData("end", "middle")]
+    [InlineData("left", "bottom")]
+    [InlineData("start", "ideographic")]
+    [InlineData("left", "alphabetic")]
+    public async Task TextIsPlacedByItsAlignmentAndBaseline_AndSqueezedIntoAMaximumWidth(string align, string baseline)
+    {
+        var (_, log) = await PaintAsync($"g.font = '10px sans-serif'; g.textAlign = '{align}'; g.textBaseline = '{baseline}'; g.fillText('Hello', 20, 10); g.strokeText('Hello', 20, 10, 8); g.fillText('', 1, 1); console.log(typeof g.measureText('Hello').width);");
+
+        Assert.Equal(["number"], log);
+    }
+
+    [Fact]
+    public async Task ACanvasCanBeDrawnOntoAnotherCanvas()
+    {
+        var (page, _) = await PaintAsync("""
+            var src = document.createElement('canvas'); src.width = 10; src.height = 10;
+            var s = src.getContext('2d'); s.fillStyle = '#ff00ff'; s.fillRect(0, 0, 10, 10);
+            g.drawImage(src, 0, 0); g.drawImage(src, 20, 0, 10, 10); g.drawImage(src, 0, 0, 5, 5, 30, 10, 8, 8);
+            """);
+
+        Assert.Equal((255, 0, 255), At(page, 3, 3));
+    }
 }
