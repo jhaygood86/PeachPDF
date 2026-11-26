@@ -148,6 +148,9 @@ internal sealed partial class ScriptRuntime
         InstallContextDrawing();
 
         Define(Engine.Global, "CanvasRenderingContext2D", Js.Constructor(Engine, "CanvasRenderingContext2D", ContextPrototype, 0, (_, _, _) => throw TypeError("Illegal constructor")));
+
+        // Web IDL: an interface object's prototype property is neither writable nor configurable (its methods stay both).
+        ((ObjectInstance)Engine.Global.Get("CanvasRenderingContext2D")).DefineOwnProperty("prototype", new PropertyDescriptor(ContextPrototype, PropertyFlag.AllForbidden));
         Define(Engine.Global, "CanvasGradient", Js.Constructor(Engine, "CanvasGradient", GradientPrototype, 0, (_, _, _) => throw TypeError("Illegal constructor")));
         Define(Engine.Global, "CanvasPattern", Js.Constructor(Engine, "CanvasPattern", PatternPrototype, 0, (_, _, _) => throw TypeError("Illegal constructor")));
         Define(Engine.Global, "Path2D", Js.Constructor(Engine, "Path2D", Path2DPrototype, 0, (_, args, _) =>
@@ -157,7 +160,7 @@ internal sealed partial class ScriptRuntime
                 path.Path = other.Path.Clone();
             return path;
         }));
-        Js.Method(Engine, Path2DPrototype, "addPath", 1, (self, args) =>
+        Js.StrictMethod(Engine, Path2DPrototype, "addPath", 1, (self, args) =>
         {
             if (Js.Arg(args, 0) is Path2DObject other)
             {
@@ -167,7 +170,7 @@ internal sealed partial class ScriptRuntime
 
             return JsValue.Undefined;
         });
-        Js.Method(Engine, GradientPrototype, "addColorStop", 2, (self, args) =>
+        Js.StrictMethod(Engine, GradientPrototype, "addColorStop", 2, (self, args) =>
         {
             var gradient = ((GradientObject)self).Model;
             var offset = Num(args, 0);
@@ -210,7 +213,7 @@ internal sealed partial class ScriptRuntime
                 });
         }
 
-        Js.Method(Engine, element, "getContext", 1, (self, args) =>
+        Js.StrictMethod(Engine, element, "getContext", 1, (self, args) =>
         {
             if (Js.AsText(Js.Arg(args, 0)) != "2d")
                 return JsValue.Null;
@@ -325,41 +328,47 @@ internal sealed partial class ScriptRuntime
         var p = ContextPrototype;
         CanvasState S(JsValue self) => Cx(self).Bitmap.State;
 
-        Js.Method(Engine, p, "save", 0, (self, _) => { Cx(self).Bitmap.Save(); return JsValue.Undefined; });
-        Js.Method(Engine, p, "restore", 0, (self, _) => { Cx(self).Bitmap.Restore(); return JsValue.Undefined; });
-        Js.Method(Engine, p, "reset", 0, (self, _) => { Cx(self).Bitmap.Reset(); return JsValue.Undefined; });
+        Js.StrictMethod(Engine, p, "save", 0, (self, _) => { Cx(self).Bitmap.Save(); return JsValue.Undefined; });
+        Js.StrictMethod(Engine, p, "restore", 0, (self, _) => { Cx(self).Bitmap.Restore(); return JsValue.Undefined; });
+        Js.StrictMethod(Engine, p, "reset", 0, (self, _) => { Cx(self).Bitmap.Reset(); return JsValue.Undefined; });
 
-        Js.Method(Engine, p, "scale", 2, (self, args) =>
+        Js.StrictMethod(Engine, p, "scale", 2, (self, args) =>
         {
             if (Finite(args, 2)) Cx(self).Bitmap.Concat(Matrix3x2.CreateScale((float)Num(args, 0), (float)Num(args, 1)));
             return JsValue.Undefined;
         });
-        Js.Method(Engine, p, "rotate", 1, (self, args) =>
+        Js.StrictMethod(Engine, p, "rotate", 1, (self, args) =>
         {
             if (Finite(args, 1)) Cx(self).Bitmap.Concat(Matrix3x2.CreateRotation((float)Num(args, 0)));
             return JsValue.Undefined;
         });
-        Js.Method(Engine, p, "translate", 2, (self, args) =>
+        Js.StrictMethod(Engine, p, "translate", 2, (self, args) =>
         {
             if (Finite(args, 2)) Cx(self).Bitmap.Concat(Matrix3x2.CreateTranslation((float)Num(args, 0), (float)Num(args, 1)));
             return JsValue.Undefined;
         });
-        Js.Method(Engine, p, "transform", 6, (self, args) =>
+        Js.StrictMethod(Engine, p, "transform", 6, (self, args) =>
         {
             if (Finite(args, 6))
                 Cx(self).Bitmap.Concat(new Matrix3x2((float)Num(args, 0), (float)Num(args, 1), (float)Num(args, 2), (float)Num(args, 3), (float)Num(args, 4), (float)Num(args, 5)));
             return JsValue.Undefined;
         });
-        Js.Method(Engine, p, "setTransform", 6, (self, args) =>
+        // Two overloads: six numbers, or an optional matrix (none, or an object). Anything between is the six-number form with arguments missing.
+        Js.Method(Engine, p, "setTransform", 0, (self, args) =>
         {
-            if (args.Length > 0 && args[0] is ObjectInstance init)
+            if (args.Length is >= 1 and < 6 && !(args.Length == 1 && args[0] is ObjectInstance))
+                throw TypeError($"Failed to execute 'setTransform': 6 arguments required, but only {args.Length} present.");
+
+            if (args.Length == 0)
+                S(self).Transform = Matrix3x2.Identity;
+            else if (args[0] is ObjectInstance init)
                 S(self).Transform = MatrixFrom(init);
             else if (Finite(args, 6))
                 S(self).Transform = new Matrix3x2((float)Num(args, 0), (float)Num(args, 1), (float)Num(args, 2), (float)Num(args, 3), (float)Num(args, 4), (float)Num(args, 5));
             return JsValue.Undefined;
         });
-        Js.Method(Engine, p, "resetTransform", 0, (self, _) => { S(self).Transform = Matrix3x2.Identity; return JsValue.Undefined; });
-        Js.Method(Engine, p, "getTransform", 0, (self, _) =>
+        Js.StrictMethod(Engine, p, "resetTransform", 0, (self, _) => { S(self).Transform = Matrix3x2.Identity; return JsValue.Undefined; });
+        Js.StrictMethod(Engine, p, "getTransform", 0, (self, _) =>
         {
             var m = S(self).Transform;
             return Engine.Evaluate("(function (a) { return new DOMMatrix(a); })").Call(JsValue.Undefined, [Js.Array(Engine, [Js.Num(m.M11), Js.Num(m.M12), Js.Num(m.M21), Js.Num(m.M22), Js.Num(m.M31), Js.Num(m.M32)])]);
@@ -395,7 +404,7 @@ internal sealed partial class ScriptRuntime
             var number = TypeConverter.ToNumber(value);
             if (double.IsFinite(number) && number > 0) S(self).MiterLimit = number;
         });
-        Js.Method(Engine, p, "setLineDash", 1, (self, args) =>
+        Js.StrictMethod(Engine, p, "setLineDash", 1, (self, args) =>
         {
             if (Js.Arg(args, 0) is not ObjectInstance list)
                 throw TypeError("The argument is not a sequence.");
@@ -409,7 +418,7 @@ internal sealed partial class ScriptRuntime
             S(self).LineDash = values.Sum() == 0 ? [] : [.. values];
             return JsValue.Undefined;
         });
-        Js.Method(Engine, p, "getLineDash", 0, (self, _) => Js.Array(Engine, [.. S(self).LineDash.Select(Js.Num)]));
+        Js.StrictMethod(Engine, p, "getLineDash", 0, (self, _) => Js.Array(Engine, [.. S(self).LineDash.Select(Js.Num)]));
         Js.Accessor(Engine, p, "lineDashOffset", self => Js.Num(S(self).LineDashOffset), (self, value) =>
         {
             var number = TypeConverter.ToNumber(value);
@@ -536,8 +545,8 @@ internal sealed partial class ScriptRuntime
 
     private void InstallPathMethods(ObjectInstance p, Func<JsValue, (PathData Path, Matrix3x2 Matrix)> target)
     {
-        Js.Method(Engine, p, "closePath", 0, (self, _) => { target(self).Path.Close(); return JsValue.Undefined; });
-        Js.Method(Engine, p, "moveTo", 2, (self, args) =>
+        Js.StrictMethod(Engine, p, "closePath", 0, (self, _) => { target(self).Path.Close(); return JsValue.Undefined; });
+        Js.StrictMethod(Engine, p, "moveTo", 2, (self, args) =>
         {
             if (!Finite(args, 2)) return JsValue.Undefined;
             var (path, m) = target(self);
@@ -545,7 +554,7 @@ internal sealed partial class ScriptRuntime
             path.MoveTo(point.X, point.Y);
             return JsValue.Undefined;
         });
-        Js.Method(Engine, p, "lineTo", 2, (self, args) =>
+        Js.StrictMethod(Engine, p, "lineTo", 2, (self, args) =>
         {
             if (!Finite(args, 2)) return JsValue.Undefined;
             var (path, m) = target(self);
@@ -553,7 +562,7 @@ internal sealed partial class ScriptRuntime
             path.LineTo(point.X, point.Y);
             return JsValue.Undefined;
         });
-        Js.Method(Engine, p, "quadraticCurveTo", 4, (self, args) =>
+        Js.StrictMethod(Engine, p, "quadraticCurveTo", 4, (self, args) =>
         {
             if (!Finite(args, 4)) return JsValue.Undefined;
             var (path, m) = target(self);
@@ -568,7 +577,7 @@ internal sealed partial class ScriptRuntime
             path.CurveTo(x0 + 2.0 / 3 * (c.X - x0), y0 + 2.0 / 3 * (c.Y - y0), e.X + 2.0 / 3 * (c.X - e.X), e.Y + 2.0 / 3 * (c.Y - e.Y), e.X, e.Y);
             return JsValue.Undefined;
         });
-        Js.Method(Engine, p, "bezierCurveTo", 6, (self, args) =>
+        Js.StrictMethod(Engine, p, "bezierCurveTo", 6, (self, args) =>
         {
             if (!Finite(args, 6)) return JsValue.Undefined;
             var (path, m) = target(self);
@@ -577,7 +586,7 @@ internal sealed partial class ScriptRuntime
             path.CurveTo(a.X, a.Y, b.X, b.Y, c.X, c.Y);
             return JsValue.Undefined;
         });
-        Js.Method(Engine, p, "arc", 5, (self, args) =>
+        Js.StrictMethod(Engine, p, "arc", 5, (self, args) =>
         {
             if (!Finite(args, 5)) return JsValue.Undefined;
             if (Num(args, 2) < 0) throw DomError("IndexSizeError", "The radius is negative.");
@@ -585,7 +594,7 @@ internal sealed partial class ScriptRuntime
             path.AddArc(Num(args, 0), Num(args, 1), Num(args, 2), Num(args, 2), 0, Num(args, 3), Num(args, 4), TypeConverter.ToBoolean(Js.Arg(args, 5)), m);
             return JsValue.Undefined;
         });
-        Js.Method(Engine, p, "ellipse", 7, (self, args) =>
+        Js.StrictMethod(Engine, p, "ellipse", 7, (self, args) =>
         {
             if (!Finite(args, 7)) return JsValue.Undefined;
             if (Num(args, 2) < 0 || Num(args, 3) < 0) throw DomError("IndexSizeError", "A radius is negative.");
@@ -593,7 +602,7 @@ internal sealed partial class ScriptRuntime
             path.AddArc(Num(args, 0), Num(args, 1), Num(args, 2), Num(args, 3), Num(args, 4), Num(args, 5), Num(args, 6), TypeConverter.ToBoolean(Js.Arg(args, 7)), m);
             return JsValue.Undefined;
         });
-        Js.Method(Engine, p, "arcTo", 5, (self, args) =>
+        Js.StrictMethod(Engine, p, "arcTo", 5, (self, args) =>
         {
             if (!Finite(args, 5)) return JsValue.Undefined;
             if (Num(args, 4) < 0) throw DomError("IndexSizeError", "The radius is negative.");
@@ -601,14 +610,14 @@ internal sealed partial class ScriptRuntime
             ArcTo(path, m, Num(args, 0), Num(args, 1), Num(args, 2), Num(args, 3), Num(args, 4));
             return JsValue.Undefined;
         });
-        Js.Method(Engine, p, "rect", 4, (self, args) =>
+        Js.StrictMethod(Engine, p, "rect", 4, (self, args) =>
         {
             if (!Finite(args, 4)) return JsValue.Undefined;
             var (path, m) = target(self);
             path.AddRect(Num(args, 0), Num(args, 1), Num(args, 2), Num(args, 3), m);
             return JsValue.Undefined;
         });
-        Js.Method(Engine, p, "roundRect", 4, (self, args) =>
+        Js.StrictMethod(Engine, p, "roundRect", 4, (self, args) =>
         {
             if (!Finite(args, 4)) return JsValue.Undefined;
             var (path, m) = target(self);
@@ -711,7 +720,7 @@ internal sealed partial class ScriptRuntime
         var p = ContextPrototype;
         CanvasBitmap B(JsValue self) => Cx(self).Bitmap;
 
-        Js.Method(Engine, p, "beginPath", 0, (self, _) => { B(self).Path = new PathData(); return JsValue.Undefined; });
+        Js.StrictMethod(Engine, p, "beginPath", 0, (self, _) => { B(self).Path = new PathData(); return JsValue.Undefined; });
 
         (PathData Path, FillMode Rule) PathArgs(JsValue self, JsValue[] args)
         {
@@ -727,58 +736,58 @@ internal sealed partial class ScriptRuntime
             return (path, rule);
         }
 
-        Js.Method(Engine, p, "fill", 0, (self, args) =>
+        Js.StrictMethod(Engine, p, "fill", 0, (self, args) =>
         {
             var (path, rule) = PathArgs(self, args);
             B(self).FillPath(path, rule);
             return JsValue.Undefined;
         });
-        Js.Method(Engine, p, "stroke", 0, (self, args) =>
+        Js.StrictMethod(Engine, p, "stroke", 0, (self, args) =>
         {
             var path = Js.Arg(args, 0) is Path2DObject own ? own.Path.Transformed(B(self).State.Transform) : B(self).Path;
             B(self).StrokePath(path);
             return JsValue.Undefined;
         });
-        Js.Method(Engine, p, "clip", 0, (self, args) =>
+        Js.StrictMethod(Engine, p, "clip", 0, (self, args) =>
         {
             var (path, rule) = PathArgs(self, args);
             B(self).ClipPath(path, rule);
             return JsValue.Undefined;
         });
 
-        Js.Method(Engine, p, "fillRect", 4, (self, args) =>
+        Js.StrictMethod(Engine, p, "fillRect", 4, (self, args) =>
         {
             if (Finite(args, 4)) B(self).FillRect(Num(args, 0), Num(args, 1), Num(args, 2), Num(args, 3));
             return JsValue.Undefined;
         });
-        Js.Method(Engine, p, "strokeRect", 4, (self, args) =>
+        Js.StrictMethod(Engine, p, "strokeRect", 4, (self, args) =>
         {
             if (Finite(args, 4)) B(self).StrokeRect(Num(args, 0), Num(args, 1), Num(args, 2), Num(args, 3));
             return JsValue.Undefined;
         });
-        Js.Method(Engine, p, "clearRect", 4, (self, args) =>
+        Js.StrictMethod(Engine, p, "clearRect", 4, (self, args) =>
         {
             if (Finite(args, 4)) B(self).ClearRect(Num(args, 0), Num(args, 1), Num(args, 2), Num(args, 3));
             return JsValue.Undefined;
         });
 
-        Js.Method(Engine, p, "createLinearGradient", 4, (self, args) =>
+        Js.StrictMethod(Engine, p, "createLinearGradient", 4, (self, args) =>
         {
             if (!Finite(args, 4)) throw TypeError("The gradient coordinates are not finite.");
             return NewGradient(new CanvasGradient("linear", [Num(args, 0), Num(args, 1), Num(args, 2), Num(args, 3)]) { Owner = Cx(self).Canvas, InterpolateInOklab = Document.InterpolateGradientStops });
         });
-        Js.Method(Engine, p, "createRadialGradient", 6, (self, args) =>
+        Js.StrictMethod(Engine, p, "createRadialGradient", 6, (self, args) =>
         {
             if (!Finite(args, 6)) throw TypeError("The gradient coordinates are not finite.");
             if (Num(args, 2) < 0 || Num(args, 5) < 0) throw DomError("IndexSizeError", "A radius is negative.");
             return NewGradient(new CanvasGradient("radial", [Num(args, 0), Num(args, 1), Num(args, 2), Num(args, 3), Num(args, 4), Num(args, 5)]) { Owner = Cx(self).Canvas, InterpolateInOklab = Document.InterpolateGradientStops });
         });
-        Js.Method(Engine, p, "createConicGradient", 3, (self, args) =>
+        Js.StrictMethod(Engine, p, "createConicGradient", 3, (self, args) =>
         {
             if (!Finite(args, 3)) throw TypeError("The gradient coordinates are not finite.");
             return NewGradient(new CanvasGradient("conic", [Num(args, 0), Num(args, 1), Num(args, 2)]) { Owner = Cx(self).Canvas, InterpolateInOklab = Document.InterpolateGradientStops });
         });
-        Js.Method(Engine, p, "createPattern", 2, (self, args) =>
+        Js.StrictMethod(Engine, p, "createPattern", 2, (self, args) =>
         {
             var image = Js.Arg(args, 0) is NodeObject { Node: { Kind: ScriptNodeKind.Element } canvasNode } && string.Equals(canvasNode.TagName, "canvas", StringComparison.OrdinalIgnoreCase)
                 ? SnapshotOf(canvasNode)
@@ -795,7 +804,7 @@ internal sealed partial class ScriptRuntime
             return pattern;
         });
 
-        Js.Method(Engine, p, "drawImage", 3, (self, args) =>
+        Js.StrictMethod(Engine, p, "drawImage", 3, (self, args) =>
         {
             var source = Js.Arg(args, 0);
             var numbers = args.Skip(1).Select(TypeConverter.ToNumber).ToArray();
@@ -873,7 +882,7 @@ internal sealed partial class ScriptRuntime
         foreach (var stroke in new[] { false, true })
         {
             var isStroke = stroke;
-            Js.Method(Engine, p, isStroke ? "strokeText" : "fillText", 3, (self, args) =>
+            Js.StrictMethod(Engine, p, isStroke ? "strokeText" : "fillText", 3, (self, args) =>
             {
                 if (!double.IsFinite(Num(args, 1)) || !double.IsFinite(Num(args, 2)))
                     return JsValue.Undefined;
@@ -894,7 +903,7 @@ internal sealed partial class ScriptRuntime
             });
         }
 
-        Js.Method(Engine, p, "measureText", 1, (self, args) =>
+        Js.StrictMethod(Engine, p, "measureText", 1, (self, args) =>
         {
             var context = Cx(self);
             var text = Js.AsText(Js.Arg(args, 0));

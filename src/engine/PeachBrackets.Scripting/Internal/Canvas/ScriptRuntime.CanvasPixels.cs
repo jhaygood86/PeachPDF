@@ -50,7 +50,7 @@ internal sealed partial class ScriptRuntime
         Tag(BitmapPrototype, "ImageBitmap");
         Js.Accessor(Engine, BitmapPrototype, "width", self => Js.Num(((BitmapObject)self).Image?.Width ?? 0));
         Js.Accessor(Engine, BitmapPrototype, "height", self => Js.Num(((BitmapObject)self).Image?.Height ?? 0));
-        Js.Method(Engine, BitmapPrototype, "close", 0, (self, _) =>
+        Js.StrictMethod(Engine, BitmapPrototype, "close", 0, (self, _) =>
         {
             ((BitmapObject)self).Image = null;
             return JsValue.Undefined;
@@ -60,7 +60,7 @@ internal sealed partial class ScriptRuntime
         var p = ContextPrototype;
         CanvasBitmap B(JsValue self) => Cx(self).Bitmap;
 
-        Js.Method(Engine, p, "isPointInPath", 2, (self, args) =>
+        Js.StrictMethod(Engine, p, "isPointInPath", 2, (self, args) =>
         {
             var index = 0;
             PathData path = B(self).Path;
@@ -77,7 +77,7 @@ internal sealed partial class ScriptRuntime
             var rule = Js.Arg(args, index + 2) is { } text && text.IsString() && text.AsString() == "evenodd" ? FillMode.EvenOdd : FillMode.Nonzero;
             return Js.Bool(path.Contains(x, y, rule));
         });
-        Js.Method(Engine, p, "isPointInStroke", 2, (self, args) =>
+        Js.StrictMethod(Engine, p, "isPointInStroke", 2, (self, args) =>
         {
             var index = 0;
             PathData path = B(self).Path;
@@ -95,23 +95,45 @@ internal sealed partial class ScriptRuntime
             return Js.Bool(path.Touches(x, y, B(self).State.LineWidth * scale));
         });
 
-        Js.Method(Engine, p, "createImageData", 1, (self, args) =>
+        Js.StrictMethod(Engine, p, "createImageData", 1, (self, args) =>
         {
-            if (Js.Arg(args, 0) is ObjectInstance source && source.HasProperty("data"))
-                return MakeImageData(TypeConverter.ToInt32(source.Get("width")), TypeConverter.ToInt32(source.Get("height")), null, Js.AsText(source.Get("colorSpace")));
+            var context = Cx(self);
+            if (Js.Arg(args, 0) is ObjectInstance source)
+            {
+                if (!IsImageData(source))
+                    throw TypeError("The first argument is not an ImageData.");
 
-            var settingsIndex = Js.Arg(args, 0) is ObjectInstance ? 1 : 2;
-            var space = ImageDataSpace(Js.Arg(args, settingsIndex), Cx(self).Settings.ColorSpace);
-            var (w, h) = (Num(args, 0), Num(args, 1));
-            if (!double.IsFinite(w) || !double.IsFinite(h))
-                throw TypeError("The size is not finite.");
+                return MakeImageData(TypeConverter.ToInt32(source.Get("width")), TypeConverter.ToInt32(source.Get("height")), null, Js.AsText(source.Get("colorSpace")));
+            }
+
+            if (args.Length < 2)
+                throw TypeError("Failed to execute 'createImageData': 2 arguments required, but only 1 present.");
+
+            var space = ImageDataSpace(Js.Arg(args, 2), context.Settings.ColorSpace);
+
+            // [EnforceRange] long: not finite, or too large for a long, is a TypeError; a fraction is cut off before it is asked whether it is zero (0.99 is 0), and a negative size is its magnitude.
+            foreach (var number in new[] { Num(args, 0), Num(args, 1) })
+            {
+                if (!double.IsFinite(number) || Math.Truncate(number) is < int.MinValue or > int.MaxValue)
+                    throw TypeError("Failed to execute 'createImageData': The provided value is outside the range of a long.");
+            }
+
+            var (w, h) = (TypeConverter.ToInt32(Js.Arg(args, 0)), TypeConverter.ToInt32(Js.Arg(args, 1)));
             if (w == 0 || h == 0)
                 throw DomError("IndexSizeError", "The size is zero.");
 
-            return MakeImageData((int)Math.Abs(Math.Truncate(w)), (int)Math.Abs(Math.Truncate(h)), null, space);
+            return MakeImageData(Math.Abs(w), Math.Abs(h), null, space);
         });
-        Js.Method(Engine, p, "getImageData", 4, (self, args) =>
+        Js.StrictMethod(Engine, p, "getImageData", 4, (self, args) =>
         {
+            // [EnforceRange] long: a number that is not finite, or that does not fit a long once its fraction is cut off, is a TypeError rather than wrapping round.
+            for (var i = 0; i < 4; i++)
+            {
+                var number = Num(args, i);
+                if (!double.IsFinite(number) || Math.Truncate(number) is < int.MinValue or > int.MaxValue)
+                    throw TypeError("Failed to execute 'getImageData': The provided value is outside the range of a long.");
+            }
+
             if (!Finite(args, 4))
                 throw TypeError("The rectangle is not finite.");
 
@@ -142,9 +164,9 @@ internal sealed partial class ScriptRuntime
             ConvertColorSpace(pixels, "srgb", space);
             return MakeImageData(sw, sh, pixels, space);
         });
-        Js.Method(Engine, p, "putImageData", 3, (self, args) =>
+        Js.StrictMethod(Engine, p, "putImageData", 3, (self, args) =>
         {
-            if (Js.Arg(args, 0) is not ObjectInstance data || !data.HasProperty("data"))
+            if (Js.Arg(args, 0) is not ObjectInstance data || !IsImageData(data))
                 throw TypeError("The first argument is not an ImageData.");
 
             var (dx, dy) = (Num(args, 1), Num(args, 2));
@@ -162,8 +184,9 @@ internal sealed partial class ScriptRuntime
                 (rx, ry, rw, rh) = ((int)Num(args, 3), (int)Num(args, 4), (int)Num(args, 5), (int)Num(args, 6));
                 if (rw < 0) { rx += rw; rw = -rw; }
                 if (rh < 0) { ry += rh; rh = -rh; }
-                rx = Math.Max(rx, 0);
-                ry = Math.Max(ry, 0);
+                // The part of it left of or above the image is not in the image: it shortens the rectangle, it does not slide it.
+                if (rx < 0) { rw += rx; rx = 0; }
+                if (ry < 0) { rh += ry; ry = 0; }
                 rw = Math.Min(rw, w - rx);
                 rh = Math.Min(rh, h - ry);
             }
@@ -184,8 +207,8 @@ internal sealed partial class ScriptRuntime
         });
 
         var element = ElementPrototypeFor("canvas");
-        Js.Method(Engine, element, "toDataURL", 0, (self, _) => Js.Str(DataUrlOf(Sn(self))));
-        Js.Method(Engine, element, "toBlob", 1, (self, args) =>
+        Js.StrictMethod(Engine, element, "toDataURL", 0, (self, _) => Js.Str(DataUrlOf(Sn(self))));
+        Js.StrictMethod(Engine, element, "toBlob", 1, (self, args) =>
         {
             if (!Js.IsCallable(Js.Arg(args, 0)))
                 throw TypeError("The callback is not a function.");
@@ -203,11 +226,16 @@ internal sealed partial class ScriptRuntime
 
         Define(Engine.Global, "ImageData", Js.Constructor(Engine, "ImageData", ImageDataPrototype(), 2, (_, args, _) =>
         {
-            if (Js.Arg(args, 0) is ObjectInstance { } array && !array.IsArray() && array.HasProperty("length"))
+            if (args.Length < 2)
+                throw TypeError($"Failed to construct 'ImageData': 2 arguments required, but only {args.Length} present.");
+
+            // (data, width [, height [, settings]]) when the first argument is a Uint8ClampedArray, else (width, height [, settings]): a Uint8Array has the same bytes and is
+            // read as a number, which is no width.
+            if (Js.Arg(args, 0) is ObjectInstance { } array && Js.AsText(Engine.Evaluate("(function (a) { return Object.prototype.toString.call(a); })").Call(JsValue.Undefined, [array])).Equals("[object Uint8ClampedArray]", StringComparison.Ordinal))
             {
                 var length = (int)TypeConverter.ToNumber(array.Get("length"));
-                if (length % 4 != 0)
-                    throw DomError("InvalidStateError", "The data length is not a multiple of 4.");
+                if (length == 0 || length % 4 != 0)
+                    throw DomError("InvalidStateError", "The data length is zero or not a multiple of 4.");
 
                 var width = TypeConverter.ToInt32(Js.Arg(args, 1));
                 if (width <= 0)
@@ -223,6 +251,10 @@ internal sealed partial class ScriptRuntime
                 return BuildImageData(width, height, array, ImageDataSpace(Js.Arg(args, 3), "srgb"));
             }
 
+            // The third argument is the settings dictionary: an object, or nothing.
+            if (args.Length > 2 && !args[2].IsUndefined() && !args[2].IsNull() && args[2] is not ObjectInstance)
+                throw TypeError("Failed to construct 'ImageData': The settings are not a dictionary.");
+
             var (w, h) = (TypeConverter.ToInt32(Js.Arg(args, 0)), TypeConverter.ToInt32(Js.Arg(args, 1)));
             if (w <= 0 || h <= 0)
                 throw DomError("IndexSizeError", "The size is zero.");
@@ -236,7 +268,7 @@ internal sealed partial class ScriptRuntime
         foreach (var named in Document.QuerySelectorAll("[id]"))
             NameElement(named);
 
-        Js.Method(Engine, ContextPrototype, "getContextAttributes", 0, (self, _) =>
+        Js.StrictMethod(Engine, ContextPrototype, "getContextAttributes", 0, (self, _) =>
         {
             var settings = Cx(self).Settings;
             var attributes = Js.NewObject(Engine);
@@ -261,9 +293,9 @@ internal sealed partial class ScriptRuntime
         foreach (var name in new[] { "width", "height", "getContext" })
             OffscreenPrototype.FastSetProperty(name, element.GetOwnProperty(name));
 
-        Js.Method(Engine, OffscreenPrototype, "transferToImageBitmap", 0, (self, _) =>
+        Js.StrictMethod(Engine, OffscreenPrototype, "transferToImageBitmap", 0, (self, _) =>
             BitmapFrom(Wrap(Sn(self)), []));
-        Js.Method(Engine, OffscreenPrototype, "convertToBlob", 0, (self, _) =>
+        Js.StrictMethod(Engine, OffscreenPrototype, "convertToBlob", 0, (self, _) =>
         {
             var url = DataUrlOf(Sn(self));
             return Engine.Evaluate("(function (url) { return new Promise(function (resolve) { var s = atob(url.slice(url.indexOf(',') + 1)); var b = new Uint8Array(s.length); for (var i = 0; i < s.length; i++) b[i] = s.charCodeAt(i); resolve(new Blob([b], { type: 'image/png' })); }); })")
@@ -318,6 +350,19 @@ internal sealed partial class ScriptRuntime
         Set("colorSpace", Js.Str(colorSpace));
         Set("pixelFormat", Js.Str("rgba-unorm8"));
         return result;
+    }
+
+    // Whether the object is an ImageData: made by the constructor or the context, or inheriting from it.
+    private bool IsImageData(ObjectInstance candidate)
+    {
+        var prototype = ImageDataPrototype();
+        for (var p = candidate.Prototype; p is not null; p = p.Prototype)
+        {
+            if (ReferenceEquals(p, prototype))
+                return true;
+        }
+
+        return false;
     }
 
     private static void Visible(ObjectInstance target, string name, JsValue value) =>

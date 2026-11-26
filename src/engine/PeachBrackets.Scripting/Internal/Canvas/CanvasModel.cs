@@ -477,8 +477,22 @@ internal sealed class CanvasBitmap(ScriptDocument document, double width, double
     /// <summary>Puts pixels on the canvas as they are: no transform, clip, alpha or shadow applies to this.</summary>
     public void PutPixels(Image image, Rect source, Rect destination)
     {
+        // Put pixels replace what is under them, transparent ones included, rather than being drawn over it: the Copy operator, bounded to the rectangle.
         Revision++;
-        AddOp(canvas => canvas.DrawImage(image, destination, source, ImageSampling.Pixelated));
+        _usesOperators = true;
+        _needsGroup = true;
+        AddOp(canvas =>
+        {
+            canvas.PushBlendMode(PaintBlendMode.Copy);
+            try
+            {
+                canvas.DrawImage(image, destination, source, ImageSampling.Pixelated);
+            }
+            finally
+            {
+                canvas.PopBlendMode();
+            }
+        });
     }
 
     public void Save() => Saved.Push(State.Clone());
