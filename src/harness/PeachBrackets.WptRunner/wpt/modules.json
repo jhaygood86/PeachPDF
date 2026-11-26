@@ -15,6 +15,7 @@
     { "id": "css-text", "dirs": ["css/css-text"] },
     { "id": "css-transforms", "dirs": ["css/css-transforms"] },
     { "id": "css-multicol", "dirs": ["css/css-multicol"] },
-    { "id": "css-lists", "dirs": ["css/css-lists"] }
+    { "id": "css-lists", "dirs": ["css/css-lists"] },
+    { "id": "mathml", "dirs": ["mathml/presentation-markup", "mathml/relations"] }
   ]
 }

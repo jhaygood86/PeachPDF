@@ -17,6 +17,8 @@
     "css2-flow": 1821,
     "css2-generated": 212,
     "css2-positioning": 451,
-    "css2-tables": 174
-  }
+    "css2-tables": 174,
+    "mathml": 83
+  },
+  "margins": {}
 }

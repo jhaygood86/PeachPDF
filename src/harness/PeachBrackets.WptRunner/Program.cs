@@ -94,7 +94,7 @@ namespace PeachBrackets.WptRunner
             var commit = PinnedCommit();
             var cache = o.GetValueOrDefault("cache") ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".peachbrackets-wpt");
             var dest = Path.Combine(cache, "wpt", commit);
-            string[] wanted = ["css/", "fonts/", "images/", "common/", "resources/", "dom/", "html/resources/", "interfaces/", "xhr/", "fetch/", "url/", "FileAPI/", "webidl/", "domparsing/", "html/canvas/", "html/semantics/", "html/dom/", "streams/", "html/webappapis/", "html/infrastructure/", "webmessaging/", "encoding/"];
+            string[] wanted = ["css/", "fonts/", "images/", "common/", "resources/", "dom/", "html/resources/", "interfaces/", "xhr/", "fetch/", "url/", "FileAPI/", "webidl/", "domparsing/", "html/canvas/", "html/semantics/", "html/dom/", "streams/", "html/webappapis/", "html/infrastructure/", "webmessaging/", "encoding/", "mathml/"];
 
             // The marker names what the checkout holds, so a checkout fetched before a directory was added is fetched again.
             var marker = string.Join(',', wanted);

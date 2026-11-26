@@ -23,6 +23,9 @@ namespace PeachBrackets.Html.Parse
         /// <summary>What a parse is in the middle of: the root it builds under, the stack of open elements, the list of active formatting elements.</summary>
         private sealed class ParserState(CssBox root)
         {
+            /// <summary>Whether a script will read the tree: a MathML token's text is then a child text node, as the DOM has it, not held on the element.</summary>
+            public bool KeepTokenText { get; init; }
+
             /// <summary>The box the document is built under; below the stack of open elements and not itself an element of it.</summary>
             public CssBox Root { get; } = root;
 
@@ -462,7 +465,7 @@ namespace PeachBrackets.Html.Parse
             var place = AppropriatePlace(state);
 
             // A MathML token's text stays on its element (see CssBox.ForeignText).
-            if (place.Before is null && place.Parent.TryAbsorbForeignText(text)) return;
+            if (!state.KeepTokenText && place.Before is null && place.Parent.TryAbsorbForeignText(text)) return;
 
             var box = CssBox.CreateBox(place.Parent);
             box.Text = text;

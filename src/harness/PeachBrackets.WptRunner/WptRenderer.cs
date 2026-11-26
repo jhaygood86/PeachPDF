@@ -75,12 +75,15 @@ internal sealed partial class WptRenderer(string wptRoot) : IReftestRenderer
 
     public string FullPath(string wptPath) => Path.Combine(wptRoot, wptPath.Replace('/', Path.DirectorySeparatorChar));
 
+    /// <summary>The address of the empty page a reftest names as its reference (<c>&lt;link rel=match href=about:blank&gt;</c>).</summary>
+    public const string BlankPage = "about:blank";
+
     public async Task<RgbaImage> RenderAsync(string wptPath)
     {
         // The page as the server serves it: .sub. files substituted, and the headers of its .headers file (an XHTML content type among them) known.
         var server = new WptServer(wptRoot);
         var served = server.Handle(new ServerRequest("GET", new Uri(Origin + "/" + wptPath)));
-        var text = served.Status == 200 ? served.Text : await File.ReadAllTextAsync(FullPath(wptPath));
+        var text = wptPath == BlankPage ? "<!DOCTYPE html>" : served.Status == 200 ? served.Text : await File.ReadAllTextAsync(FullPath(wptPath));
         var source = Prepare(wptPath, text);
 
         var context = new RasterRenderContext { ResourceLoader = uri => LoadAsync(server, uri), PixelsPerPoint = 96.0 / 72.0 };

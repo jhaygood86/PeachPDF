@@ -92,7 +92,9 @@ internal static class ScriptSerializer
         }
 
         text.Append('>');
-        if (tag.IsSingle || HtmlUtils.IsSingleTag(tag.Name.ToLowerInvariant()))
+        // Only an HTML element can be void: a foreign element (<mspace/>, <path/>) parsed as self-closing still gets its end tag, or the markup
+        // read back would nest everything after it.
+        if (!box.IsWithinForeignContent && (tag.IsSingle || HtmlUtils.IsSingleTag(tag.Name.ToLowerInvariant())))
             return;
 
         // A line break straight after <pre>, <textarea> and <listing> is dropped by the parser, so one the text starts with has to be doubled.

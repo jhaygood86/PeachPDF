@@ -684,17 +684,34 @@ internal sealed partial class ScriptRuntime
             Js.Method(Engine, p, no, 0, (self, _) => JsValue.Undefined);
     }
 
-    private JsValue FontFaceSet()
-    {
-        var fonts = Js.NewObject(Engine);
-        Js.Value(fonts, "ready", Engine.Evaluate("Promise.resolve()"));
-        Js.Value(fonts, "status", Js.Str("loaded"));
-        Js.Method(Engine, fonts, "load", 1, (_, _) => Engine.Evaluate("Promise.resolve([])"));
-        Js.Method(Engine, fonts, "check", 1, (_, _) => JsBoolean.True);
-        Js.Method(Engine, fonts, "forEach", 1, (_, _) => JsValue.Undefined);
-        Js.Method(Engine, fonts, "add", 1, (_, _) => JsValue.Undefined);
-        return fonts;
-    }
+    private JsValue? _fontFaceSet;
+
+    /// <summary>
+    /// <c>document.fonts</c>: a set with no <c>FontFace</c> objects in it (the page's <c>@font-face</c> rules are loaded by the engine, not
+    /// through script), but with the whole <c>FontFaceSet</c> shape, so <c>[...document.fonts]</c> and <c>for...of</c> work and everything has
+    /// already loaded.
+    /// </summary>
+    private JsValue FontFaceSet() => _fontFaceSet ??= Engine.Evaluate("""
+        (function () {
+          var none = function () { return [][Symbol.iterator](); };
+          var set = {
+            ready: Promise.resolve(),
+            status: 'loaded',
+            size: 0,
+            onloading: null, onloadingdone: null, onloadingerror: null,
+            load: function () { return Promise.resolve([]); },
+            check: function () { return true; },
+            has: function () { return false; },
+            add: function () { return set; },
+            delete: function () { return false; },
+            clear: function () { },
+            forEach: function () { },
+            entries: none, keys: none, values: none
+          };
+          set[Symbol.iterator] = none;
+          return set;
+        })()
+        """);
 
     private void InstallStyle()
     {
