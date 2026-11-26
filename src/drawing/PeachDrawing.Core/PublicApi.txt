@@ -1019,6 +1019,18 @@ PeachDrawing.Core.TextRunCluster : struct
   property Double X { get; init; }
   property Int32 End { get; init; }
   property Int32 Start { get; init; }
+PeachDrawing.Core.TextRunLayout : sealed class
+  method Boolean TryGetInk(Int32 start, Int32 end, out Double left, out Double right, out Double top, out Double bottom)
+  method Double CaretX(Int32 index)
+  method IReadOnlyList<ValueTuple<Double, Double>> SelectionBoxes(Int32 start, Int32 end)
+  method Int32 IndexFromOffset(Double x)
+  method static TextRunLayout Create(Font font, String text, Boolean rightToLeft = False, Double letterSpacing = 0, Double wordSpacing = 0, ShapeSettings? features = null, Func<Rune, Font> fallback = null)
+  property Double FontAscent { get; }
+  property Double FontDescent { get; }
+  property Double Width { get; }
+  property IReadOnlyList<Int32> Boundaries { get; }
+  property IReadOnlyList<TextRunSegment> Runs { get; }
+  property String Text { get; }
 PeachDrawing.Core.TextRunMeasure : static class
   method static TextRunMetrics Measure(Font font, String text, Double letterSpacing = 0, Double wordSpacing = 0, ShapeSettings? features = null)
 PeachDrawing.Core.TextRunMetrics : sealed class
@@ -1035,6 +1047,18 @@ PeachDrawing.Core.TextRunMetrics : sealed class
   property Double InkRight { get; }
   property Double Width { get; }
   property IReadOnlyList<TextRunCluster> Clusters { get; }
+PeachDrawing.Core.TextRunSegment : struct
+  ctor(Int32 Start, Int32 End, Double X, Double Width, Boolean IsRightToLeft)
+  method Void Deconstruct(out Int32 Start, out Int32 End, out Double X, out Double Width, out Boolean IsRightToLeft)
+  method virtual Boolean Equals(Object obj)
+  method virtual Boolean Equals(TextRunSegment other)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property Boolean IsRightToLeft { get; init; }
+  property Double Width { get; init; }
+  property Double X { get; init; }
+  property Int32 End { get; init; }
+  property Int32 Start { get; init; }
 PeachDrawing.Core.TileBrush : sealed class
   ctor(Image tile, Double cellWidth, Double cellHeight)
   ctor(Image tile, Double cellWidth, Double cellHeight, Matrix3x2 transform, ImageSampling sampling = Automatic)

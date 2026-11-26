@@ -1177,13 +1177,12 @@ internal sealed class CanvasBitmap(ScriptDocument document, double width, double
     /// Draws a laid-out run. <paramref name="anchor"/> is how far from the run's left edge the point <paramref name="x"/> falls (where the text's alignment puts it), and
     /// <paramref name="baselineY"/> the alphabetic baseline. A run wider than <paramref name="maxWidth"/> is condensed to it.
     /// </summary>
-    public void DrawText(string text, double x, double baselineY, double anchor, bool stroke, double? maxWidth, Font font, TextRunMetrics metrics, double letterSpacing, double wordSpacing,
+    public void DrawText(string text, double x, double baselineY, double anchor, bool stroke, double? maxWidth, Font font, TextRunMetrics metrics, double width, double letterSpacing, double wordSpacing,
         ShapeSettings shape, PaintSource fill, Pen? pen)
     {
         if (text.Length == 0)
             return;
 
-        var width = metrics.Width;
         var scale = maxWidth is { } max && width > max && max > 0 ? max / width : 1.0;
         var left = x - anchor * scale;
         var top = baselineY - font.Ascent;

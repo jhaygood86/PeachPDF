@@ -1013,42 +1013,17 @@ internal sealed partial class ScriptRuntime
 
                 var layout = LayoutText(context, font, text);
                 var state = context.Bitmap.State;
-                context.Bitmap.DrawText(layout.Text, x, y + layout.LineOffset, layout.Anchor, isStroke, max, font, layout.Metrics, layout.LetterSpacing, layout.WordSpacing, layout.Shape,
+                context.Bitmap.DrawText(layout.Text, x, y + layout.LineOffset, layout.Anchor, isStroke, max, font, layout.Metrics, layout.Width, layout.LetterSpacing, layout.WordSpacing, layout.Shape,
                     isStroke ? state.StrokeStyle : state.FillStyle, isStroke ? context.Bitmap.MakePen(state) : null);
                 return JsValue.Undefined;
             });
         }
 
-        Js.StrictMethod(Engine, p, "measureText", 1, (self, args) =>
-        {
-            var context = Cx(self);
-            var text = Js.AsText(Js.Arg(args, 0));
-            var result = Js.NewObject(Engine);
-            // With no font to measure with (a document with no fonts at all) the text takes no room.
-            var font = FontFor(context);
-            var layout = font is null ? null : LayoutText(context, font, text);
-            var metrics = layout?.Metrics ?? new TextRunMetrics();
-            layout ??= new TextLayout(text, metrics, ShapeSettings.Default, 0, 0, 0, 0);
-
-            // Every measure is from the line the text's baseline setting names, up being positive.
-            var line = layout.LineOffset;
-            foreach (var (name, value) in new[]
-            {
-                ("width", metrics.Width),
-                ("actualBoundingBoxLeft", layout.Anchor - metrics.InkLeft), ("actualBoundingBoxRight", metrics.InkRight - layout.Anchor),
-                ("fontBoundingBoxAscent", metrics.FontAscent - line), ("fontBoundingBoxDescent", metrics.FontDescent + line),
-                ("actualBoundingBoxAscent", metrics.InkAscent - line), ("actualBoundingBoxDescent", metrics.InkDescent + line),
-                ("emHeightAscent", metrics.EmAscent - line), ("emHeightDescent", metrics.EmDescent + line),
-                ("hangingBaseline", metrics.HangingBaseline - line), ("alphabeticBaseline", -line), ("ideographicBaseline", metrics.IdeographicBaseline - line),
-            })
-                Js.Value(result, name, Js.Num(value == 0 ? 0 : value));
-
-            return result;
-        });
+        InstallTextMetrics(p);
     }
 
     /// <summary>A run of text as the context's text settings lay it out.</summary>
-    private sealed record TextLayout(string Text, TextRunMetrics Metrics, ShapeSettings Shape, double LetterSpacing, double WordSpacing, double LineOffset, double Anchor);
+    private sealed record TextLayout(string Text, TextRunMetrics Metrics, TextRunLayout? Run, ShapeSettings Shape, double LetterSpacing, double WordSpacing, double LineOffset, double Anchor, double Width, Font Font, string Align, string Baseline);
 
     private bool IsRightToLeft(ContextObject context)
     {
@@ -1060,9 +1035,11 @@ internal sealed partial class ScriptRuntime
     }
 
     // The text the context draws or measures: shaped with its kerning, caps and language, spaced by its letter and word spacing, and where its alignment and baseline put it.
-    private TextLayout LayoutText(ContextObject context, Font font, string raw)
+    private TextLayout LayoutText(ContextObject context, Font font, string raw, string? alignOverride = null, string? baselineOverride = null)
     {
         var state = context.Bitmap.State;
+        var textAlign = alignOverride ?? state.TextAlign;
+        var textBaseline = baselineOverride ?? state.TextBaseline;
 
         // The ASCII white space is drawn as spaces, none of it collapsed.
         var text = raw.Replace('\t', ' ').Replace('\n', ' ').Replace('\f', ' ').Replace('\r', ' ');
@@ -1083,29 +1060,56 @@ internal sealed partial class ScriptRuntime
         var shape = new ShapeSettings { Kerning = state.FontKerning != "none", Caps = CanvasFont.Parse(state.Font, FontEnvironment.Detached)?.SmallCaps == true && caps == CapsMode.None ? CapsMode.SmallCaps : caps, Language = lang };
         var metrics = TextRunMeasure.Measure(font, text, letter, word, shape);
 
+        // The line is laid out with the characters the font lacks drawn in another that has them, and in the direction the text reads.
         var rtl = IsRightToLeft(context);
-        var anchor = state.TextAlign switch
+        var spec = CanvasFont.Parse(state.Font, FontEnvironment.Detached);
+        var style = (spec?.Weight >= 600 ? PaintFontStyle.Bold : PaintFontStyle.Regular) | (spec?.Style is { } fontStyle && fontStyle != "normal" ? PaintFontStyle.Italic : PaintFontStyle.Regular);
+        var weight = spec?.Weight ?? 400;
+        TextRunLayout? run = null;
+        try
         {
-            "center" => metrics.Width / 2,
-            "right" => metrics.Width,
+            run = TextRunLayout.Create(font, text, rtl, letter, word, shape, rune => context.Canvas.OwnerDocument.GetFallbackFont(rune, font.Size, style, weight));
+        }
+        catch (Exception error) when (error is InvalidOperationException or ArgumentException)
+        {
+            // A font with nothing to lay out with: the run measures are all there is.
+        }
+
+        // Text of the ASCII has no other direction and no other font: the plain measure (which keeps a trailing space and gives a control character the font's own width) is what it is.
+        var width = run is not null && text.Any(c => c > 0x7F) ? run.Width : metrics.Width;
+        var anchor = textAlign switch
+        {
+            "center" => width / 2,
+            "right" => width,
             "left" => 0,
-            "end" => rtl ? 0 : metrics.Width,
-            _ => rtl ? metrics.Width : 0,
+            "end" => rtl ? 0 : width,
+            _ => rtl ? width : 0,
         };
 
-        // How far above the alphabetic baseline the line the text sits on is.
-        var line = state.TextBaseline switch
-        {
-            "top" => metrics.EmAscent,
-            "hanging" => metrics.HangingBaseline,
-            "middle" => (metrics.EmAscent - metrics.EmDescent) / 2,
-            "ideographic" => metrics.IdeographicBaseline,
-            "bottom" => -metrics.EmDescent,
-            _ => 0.0,
-        };
-
-        return new TextLayout(text, metrics, shape, letter, word, line, anchor);
+        var line = LineOffsetOf(textBaseline, metrics);
+        return new TextLayout(text, metrics, run, shape, letter, word, line, anchor, width, font, textAlign, textBaseline);
     }
+
+    // How far above the alphabetic baseline the line a text baseline names is.
+    private static double LineOffsetOf(string baseline, TextRunMetrics metrics) => baseline switch
+    {
+        "top" => metrics.EmAscent,
+        "hanging" => metrics.HangingBaseline,
+        "middle" => (metrics.EmAscent - metrics.EmDescent) / 2,
+        "ideographic" => metrics.IdeographicBaseline,
+        "bottom" => -metrics.EmDescent,
+        _ => 0.0,
+    };
+
+    // The distance from the left edge of a stretch of text to the point a text alignment names, for the width of that stretch.
+    private static double AlignOffsetOf(string align, double width, bool rtl) => align switch
+    {
+        "center" => width / 2,
+        "right" => width,
+        "left" => 0,
+        "end" => rtl ? 0 : width,
+        _ => rtl ? width : 0,
+    };
 
     // The decoded picture an image element, a pattern source or drawImage argument stands for, or null while it is not loaded.
     // A canvas as a picture of what it shows now (a pattern keeps the pixels it was made from).

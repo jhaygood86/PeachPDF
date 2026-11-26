@@ -648,6 +648,15 @@ public sealed class ScriptDocument
         return _container.RenderContext.GetFont(family, sizePixels, style, weight);
     }
 
+    /// <summary>The font to draw a character with that the font a script asked for lacks: one of the system's that has it.</summary>
+    /// <param name="rune">the character</param>
+    /// <param name="sizePixels">the size</param>
+    /// <param name="style">the style of the font asked for</param>
+    /// <param name="weight">the weight of the font asked for</param>
+    /// <returns>the font, or null when none has the character</returns>
+    public PeachDrawing.Core.Font? GetFallbackFont(System.Text.Rune rune, double sizePixels, PeachDrawing.Core.PaintFontStyle style, double weight) =>
+        _container.RenderContext.GetSystemFallbackFontForCodepoint(sizePixels, style, rune, weight);
+
     /// <summary>Makes a small canvas text can be measured on (what the host gave as <see cref="HtmlDocumentOptions.MeasuringCanvasFactory"/>), or null when it gave none.</summary>
     /// <returns>the canvas, which the caller disposes</returns>
     public PeachDrawing.Core.Canvas? CreateMeasuringCanvas() => _container.MeasuringCanvasFactory?.Invoke();
