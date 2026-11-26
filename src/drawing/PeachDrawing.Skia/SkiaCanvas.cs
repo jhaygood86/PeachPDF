@@ -114,6 +114,9 @@ public sealed partial class SkiaCanvas : Canvas
     public override bool HasNativeLayerEffects => true;
 
     /// <inheritdoc />
+    public override bool SupportsCompositeOperators => true;
+
+    /// <inheritdoc />
     public override Matrix3x2 CurrentTransform => _ctm;
 
     /// <inheritdoc />
@@ -246,6 +249,16 @@ public sealed partial class SkiaCanvas : Canvas
         PaintBlendMode.Color => SKBlendMode.Color,
         PaintBlendMode.Luminosity => SKBlendMode.Luminosity,
         PaintBlendMode.Plus => SKBlendMode.Plus,
+        PaintBlendMode.SourceIn => SKBlendMode.SrcIn,
+        PaintBlendMode.SourceOut => SKBlendMode.SrcOut,
+        PaintBlendMode.SourceAtop => SKBlendMode.SrcATop,
+        PaintBlendMode.DestinationOver => SKBlendMode.DstOver,
+        PaintBlendMode.DestinationIn => SKBlendMode.DstIn,
+        PaintBlendMode.DestinationOut => SKBlendMode.DstOut,
+        PaintBlendMode.DestinationAtop => SKBlendMode.DstATop,
+        PaintBlendMode.Xor => SKBlendMode.Xor,
+        PaintBlendMode.Copy => SKBlendMode.Src,
+        PaintBlendMode.Clear => SKBlendMode.Clear,
         _ => SKBlendMode.SrcOver,
     };
 

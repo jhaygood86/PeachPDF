@@ -482,6 +482,14 @@ namespace PeachDrawing.Core
         public virtual bool FlattensTransparency => false;
 
         /// <summary>
+        /// Whether this canvas composites with the Porter-Duff operators of <see cref="PaintBlendMode"/> (<see cref="PaintBlendMode.SourceIn"/> through
+        /// <see cref="PaintBlendMode.Clear"/>). A screen or raster canvas does, natively where its graphics API has them. A document writer (PDF, SVG) cannot
+        /// express them as vector content and paints those modes as <see cref="PaintBlendMode.Normal"/>, so a caller that needs the result
+        /// draws through <see cref="BeginRasterSurface"/> onto a canvas that does and places it with <see cref="DrawRaster"/>.
+        /// </summary>
+        public virtual bool SupportsCompositeOperators => false;
+
+        /// <summary>
         /// Whether painting through <paramref name="paint"/> would need transparency (a transparency group, a soft mask, a
         /// constant alpha) on this canvas. A canvas whose output forbids transparency (PDF/A-1, PDF/X-1a/X-3) answers by
         /// running <paramref name="paint"/> against a scratch target of its own that is never saved, so the answer comes from

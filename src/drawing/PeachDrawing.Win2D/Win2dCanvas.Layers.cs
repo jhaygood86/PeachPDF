@@ -123,8 +123,11 @@ public sealed partial class Win2dCanvas
                 if (options.Opacity < 1)
                     image = Track(made, new OpacityEffect { Source = image, Opacity = (float)Math.Clamp(options.Opacity, 0, 1) });
 
-                _session.Transform = placement;
                 FlushText();
+                if (IsCompositeOperator(options.BlendMode) && TryDrawComposited(image, placement, options.BlendMode, options.Bounds, made))
+                    return;
+
+                _session.Transform = placement;
                 if (options.BlendMode != PaintBlendMode.Normal)
                     _session.Blend = SessionBlendFor(options.BlendMode);
 

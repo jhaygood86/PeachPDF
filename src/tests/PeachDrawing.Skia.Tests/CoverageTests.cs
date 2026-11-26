@@ -42,6 +42,8 @@ public class CoverageTests
             scene.Canvas.PopBlendMode();
         }
 
+        // The last mode is Clear, which leaves nothing behind; a draw after the last pop is plain again.
+        scene.Canvas.DrawRectangle(scene.Solid(200, 100, 50), 0, 0, 40, 40);
         Assert.True(scene.OpaquePixels() > 0);
     }
 

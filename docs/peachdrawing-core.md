@@ -110,8 +110,17 @@ canvas.PopTransform();
   `PushClipExclude` (subtract a rectangle from the current clip),
   `PushTransform`/`PopTransform` (a `System.Numerics.Matrix3x2`, composed before/with the current
   transform), and `PushBlendMode`/`PopBlendMode` (`PaintBlendMode`, the 16 PDF 32000-1 §11.3.5 separable
-  and non-separable modes, the same set CSS Compositing and Blending Level 1's `mix-blend-mode` uses) are
-  all stack-shaped: what you push, you pop, in order. `SuspendClipping`/`ResumeClipping` temporarily
+  and non-separable modes, the same set CSS Compositing and Blending Level 1's `mix-blend-mode` uses, plus
+  `Plus` and the ten Porter-Duff operators `SourceIn`, `SourceOut`, `SourceAtop`, `DestinationOver`,
+  `DestinationIn`, `DestinationOut`, `DestinationAtop`, `Xor`, `Copy` and `Clear`) are
+  all stack-shaped: what you push, you pop, in order. A Porter-Duff operator drawn directly reaches only as far as the
+  shape does; most of them (`SourceIn`, `DestinationIn`, `Copy`...) also change the backdrop where the source is
+  *absent*, so to have one reach a whole region, draw the shape in a layer whose `LayerOptions.Bounds` cover
+  the region and give the layer the operator as its `BlendMode`: the layer replaces the backdrop across all of it, as a 2D
+  canvas expects, natively on Raster, Skia and CoreGraphics and by an effect on a Win2D composer's canvas, all on the GPU where there is one.
+  `DestinationOut` is the eraser and `Copy` replaces pixels. `Canvas.SupportsCompositeOperators` says whether a canvas
+  composites this way; a PDF or SVG writer does not (neither format has the operators) and paints them as `Normal`, so a caller that needs the
+  result draws through `BeginRasterSurface` onto a canvas that does and places it with `DrawRaster`. `SuspendClipping`/`ResumeClipping` temporarily
   restore the clip stack to its initial (construction-time) state and put it back - what a `position: fixed`
   element's paint needs to reach its containing block regardless of ancestor clips.
 - **Drawing.** `DrawRectangle`, `DrawPolygon`, `DrawPath`, `DrawLine` (each with a `Brush` fill or `Pen`

@@ -17,6 +17,13 @@ internal static class BlendModes
     /// </summary>
     public static void Blend(PaintBlendMode mode, Span<byte> dst, int sr, int sg, int sb, int sa)
     {
+        // The Porter-Duff operators change the backdrop where the source is transparent too (destination-in clears it), so they come before the early return.
+        if (mode >= PaintBlendMode.SourceIn)
+        {
+            Composite(mode, dst, sr, sg, sb, sa);
+            return;
+        }
+
         if (sa == 0)
             return;
 
@@ -51,6 +58,33 @@ internal static class BlendModes
         dst[1] = ToByte(g);
         dst[2] = ToByte(b);
         dst[3] = ToByte(outA);
+    }
+
+    /// <summary>
+    /// A Porter-Duff operator on premultiplied pixels: result = source * Fa + backdrop * Fb, with the factors the operator names (W3C Compositing and Blending §5.2).
+    /// </summary>
+    private static void Composite(PaintBlendMode mode, Span<byte> dst, int sr, int sg, int sb, int sa)
+    {
+        int da = dst[3];
+        int fa, fb;
+        switch (mode)
+        {
+            case PaintBlendMode.SourceIn: (fa, fb) = (da, 0); break;
+            case PaintBlendMode.SourceOut: (fa, fb) = (255 - da, 0); break;
+            case PaintBlendMode.SourceAtop: (fa, fb) = (da, 255 - sa); break;
+            case PaintBlendMode.DestinationOver: (fa, fb) = (255 - da, 255); break;
+            case PaintBlendMode.DestinationIn: (fa, fb) = (0, sa); break;
+            case PaintBlendMode.DestinationOut: (fa, fb) = (0, 255 - sa); break;
+            case PaintBlendMode.DestinationAtop: (fa, fb) = (255 - da, sa); break;
+            case PaintBlendMode.Xor: (fa, fb) = (255 - da, 255 - sa); break;
+            case PaintBlendMode.Copy: (fa, fb) = (255, 0); break;
+            default: (fa, fb) = (0, 0); break; // Clear
+        }
+
+        dst[0] = (byte)Math.Min(255, PixelKernels.Div255(sr * fa) + PixelKernels.Div255(dst[0] * fb));
+        dst[1] = (byte)Math.Min(255, PixelKernels.Div255(sg * fa) + PixelKernels.Div255(dst[1] * fb));
+        dst[2] = (byte)Math.Min(255, PixelKernels.Div255(sb * fa) + PixelKernels.Div255(dst[2] * fb));
+        dst[3] = (byte)Math.Min(255, PixelKernels.Div255(sa * fa) + PixelKernels.Div255(da * fb));
     }
 
     private static byte ToByte(float v) => (byte)Math.Clamp((int)MathF.Round(v * 255f), 0, 255);

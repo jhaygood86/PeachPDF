@@ -28,6 +28,7 @@
     <ProjectReference Include="..\..\engine\PeachBrackets\PeachBrackets.csproj" />
     <ProjectReference Include="..\..\engine\PeachBrackets.Scripting\PeachBrackets.Scripting.csproj" />
     <ProjectReference Include="..\..\drawing\PeachDrawing\PeachDrawing.csproj" />
+    <ProjectReference Include="..\..\drawing\PeachDrawing.Svg\PeachDrawing.Svg.csproj" />
   </ItemGroup>
 
   <!-- The bundled test fonts are shared with the sibling test projects rather than checked in again. -->

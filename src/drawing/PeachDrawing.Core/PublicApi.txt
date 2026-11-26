@@ -163,6 +163,7 @@ PeachDrawing.Core.Canvas : abstract class
   property Boolean InvisibleText { get; set; }
   property Boolean IsOffscreenTile { get; }
   property Boolean PrefersRasterGroups { get; }
+  property Boolean SupportsCompositeOperators { get; }
   property Double PixelsPerPoint { get; }
   property Double RasterizationDpi { get; }
   property Matrix3x2 CurrentTransform { get; }
@@ -625,10 +626,16 @@ PeachDrawing.Core.Matrix3x2Extensions : static class
   method static Matrix3x2 RebaseOrigin(Matrix3x2 matrix, Double px, Double py)
   method static Matrix3x2 Then(Matrix3x2 matrix, Matrix3x2 next)
 PeachDrawing.Core.PaintBlendMode : enum Int32
+  Clear = 26
   Color = 14
   ColorBurn = 7
   ColorDodge = 6
+  Copy = 25
   Darken = 4
+  DestinationAtop = 23
+  DestinationIn = 21
+  DestinationOut = 22
+  DestinationOver = 20
   Difference = 10
   Exclusion = 11
   HardLight = 8
@@ -642,6 +649,10 @@ PeachDrawing.Core.PaintBlendMode : enum Int32
   Saturation = 13
   Screen = 2
   SoftLight = 9
+  SourceAtop = 19
+  SourceIn = 17
+  SourceOut = 18
+  Xor = 24
 PeachDrawing.Core.PaintColor : struct
   field static PaintColor Empty
   method ValueTuple<Byte, Byte, Byte> ToRgb()

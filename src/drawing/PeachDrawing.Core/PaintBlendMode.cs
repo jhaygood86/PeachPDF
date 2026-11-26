@@ -52,6 +52,30 @@ namespace PeachDrawing.Core
         /// <summary>Takes the luminosity of the source with the hue and saturation of the backdrop - the inverse of <see cref="Color"/>.</summary>
         Luminosity,
         /// <summary>Adds the premultiplied source to the backdrop and clamps the result - Porter-Duff <c>plus</c>, so overlapping translucent ink brightens. A backend with no additive blend ignores it and paints as <see cref="Normal"/>.</summary>
-        Plus
+        Plus,
+        /// <summary>
+        /// Porter-Duff <c>source-in</c>: the source where the backdrop is, nothing elsewhere. Only the source's own coverage is composited unless the drawing is made in a
+        /// layer whose <see cref="LayerOptions.Bounds"/> cover the region: the layer then replaces the backdrop across all of them, which is how a 2D canvas applies it.
+        /// A backend that cannot composite this way (a PDF or SVG writer) paints <see cref="Normal"/>; see <see cref="Canvas.SupportsCompositeOperators"/>.
+        /// </summary>
+        SourceIn,
+        /// <summary>Porter-Duff <c>source-out</c>: the source where the backdrop is not. See <see cref="SourceIn"/> for how far it reaches.</summary>
+        SourceOut,
+        /// <summary>Porter-Duff <c>source-atop</c>: the source where the backdrop is, with the backdrop kept elsewhere. See <see cref="SourceIn"/> for how far it reaches.</summary>
+        SourceAtop,
+        /// <summary>Porter-Duff <c>destination-over</c>: the source painted behind the backdrop.</summary>
+        DestinationOver,
+        /// <summary>Porter-Duff <c>destination-in</c>: the backdrop where the source is, nothing elsewhere. See <see cref="SourceIn"/> for how far it reaches.</summary>
+        DestinationIn,
+        /// <summary>Porter-Duff <c>destination-out</c>: the backdrop where the source is not, so the source erases. Unlike the other operators it reaches only as far as the source does.</summary>
+        DestinationOut,
+        /// <summary>Porter-Duff <c>destination-atop</c>: the backdrop where the source is, with the source kept elsewhere. See <see cref="SourceIn"/> for how far it reaches.</summary>
+        DestinationAtop,
+        /// <summary>Porter-Duff <c>xor</c>: the source and the backdrop each where the other is not. See <see cref="SourceIn"/> for how far it reaches.</summary>
+        Xor,
+        /// <summary>Porter-Duff <c>src</c>: the source replaces the backdrop, transparent source pixels included. See <see cref="SourceIn"/> for how far it reaches.</summary>
+        Copy,
+        /// <summary>Porter-Duff <c>clear</c>: the backdrop becomes transparent where the source reaches. See <see cref="SourceIn"/> for how far it reaches.</summary>
+        Clear
     }
 }

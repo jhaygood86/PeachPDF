@@ -307,8 +307,47 @@ internal sealed class CanvasBitmap(ScriptDocument document, double width, double
 
     public ScriptCanvasPainting Painting => new(Width, Height, Replay);
 
+    /// <summary>Whether the drawing uses a Porter-Duff operator, which a document writer cannot express as vector content.</summary>
+    private bool _usesOperators;
+
+    /// <summary>
+    /// Plays the drawing on a canvas. One that uses a Porter-Duff operator is played as a group of its own, so the operators act on the canvas and not on the page
+    /// behind it: in a layer on a canvas that composites with them, or, when the target cannot (a PDF or SVG writer), onto a raster surface placed with
+    /// <see cref="PeachDrawing.Core.Canvas.DrawRaster"/>. Vector wherever the format can express the drawing, a bitmap only where it cannot.
+    /// </summary>
     public void Replay(PeachDrawing.Core.Canvas canvas)
     {
+        if (_usesOperators)
+        {
+            var bounds = new Rect(0, 0, Width, Height);
+            if (!canvas.SupportsCompositeOperators)
+            {
+                if (canvas.BeginRasterSurface(bounds) is { } region)
+                {
+                    using (region)
+                    {
+                        foreach (var op in _ops.ToArray())
+                            op(region.Graphics);
+
+                        canvas.DrawRaster(region.Surface);
+                    }
+
+                    return;
+                }
+            }
+            else if (canvas.BeginLayer(new LayerOptions(1.0, PaintBlendMode.Normal, null, bounds)) is { } group)
+            {
+                // An element is its own group: what an operator clears is cleared from the canvas, not from the page behind it.
+                using (group)
+                {
+                    foreach (var op in _ops.ToArray())
+                        op(group.Canvas);
+                }
+
+                return;
+            }
+        }
+
         foreach (var op in _ops.ToArray())
             op(canvas);
     }
@@ -363,6 +402,7 @@ internal sealed class CanvasBitmap(ScriptDocument document, double width, double
     {
         Revision++;
         _ops.Clear();
+        _usesOperators = false;
         Saved.Clear();
         State = new CanvasState();
         Path = new PathData();
@@ -392,31 +432,39 @@ internal sealed class CanvasBitmap(ScriptDocument document, double width, double
         "saturation" => PaintBlendMode.Saturation,
         "color" => PaintBlendMode.Color,
         "luminosity" => PaintBlendMode.Luminosity,
+        "source-in" => PaintBlendMode.SourceIn,
+        "source-out" => PaintBlendMode.SourceOut,
+        "source-atop" => PaintBlendMode.SourceAtop,
+        "destination-over" => PaintBlendMode.DestinationOver,
+        "destination-in" => PaintBlendMode.DestinationIn,
+        "destination-out" => PaintBlendMode.DestinationOut,
+        "destination-atop" => PaintBlendMode.DestinationAtop,
+        "xor" => PaintBlendMode.Xor,
+        "copy" => PaintBlendMode.Copy,
         _ => null,
     };
 
     /// <summary>Whether a compositing operation is one this can draw (the others draw as source-over).</summary>
-    public static bool IsKnownComposite(string value) =>
-        BlendFor(value) is not null
-        || value is "source-in" or "source-out" or "source-atop" or "destination-over" or "destination-in" or "destination-out" or "destination-atop" or "copy" or "xor";
+    public static bool IsKnownComposite(string value) => BlendFor(value) is not null;
 
     /// <summary>
     /// Keeps a drawing operation with the state it was made with. <paramref name="draw"/> runs with the canvas transformed by the transformation matrix of
     /// the moment, inside the clips then in force, in a layer when the alpha, blend mode or shadow ask for one.
     /// </summary>
-    public void Record(Action<PeachDrawing.Core.Canvas> draw)
-    {
-        if (IsPorterDuff(State.Composite))
-        {
-            RecordComposite(State, State.Composite, draw);
-            return;
-        }
+    public void Record(Action<PeachDrawing.Core.Canvas> draw) => RecordWith(State, State.Composite, draw);
 
+    /// <summary>
+    /// <see cref="Record"/> with the compositing operation named instead of the state's. A Porter-Duff operator reaches the whole region the clips leave, not only the
+    /// shape (<c>source-in</c> clears everything the shape does not cover), so the shape is drawn in a layer over the whole canvas and the layer is composited
+    /// with the operator: the canvas backend does that natively, on the GPU where it has one.
+    /// </summary>
+    private void RecordWith(CanvasState state, string composite, Action<PeachDrawing.Core.Canvas> draw)
+    {
         Revision++;
-        var state = State;
         var (clips, matrix) = (state.Clips.ToArray(), state.Transform);
         var alpha = state.GlobalAlpha;
-        var blend = BlendFor(state.Composite) ?? PaintBlendMode.Normal;
+        var blend = BlendFor(composite) ?? PaintBlendMode.Normal;
+        _usesOperators |= blend >= PaintBlendMode.SourceIn;
         var shadow = state.ShadowColor.A > 0 && (state.ShadowBlur > 0 || state.ShadowOffsetX != 0 || state.ShadowOffsetY != 0)
             ? new DropShadowEffect(state.ShadowOffsetX, state.ShadowOffsetY, state.ShadowBlur / 2, state.ShadowBlur / 2, state.ShadowColor)
             : null;
@@ -465,84 +513,12 @@ internal sealed class CanvasBitmap(ScriptDocument document, double width, double
         });
     }
 
-    private static bool IsPorterDuff(string composite) =>
-        composite is "source-in" or "source-out" or "source-atop" or "destination-over" or "destination-in" or "destination-out" or "destination-atop" or "copy" or "xor";
-
-    /// <summary>
-    /// The Porter-Duff operations (and erasing part of the canvas) have no vector form, so the drawing so far becomes a bitmap: the new shape is drawn alone,
-    /// each pixel is combined with what was there as the operation says (only inside the clip), and the result stands for everything drawn before.
-    /// </summary>
-    private void RecordComposite(CanvasState state, string composite, Action<PeachDrawing.Core.Canvas> draw)
-    {
-        var (width, height) = ((int)Width, (int)Height);
-        if (width <= 0 || height <= 0 || (long)width * height * 4 > (1 << 26))
-            return;
-
-        var plain = state.Clone();
-        plain.Composite = "source-over";
-        var source = new CanvasBitmap(Document, Width, Height) { State = plain };
-        source.Record(draw);
-        var src = source.RenderPixels();
-        var dst = this.RenderPixels();
-        if (src.Length != dst.Length)
-            return;
-
-        byte[]? mask = null;
-        if (state.Clips.Count > 0)
-        {
-            var bounds = state.Clone();
-            bounds.Composite = "source-over";
-            bounds.Transform = Matrix3x2.Identity;
-            bounds.GlobalAlpha = 1;
-            bounds.ShadowColor = PaintColor.Transparent;
-            bounds.FillStyle = new PaintSource.ColorSource(PaintColor.Black, "#000000");
-            var everywhere = new CanvasBitmap(Document, Width, Height) { State = bounds };
-            everywhere.Record(canvas => canvas.DrawRectangle(new SolidBrush(PaintColor.Black), 0, 0, width, height));
-            mask = everywhere.RenderPixels();
-        }
-
-        var result = new byte[dst.Length];
-        for (var i = 0; i + 3 < dst.Length; i += 4)
-        {
-            double aS = src[i + 3] / 255.0, aD = dst[i + 3] / 255.0;
-            var (fs, fd) = composite switch
-            {
-                "source-in" => (aD, 0.0),
-                "source-out" => (1 - aD, 0.0),
-                "source-atop" => (aD, 1 - aS),
-                "destination-over" => (1 - aD, 1.0),
-                "destination-in" => (0.0, aS),
-                "destination-out" => (0.0, 1 - aS),
-                "destination-atop" => (1 - aD, aS),
-                "xor" => (1 - aD, 1 - aS),
-                _ => (1.0, 0.0),
-            };
-
-            var inside = mask is null ? 1.0 : mask[i + 3] / 255.0;
-            var alpha = (aS * fs) + (aD * fd);
-            alpha = (alpha * inside) + (aD * (1 - inside));
-            result[i + 3] = (byte)Math.Round(Math.Clamp(alpha, 0, 1) * 255);
-            for (var c = 0; c < 3; c++)
-            {
-                var premultiplied = (src[i + c] / 255.0 * aS * fs) + (dst[i + c] / 255.0 * aD * fd);
-                premultiplied = (premultiplied * inside) + (dst[i + c] / 255.0 * aD * (1 - inside));
-                result[i + c] = alpha <= 0 ? (byte)0 : (byte)Math.Round(Math.Clamp(premultiplied / alpha, 0, 1) * 255);
-            }
-        }
-
-        if (Document.DecodeImage(PngWriter.Encode(width, height, result)) is not { } image)
-            return;
-
-        Revision++;
-        _ops.Clear();
-        _ops.Add(canvas => canvas.DrawImage(image, new Rect(0, 0, width, height), new Rect(0, 0, width, height), ImageSampling.Pixelated));
-    }
-
     /// <summary>Starts over: everything drawn so far is dropped (what <c>clearRect</c> over the whole canvas comes to).</summary>
     public void ClearDrawing()
     {
         Revision++;
         _ops.Clear();
+        _usesOperators = false;
     }
 
     // ---- brushes and pens
@@ -703,7 +679,7 @@ internal sealed class CanvasBitmap(ScriptDocument document, double width, double
 
     public void ClearRect(double x, double y, double w, double h)
     {
-        // Erasing part of the drawing has no vector form; clearing all of it, which is what animation loops do, does.
+        // Clearing all of the drawing, which is what animation loops do, starts over and keeps nothing to composite.
         var m = State.Transform;
         var corners = new[] { PathData.T(m, x, y), PathData.T(m, x + w, y), PathData.T(m, x, y + h), PathData.T(m, x + w, y + h) };
         if (m.M12 == 0 && m.M21 == 0 && State.Clips.Count == 0
@@ -718,7 +694,7 @@ internal sealed class CanvasBitmap(ScriptDocument document, double width, double
         eraser.FillStyle = new PaintSource.ColorSource(PaintColor.Black, "#000000");
         eraser.GlobalAlpha = 1;
         eraser.ShadowColor = PaintColor.Transparent;
-        RecordComposite(eraser, "destination-out", canvas => canvas.DrawRectangle(new SolidBrush(PaintColor.Black), Math.Min(x, x + w), Math.Min(y, y + h), Math.Abs(w), Math.Abs(h)));
+        RecordWith(eraser, "destination-out", canvas => canvas.DrawRectangle(new SolidBrush(PaintColor.Black), Math.Min(x, x + w), Math.Min(y, y + h), Math.Abs(w), Math.Abs(h)));
     }
 
     public void ClipPath(PathData path, FillMode rule) => State.Clips = [.. State.Clips, (path.Clone(), rule)];
@@ -738,6 +714,7 @@ internal sealed class CanvasBitmap(ScriptDocument document, double width, double
         // The source is read when drawImage is called (a snapshot, as the spec says), not when this canvas is painted: a live reference would replay a canvas
         // drawn onto itself, or two drawn onto each other, forever.
         var snapshot = other._ops.ToArray();
+        _usesOperators |= other._usesOperators;
         Record(canvas =>
         {
             canvas.PushTransform(scale);

@@ -57,6 +57,7 @@ PeachDrawing.Win2D.Win2dCanvas : sealed class
   method virtual Void ReturnPreviousSmoothingMode(Object prevMode)
   property Boolean HasNativeLayerEffects { get; }
   property Boolean IsOffscreenTile { get; }
+  property Boolean SupportsCompositeOperators { get; }
   property Double PixelsPerPoint { get; }
   property Matrix3x2 CurrentTransform { get; }
   property ValueTuple<Double, Double> TransformScale { get; }

@@ -39,6 +39,9 @@ public sealed partial class RasterCanvas : Canvas
     private Affine _ctm = Affine.Identity;
     private readonly Stack<Matrix3x2> _layoutTransforms = [];
     private Matrix3x2 _layoutCtm = Matrix3x2.Identity;
+    /// <inheritdoc/>
+    public override bool SupportsCompositeOperators => true;
+
     private PaintBlendMode _blend = PaintBlendMode.Normal;
     private byte[] _coverageScratch;
     private byte[] _pixelScratch;

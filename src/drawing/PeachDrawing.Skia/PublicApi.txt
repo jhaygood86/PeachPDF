@@ -61,6 +61,7 @@ PeachDrawing.Skia.SkiaCanvas : sealed class
   property Boolean HasNativeLayerEffects { get; }
   property Boolean IsOffscreenTile { get; }
   property Boolean OpaqueBackdrop { get; set; }
+  property Boolean SupportsCompositeOperators { get; }
   property Double PixelsPerPoint { get; }
   property Matrix3x2 CurrentTransform { get; }
   property SkiaLinkMap Links { get; }
