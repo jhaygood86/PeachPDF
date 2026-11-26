@@ -5,7 +5,7 @@ public class CanvasTextTests
 {
     private static async Task<List<string>> LogAsync(string script)
     {
-        var (_, log) = await CanvasParityTests.PaintAsync("var c = document.getElementById('c'), g = c.getContext('2d'); " + script, "width=40 height=20");
+        var (_, log) = await CanvasParityTests.PaintAsync("var c = document.getElementById('c'), g = c.getContext('2d'); function name(f) { try { f(); return 'none'; } catch (e) { return e.name; } } " + script, "width=40 height=20");
         return log;
     }
 
@@ -88,5 +88,38 @@ public class CanvasTextTests
             """);
 
         Assert.Equal(["Missing unloaded error 0 true true 1 true 0", "rejected NetworkError error"], log);
+    }
+
+    [Fact]
+    public async Task TextMetricsRanges_AnswerWhereTheCharactersAre()
+    {
+        var log = await LogAsync("""
+            g.font = '20px TestSans';
+            var tm = g.measureText('Hello World');
+            var clusters = tm.getTextClusters();
+            var w = tm.width, first = tm.getSelectionRects(0, 5)[0], whole = tm.getActualBoundingBox(0, 11);
+            Log.info([clusters.length, clusters[0].text, clusters[10].end, first.x, first.width > 30 && first.width < w, whole.width > 0 && whole.width <= w + 1,
+                tm.getIndexFromOffset(-5), tm.getIndexFromOffset(w + 5), tm.getIndexFromOffset(first.width + 1),
+                name(function () { tm.getTextClusters(-1, 2); }), name(function () { tm.getTextClusters(5, 3); }), name(function () { tm.getSelectionRects(0, 12); })].join(' '));
+            """);
+
+        Assert.Equal(["11 H 11 0 true true 0 11 5 TypeError IndexSizeError IndexSizeError"], log);
+    }
+
+    [Fact]
+    public async Task ARangeOfATextNode_HasTheRectanglesOfItsCharacters_AndAPointFindsTheCharacterUnderIt()
+    {
+        var log = await LogAsync("""
+            var el = document.createElement('p'); el.style.cssText = 'position: absolute; left: 0; top: 0; margin: 0; font: 20px TestSans'; el.textContent = 'Hello World'; document.body.appendChild(el);
+            var text = el.firstChild, range = document.createRange();
+            range.setStart(text, 0); range.setEnd(text, 5);
+            var all = range.getClientRects(), whole = el.getBoundingClientRect();
+            range.setStart(text, 2); range.setEnd(text, 2);
+            var collapsed = range.getClientRects();
+            var at = document.caretPositionFromPoint(1, whole.y + whole.height / 2), far = document.caretPositionFromPoint(whole.width + 50, whole.y + whole.height / 2);
+            Log.info([all.length, all[0].x, all[0].width > 40 && all[0].width < whole.width, collapsed.length, collapsed[0].width, at.offsetNode === text, at.offset, far.offset].join(' '));
+            """);
+
+        Assert.Equal(["1 0 true 1 0 true 0 11"], log);
     }
 }

@@ -42,6 +42,9 @@ namespace PeachDrawing.Core
         /// <summary>How far the font falls below the alphabetic baseline, as its own metrics say.</summary>
         public double FontDescent { get; internal set; }
 
+        /// <summary>The space the font adds between lines, beyond its ascent and descent.</summary>
+        public double FontLineGap { get; internal set; }
+
         /// <summary>How far the em square rises above the baseline: the font's size shared between ascent and descent in the proportion the font has them.</summary>
         public double EmAscent { get; internal set; }
 
@@ -87,6 +90,7 @@ namespace PeachDrawing.Core
             var descent = metrics.NormalLineDescent * scale;
             result.FontAscent = ascent;
             result.FontDescent = descent;
+            result.FontLineGap = Math.Max(0, metrics.NormalLineGap * scale);
             var total = ascent + descent;
             result.EmAscent = total > 0 ? font.Size * ascent / total : 0;
             result.EmDescent = total > 0 ? font.Size - result.EmAscent : 0;

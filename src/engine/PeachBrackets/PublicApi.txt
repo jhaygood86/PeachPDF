@@ -848,6 +848,7 @@ PeachBrackets.ScriptHosting.ScriptDocument : sealed class
   method Canvas CreateMeasuringCanvas()
   method Font GetFallbackFont(Rune rune, Double sizePixels, PaintFontStyle style, Double weight)
   method Font GetFont(String family, Double sizePixels, PaintFontStyle style, Double weight)
+  method IReadOnlyList<ScriptBox> GetTextRects(ScriptNode element, Int32 from, Int32 to)
   method IReadOnlyList<ScriptNode> GetElementsByClassName(String classNames)
   method IReadOnlyList<ScriptNode> GetElementsByTagName(String tagName)
   method IReadOnlyList<ScriptNode> QuerySelectorAll(String selector)
@@ -877,6 +878,7 @@ PeachBrackets.ScriptHosting.ScriptDocument : sealed class
   method ValueTask<ScriptImageInfo> LoadImageAsync(String address)
   method ValueTask<ScriptNetworkResponse> SendAsync(ScriptNetworkRequest request, CancellationToken cancellationToken = null)
   method ValueTask<String> LoadTextAsync(String address)
+  method ValueTuple<ScriptNode, Int32>? GetCaretAt(Double x, Double y)
   method Void SetCanvasPainting(ScriptNode canvas, ScriptCanvasPainting painting)
   method static Boolean TryParseNonNegativeInteger(String text, out UInt32 value)
   property Boolean CanMeasure { get; }

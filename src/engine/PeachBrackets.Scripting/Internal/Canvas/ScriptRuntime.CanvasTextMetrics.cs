@@ -261,10 +261,15 @@ internal sealed partial class ScriptRuntime
             var layout = LayoutOf(self);
             var (start, end) = RangeArguments(args, 0, layout.Text.Length, clusters: false);
             var rects = new List<JsValue>();
-            if (layout.Run is { } run && start != end)
+            if (layout.Run is { } collapsedRun && start >= end)
+            {
+                // An empty stretch (or one the wrong way round, which is the empty one at its end) is a box with no width where the caret is.
+                rects.Add(Rect(collapsedRun.CaretX(end) - layout.Anchor, -(layout.Metrics.FontAscent - layout.LineOffset) - layout.Metrics.FontLineGap / 2, 0, layout.Metrics.FontAscent + layout.Metrics.FontDescent + layout.Metrics.FontLineGap));
+            }
+            else if (layout.Run is { } run)
             {
                 foreach (var (x, width) in run.SelectionBoxes(start, end))
-                    rects.Add(Rect(x - layout.Anchor, -(layout.Metrics.FontAscent - layout.LineOffset), width, layout.Metrics.FontAscent + layout.Metrics.FontDescent));
+                    rects.Add(Rect(x - layout.Anchor, -(layout.Metrics.FontAscent - layout.LineOffset) - layout.Metrics.FontLineGap / 2, width, layout.Metrics.FontAscent + layout.Metrics.FontDescent + layout.Metrics.FontLineGap));
             }
 
             return Js.Array(Engine, rects);

@@ -297,6 +297,9 @@ public sealed class HtmlDocumentOptions
         copy.ScriptHost = PeachBrackets.ScriptHosting.IdleScriptHost.Instance;
         copy.MeasuringCanvasFactory = null;
         copy.ScriptApis = [];
+
+        // The probe answers where text is (the rectangles of a range, the character at a point), which the text runs have.
+        copy.RecordTextRuns = true;
         return copy;
     }
 

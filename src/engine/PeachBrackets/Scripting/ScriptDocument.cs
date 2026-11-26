@@ -121,6 +121,11 @@ public sealed class ScriptDocument
     private HtmlDocument? _probe;
     private int _probeVersion = -1;
 
+    // The laid-out documents of the markups the tree has had, newest last: a script that adds an element, reads where it is and takes it away again (and does so for many
+    // elements that are the same) lays the same document out each time, which is only done once.
+    private readonly List<(string Markup, HtmlDocument Document)> _probes = [];
+    private const int MaxProbes = 8;
+
     // The document as it is now, laid out: loaded again from the tree when the tree has changed since.
     private HtmlDocument? CurrentProbe()
     {
@@ -129,16 +134,33 @@ public sealed class ScriptDocument
 
         if (_probe is null || _probeVersion != Version)
         {
-            _probe?.Dispose();
-            _probe = null;
-            try
+            var markup = Serialize();
+            var cached = _probes.FindIndex(p => string.Equals(p.Markup, markup, StringComparison.Ordinal));
+            if (cached >= 0)
             {
-                // The scripts run inside a load that is already asynchronous; the probe's own load is of an in-memory string.
-                _probe = Probe(Serialize()).AsTask().GetAwaiter().GetResult();
+                _probe = _probes[cached].Document;
+                var entry = _probes[cached];
+                _probes.RemoveAt(cached);
+                _probes.Add(entry);
             }
-            catch (HtmlRenderException)
+            else
             {
                 _probe = null;
+                try
+                {
+                    // The scripts run inside a load that is already asynchronous; the probe's own load is of an in-memory string.
+                    _probe = Probe(markup).AsTask().GetAwaiter().GetResult();
+                    _probes.Add((markup, _probe));
+                    while (_probes.Count > MaxProbes)
+                    {
+                        _probes[0].Document.Dispose();
+                        _probes.RemoveAt(0);
+                    }
+                }
+                catch (HtmlRenderException)
+                {
+                    _probe = null;
+                }
             }
 
             _probeVersion = Version;
@@ -163,6 +185,34 @@ public sealed class ScriptDocument
         return new ScriptBox(bounds.X, bounds.Y, bounds.Width, bounds.Height);
     }
 
+    /// <summary>The rectangles the characters from <paramref name="from"/> to <paramref name="to"/> of an element's text take in the document as it is now, one for each stretch of a line, in CSS pixels.</summary>
+    /// <param name="element">the element that holds the text</param>
+    /// <param name="from">the index of the first character</param>
+    /// <param name="to">the index one past the last</param>
+    /// <returns>the boxes; none when there is no layout to read</returns>
+    public IReadOnlyList<ScriptBox> GetTextRects(ScriptNode element, int from, int to)
+    {
+        ArgumentNullException.ThrowIfNull(element);
+        var ordinal = OrdinalOf(element);
+        if (ordinal < 0 || CurrentProbe() is not { } probe)
+            return [];
+
+        return [.. probe.ProbeTextRects(ordinal, from, to).Select(r => new ScriptBox(r.X, r.Y, r.Width, r.Height))];
+    }
+
+    /// <summary>The place between two characters nearest a point of the page (in CSS pixels): the element whose text it is in and how many characters of the text come before it.</summary>
+    /// <param name="x">the distance from the left of the page</param>
+    /// <param name="y">the distance from the top</param>
+    /// <returns>the element and the offset, or null when no text is there to find</returns>
+    public (ScriptNode Element, int Offset)? GetCaretAt(double x, double y)
+    {
+        if (CurrentProbe() is not { } probe || probe.ProbeCaretAt(x, y) is not { } caret)
+            return null;
+
+        var elements = ElementsInOrder();
+        return caret.Ordinal >= 0 && caret.Ordinal < elements.Count ? (elements[caret.Ordinal], caret.Offset) : null;
+    }
+
     /// <summary>The computed value of a CSS property of an element in the document as it is now, or null when there is no layout to read.</summary>
     /// <param name="element">the element</param>
     /// <param name="property">the property name, such as <c>display</c> or <c>background-color</c></param>
@@ -177,7 +227,10 @@ public sealed class ScriptDocument
 
     internal void ReleaseProbe()
     {
-        _probe?.Dispose();
+        foreach (var (_, document) in _probes)
+            document.Dispose();
+
+        _probes.Clear();
         _probe = null;
     }
 

@@ -105,7 +105,7 @@ internal sealed partial class TestharnessEvaluator(string wptRoot) : IWptEvaluat
             ScriptHost = new JintScriptHost(new JintScriptOptions
             {
                 ScriptTimeout = TimeSpan.FromSeconds(20),
-                MemoryLimitBytes = 1L << 30,
+                MemoryLimitBytes = 4L << 30,
                 MaxVirtualTime = TimeSpan.FromSeconds(60),
                 MaxCallbacks = 100_000,
                 Logger = new CollectingLogger(lines, errors, diagnostics),
@@ -198,7 +198,7 @@ internal sealed partial class TestharnessEvaluator(string wptRoot) : IWptEvaluat
     private static string Trim(string text)
     {
         text = text.ReplaceLineEndings(" ");
-        return text.Length > 220 ? text[..220] : text;
+        return text.Length > 900 ? text[..900] : text;
     }
 
     /// <summary>The page the WPT server generates for the window global of a <c>.any.js</c> / <c>.window.js</c> file; null when the file asks for no window.</summary>

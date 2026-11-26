@@ -1039,6 +1039,7 @@ PeachDrawing.Core.TextRunMetrics : sealed class
   property Double EmDescent { get; }
   property Double FontAscent { get; }
   property Double FontDescent { get; }
+  property Double FontLineGap { get; }
   property Double HangingBaseline { get; }
   property Double IdeographicBaseline { get; }
   property Double InkAscent { get; }

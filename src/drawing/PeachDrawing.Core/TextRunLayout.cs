@@ -118,16 +118,35 @@ namespace PeachDrawing.Core
             if (_line is null)
                 return 0;
 
-            // A point on a boundary is that boundary (where two share it, as at the edge of a run of the other direction, the first in the text).
-            foreach (var boundary in _graphemes)
+            // Every boundary has a place in each run it touches (at the edge between two runs of different directions it has two); the nearest place is the answer.
+            // A point half way between two goes to the one that comes first in reading order.
+            var boundaries = new HashSet<int>(_graphemes);
+            var best = 0;
+            var bestDistance = double.PositiveInfinity;
+            var bestPosition = 0.0;
+            foreach (var run in _line.Runs)
             {
-                if (Math.Abs(CaretX(boundary) - x) < 1e-3)
-                    return boundary;
+                if (run.IsGenerated)
+                    continue;
+
+                for (var i = run.Range.Start; i <= run.Range.End; i++)
+                {
+                    if (!boundaries.Contains(i))
+                        continue;
+
+                    var position = run.GetCaretX(i) - _line.Left;
+                    var distance = Math.Abs(position - x);
+                    var firstInReading = _rightToLeft ? position > bestPosition : position < bestPosition;
+                    if (distance < bestDistance - 1e-9 || Math.Abs(distance - bestDistance) <= 1e-9 && firstInReading)
+                    {
+                        best = i;
+                        bestDistance = distance;
+                        bestPosition = position;
+                    }
+                }
             }
 
-            // The layout finds the character boundary nearest to a point, in its own reading of the line's directions; a point half way between two goes to the one before it in reading order.
-            var position = _layout.PositionAt(new System.Drawing.PointF((float)(x + _line.Left + -1e-4), (float)(_line.Top + _line.Height / 2)));
-            return Math.Clamp(position.Index, 0, Text.Length);
+            return best;
         }
 
         /// <summary>

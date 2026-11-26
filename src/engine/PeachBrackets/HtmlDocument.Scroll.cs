@@ -1,3 +1,4 @@
+using System.Linq;
 using PeachBrackets.Text;
 using System;
 using System.Collections.Generic;
@@ -103,6 +104,136 @@ public sealed partial class HtmlDocument
         var points = PeachBrackets.Utilities.Utils.ToPoints(rect, _unitsPerPoint);
         const double pointsPerPixel = 0.75;
         return (points.X / pointsPerPixel, points.Y / pointsPerPixel, points.Width / pointsPerPixel, points.Height / pointsPerPixel);
+    }
+
+    // The text runs that lie in the element that is the ordinal-th of the source, in the order they are in the document.
+    private List<TextRun> RunsIn(int ordinal)
+    {
+        var result = new List<TextRun>();
+        if (FindByOrdinal(_container.Root, ordinal) is not { } element)
+            return result;
+
+        foreach (var run in TextRuns)
+        {
+            for (var owner = run.Owner; owner is not null; owner = owner.ParentBox)
+            {
+                if (ReferenceEquals(owner, element))
+                {
+                    result.Add(run);
+                    break;
+                }
+            }
+        }
+
+        return result;
+    }
+
+    // Where a character index of a run is along it: the offset of the boundary at or after it.
+    private static double XAt(TextRun run, int index)
+    {
+        var boundaries = run.CharacterBoundaries;
+        for (var k = 0; k < boundaries.Count && k < run.CharacterOffsets.Count; k++)
+        {
+            if (boundaries[k] >= index)
+                return run.CharacterOffsets[k];
+        }
+
+        return run.CharacterOffsets[^1];
+    }
+
+    /// <summary>The rectangles the characters from <paramref name="from"/> to <paramref name="to"/> of the text of the <paramref name="ordinal"/>-th element take, one for each stretch of a line, in CSS pixels.</summary>
+    internal IReadOnlyList<(double X, double Y, double Width, double Height)> ProbeTextRects(int ordinal, int from, int to)
+    {
+        _ = Pages;
+        var rects = new List<(double X, double Y, double Right, double Bottom)>();
+        foreach (var run in RunsIn(ordinal))
+        {
+            if (run.CharacterOffsets.Count == 0)
+                continue;
+
+            // Each word of the run knows where its characters are in the text they came from.
+            foreach (var slice in run.Slices)
+            {
+                var source = slice.Word.SourceStart;
+                if (source < 0)
+                    continue;
+
+                var (start, end) = (Math.Max(from, source), Math.Min(to, source + slice.Length));
+                if (end <= start)
+                    continue;
+
+                // The word's left edge is the run's first offset of the word less where that edge is from the word's left.
+                var first = XAt(run, slice.TextStart);
+                var wordLeft = first - slice.Edges[0];
+                var (a, b) = (wordLeft + slice.Edges[start - source], wordLeft + slice.Edges[end - source]);
+                var (left, right) = (Math.Min(a, b), Math.Max(a, b));
+                var (top, bottom) = (run.Bounds.Y, run.Bounds.Y + run.Bounds.Height);
+
+                rects.Add((left, top, right, bottom));
+
+                // The space before the word is covered when the range includes it.
+                if (slice.HasGap && from <= source - 1 && source - 1 < to)
+                    rects.Add((Math.Min(wordLeft + slice.GapStart, wordLeft + slice.GapEnd), top, Math.Max(wordLeft + slice.GapStart, wordLeft + slice.GapEnd), bottom));
+            }
+        }
+
+        // An empty range is a box with no width where the place is.
+        if (rects.Count == 0 && from >= to)
+        {
+            foreach (var run in RunsIn(ordinal))
+            {
+                foreach (var slice in run.Slices)
+                {
+                    var source = slice.Word.SourceStart;
+                    if (source < 0 || to < source || to > source + slice.Length)
+                        continue;
+
+                    var x = XAt(run, slice.TextStart) - slice.Edges[0] + slice.Edges[to - source];
+                    rects.Add((x, run.Bounds.Y, x, run.Bounds.Y + run.Bounds.Height));
+                    break;
+                }
+
+                if (rects.Count > 0)
+                    break;
+            }
+        }
+
+        // The stretches that touch on one line are one rectangle, left to right.
+        rects.Sort((p, q) => Math.Abs(p.Y - q.Y) < 0.5 ? p.X.CompareTo(q.X) : p.Y.CompareTo(q.Y));
+        var merged = new List<(double X, double Y, double Right, double Bottom)>();
+        foreach (var rect in rects)
+        {
+            if (merged.Count > 0 && Math.Abs(merged[^1].Y - rect.Y) < 0.5 && rect.X <= merged[^1].Right + 0.5)
+                merged[^1] = (merged[^1].X, merged[^1].Y, Math.Max(merged[^1].Right, rect.Right), Math.Max(merged[^1].Bottom, rect.Bottom));
+            else
+                merged.Add(rect);
+        }
+
+        rects = merged;
+
+        const double pointsPerPixel = 0.75;
+        return [.. rects.Select(r => (r.X / pointsPerPixel, r.Y / pointsPerPixel, (r.Right - r.X) / pointsPerPixel, (r.Bottom - r.Y) / pointsPerPixel))];
+    }
+
+    /// <summary>The place between two characters nearest a point (in CSS pixels): the ordinal of the element that holds the text, and how many characters of that text come before the place.</summary>
+    internal (int Ordinal, int Offset)? ProbeCaretAt(double x, double y)
+    {
+        _ = Pages;
+        if (Pages.Count == 0 || GetCaretPosition(0, x * 0.75, y * 0.75) is not { } position || position.RunIndex < 0 || position.RunIndex >= TextRuns.Count)
+            return null;
+
+        var run = TextRuns[position.RunIndex];
+        for (var owner = run.Owner; owner is not null; owner = owner.ParentBox)
+        {
+            if (owner.HtmlTag is not { } tag)
+                continue;
+
+            // The word the place is in names where it is in the source text.
+            var slice = run.Slices.FirstOrDefault(s => s.Word.SourceStart >= 0 && position.CharIndex >= s.TextStart && position.CharIndex <= s.TextStart + s.Length);
+            return slice is null ? null : (tag.SourceOrdinal, slice.Word.SourceStart + position.CharIndex - slice.TextStart);
+        }
+
+        return null;
     }
 
     /// <summary>The computed value of a property of the element that is the <paramref name="ordinal"/>-th element of the source, or null.</summary>
