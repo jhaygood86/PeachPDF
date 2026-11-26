@@ -807,6 +807,29 @@ internal sealed class CanvasBitmap(ScriptDocument document, double width, double
         Record(canvas => canvas.DrawImage(image, destination, source, sampling));
     }
 
+    /// <summary>Draws a loaded SVG image: its part <paramref name="source"/> (in the image's own size) lands on <paramref name="destination"/>, clipped to it.</summary>
+    public void DrawSvg(string address, double imageWidth, double imageHeight, Rect source, Rect destination)
+    {
+        if (!(source.Width > 0) || !(source.Height > 0) || !(destination.Width > 0) || !(destination.Height > 0) || !(imageWidth > 0) || !(imageHeight > 0))
+            return;
+
+        var (scaleX, scaleY) = (destination.Width / source.Width, destination.Height / source.Height);
+        var viewport = new Rect(destination.X - source.X * scaleX, destination.Y - source.Y * scaleY, imageWidth * scaleX, imageHeight * scaleY);
+        var document = Document;
+        Record(canvas =>
+        {
+            canvas.PushClip(destination);
+            try
+            {
+                document.DrawSvgImage(canvas, address, viewport);
+            }
+            finally
+            {
+                canvas.PopClip();
+            }
+        });
+    }
+
     public void DrawCanvas(CanvasBitmap other, Rect destination)
     {
         if (other.Width <= 0 || other.Height <= 0)

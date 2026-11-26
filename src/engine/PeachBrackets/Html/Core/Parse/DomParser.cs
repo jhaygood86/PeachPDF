@@ -3388,6 +3388,15 @@ namespace PeachBrackets.Html.Parse
                         TranslateFace(box, valueParser, value);
                         break;
                     case HtmlConstants.Height:
+                        if (IsCanvas(tag))
+                        {
+                            // A canvas's attribute is the size of its bitmap, a whole number of pixels read by the rules for non-negative integers; there is no length or
+                            // percentage in it, and one that cannot be read leaves the box its default intrinsic size.
+                            if (Utils.HtmlIntegerParser.TryParseNonNegative(value, out var canvasHeight) && canvasHeight <= int.MaxValue)
+                                box.Height = string.Format(NumberFormatInfo.InvariantInfo, "{0}px", canvasHeight);
+                            break;
+                        }
+
                         box.Height = TranslateLength(value);
                         break;
                     case HtmlConstants.Hspace:
@@ -3424,6 +3433,13 @@ namespace PeachBrackets.Html.Parse
                             TranslateLength(value), Map.AutoKeywords, CssValueParser.TryParseLengthOrCalc, AutoKeyword.Auto);
                         break;
                     case HtmlConstants.Width:
+                        if (IsCanvas(tag))
+                        {
+                            if (Utils.HtmlIntegerParser.TryParseNonNegative(value, out var canvasWidth) && canvasWidth <= int.MaxValue)
+                                box.Width = string.Format(NumberFormatInfo.InvariantInfo, "{0}px", canvasWidth);
+                            break;
+                        }
+
                         box.Width = TranslateLength(value);
                         break;
                 }
@@ -3854,6 +3870,8 @@ namespace PeachBrackets.Html.Parse
                 && !dirAttr.Equals(Keywords.Ltr, StringComparison.OrdinalIgnoreCase)
                 && !dirAttr.Equals(Keywords.Rtl, StringComparison.OrdinalIgnoreCase);
         }
+
+        private static bool IsCanvas(HtmlTag tag) => tag.Name.Equals("canvas", StringComparison.OrdinalIgnoreCase);
 
         /// <summary>
         /// Converts an HTML length into a Css length

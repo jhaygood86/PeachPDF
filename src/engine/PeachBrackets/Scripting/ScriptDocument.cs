@@ -390,6 +390,7 @@ public sealed class ScriptDocument
 
     private readonly Dictionary<ScriptNode, ScriptCanvasPainting> _canvases = new(ReferenceEqualityComparer.Instance as IEqualityComparer<ScriptNode>);
     private readonly Dictionary<string, PeachDrawing.Core.Image> _loadedImages = [];
+    private readonly Dictionary<string, Svg.SvgDocument> _loadedSvgs = [];
 
     /// <summary>Sets what a <c>canvas</c> element shows: a drawing a script made, replacing any earlier one. Null clears it.</summary>
     /// <param name="canvas">the <c>canvas</c> element</param>
@@ -522,6 +523,15 @@ public sealed class ScriptDocument
         return result;
     }
 
+    /// <summary>
+    /// Reads a number out of an attribute by the HTML rules for parsing non-negative integers: white space is skipped, a plus sign is allowed, the leading digits are the number and
+    /// anything after them is ignored (<c>"100.999"</c> and <c>"100em"</c> are 100, <c>"0x100"</c> is 0).
+    /// </summary>
+    /// <param name="text">the attribute's value, or null for none</param>
+    /// <param name="value">the number</param>
+    /// <returns>false when there is no number to read</returns>
+    public static bool TryParseNonNegativeInteger(string? text, out uint value) => Html.Utils.HtmlIntegerParser.TryParseNonNegative(text, out value);
+
     /// <summary>Finds a font by family name, as the document's render context knows it.</summary>
     /// <param name="family">one family name or a generic one</param>
     /// <param name="sizePixels">the size in CSS pixels</param>
@@ -575,6 +585,25 @@ public sealed class ScriptDocument
     /// <returns>the image, or null</returns>
     public PeachDrawing.Core.Image? GetLoadedImage(string address) => _loadedImages.GetValueOrDefault(address);
 
+    /// <summary>Whether the image loaded from <paramref name="address"/> is an SVG document, which is drawn as vector content with <see cref="DrawSvgImage"/> rather than as an <see cref="PeachDrawing.Core.Image"/>.</summary>
+    /// <param name="address">the address as it was given to <see cref="LoadImageAsync"/></param>
+    public bool IsSvgImage(string address) => _loadedSvgs.ContainsKey(address);
+
+    /// <summary>Draws the SVG image loaded from <paramref name="address"/> onto <paramref name="canvas"/>, its whole viewport mapped onto <paramref name="viewport"/>.</summary>
+    /// <param name="canvas">where to draw</param>
+    /// <param name="address">the address as it was given to <see cref="LoadImageAsync"/></param>
+    /// <param name="viewport">where the image's whole width and height land, in the canvas's units</param>
+    /// <returns>false when no SVG image was loaded from that address</returns>
+    public bool DrawSvgImage(PeachDrawing.Core.Canvas canvas, string address, PeachDrawing.Core.Rect viewport)
+    {
+        ArgumentNullException.ThrowIfNull(canvas);
+        if (!_loadedSvgs.TryGetValue(address, out var svg))
+            return false;
+
+        Svg.SvgRenderer.RenderInto(canvas, svg, viewport);
+        return true;
+    }
+
     /// <summary>Loads an image a script asked for (<c>new Image()</c>, an <c>img</c> element's <c>src</c>) to find out whether it can be decoded and how large it is.</summary>
     /// <param name="address">the address as written, absolute or relative</param>
     /// <returns>the image's size and address, or null when it could not be loaded or decoded</returns>
@@ -605,6 +634,7 @@ public sealed class ScriptDocument
 
             if (handler.SvgDocument is { } svg)
             {
+                _loadedSvgs[address] = svg;
                 var width = svg.Width ?? svg.ViewBox?.Width ?? 300;
                 var height = svg.Height ?? svg.ViewBox?.Height ?? 150;
                 return new ScriptImageInfo(width, height, url);

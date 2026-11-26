@@ -41,8 +41,8 @@ namespace PeachBrackets.Html.Dom
             return ValueTask.CompletedTask;
         }
 
-        // A non-negative whole number of CSS pixels, or the default.
+        // A non-negative whole number of CSS pixels read by the HTML rules (leading digits, junk ignored), or the default when there is none or it is too large.
         private double Attribute(string name, double fallback) =>
-            HtmlTag?.TryGetAttribute(name) is { } text && int.TryParse(text.Trim(), NumberStyles.None, CultureInfo.InvariantCulture, out var value) ? value : fallback;
+            Utils.HtmlIntegerParser.TryParseNonNegative(HtmlTag?.TryGetAttribute(name), out var value) && value <= int.MaxValue ? value : fallback;
     }
 }

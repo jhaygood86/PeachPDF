@@ -79,6 +79,9 @@ internal sealed partial class ScriptRuntime
     private ObjectInstance PatternPrototype = null!;
     private readonly Dictionary<ScriptNode, ContextObject> _contexts = [];
 
+    // The rectangle with a positive width and height covering the same area: the origin moves to the corner a negative size reaches back from.
+    private static Rect Normalized(Rect r) => new(r.Width < 0 ? r.X + r.Width : r.X, r.Height < 0 ? r.Y + r.Height : r.Y, Math.Abs(r.Width), Math.Abs(r.Height));
+
     private static double Num(JsValue[] args, int index) => TypeConverter.ToNumber(Js.Arg(args, index));
 
     private static bool Finite(JsValue[] args, int count)
@@ -121,7 +124,7 @@ internal sealed partial class ScriptRuntime
     private static (double Width, double Height) CanvasSize(ScriptNode element)
     {
         double Read(string name, double fallback) =>
-            element.GetAttribute(name) is { } text && int.TryParse(text.Trim(), NumberStyles.None, CultureInfo.InvariantCulture, out var value) ? value : fallback;
+            ScriptDocument.TryParseNonNegativeInteger(element.GetAttribute(name), out var value) && value <= int.MaxValue ? value : fallback;
 
         return (Read("width", 300), Read("height", 150));
     }
@@ -199,8 +202,9 @@ internal sealed partial class ScriptRuntime
                 self => Js.Num(CanvasSize(Sn(self)) is var (w, h) && attribute == "width" ? w : CanvasSize(Sn(self)).Height),
                 (self, value) =>
                 {
-                    var number = TypeConverter.ToNumber(value);
-                    var whole = double.IsFinite(number) && number >= 0 && number <= int.MaxValue ? (int)Math.Truncate(number) : defaultValue;
+                    // An unsigned long: the value modulo 2^32 (200 - 2^32 is 200, "400x" is 0), and the default when it is more than the attribute can hold.
+                    var number = TypeConverter.ToUint32(value);
+                    var whole = number <= int.MaxValue ? number : (uint)defaultValue;
                     Sn(self).SetAttribute(attribute, whole.ToString(CultureInfo.InvariantCulture));
                     ResetCanvas(Sn(self));
                 });
@@ -801,23 +805,52 @@ internal sealed partial class ScriptRuntime
                 return JsValue.Undefined;
             }
 
-            if (source is NodeObject { Node: { Kind: ScriptNodeKind.Element } element } && string.Equals(element.TagName, "canvas", StringComparison.OrdinalIgnoreCase)
-                && _contexts.TryGetValue(element, out var other))
+            if (source is NodeObject { Node: { Kind: ScriptNodeKind.Element } element } && string.Equals(element.TagName, "canvas", StringComparison.OrdinalIgnoreCase))
             {
+                // A canvas with no width or height is not a picture to draw. One that has a size but no context holds nothing: transparent, so nothing is drawn.
+                var (canvasWidth, canvasHeight) = CanvasSize(element);
+                if (canvasWidth == 0 || canvasHeight == 0)
+                    throw DomError("InvalidStateError", "The canvas has no width or height.");
+
+                if (!_contexts.TryGetValue(element, out var other))
+                    return JsValue.Undefined;
+
                 var (dx, dy, dw, dh) = numbers.Length switch
                 {
                     2 => (numbers[0], numbers[1], other.Bitmap.Width, other.Bitmap.Height),
                     4 => (numbers[0], numbers[1], numbers[2], numbers[3]),
                     _ => (numbers[4], numbers[5], numbers[6], numbers[7]),
                 };
-                B(self).DrawCanvas(other.Bitmap, new Rect(dx, dy, dw, dh));
+                B(self).DrawCanvas(other.Bitmap, Normalized(new Rect(dx, dy, dw, dh)));
                 return JsValue.Undefined;
             }
+
+            if (source is BitmapObject { Image: null })
+                throw DomError("InvalidStateError", "The image bitmap is closed.");
 
             if (ImageOf(source) is not { } image)
             {
                 if (source is NodeObject { Node: { Kind: ScriptNodeKind.Element } img } && IsImage(img))
-                    throw DomError("InvalidStateError", "The image is not loaded.");
+                {
+                    // Broken is an error; an image that is not loaded yet (or has nothing to load) is not an error but is not drawn either.
+                    _images.TryGetValue(img, out var state);
+                    if (state?.Status == 3)
+                        throw DomError("InvalidStateError", "The image is broken.");
+
+                    if (state?.Status == 2 && img.GetAttribute("src") is { } svgAddress && Document.IsSvgImage(svgAddress))
+                    {
+                        var (svgSx, svgSy, svgSw, svgSh) = numbers.Length == 8 ? (numbers[0], numbers[1], numbers[2], numbers[3]) : (0, 0, state.Width, state.Height);
+                        var svgDestination = numbers.Length switch
+                        {
+                            2 => new Rect(numbers[0], numbers[1], state.Width, state.Height),
+                            4 => new Rect(numbers[0], numbers[1], numbers[2], numbers[3]),
+                            _ => new Rect(numbers[4], numbers[5], numbers[6], numbers[7]),
+                        };
+                        B(self).DrawSvg(svgAddress, state.Width, state.Height, Normalized(new Rect(svgSx, svgSy, svgSw, svgSh)), Normalized(svgDestination));
+                    }
+
+                    return JsValue.Undefined;
+                }
 
                 throw TypeError("The image argument is not a drawable object.");
             }
@@ -829,8 +862,10 @@ internal sealed partial class ScriptRuntime
                 4 => new Rect(numbers[0], numbers[1], numbers[2], numbers[3]),
                 _ => new Rect(numbers[4], numbers[5], numbers[6], numbers[7]),
             };
+
+            // A rectangle with a negative width or height is the same rectangle with its origin moved to the other corner: it never flips the picture.
             if (sw != 0 && sh != 0 && d.Width != 0 && d.Height != 0)
-                B(self).DrawImage(image, new Rect(sx, sy, sw, sh), d);
+                B(self).DrawImage(image, Normalized(new Rect(sx, sy, sw, sh)), Normalized(d));
 
             return JsValue.Undefined;
         });
