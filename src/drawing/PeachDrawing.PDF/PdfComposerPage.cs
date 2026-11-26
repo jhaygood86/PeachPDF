@@ -56,6 +56,7 @@ public sealed class PdfComposerPage
         PdfPage.Keys.VP
     }.ToFrozenSet(StringComparer.Ordinal);
     private bool _finished;
+    private double _contentScale = 1;
 
     internal PdfComposerPage(PdfComposer composer, PdfPage page, int index, PdfRenderContext renderContext)
     {
@@ -185,7 +186,7 @@ public sealed class PdfComposerPage
     }
 
     /// <summary>Names a place on this page (<paramref name="topPoints"/> below its top edge) for a destination link to lead to.</summary>
-    internal void AddDestination(string name, double topPoints) => _composer.AddNamedDestination(name, Index, topPoints);
+    internal void AddDestination(string name, double topPoints) => _composer.AddNamedDestination(name, Index, topPoints * _contentScale);
 
     /// <summary>
     /// Makes another canvas over this page's content, drawing with <paramref name="renderContext"/>. The canvases of one page share its
@@ -203,6 +204,31 @@ public sealed class PdfComposerPage
         var canvas = new PdfCanvas(renderContext, _graphics, renderContext.PixelsPerPoint) { Page = this };
         _canvases.Add(canvas);
         return canvas;
+    }
+
+    /// <summary>
+    /// Draws the page at <paramref name="scale"/> times the size its coordinates say, from the top-left corner: a canvas that draws a rectangle
+    /// 600 points wide at a scale of 0.5 puts one 300 points wide on the page. The coordinates of links, destinations, form fields, annotations and
+    /// bookmarks are scaled the same way, so everything is placed as it would be on a page of <c>1 / scale</c> times the size. This is how a page laid
+    /// out on a larger sheet is shrunk onto a smaller one. Call it before drawing anything on the page.
+    /// </summary>
+    /// <param name="scale">the scale, greater than zero and finite; 1 (the default) draws at the size the coordinates say</param>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="scale"/> is not a positive, finite number</exception>
+    /// <exception cref="InvalidOperationException">the page is finished, or its scale was already set</exception>
+    public void SetContentScale(double scale)
+    {
+        if (!(scale > 0) || double.IsInfinity(scale))
+            throw new ArgumentOutOfRangeException(nameof(scale), scale, "A content scale must be a positive, finite number.");
+        if (_finished)
+            throw new InvalidOperationException("The page is finished; its content cannot be drawn on any more.");
+        if (_contentScale != 1)
+            throw new InvalidOperationException("The page's content scale is already set.");
+
+        if (scale == 1)
+            return;
+
+        _contentScale = scale;
+        _graphics.MultiplyTransform(System.Numerics.Matrix3x2.CreateScale((float)scale));
     }
 
     /// <summary>
@@ -254,7 +280,7 @@ public sealed class PdfComposerPage
     {
         ArgumentNullException.ThrowIfNull(uri);
 
-        var annotation = _page.AddWebLink(new PdfRectangle(ToPdf(bounds)), uri);
+        var annotation = _page.AddWebLink(new PdfRectangle(ToPageSpace(bounds)), uri);
         return Complete(annotation, quad);
     }
 
@@ -269,20 +295,27 @@ public sealed class PdfComposerPage
     {
         ArgumentException.ThrowIfNullOrEmpty(destinationName);
 
-        var annotation = _page.AddDocumentLink(new PdfRectangle(ToPdf(bounds)), destinationName);
+        var annotation = _page.AddDocumentLink(new PdfRectangle(ToPageSpace(bounds)), destinationName);
         return Complete(annotation, quad);
     }
 
     private PdfLink Complete(PdfLinkAnnotation annotation, IReadOnlyList<PaintPoint>? quad)
     {
         if (quad is { Count: > 0 } && _composer.Document.Version >= 16)
-            annotation.SetQuadPoints([.. quad.Select(corner => new PaintPoint(corner.X, HeightPoints - corner.Y))]);
+            annotation.SetQuadPoints([.. quad.Select(corner => new PaintPoint(corner.X * _contentScale, HeightPoints - (corner.Y * _contentScale)))]);
 
         return new PdfLink(annotation, this);
     }
 
-    /// <summary>The page's own convention: a rectangle measured from the page's bottom edge.</summary>
-    private Rect ToPdf(Rect bounds) => new(bounds.X, HeightPoints - (bounds.Y + bounds.Height), bounds.Width, bounds.Height);
+    /// <summary>
+    /// A rectangle in the space the page is drawn in (see <see cref="SetContentScale"/>), from its top-left corner, as the page's own convention
+    /// has it: in points, measured from the page's bottom edge.
+    /// </summary>
+    internal Rect ToPageSpace(Rect bounds) =>
+        new(bounds.X * _contentScale, HeightPoints - ((bounds.Y + bounds.Height) * _contentScale), bounds.Width * _contentScale, bounds.Height * _contentScale);
+
+    /// <summary>How much smaller the page is drawn than the coordinates it is given say; see <see cref="SetContentScale"/>.</summary>
+    internal double ContentScale => _contentScale;
 
     private sealed class ShiftScope(PdfGraphics graphics, PdfGraphicsStateToken state) : IDisposable
     {

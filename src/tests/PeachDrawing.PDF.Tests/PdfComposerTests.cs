@@ -131,6 +131,77 @@ namespace PeachDrawing.PDF.Tests
         }
 
         [Fact]
+        public async Task SetContentScale_DrawsAtThatScaleAndPlacesLinksAndDestinationsTheSameWay()
+        {
+            var (context, _) = await NewContextAsync();
+            using var composer = new PdfComposer(context, Plain());
+
+            // A page laid out as 400 x 200 and drawn at half the size onto a 200 x 100 sheet.
+            var page = composer.AddPage(200, 100);
+            page.SetContentScale(0.5);
+            page.Canvas.DrawRectangle(page.Canvas.GetSolidBrush(Red), 0, 0, 400, 200);
+            page.AddLink(new Rect(40, 20, 100, 30), "https://example.com/", [new PaintPoint(40, 20), new PaintPoint(140, 20), new PaintPoint(40, 50), new PaintPoint(140, 50)]);
+
+            var pdf = Latin1(Save(composer));
+
+            // The rectangle is the whole 400 x 200 it was given, under a half-size scale; the link is 50 x 15 and starts at (20, 100 - 25).
+            Assert.Contains("0.5 0 0 0.5 0 0 cm", pdf);
+            Assert.Contains("0 0 400 200 re", pdf);
+            Assert.Contains("/Rect [20 75 70 90]", pdf);
+            Assert.Contains("/QuadPoints [20 90 70 90 20 75 70 75]", pdf);
+            Assert.Contains("/MediaBox [0 0 200 100]", pdf);
+        }
+
+        [Fact]
+        public async Task SetContentScale_ScalesDestinationsFromThePagesOwnScaleOnly()
+        {
+            var (context, _) = await NewContextAsync();
+            using var composer = new PdfComposer(context, Plain());
+
+            var scaled = composer.AddPage(200, 100);
+            scaled.SetContentScale(0.5);
+            scaled.Canvas.AddDestination("scaled-spot", 100);
+
+            var plain = composer.AddPage(200, 100);
+            plain.Canvas.AddDestination("plain-spot", 100);
+
+            var pdf = Latin1(Save(composer));
+
+            // 100 below the top of a page drawn at half size is 50 down; at full size it is 100 down. /FitH counts from the bottom edge.
+            Assert.Matches(@"/FitH 50", pdf);
+            Assert.Matches(@"/FitH 0", pdf);
+        }
+
+        [Theory]
+        [InlineData(0d)]
+        [InlineData(-1d)]
+        [InlineData(double.NaN)]
+        [InlineData(double.PositiveInfinity)]
+        public async Task SetContentScale_RejectsAScaleThatIsNotPositiveAndFinite(double scale)
+        {
+            var (context, _) = await NewContextAsync();
+            using var composer = new PdfComposer(context, Plain());
+
+            Assert.Throws<ArgumentOutOfRangeException>(() => composer.AddPage(100, 100).SetContentScale(scale));
+        }
+
+        [Fact]
+        public async Task SetContentScale_CanBeSetOnceAndNotOnAFinishedPage()
+        {
+            var (context, _) = await NewContextAsync();
+            using var composer = new PdfComposer(context, Plain());
+
+            var page = composer.AddPage(100, 100);
+            page.SetContentScale(1);
+            page.SetContentScale(0.5);
+
+            Assert.Throws<InvalidOperationException>(() => page.SetContentScale(0.25));
+
+            page.Finish();
+            Assert.Throws<InvalidOperationException>(() => page.SetContentScale(0.5));
+        }
+
+        [Fact]
         public async Task Options_AreWrittenToTheDocumentInformation()
         {
             var (context, _) = await NewContextAsync();

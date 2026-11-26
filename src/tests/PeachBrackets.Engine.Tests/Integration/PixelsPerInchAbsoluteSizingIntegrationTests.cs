@@ -36,7 +36,6 @@ namespace PeachBrackets.Engine.Tests.Integration
             {
                 ManualPageWidth = 400,
                 ManualPageHeight = 600,
-                PixelsPerInch = 96,
             };
             config.SetMargins(0);
 
@@ -44,7 +43,7 @@ namespace PeachBrackets.Engine.Tests.Integration
                        $"<img id='i' width='34' height='34' src='{PngDataUri}'>" +
                        "</body></html>";
 
-            var (root, container) = await PdfGeneratorLayoutHarness.LayoutAsync(html, config);
+            var (root, container) = await PdfGeneratorLayoutHarness.LayoutAsync(html, config, pixelsPerPoint: 96d / 72d);
             var img = FindById(root, "i")!;
             var ppp = ((HtmlRenderContext)container.RenderContext).PixelsPerPoint;
 
@@ -67,7 +66,6 @@ namespace PeachBrackets.Engine.Tests.Integration
             {
                 ManualPageWidth = 400,
                 ManualPageHeight = 600,
-                PixelsPerInch = 96,
             };
             config.SetMargins(0);
 
@@ -77,7 +75,7 @@ namespace PeachBrackets.Engine.Tests.Integration
                 </body></html>
                 """;
 
-            var (root, container) = await PdfGeneratorLayoutHarness.LayoutAsync(html, config);
+            var (root, container) = await PdfGeneratorLayoutHarness.LayoutAsync(html, config, pixelsPerPoint: 96d / 72d);
             var svg = (CssBoxSvg)FindById(root, "s")!;
             var ppp = ((HtmlRenderContext)container.RenderContext).PixelsPerPoint;
 
@@ -98,7 +96,6 @@ namespace PeachBrackets.Engine.Tests.Integration
             {
                 ManualPageWidth = 400,
                 ManualPageHeight = 600,
-                PixelsPerInch = 96,
             };
             config.SetMargins(0);
 
@@ -112,7 +109,7 @@ namespace PeachBrackets.Engine.Tests.Integration
                 </body></html>
                 """;
 
-            var (root, container) = await PdfGeneratorLayoutHarness.LayoutAsync(html, config);
+            var (root, container) = await PdfGeneratorLayoutHarness.LayoutAsync(html, config, pixelsPerPoint: 96d / 72d);
             var img = FindById(root, "i")!;
             var svg = FindById(root, "s")!;
             var ppp = ((HtmlRenderContext)container.RenderContext).PixelsPerPoint;
@@ -137,7 +134,6 @@ namespace PeachBrackets.Engine.Tests.Integration
             {
                 ManualPageWidth = 400,
                 ManualPageHeight = 600,
-                PixelsPerInch = 96,
             };
             config.SetMargins(0);
 
@@ -147,7 +143,7 @@ namespace PeachBrackets.Engine.Tests.Integration
                 </body></html>
                 """;
 
-            var (root, container) = await PdfGeneratorLayoutHarness.LayoutAsync(html, config);
+            var (root, container) = await PdfGeneratorLayoutHarness.LayoutAsync(html, config, pixelsPerPoint: 96d / 72d);
             var ppp = ((HtmlRenderContext)container.RenderContext).PixelsPerPoint;
             Assert.True(ppp > 1.0, "fixture must exercise a non-default PixelsPerPoint");
 
@@ -190,7 +186,6 @@ namespace PeachBrackets.Engine.Tests.Integration
             {
                 ManualPageWidth = 400,
                 ManualPageHeight = 600,
-                PixelsPerInch = 96,
             };
             config.SetMargins(0);
 
@@ -200,7 +195,7 @@ namespace PeachBrackets.Engine.Tests.Integration
                 </body></html>
                 """;
 
-            var (root, container) = await PdfGeneratorLayoutHarness.LayoutAsync(html, config);
+            var (root, container) = await PdfGeneratorLayoutHarness.LayoutAsync(html, config, pixelsPerPoint: 96d / 72d);
             var div = FindById(root, "d")!;
             var ppp = ((HtmlRenderContext)container.RenderContext).PixelsPerPoint;
 
@@ -218,7 +213,6 @@ namespace PeachBrackets.Engine.Tests.Integration
             {
                 ManualPageWidth = 400,
                 ManualPageHeight = 600,
-                PixelsPerInch = 96,
             };
             config.SetMargins(0);
 
@@ -228,7 +222,7 @@ namespace PeachBrackets.Engine.Tests.Integration
                 </body></html>
                 """;
 
-            var (root, container) = await PdfGeneratorLayoutHarness.LayoutAsync(html, config);
+            var (root, container) = await PdfGeneratorLayoutHarness.LayoutAsync(html, config, pixelsPerPoint: 96d / 72d);
             var inner = FindById(root, "inner")!;
             var ppp = ((HtmlRenderContext)container.RenderContext).PixelsPerPoint;
 

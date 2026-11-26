@@ -197,7 +197,7 @@ public sealed partial class PdfComposer : IDisposable
                 // /FitH top fits the page width and positions vertically at the top - not /FitV's horizontal left. The offset is top
                 // down, but /FitH's own top is PDF default user space, bottom-up, so it is flipped against the destination page.
                 outline.PageDestinationType = PdfPageDestinationType.FitH;
-                outline.Top = outline.DestinationPage.Height - bookmark.TopPoints;
+                outline.Top = outline.DestinationPage.Height - (bookmark.TopPoints * _pages[pageIndex].ContentScale);
             }
 
             if (bookmark.StructureTarget is { } target && _document.Version >= 20 && _tagRecorder?.TryGetStructureElement(target) is { } element)

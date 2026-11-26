@@ -94,7 +94,11 @@ namespace PeachBrackets.Html.Paint
 #if DEBUG
                 TraceWord(wordFragment, clip, drawn: !invisible);
 #endif
-                if (invisible) continue;
+                if (invisible)
+                {
+                    if (!_textOnly) RecordIfPastPageEnd(wordFragment);
+                    continue;
+                }
 
                 // Past this point the word IS drawn, and the surviving intersection can still be
                 // smaller than the word itself - the glyphs go into the content stream whole and the
@@ -216,6 +220,47 @@ namespace PeachBrackets.Html.Paint
         /// and the direction the separator itself runs in (which side of that edge its glyph is on).
         /// </summary>
         private readonly record struct SeparatorAnchor(double Edge, bool RightToLeft);
+
+        /// <summary>
+        /// Records every word of a fragment that is not painted because it lies outside the clip, and of the fragments below it, that is lost past the
+        /// end of the page's content area: see <see cref="RecordIfPastPageEnd"/>.
+        /// </summary>
+        private void RecordWordsPastPageEnd(BoxFragment fragment)
+        {
+            foreach (var word in fragment.Words)
+                RecordIfPastPageEnd(word);
+
+            foreach (var child in fragment.Children)
+                RecordWordsPastPageEnd(child);
+        }
+
+        /// <summary>
+        /// Records a word that is not drawn because it lies wholly beyond the end of the page's content area along the line - past the right edge of
+        /// the page for left-to-right text - on a line the page does reach. That is content the page was too narrow for, and nothing of it is in the
+        /// output, so unlike a word the clip merely cuts it would otherwise leave no trace. A word cut off by an <c>overflow</c> clip of the
+        /// document's own is the author's doing and not reported, a word above or below the page is a page break's doing, and a word before the start
+        /// of the page is the usual way to hide text off-screen, so none of those is reported.
+        /// </summary>
+        private void RecordIfPastPageEnd(TextFragment wordFragment)
+        {
+            var word = wordFragment.Word;
+            if (word.IsLineBreak || word.IsImage || word.IsSpaces) return;
+
+            var rect = wordFragment.Rect;
+            if (rect.Width <= VisibilityClipEpsilon || rect.Height <= VisibilityClipEpsilon) return;
+
+            // Only the horizontal flow of text: a vertical writing mode runs its lines down the page, where an overflow is a different story.
+            if (word.OwnerBox.WritingMode.Value.IsVertical()) return;
+
+            var page = container.PageClipOverride ?? container.PageBoxRect;
+            var rightToLeft = word.OwnerBox.ContainingBlock.Direction.Value == DirectionMode.Rtl;
+            var pastEnd = rightToLeft ? rect.Right <= page.Left + VisibilityClipEpsilon : rect.Left >= page.Right - VisibilityClipEpsilon;
+            var onThePagesLines = rect.Bottom > page.Top + VisibilityClipEpsilon && rect.Top < page.Bottom - VisibilityClipEpsilon;
+            if (!pastEnd || !onThePagesLines) return;
+
+            // Nothing of it is visible: the whole width is lost, the height it shares with the page is not what is missing.
+            RecordIfClipped(word, rect, new Rect(rect.X, rect.Y, 0, rect.Height));
+        }
 
         /// <summary>
         /// Records a word that was drawn but whose visible rect is smaller than its own - the loss

@@ -36,7 +36,6 @@ namespace PeachBrackets.Engine.Tests.Integration
             {
                 ManualPageWidth = 400,
                 ManualPageHeight = 600,
-                PixelsPerInch = 144,
             };
             config.SetMargins(0);
 
@@ -47,7 +46,7 @@ namespace PeachBrackets.Engine.Tests.Integration
                 </style></head><body><p>content</p></body></html>
                 """;
 
-            var (_, container) = await PdfGeneratorLayoutHarness.LayoutAsync(html, config);
+            var (_, container) = await PdfGeneratorLayoutHarness.LayoutAsync(html, config, pixelsPerPoint: 2);
 
             Assert.NotNull(container.CssPageSize);
 
@@ -71,7 +70,6 @@ namespace PeachBrackets.Engine.Tests.Integration
             {
                 ManualPageWidth = 400,
                 ManualPageHeight = 600,
-                PixelsPerInch = 144,
             };
             config.SetMargins(0);
 
@@ -82,7 +80,7 @@ namespace PeachBrackets.Engine.Tests.Integration
                 </style></head><body><p>content</p></body></html>
                 """;
 
-            var (_, container) = await PdfGeneratorLayoutHarness.LayoutAsync(html, config);
+            var (_, container) = await PdfGeneratorLayoutHarness.LayoutAsync(html, config, pixelsPerPoint: 2);
 
             Assert.NotNull(container.CssPageSize);
 
