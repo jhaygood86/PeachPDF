@@ -1009,6 +1009,18 @@ namespace PeachBrackets.Html.Dom
         /// </summary>
         internal IPageGrid? SlicedRowGrid { get => _rare?.SlicedRowGrid; set { if (_rare is null) { if (value is null) return; _rare = new BoxRareState(); } _rare.SlicedRowGrid = value; } }
 
+        /// <summary>
+        /// Whether this table's row loop stopped inside a row - a cell ran out of fragmentainer before it ran
+        /// out of content (css-tables-3 §6.1) - on this layout or on an earlier pass of it.
+        /// </summary>
+        /// <remarks>
+        /// A break taken between two rows is recorded in <see cref="PageBreakBottoms"/>; one taken inside a
+        /// row is not, because the slice bottom that dictionary holds clips the table's borders. This is the
+        /// other half of "the table fragmented", which is what <see cref="PaginatedItsOwnContentWithoutBreaking"/>
+        /// has to read, or a table that fragmented inside a row is moved whole as if it had not.
+        /// </remarks>
+        internal bool TableBrokeInsideARow { get => _rare is not null && _rare.TableBrokeInsideARow; set { if (_rare is null) { if (!value) return; _rare = new BoxRareState(); } _rare.TableBrokeInsideARow = value; } }
+
         internal Dictionary<int, double>? PageBreakBottoms { get => _rare is null ? default(Dictionary<int, double>?) : _rare.PageBreakBottoms; set { if (_rare is null) { if (EqualityComparer<Dictionary<int, double>?>.Default.Equals(value, default(Dictionary<int, double>?))) return; _rare = new BoxRareState(); } _rare.PageBreakBottoms = value; } }
 
         /// <summary>
@@ -5250,7 +5262,8 @@ namespace PeachBrackets.Html.Dom
             !IsOutOfFlow
             && DerivedStyle.ActualDisplay is Keywords.Table or Keywords.InlineTable
             && HtmlContainer is { IsFragmenting: true }
-            && PageBreakBottoms is not { Count: > 0 };
+            && PageBreakBottoms is not { Count: > 0 }
+            && !TableBrokeInsideARow;
 
         /// <summary>
         /// Whether this box, with the decorations §6.2 makes each fragment re-open and close with, fits
