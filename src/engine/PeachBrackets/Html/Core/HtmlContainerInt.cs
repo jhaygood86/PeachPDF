@@ -1612,6 +1612,9 @@ namespace PeachBrackets.Html
         /// <summary>Whether a canvas whose children are drawable is a box that holds them (see <see cref="HtmlDocumentOptions.LayoutCanvasSubtrees"/>).</summary>
         internal bool LayoutCanvasSubtrees { get; set; }
 
+        /// <summary>The box a picture is being drawn of (see <c>HtmlDocument.ProbeRenderAsync</c>), or null.</summary>
+        internal CssBox? ProbeRenderRoot { get; set; }
+
         /// <summary>What scripts drew on <c>canvas</c> elements, by the element's source ordinal.</summary>
         internal System.Collections.Generic.Dictionary<int, ScriptHosting.ScriptCanvasPainting> CanvasPaintings { get; } = [];
 

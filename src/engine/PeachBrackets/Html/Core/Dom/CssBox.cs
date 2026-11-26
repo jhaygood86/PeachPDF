@@ -1913,7 +1913,7 @@ namespace PeachBrackets.Html.Dom
             {
                 HtmlConstants.Img => new CssBoxImage(parent, tag),
                 HtmlConstants.Iframe => new CssBoxFrame(parent, tag),
-                "canvas" when CanvasSubtreesWanted && string.Equals(tag.TryGetAttribute("content"), "drawable", System.StringComparison.OrdinalIgnoreCase) => new CssBox(parent, tag),
+                "canvas" when CanvasSubtreesWanted && string.Equals(tag.TryGetAttribute("content"), "drawable", System.StringComparison.OrdinalIgnoreCase) => new CssBoxDrawableCanvas(parent, tag),
                 "canvas" => new CssBoxCanvas(parent, tag),
                 HtmlConstants.Svg => new CssBoxSvg(parent, tag),
                 HtmlConstants.Math => new CssBoxMath(parent, tag),

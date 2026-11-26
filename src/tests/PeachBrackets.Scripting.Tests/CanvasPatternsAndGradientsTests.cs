@@ -405,4 +405,48 @@ public class HtmlInCanvasTests
 
         Assert.Equal(["10 10 30 20 kid/k k InvalidStateError"], log);
     }
+
+    [Fact]
+    public async Task AClipLimitsWhereAPointerFindsAnElement_InTheSpaceOfItsTransform_AndRemovalPaintsTheCanvas()
+    {
+        var log = await LogAsync("", Setup + """
+            paint().then(function () {
+                var box = k.getBoundingClientRect();
+                k.updateElementGeometry(kid, { canvasTransform: new DOMMatrix().translate(10, 10), canvasClip: { x: 0, y: 0, width: 10, height: 10 } });
+                var at = function (x, y) { return document.elementsFromPoint(box.left + x, box.top + y)[0].id || document.elementsFromPoint(box.left + x, box.top + y)[0].tagName; };
+                var inside = at(15, 15), outside = at(25, 25);
+                k.updateElementGeometry(kid, { canvasClip: { x: 10, y: 10, width: -10, height: -10 } });
+                var kept = at(15, 15);
+                var removed = 0;
+                k.onpaint = function () { removed++; };
+                kid.remove();
+                new Promise(function (resolve) { requestAnimationFrame(function () { setTimeout(resolve, 0); }); }).then(function () {
+                    Log.info([inside, outside, kept, removed > 0].join(" "));
+                });
+            });
+            """);
+
+        Assert.Equal(["kid k kid true"], log);
+    }
+
+    [Fact]
+    public async Task ACanvasInsideAnElement_IsDrawnAsWhatAScriptDrewOnIt_NotAsItsChildren()
+    {
+        var log = await LogAsync("", """
+            var host = document.createElement('div');
+            host.innerHTML = '<canvas id="outer" width="100" height="40" content="drawable"><div id="holder" drawable style="width:40px;height:40px"><canvas id="inner" width="40" height="40" content="drawable"><div id="part" drawable style="width:20px;height:20px;background:#00f"></div><div style="width:40px;height:10px;background:#f00"></div></canvas></div></canvas>';
+            document.body.appendChild(host);
+            var outer = document.getElementById('outer'), inner = document.getElementById('inner'), holder = document.getElementById('holder'), part = document.getElementById('part');
+            var og = outer.getContext('2d'), ig = inner.getContext('2d');
+            inner.onpaint = function () { ig.drawElementImage(part, 20, 20); };
+            outer.onpaint = function () {
+                og.drawElementImage(holder, 0, 0);
+                var drawn = Array.from(og.getImageData(25, 25, 1, 1).data).join(',');
+                var children = Array.from(og.getImageData(5, 5, 1, 1).data).join(',');
+                Log.info(drawn + ' ' + children);
+            };
+            """);
+
+        Assert.Equal(["0,0,255,255 0,0,0,0"], log);
+    }
 }

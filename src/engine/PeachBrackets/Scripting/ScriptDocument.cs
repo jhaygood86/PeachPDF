@@ -185,6 +185,19 @@ public sealed class ScriptDocument
         return new ScriptBox(bounds.X, bounds.Y, bounds.Width, bounds.Height);
     }
 
+    /// <summary>The whole box of an element (the union of the parts a broken one takes) and its bounding box with its own CSS transform applied, in CSS pixels from the top left of the page.</summary>
+    /// <param name="element">the element</param>
+    /// <returns>the two boxes, or null when there is no layout to read or the element is not displayed</returns>
+    public (ScriptBox Box, ScriptBox Transformed)? GetBoundingBoxes(ScriptNode element)
+    {
+        ArgumentNullException.ThrowIfNull(element);
+        var ordinal = OrdinalOf(element);
+        if (ordinal < 0 || CurrentProbe() is not { } probe || probe.ProbeBoxes(ordinal) is not { } boxes)
+            return null;
+
+        return (new ScriptBox(boxes.Box.X, boxes.Box.Y, boxes.Box.Width, boxes.Box.Height), new ScriptBox(boxes.Transformed.X, boxes.Transformed.Y, boxes.Transformed.Width, boxes.Transformed.Height));
+    }
+
     private readonly Dictionary<int, ScriptElementPicture?> _pictures = [];
     private int _picturesVersion = -1;
 
@@ -203,9 +216,7 @@ public sealed class ScriptDocument
 
         if (_picturesVersion != Version)
         {
-            foreach (var old in _pictures.Values)
-                old?.Image.Dispose();
-
+            // Not disposed: a canvas that drew one keeps it in what it recorded, to draw again.
             _pictures.Clear();
             _picturesVersion = Version;
         }
@@ -217,13 +228,21 @@ public sealed class ScriptDocument
         ScriptElementPicture? made = null;
         if (measuring is not null)
         {
-            var rendered = probe.ProbeRenderAsync(ordinal, (w, h) => measuring.CreateOffscreenSurface(w, h)).AsTask().GetAwaiter().GetResult();
+            var rendered = probe.ProbeRenderAsync(ordinal, (w, h) => measuring.CreateOffscreenSurface(w, h), CanvasPaintingsByOrdinal()).AsTask().GetAwaiter().GetResult();
             if (rendered is { } picture)
                 made = new ScriptElementPicture(picture.Image, picture.Width, picture.Height);
         }
 
         _pictures[ordinal] = made;
         return made;
+    }
+
+    // What the canvases of the document show now, by the position the layout knows each by: a picture of something that holds a canvas draws it.
+    private Dictionary<int, ScriptCanvasPainting> CanvasPaintingsByOrdinal()
+    {
+        var result = new Dictionary<int, ScriptCanvasPainting>();
+        PublishInto(result);
+        return result;
     }
 
     /// <summary>The rectangles the characters from <paramref name="from"/> to <paramref name="to"/> of an element's text take in the document as it is now, one for each stretch of a line, in CSS pixels.</summary>
@@ -648,6 +667,9 @@ public sealed class ScriptDocument
             _canvases.Remove(canvas);
         else
             _canvases[canvas] = painting;
+
+        // A picture that holds this canvas shows what it showed.
+        _picturesVersion = -1;
     }
 
     // The drawings of the canvas elements still in the tree, by the position the layout knows each element by.

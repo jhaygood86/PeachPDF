@@ -18,6 +18,7 @@ namespace PeachBrackets.Html.Paint.Content
         private static readonly CanvasFragmentPainter CanvasPainter = new();
         private static readonly MarkerFragmentPainter MarkerPainter = new();
         private static readonly FormFieldFragmentPainter FormFieldPainter = new();
+        private static readonly DrawableCanvasFragmentPainter DrawableCanvasPainter = new();
         private static readonly ScreenFormControlPainter ScreenFormPainter = new();
         private static readonly ScreenFormControlPainter StaticFormPainter = new(genericChrome: true);
         private static readonly MeterFragmentPainter MeterPainter = new();
@@ -36,6 +37,7 @@ namespace PeachBrackets.Html.Paint.Content
             CssBoxMath => MathPainter,
             CssBoxFrame => FramePainter,
             CssBoxCanvas => CanvasPainter,
+            CssBoxDrawableCanvas => DrawableCanvasPainter,
             CssBoxMarker => MarkerPainter,
             // Only when interactive forms are enabled AND the box actually resolves to a field kind -
             // otherwise this falls through to the generic path, preserving the flag-off static box

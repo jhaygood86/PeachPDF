@@ -881,6 +881,7 @@ PeachBrackets.ScriptHosting.ScriptDocument : sealed class
   method ValueTask<ScriptImageInfo> LoadImageAsync(String address)
   method ValueTask<ScriptNetworkResponse> SendAsync(ScriptNetworkRequest request, CancellationToken cancellationToken = null)
   method ValueTask<String> LoadTextAsync(String address)
+  method ValueTuple<ScriptBox, ScriptBox>? GetBoundingBoxes(ScriptNode element)
   method ValueTuple<ScriptNode, Int32>? GetCaretAt(Double x, Double y)
   method Void SetCanvasPainting(ScriptNode canvas, ScriptCanvasPainting painting)
   method static Boolean TryParseNonNegativeInteger(String text, out UInt32 value)

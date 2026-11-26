@@ -62,6 +62,9 @@ internal sealed partial class ScriptRuntime
 
         /// <summary>The elements that can be hit, the one drawn or updated last at the end (so the one on top).</summary>
         public List<ScriptNode> HitOrder { get; } = [];
+
+        /// <summary>The part of each element (x, y, width, height in its own space, before its transform) a pointer can find it in.</summary>
+        public Dictionary<ScriptNode, (double X, double Y, double Width, double Height)> Clips { get; } = [];
     }
 
     private readonly Dictionary<ScriptNode, HtmlCanvasState> _htmlCanvases = [];
@@ -124,7 +127,8 @@ internal sealed partial class ScriptRuntime
 
         foreach (var element in canvas.QuerySelectorAll("[drawable]"))
         {
-            if (!IsDisplayed(element) || Document.GetLayoutBox(element) is not { } box)
+            // What a canvas nested in this one holds belongs to that canvas.
+            if (!ReferenceEquals(DrawableCanvasOf(element), canvas) || !IsDisplayed(element) || Document.GetLayoutBox(element) is not { } box)
                 continue;
 
             state.Painted[element] = (box.Width, box.Height);
@@ -137,20 +141,42 @@ internal sealed partial class ScriptRuntime
             return;
 
         state.FrameScheduled = true;
+        _pendingCanvasPaints.Add((canvas, state));
+        if (_canvasPaintTimer)
+            return;
+
+        // One callback for the frame runs every canvas that is due, in post-tree order: what is inside a canvas paints before the canvas.
+        _canvasPaintTimer = true;
         AddTimer(Js.Function(Engine, "canvasPaint", 0, (_, _) =>
         {
-            RunCanvasPaint(canvas, state);
+            _canvasPaintTimer = false;
+            var due = _pendingCanvasPaints.ToList();
+            _pendingCanvasPaints.Clear();
+            // The last in the document first, so what is inside a canvas paints before the canvas.
+            var order = Document.GetElementsByTagName("canvas").ToList();
+            foreach (var (due1, state1) in due.OrderByDescending(d => order.IndexOf(d.Canvas)))
+                RunCanvasPaint(due1, state1);
+
             return JsValue.Undefined;
         }), 0, [], repeat: false, frame: true);
     }
 
+    private readonly List<(ScriptNode Canvas, HtmlCanvasState State)> _pendingCanvasPaints = [];
+    private bool _canvasPaintTimer;
+
     private void RunCanvasPaint(ScriptNode canvas, HtmlCanvasState state)
     {
         state.FrameScheduled = false;
-        if (!state.Requested && state.Changed.Count == 0)
-            return;
+        var changed = state.Changed.Where(n => n.IsConnected && IsInside(canvas, n)).ToArray();
 
-        var changed = state.Changed.ToArray();
+        // Painting is for what changed since the last paint: an element that was painted and is gone is a change too, one that came and went between two paints is none.
+        var gone = state.Painted.Keys.Any(k => !k.IsConnected || !IsInside(canvas, k));
+        if (!state.Requested && changed.Length == 0 && !gone)
+        {
+            state.Changed.Clear();
+            return;
+        }
+
         state.Changed.Clear();
         state.Requested = false;
         TakePaintSnapshot(canvas, state);
@@ -215,7 +241,22 @@ internal sealed partial class ScriptRuntime
 
         // A child added or removed anywhere in the canvas is a change too, whether or not a drawable element holds it.
         if (changed is not null || mutation.Kind == ScriptMutationKind.ChildList)
+        {
+            // What was put in is a change of its own (one that is gone again by the paint is no change).
+            if (mutation.Kind == ScriptMutationKind.ChildList && mutation.Added is { } added)
+            {
+                foreach (var node in added.Where(a => a.Kind == ScriptNodeKind.Element))
+                {
+                    foreach (var element in new[] { node }.Concat(node.QuerySelectorAll("[drawable]")).Where(e => e.HasAttribute("drawable")))
+                    {
+                        if (ReferenceEquals(DrawableCanvasOf(element), canvas) && !state.Changed.Contains(element))
+                            state.Changed.Add(element);
+                    }
+                }
+            }
+
             ScheduleCanvasPaint(canvas, state);
+        }
     }
 
     private ScriptNode ElementOf(JsValue source, out ElementImageObject? image)
@@ -237,7 +278,7 @@ internal sealed partial class ScriptRuntime
         if (image is not null && !ReferenceEquals(image.Canvas, canvas))
             throw DomError("InvalidStateError", "The ElementImage is of another canvas.");
 
-        if (!element.HasAttribute("drawable") || !IsInside(canvas, element))
+        if (!element.HasAttribute("drawable") || !IsInside(canvas, element) || !ReferenceEquals(DrawableCanvasOf(element), canvas))
             throw DomError("InvalidStateError", "The element is not a drawable child of the canvas.");
 
         var state = StateOfCanvas(canvas);
@@ -261,12 +302,15 @@ internal sealed partial class ScriptRuntime
         state.HitOrder.Add(element);
     }
 
-    private static (double X, double Y, double Width, double Height) Transformed((double[] Values, bool Is2D) transform, double width, double height)
+    private static (double X, double Y, double Width, double Height) Transformed((double[] Values, bool Is2D) transform, double width, double height) =>
+        TransformedRect(transform, 0, 0, width, height);
+
+    private static (double X, double Y, double Width, double Height) TransformedRect((double[] Values, bool Is2D) transform, double rx, double ry, double width, double height)
     {
         var v = transform.Values;
         double A = v[0], B = v[1], C = v[4], D = v[5], E = v[12], F = v[13];
         double left = double.MaxValue, top = double.MaxValue, right = double.MinValue, bottom = double.MinValue;
-        foreach (var (x, y) in new[] { (0.0, 0.0), (width, 0.0), (0.0, height), (width, height) })
+        foreach (var (x, y) in new[] { (rx, ry), (rx + width, ry), (rx, ry + height), (rx + width, ry + height) })
         {
             var (tx, ty) = (A * x + C * y + E, B * x + D * y + F);
             left = Math.Min(left, tx); right = Math.Max(right, tx);
@@ -287,18 +331,53 @@ internal sealed partial class ScriptRuntime
         return null;
     }
 
-    // An element's rectangle on the page, in CSS pixels: where the canvas it is a drawable child of has put it (the canvas's origin and the transform it was given), or where it is laid out.
+    // An element's rectangle on the page, in CSS pixels. A drawable child of a canvas is where the canvas put it: at the canvas's origin carried by the transform it was given (none is the identity),
+    // whatever its place in the layout; what is inside it keeps its place in it, carried by the same transform. Everything else is where it is laid out.
     private (double X, double Y, double Width, double Height) PageRectOf(ScriptNode element)
     {
         var layout = LayoutOf(element);
-        if (DrawableCanvasOf(element) is { } canvas && _htmlCanvases.TryGetValue(canvas, out var state) && state.Transforms.TryGetValue(element, out var transform)
-            && Document.GetLayoutBox(canvas) is { } origin)
+        if (DrawableCanvasOf(element) is not { } canvas || Document.GetLayoutBox(canvas) is not { } origin)
+            return layout;
+
+        var anchor = element.HasAttribute("drawable") ? element : null;
+        for (var current = element.Parent; anchor is null && current is not null && !ReferenceEquals(current, canvas); current = current.Parent)
         {
-            var (x, y, width, height) = Transformed(transform, layout.Width, layout.Height);
-            return (origin.X + x, origin.Y + y, width, height);
+            if (current.Kind == ScriptNodeKind.Element && current.HasAttribute("drawable"))
+                anchor = current;
         }
 
-        return layout;
+        if (anchor is null || Document.GetBoundingBoxes(anchor) is not { } from)
+            return layout;
+
+        // The element's box (with its own CSS transform, which the canvas transform is applied after) as it sits in its drawable ancestor's, which is what the canvas transform carries.
+        var own = Document.GetBoundingBoxes(element) is { } mine ? mine.Transformed : new ScriptBox(layout.X, layout.Y, layout.Width, layout.Height);
+        var transform = _htmlCanvases.TryGetValue(canvas, out var state) && state.Transforms.TryGetValue(anchor, out var given) ? given : (Identity16, true);
+        var (x, y, width, height) = TransformedRect(transform, own.X - from.Box.X, own.Y - from.Box.Y, own.Width, own.Height);
+        return (origin.X + x, origin.Y + y, width, height);
+    }
+
+    // Where a pointer can find a drawable child: its page rectangle, cut to the clip it was given (which is in its own space, so it moves with its transform).
+    private (double X, double Y, double Width, double Height) HitRectOf(HtmlCanvasState state, ScriptNode element)
+    {
+        var page = PageRectOf(element);
+        if (!state.Clips.TryGetValue(element, out var clip))
+            return page;
+
+        var layout = LayoutOf(element);
+        var left = Math.Max(clip.X, 0);
+        var top = Math.Max(clip.Y, 0);
+        var right = Math.Min(clip.X + clip.Width, layout.Width);
+        var bottom = Math.Min(clip.Y + clip.Height, layout.Height);
+        if (right <= left || bottom <= top)
+            return (0, 0, 0, 0);
+
+        var canvas = DrawableCanvasOf(element);
+        if (canvas is null || Document.GetLayoutBox(canvas) is not { } origin)
+            return page;
+
+        var transform = state.Transforms.TryGetValue(element, out var own) ? own : (Identity16, true);
+        var (x, y, width, height) = TransformedRect(transform, left, top, right - left, bottom - top);
+        return (origin.X + x, origin.Y + y, width, height);
     }
 
     private bool IsHittable(ScriptNode element)
@@ -342,7 +421,7 @@ internal sealed partial class ScriptRuntime
                     if (!IsHittable(candidate) || !state.Transforms.ContainsKey(candidate) && !state.Painted.ContainsKey(candidate))
                         continue;
 
-                    var (cx, cy, cw, ch) = PageRectOf(candidate);
+                    var (cx, cy, cw, ch) = HitRectOf(state, candidate);
                     if (x >= cx && x < cx + cw && y >= cy && y < cy + ch)
                         result.Add(candidate);
                 }
@@ -370,6 +449,17 @@ internal sealed partial class ScriptRuntime
             var numbers = Enumerable.Range(0, (int)TypeConverter.ToNumber(list.Get("length"))).Select(i => TypeConverter.ToNumber(list.Get(i.ToString(CultureInfo.InvariantCulture)))).ToArray();
             if (numbers.Length == 16)
                 state.Transforms[element] = (numbers, TypeConverter.ToBoolean(matrix.Get("is2D")));
+        }
+
+        // canvasClip is a rectangle (negative sides taken as the other corner); left out it keeps the clip the element has.
+        if (options is ObjectInstance clipInit && clipInit.Get("canvasClip") is ObjectInstance clip)
+        {
+            double Side(string name) => clip.Get(name) is { } value && !value.IsUndefined() ? TypeConverter.ToNumber(value) : 0;
+            var (cx, cy, cw, ch) = (Side("x"), Side("y"), Side("width"), Side("height"));
+            (cx, cw) = cw < 0 ? (cx + cw, -cw) : (cx, cw);
+            (cy, ch) = ch < 0 ? (cy + ch, -ch) : (cy, ch);
+            if (double.IsFinite(cx + cy + cw + ch))
+                state.Clips[element] = (cx, cy, cw, ch);
         }
     }
 
@@ -446,6 +536,7 @@ internal sealed partial class ScriptRuntime
         {
             var (state, element) = RequireDrawableChild(Sn(self), Js.Arg(args, 0), needsPaint: false);
             state.Transforms.Remove(element);
+            state.Clips.Remove(element);
             state.HitOrder.Remove(element);
             return JsValue.Undefined;
         });
@@ -471,6 +562,7 @@ internal sealed partial class ScriptRuntime
             var image = Js.Arg(args, 0) as ElementImageObject ?? throw DomError("InvalidStateError", "An OffscreenCanvas clears the geometry of an ElementImage only.");
             var (state, element) = RequireDrawableChild(image.Canvas, image, needsPaint: false);
             state.Transforms.Remove(element);
+            state.Clips.Remove(element);
             state.HitOrder.Remove(element);
             return JsValue.Undefined;
         });
@@ -528,6 +620,12 @@ internal sealed partial class ScriptRuntime
             Touch(state, element, preserveOrder: false);
             if (!preserve)
             {
+                // What was drawn is the source rectangle of the element, so that is what a pointer can find.
+                if (numbers.Length >= 6)
+                    state.Clips[element] = (sx, sy, sw, sh);
+                else
+                    state.Clips.Remove(element);
+
                 // The element's own space to the canvas: placed where it was drawn, then carried by the context's transform.
                 var drawn = new Affine2D(scaleX, 0, 0, scaleY, dx - sx * scaleX, dy - sy * scaleY) * context.Bitmap.State.Transform;
                 state.Transforms[element] = ([drawn.A, drawn.B, 0, 0, drawn.C, drawn.D, 0, 0, 0, 0, 1, 0, drawn.E, drawn.F, 0, 1], true);

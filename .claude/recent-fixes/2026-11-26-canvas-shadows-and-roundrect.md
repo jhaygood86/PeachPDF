@@ -159,3 +159,17 @@
 - `ElementImage.close()` (a closed image is an InvalidStateError to draw or size); `OffscreenCanvas` gets `getElementImageDefaultSize`/`updateElementGeometry`/`clearElementGeometry` and draws an `ElementImage` of a page canvas.
 - A trap: inside a lambda whose first parameter is `_`, `_ = Foo()` assigns the parameter and fails to compile with a baffling conversion error; name the variable.
 - html-canvas 3968/5028 subtests; floor 3958. Left: `clip` in the geometry, object-fit hit tests, nested canvases, iframes, the pixel grid size, the privacy tests, workers, `dialog` top layer.
+
+## Phase 8, nested canvases, `clip`, and what a picture of an element holds
+- A picture of an element is now of that element: `FragmentPainter.PaintFragment` skips boxes that are neither the pictured box, inside it, nor above it (`HtmlContainerInt.ProbeRenderRoot`), and `ProbeRenderAsync` suppresses the
+  background/border/shadow of the boxes above it while it paints. The earlier "what overlaps is drawn with it" approximation is gone (a positioned sibling no longer shows up in a capture).
+- A content=drawable canvas in the probe is a `CssBoxDrawableCanvas` with its own content painter: inside a picture of one of its children it is an ordinary box; inside any other picture it paints what the script drew on it
+  (`ProbeRenderAsync(..., canvasPaintings)` hands the probe the page's canvas recordings by ordinal) and neither its children nor what they positioned out into the stacking context around (that second part needed `IsInsideAnotherCanvas`:
+  positioned descendants are painted from the stacking context, not from their parent's `PaintBoxContent`). `SetCanvasPainting` drops the picture cache.
+- Do not dispose a cached element picture: a canvas that drew it keeps it in its recording and replays it (disposing it crashed a later replay with `ObjectDisposedException` in `RasterSurface.Buffer`).
+- A drawable child's rectangle is now the canvas origin + its transform applied to its own box (union of the fragments of a broken inline, bounding box of its CSS transform, the canvas transform applied after), whatever its
+  place in layout; what is inside it keeps its offset in it. `ProbeBoxes`/`ScriptDocument.GetBoundingBoxes` give both boxes.
+- `canvasClip` (negative sides normalised, kept when left out, removed by `clearElementGeometry`, set to the source rectangle by a 5/9-argument `drawElementImage`) cuts what a pointer finds, in the space of the transform.
+- Paint events of one frame run in one callback in reverse document order; a paint is due when requested, when a drawable child changed, or when a painted drawable is gone (an add and remove between paints is no change).
+- html-canvas 3988/5028; floor 3978. Left: CSS `zoom` in the clip, object-fit hit tests, `transferControlToOffscreen` with element geometry (`elementgeometryupdate`), iframes, animated images invalidating a canvas, the pixel grid size,
+  privacy, workers, `showModal`.

@@ -107,16 +107,80 @@ public sealed partial class HtmlDocument
     }
 
     /// <summary>
-    /// Draws the element that is the <paramref name="ordinal"/>-th element of the source, as it is laid out here, onto a new surface of its own size (one device pixel to a CSS pixel) and gives
-    /// the picture. What overlaps the element on the page is drawn with it. Null when there is no such element or it has no area to draw.
+    /// The box of the <paramref name="ordinal"/>-th element as a whole (the union of what it takes on each line, when it breaks) in CSS pixels from the top left of the page, and the same with the element's
+    /// own CSS transform applied (its bounding box).
     /// </summary>
-    internal async System.Threading.Tasks.ValueTask<(PeachDrawing.Core.Image Image, double Width, double Height)?> ProbeRenderAsync(int ordinal, Func<int, int, PeachDrawing.Core.OffscreenSurface?> makeSurface)
+    internal ((double X, double Y, double Width, double Height) Box, (double X, double Y, double Width, double Height) Transformed)? ProbeBoxes(int ordinal)
     {
         _ = Pages;
         if (FindByOrdinal(_container.Root, ordinal) is not { } found)
             return null;
 
         var box = PeachBrackets.Html.Utils.DomUtils.ResolveGeometryBox(found);
+        Rect rect = box.Bounds;
+        if (box.Rectangles.Count > 0)
+        {
+            double left = double.MaxValue, top = double.MaxValue, right = double.MinValue, bottom = double.MinValue;
+            foreach (var part in box.Rectangles.Values)
+            {
+                left = Math.Min(left, part.Left);
+                top = Math.Min(top, part.Top);
+                right = Math.Max(right, part.Right);
+                bottom = Math.Max(bottom, part.Bottom);
+            }
+
+            rect = new Rect(left, top, right - left, bottom - top);
+        }
+
+        var moved = rect;
+        if (box.HasTransform)
+        {
+            var matrix = PeachDrawing.Core.Matrix3x2Extensions.RebaseOrigin(box.ActualTransformMatrix, rect.X, rect.Y);
+            var corners = new[] { (rect.Left, rect.Top), (rect.Right, rect.Top), (rect.Right, rect.Bottom), (rect.Left, rect.Bottom) }
+                .Select(c => System.Numerics.Vector2.Transform(new System.Numerics.Vector2((float)c.Item1, (float)c.Item2), matrix)).ToArray();
+            var minX = corners.Min(c => c.X);
+            var minY = corners.Min(c => c.Y);
+            moved = new Rect(minX, minY, corners.Max(c => c.X) - minX, corners.Max(c => c.Y) - minY);
+        }
+
+        const double pointsPerPixel = 0.75;
+        (double X, double Y, double Width, double Height) InPixels(Rect r)
+        {
+            var points = PeachBrackets.Utilities.Utils.ToPoints(r, _unitsPerPoint);
+            return (points.X / pointsPerPixel, points.Y / pointsPerPixel, points.Width / pointsPerPixel, points.Height / pointsPerPixel);
+        }
+
+        return (InPixels(rect), InPixels(moved));
+    }
+
+    /// <summary>
+    /// Draws the element that is the <paramref name="ordinal"/>-th element of the source, as it is laid out here, onto a new surface of its own size (one device pixel to a CSS pixel) and gives
+    /// the picture. What overlaps the element on the page is drawn with it. Null when there is no such element or it has no area to draw.
+    /// </summary>
+    internal async System.Threading.Tasks.ValueTask<(PeachDrawing.Core.Image Image, double Width, double Height)?> ProbeRenderAsync(int ordinal, Func<int, int, PeachDrawing.Core.OffscreenSurface?> makeSurface, IReadOnlyDictionary<int, PeachBrackets.ScriptHosting.ScriptCanvasPainting>? canvasPaintings = null)
+    {
+        _ = Pages;
+        if (FindByOrdinal(_container.Root, ordinal) is not { } found)
+            return null;
+
+        var box = PeachBrackets.Html.Utils.DomUtils.ResolveGeometryBox(found);
+        _container.ProbeRenderRoot = found;
+
+        // What is above the element is not in its picture: it keeps no background, border or shadow of its own while the picture is drawn.
+        var suppressed = new List<(CssBox Box, bool Background, bool Border)>();
+        for (var above = found.ParentBox; above is not null; above = above.ParentBox)
+        {
+            suppressed.Add((above, above.SuppressOwnBackgroundPaint, above.SuppressOwnBorderPaint));
+            above.SuppressOwnBackgroundPaint = true;
+            above.SuppressOwnBorderPaint = true;
+        }
+        _container.CanvasPaintings.Clear();
+        if (canvasPaintings is not null)
+        {
+            foreach (var (key, painting) in canvasPaintings)
+                _container.CanvasPaintings[key] = painting;
+        }
+
         var rect = PeachBrackets.Html.Utils.CommonUtils.GetFirstValueOrDefault(box.Rectangles, box.Bounds);
         var layoutPerPixel = _unitsPerPoint * 0.75;
         var (width, height) = (rect.Width / layoutPerPixel, rect.Height / layoutPerPixel);
@@ -139,6 +203,13 @@ public sealed partial class HtmlDocument
         finally
         {
             canvas.PopTransform();
+            _container.ProbeRenderRoot = null;
+            _container.CanvasPaintings.Clear();
+            foreach (var (above, background, border) in suppressed)
+            {
+                above.SuppressOwnBackgroundPaint = background;
+                above.SuppressOwnBorderPaint = border;
+            }
         }
 
         return (surface.CreateSnapshot(), width, height);
