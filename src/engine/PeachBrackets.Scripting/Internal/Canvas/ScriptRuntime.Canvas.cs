@@ -6,6 +6,7 @@ using Jint.Runtime.Descriptors;
 using PeachBrackets.Scripting.Internal.Canvas;
 using PeachBrackets.ScriptHosting;
 using PeachDrawing.Core;
+using PeachDrawing.Text.Shaping;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -1000,20 +1001,19 @@ internal sealed partial class ScriptRuntime
             var isStroke = stroke;
             Js.StrictMethod(Engine, p, isStroke ? "strokeText" : "fillText", 3, (self, args) =>
             {
-                if (!double.IsFinite(Num(args, 1)) || !double.IsFinite(Num(args, 2)))
+                var text = Js.AsText(Js.Arg(args, 0));
+                var (x, y) = (Num(args, 1), Num(args, 2));
+                double? max = args.Length > 3 && !args[3].IsUndefined() ? Num(args, 3) : null;
+                if (!double.IsFinite(x) || !double.IsFinite(y) || max is { } m && (double.IsNaN(m) || m <= 0))
                     return JsValue.Undefined;
 
                 var context = Cx(self);
                 if (FontFor(context) is not { } font)
                     return JsValue.Undefined;
 
+                var layout = LayoutText(context, font, text);
                 var state = context.Bitmap.State;
-                double? max = args.Length > 3 && !args[3].IsUndefined() ? Num(args, 3) : null;
-                if (max is { } m && (double.IsNaN(m) || m <= 0))
-                    return JsValue.Undefined;
-
-                var align = state.TextAlign is "start" ? (state.Direction == "rtl" ? "right" : "left") : state.TextAlign is "end" ? (state.Direction == "rtl" ? "left" : "right") : state.TextAlign;
-                context.Bitmap.DrawText(Js.AsText(Js.Arg(args, 0)), Num(args, 1), Num(args, 2), isStroke, max, font, align, state.TextBaseline,
+                context.Bitmap.DrawText(layout.Text, x, y + layout.LineOffset, layout.Anchor, isStroke, max, font, layout.Metrics, layout.LetterSpacing, layout.WordSpacing, layout.Shape,
                     isStroke ? state.StrokeStyle : state.FillStyle, isStroke ? context.Bitmap.MakePen(state) : null);
                 return JsValue.Undefined;
             });
@@ -1024,19 +1024,87 @@ internal sealed partial class ScriptRuntime
             var context = Cx(self);
             var text = Js.AsText(Js.Arg(args, 0));
             var result = Js.NewObject(Engine);
-            var font = FontFor(context);
-            var width = font is null ? 0 : context.Bitmap.MeasureText(text, font);
-            var (ascent, descent) = font is null ? (0.0, 0.0) : (font.Ascent, Math.Max(0, font.Height - font.Ascent));
+            if (FontFor(context) is not { } font)
+                return result;
+
+            var layout = LayoutText(context, font, text);
+            var metrics = layout.Metrics;
+
+            // Every measure is from the line the text's baseline setting names, up being positive.
+            var line = layout.LineOffset;
             foreach (var (name, value) in new[]
             {
-                ("width", width), ("actualBoundingBoxLeft", 0.0), ("actualBoundingBoxRight", width), ("fontBoundingBoxAscent", ascent), ("fontBoundingBoxDescent", descent),
-                ("actualBoundingBoxAscent", ascent), ("actualBoundingBoxDescent", descent), ("emHeightAscent", ascent), ("emHeightDescent", descent),
-                ("hangingBaseline", ascent * 0.8), ("alphabeticBaseline", 0.0), ("ideographicBaseline", -descent),
+                ("width", metrics.Width),
+                ("actualBoundingBoxLeft", layout.Anchor - metrics.InkLeft), ("actualBoundingBoxRight", metrics.InkRight - layout.Anchor),
+                ("fontBoundingBoxAscent", metrics.FontAscent - line), ("fontBoundingBoxDescent", metrics.FontDescent + line),
+                ("actualBoundingBoxAscent", metrics.InkAscent - line), ("actualBoundingBoxDescent", metrics.InkDescent + line),
+                ("emHeightAscent", metrics.EmAscent - line), ("emHeightDescent", metrics.EmDescent + line),
+                ("hangingBaseline", metrics.HangingBaseline - line), ("alphabeticBaseline", -line), ("ideographicBaseline", metrics.IdeographicBaseline - line),
             })
-                Js.Value(result, name, Js.Num(value));
+                Js.Value(result, name, Js.Num(value == 0 ? 0 : value));
 
             return result;
         });
+    }
+
+    /// <summary>A run of text as the context's text settings lay it out.</summary>
+    private sealed record TextLayout(string Text, TextRunMetrics Metrics, ShapeSettings Shape, double LetterSpacing, double WordSpacing, double LineOffset, double Anchor);
+
+    private bool IsRightToLeft(ContextObject context)
+    {
+        var direction = context.Bitmap.State.Direction;
+        if (direction != "inherit")
+            return direction == "rtl";
+
+        return context.Canvas.IsConnected && Document.GetComputedValue(context.Canvas, "direction") == "rtl";
+    }
+
+    // The text the context draws or measures: shaped with its kerning, caps and language, spaced by its letter and word spacing, and where its alignment and baseline put it.
+    private TextLayout LayoutText(ContextObject context, Font font, string raw)
+    {
+        var state = context.Bitmap.State;
+
+        // The ASCII white space is drawn as spaces, none of it collapsed.
+        var text = raw.Replace('\t', ' ').Replace('\n', ' ').Replace('\f', ' ').Replace('\r', ' ');
+        var environment = FontEnvironmentOf(context.Canvas);
+        var letter = CanvasFont.SpacingPixels(state.LetterSpacing, font.Size, environment);
+        var word = CanvasFont.SpacingPixels(state.WordSpacing, font.Size, environment);
+        var caps = state.FontVariantCaps switch
+        {
+            "small-caps" => CapsMode.SmallCaps,
+            "all-small-caps" => CapsMode.AllSmallCaps,
+            "petite-caps" => CapsMode.PetiteCaps,
+            "all-petite-caps" => CapsMode.AllPetiteCaps,
+            "unicase" => CapsMode.Unicase,
+            "titling-caps" => CapsMode.TitlingCaps,
+            _ => CapsMode.None,
+        };
+        var lang = state.Lang is "inherit" ? null : state.Lang;
+        var shape = new ShapeSettings { Kerning = state.FontKerning != "none", Caps = CanvasFont.Parse(state.Font, FontEnvironment.Detached)?.SmallCaps == true && caps == CapsMode.None ? CapsMode.SmallCaps : caps, Language = lang };
+        var metrics = TextRunMeasure.Measure(font, text, letter, word, shape);
+
+        var rtl = IsRightToLeft(context);
+        var anchor = state.TextAlign switch
+        {
+            "center" => metrics.Width / 2,
+            "right" => metrics.Width,
+            "left" => 0,
+            "end" => rtl ? 0 : metrics.Width,
+            _ => rtl ? metrics.Width : 0,
+        };
+
+        // How far above the alphabetic baseline the line the text sits on is.
+        var line = state.TextBaseline switch
+        {
+            "top" => metrics.EmAscent,
+            "hanging" => metrics.HangingBaseline,
+            "middle" => (metrics.EmAscent - metrics.EmDescent) / 2,
+            "ideographic" => metrics.IdeographicBaseline,
+            "bottom" => -metrics.EmDescent,
+            _ => 0.0,
+        };
+
+        return new TextLayout(text, metrics, shape, letter, word, line, anchor);
     }
 
     // The decoded picture an image element, a pattern source or drawImage argument stands for, or null while it is not loaded.

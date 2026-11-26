@@ -1,5 +1,6 @@
 using PeachBrackets.ScriptHosting;
 using PeachDrawing.Core;
+using PeachDrawing.Text.Shaping;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -1172,53 +1173,65 @@ internal sealed class CanvasBitmap(ScriptDocument document, double width, double
         });
     }
 
-    public void DrawText(string text, double x, double y, bool stroke, double? maxWidth, Font font, string align, string baseline, PaintSource fill, Pen? pen)
+    /// <summary>
+    /// Draws a laid-out run. <paramref name="anchor"/> is how far from the run's left edge the point <paramref name="x"/> falls (where the text's alignment puts it), and
+    /// <paramref name="baselineY"/> the alphabetic baseline. A run wider than <paramref name="maxWidth"/> is condensed to it.
+    /// </summary>
+    public void DrawText(string text, double x, double baselineY, double anchor, bool stroke, double? maxWidth, Font font, TextRunMetrics metrics, double letterSpacing, double wordSpacing,
+        ShapeSettings shape, PaintSource fill, Pen? pen)
     {
         if (text.Length == 0)
             return;
 
-        var width = MeasureText(text, font);
+        var width = metrics.Width;
         var scale = maxWidth is { } max && width > max && max > 0 ? max / width : 1.0;
-        var drawn = width * scale;
-        var left = align switch
-        {
-            "center" => x - drawn / 2,
-            "right" or "end" => x - drawn,
-            _ => x,
-        };
+        var left = x - anchor * scale;
+        var top = baselineY - font.Ascent;
 
-        var ascent = font.Ascent;
-        var top = baseline switch
+        // With a word spacing the words are drawn each where the measure puts them; otherwise the run is one piece.
+        var pieces = new List<(string Text, double X)>();
+        if (wordSpacing != 0 && text.Contains(' ', StringComparison.Ordinal))
         {
-            "top" => y,
-            "hanging" => y - ascent * 0.2,
-            "middle" => y - font.Height / 2,
-            "bottom" or "ideographic" => y - font.Height,
-            _ => y - ascent,
-        };
-        var baselineY = top + ascent;
+            var start = 0;
+            for (var i = 0; i <= text.Length; i++)
+            {
+                if (i == text.Length || text[i] == ' ')
+                {
+                    if (i > start)
+                        pieces.Add((text[start..i], metrics.Clusters.FirstOrDefault(c => c.Start == start) is { Width: > 0 } cluster ? cluster.X : 0));
+                    start = i + 1;
+                }
+            }
+        }
+        else
+        {
+            pieces.Add((text, 0));
+        }
 
         Record(canvas =>
         {
             if (scale != 1.0)
-            {
                 canvas.PushTransform(Matrix3x2.CreateScale((float)scale, 1) * Matrix3x2.CreateTranslation((float)(left * (1 - scale)), 0));
-            }
 
             try
             {
-                if (!stroke && fill is PaintSource.ColorSource color)
+                foreach (var (piece, offset) in pieces)
                 {
-                    canvas.DrawString(text, font, color.Color, new PaintPoint(left, top), new Size(width, font.Height));
-                }
-                else if (canvas.GetTextOutline(text, font, new PaintPoint(left, baselineY)) is { } outline)
-                {
-                    using (outline)
+                    var pieceLeft = left + offset;
+                    var advance = piece == text ? width : TextRunMeasure.Measure(font, piece, letterSpacing, 0, shape).Width;
+                    if (!stroke && fill is PaintSource.ColorSource color)
                     {
-                        if (stroke && pen is not null)
-                            canvas.DrawPath(pen, outline);
-                        else
-                            canvas.DrawPath(MakeBrush(fill), outline);
+                        canvas.DrawString(piece, font, color.Color, new PaintPoint(pieceLeft, top), new Size(advance, font.Height), letterSpacing, null, shape);
+                    }
+                    else if (canvas.GetTextOutline(piece, font, new PaintPoint(pieceLeft, baselineY), letterSpacing, shape) is { } outline)
+                    {
+                        using (outline)
+                        {
+                            if (stroke && pen is not null)
+                                canvas.DrawPath(pen, outline);
+                            else
+                                canvas.DrawPath(MakeBrush(fill), outline);
+                        }
                     }
                 }
             }
@@ -1228,12 +1241,6 @@ internal sealed class CanvasBitmap(ScriptDocument document, double width, double
                     canvas.PopTransform();
             }
         });
-    }
-
-    public double MeasureText(string text, Font font)
-    {
-        using var measuring = Document.CreateMeasuringCanvas();
-        return measuring is null ? text.Length * font.Size * 0.5 : measuring.MeasureString(text, font).Width;
     }
 
     /// <summary>The state's transform moved by a matrix applied first (what <c>transform()</c> and <c>translate()</c> do).</summary>
