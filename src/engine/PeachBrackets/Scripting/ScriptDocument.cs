@@ -259,6 +259,68 @@ public sealed class ScriptDocument
         return id.Length == 0 ? null : Descendants(Root).FirstOrDefault(e => e.GetAttribute("id") == id);
     }
 
+    /// <summary>
+    /// The SVG <c>filter</c> element with the given <c>id</c>, built to be applied to pixels, or null when there is none (or the element of that id is not a filter in an inline
+    /// <c>svg</c>). The filter is read from the markup of the outermost <c>svg</c> it is in, with that element's own style rules.
+    /// </summary>
+    /// <param name="id">the id</param>
+    /// <returns>the filter, or null</returns>
+    public ScriptSvgFilter? GetSvgFilter(string id)
+    {
+        ArgumentNullException.ThrowIfNull(id);
+        if (GetElementById(id) is not { } element || !string.Equals(element.TagName, "filter", StringComparison.OrdinalIgnoreCase))
+            return null;
+
+        ScriptNode? svg = null;
+        for (var node = element; node is not null; node = node.Parent)
+        {
+            if (string.Equals(node.TagName, "svg", StringComparison.OrdinalIgnoreCase))
+                svg = node;
+        }
+
+        if (svg is null)
+            return null;
+
+        try
+        {
+            var root = SvgElementOf(svg);
+            // The page's own style rules apply to the filter's elements too (a class on a primitive), as well as the ones inside the svg.
+            var pageStyles = string.Join('\n', Descendants(Root).Where(e => string.Equals(e.TagName, "style", StringComparison.OrdinalIgnoreCase)).Select(e => e.TextContent));
+            var cssData = Svg.SvgCssStyling.BuildStyleData(pageStyles + "\n" + Svg.SvgCssStyling.CollectStyleText(root), _container.RenderContext);
+            var document = Svg.SvgTreeBuilder.Build(new Svg.XElementSvgSourceNode(root, root, cssData, "print", null), _container.RenderContext);
+            return document.Filters.TryGetValue(id, out var filter) ? new ScriptSvgFilter(filter) : null;
+        }
+        catch (Exception ex) when (ex is System.Xml.XmlException or InvalidOperationException or ArgumentException)
+        {
+            return null;
+        }
+    }
+
+    // An SVG element of the page's tree as a standalone XML element (the page's HTML serialization does not close an empty foreign element, so it cannot be parsed back as XML).
+    private static System.Xml.Linq.XElement SvgElementOf(ScriptNode node)
+    {
+        System.Xml.Linq.XNamespace svg = "http://www.w3.org/2000/svg";
+        var element = new System.Xml.Linq.XElement(svg + node.TagName!);
+        foreach (var name in node.AttributeNames)
+        {
+            // Namespace declarations and prefixed attributes (xlink:href) are not carried: a filter does not need them.
+            if (name.Contains(':', StringComparison.Ordinal) || name.StartsWith("xmlns", StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            element.SetAttributeValue(name, node.GetAttribute(name) ?? "");
+        }
+
+        foreach (var child in node.Children)
+        {
+            if (child.Kind == ScriptNodeKind.Element && child.TagName is not null)
+                element.Add(SvgElementOf(child));
+            else if (child.Kind == ScriptNodeKind.Text && child.Data is { } text)
+                element.Add(new System.Xml.Linq.XText(text));
+        }
+
+        return element;
+    }
+
     /// <summary>The elements with the given name, in document order. <c>*</c> names every element.</summary>
     /// <param name="tagName">the element name, matched without regard to case</param>
     /// <returns>the elements</returns>

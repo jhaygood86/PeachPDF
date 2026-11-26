@@ -518,7 +518,7 @@ internal sealed partial class ScriptRuntime
                 return;
 
             var state = S(self);
-            state.FilterEffects = effects;
+            state.FilterSteps = effects;
             state.FilterObject = value as CanvasFilterObject;
             state.Filter = value is CanvasFilterObject ? "none" : text;
         });

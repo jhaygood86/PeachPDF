@@ -44,30 +44,113 @@ internal sealed partial class ScriptRuntime
     }
 
     /// <summary>What a script assigned to <c>filter</c> stands for: a CanvasFilter is its primitives; anything else is read as text, and text that is not a filter list is not a filter.</summary>
-    private bool TryFilterEffects(JsValue value, ScriptNode? element, out LayerEffect[] effects, out string text)
+    private bool TryFilterEffects(JsValue value, ScriptNode? element, out FilterStep[] effects, out string text)
     {
         if (value is CanvasFilterObject filter)
         {
-            effects = filter.Effects;
+            effects = filter.Effects.Length == 0 ? [] : [new FilterStep(filter.Effects)];
             text = "";
             return true;
         }
 
         text = TypeConverter.ToString(value);
-        var parsed = FilterList.TryParse(text, color => Document.TryParseColor(color, element, out var parsedColor) ? parsedColor : null, PaintColor.Black, 16, out var list);
-        effects = [.. list];
-        return parsed;
+        return TryFilterSteps(text, element, out effects);
+    }
+
+    // A CSS filter list, whose url() references are filters of the document: the functions between them are steps of their own, so the order written is the order run.
+    private bool TryFilterSteps(string text, ScriptNode? element, out FilterStep[] steps)
+    {
+        steps = [];
+        var trimmed = text.Trim();
+        var result = new List<FilterStep>();
+        var pending = new System.Text.StringBuilder();
+
+        bool Flush()
+        {
+            if (pending.ToString().Trim().Length == 0)
+                return true;
+
+            if (!FilterList.TryParse(pending.ToString(), color => Document.TryParseColor(color, element, out var parsedColor) ? parsedColor : null, PaintColor.Black, 16, out var list))
+                return false;
+
+            if (list.Count > 0)
+                result.Add(new FilterStep([.. list]));
+
+            pending.Clear();
+            return true;
+        }
+
+        if (trimmed.Length == 0)
+            return false;
+
+        var i = 0;
+        while (i < trimmed.Length)
+        {
+            if (char.IsWhiteSpace(trimmed[i]))
+            {
+                pending.Append(trimmed[i++]);
+                continue;
+            }
+
+            var start = i;
+            while (i < trimmed.Length && trimmed[i] != '(' && !char.IsWhiteSpace(trimmed[i]))
+                i++;
+
+            if (i == trimmed.Length || trimmed[i] != '(')
+            {
+                // A word with no arguments (none, or nonsense): the list parser decides.
+                pending.Append(trimmed, start, i - start);
+                continue;
+            }
+
+            var depth = 0;
+            var end = i;
+            for (; end < trimmed.Length; end++)
+            {
+                if (trimmed[end] == '(')
+                    depth++;
+                else if (trimmed[end] == ')' && --depth == 0)
+                    break;
+            }
+
+            if (end == trimmed.Length)
+                return false;
+
+            var function = trimmed[start..(end + 1)];
+            i = end + 1;
+            if (!function.StartsWith("url(", StringComparison.OrdinalIgnoreCase))
+            {
+                pending.Append(function);
+                continue;
+            }
+
+            // url(#id), with or without quotes: a filter of the document.
+            var target = function[4..^1].Trim().Trim('"', '\'');
+            if (!Flush() || !target.StartsWith('#') || Document.GetSvgFilter(target[1..]) is not { } svg)
+                return false;
+
+            result.Add(new FilterStep([], svg));
+        }
+
+        if (!Flush())
+            return false;
+
+        steps = [.. result];
+        return true;
     }
 
     /// <summary>The effects of the filter of a layer's options: nothing and null are none; a CanvasFilter, a description or a list of them are primitives; anything else is read as CSS, and is none when it is not valid.</summary>
-    private LayerEffect[] LayerFilterEffects(JsValue value)
+    private FilterStep[] LayerFilterEffects(JsValue value)
     {
         if (value.IsUndefined() || value.IsNull())
             return [];
         if (value is CanvasFilterObject filter)
-            return filter.Effects;
+            return filter.Effects.Length == 0 ? [] : [new FilterStep(filter.Effects)];
         if (value is ObjectInstance description && (description.IsArray() || description.HasProperty("name")))
-            return FilterInitEffects(value, null);
+        {
+            var primitives = FilterInitEffects(value, null);
+            return primitives.Length == 0 ? [] : [new FilterStep(primitives)];
+        }
 
         return TryFilterEffects(value, null, out var effects, out _) ? effects : [];
     }

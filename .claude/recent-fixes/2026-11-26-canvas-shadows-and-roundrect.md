@@ -38,3 +38,9 @@
 - `CanvasFilter` componentTransfer (tableValues must be an array: a number, an object or an object with a valueOf giving one throws), convolveMatrix (a kernel with no columns, or a divisor or target that cannot work, filters nothing) and turbulence are now applied, not just validated.
 - Still not read: `url()` SVG filter references (they need the document's SVG filter tree evaluated through the engine's raster evaluator, and a Core effect that carries a raster callback), and the `:visited`/cross-origin tainting rules around them.
 - html-canvas 1906 files, 3061/5030; floor 3052.
+
+## Phase 5, url() filters
+- `url(#id)` in a canvas filter (alone, quoted, or chained after CSS functions: `brightness(1.8) url(#green)`) runs the page's SVG `filter` element over the drawing. `ScriptDocument.GetSvgFilter` finds the element, rebuilds its outermost inline `svg` as a standalone XML tree (walking the DOM: the HTML serialization does not close empty foreign elements, so it does not parse back), cascades the page's own `<style>` text plus the svg's, builds it with `SvgTreeBuilder` and returns a `ScriptSvgFilter`; `SvgRasterFilterEvaluator.ApplyTo` evaluates it over a raster surface with the surface's area as the box the region is measured against.
+- A filter is now a list of `FilterStep`s (effects, or one SVG filter): effects alone stay one layer with those effects (GPU where the canvas can), anything with a `url()` goes to a raster surface (`BeginRasterSurface`/`DrawRaster`, so it works on every backend) and runs the steps in the order written. An id that names no filter makes the assignment invalid (ignored).
+- Not done: the origin-clean flag. The remaining `manual/filters` failures are tainting tests (`:visited` colors, cross-origin `feImage`, displacement-map tainted inputs); this engine has no tainting at all and never matches `:visited`, so they move to the pixels phase of the plan.
+- html-canvas 1907 files, 3063/5030; floor 3058.

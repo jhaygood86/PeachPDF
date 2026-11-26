@@ -79,4 +79,20 @@ public class CanvasFilterTests
 
         Assert.Equal(["0,0,0,255 255,0 true"], log);
     }
+
+    [Fact]
+    public async Task AUrlFilter_RunsTheDocumentsSvgFilter_AloneOrAfterCssFunctions_AndAnUnknownOneIsIgnored()
+    {
+        var log = await LogAsync("""
+            var holder = document.createElement('div');
+            holder.innerHTML = '<svg width="0" height="0"><filter id="green" color-interpolation-filters="sRGB"><feColorMatrix type="matrix" values="0 0 0 0 0  0 0 0 0 1  0 0 0 0 0  0 0 0 0 1"/></filter></svg>';
+            document.body.appendChild(holder);
+            function fill(filter) { g.reset(); g.filter = filter; g.fillStyle = '#f00'; g.fillRect(0, 0, 40, 20); return Array.from(g.getImageData(20, 10, 1, 1).data).join(','); }
+            var alone = fill('url(#green)'), chained = fill('brightness(1.8) url(#green)'), quoted = fill('url("#green")'), unknown = fill('url(#nothing)');
+            g.reset(); g.filter = 'blur(2px)'; g.filter = 'url(#nothing)';
+            Log.info([alone, chained, quoted, unknown, g.filter].join(' | '));
+            """);
+
+        Assert.Equal(["0,255,0,255 | 0,255,0,255 | 0,255,0,255 | 255,0,0,255 | blur(2px)"], log);
+    }
 }

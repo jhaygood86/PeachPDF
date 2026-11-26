@@ -317,6 +317,9 @@ internal sealed class CanvasPattern(Image image, string repetition)
     public string Repetition { get; } = repetition;
 }
 
+/// <summary>One step of a filter: effects a layer applies, or an SVG filter of the document run over the pixels.</summary>
+internal sealed record FilterStep(LayerEffect[] Effects, ScriptSvgFilter? Svg = null);
+
 /// <summary>The settings <c>save()</c> and <c>restore()</c> keep.</summary>
 internal sealed class CanvasState
 {
@@ -366,8 +369,8 @@ internal sealed class CanvasState
 
     public string Filter { get; set; } = "none";
 
-    /// <summary>The effects <see cref="Filter"/> (or <see cref="FilterObject"/>) stands for.</summary>
-    public LayerEffect[] FilterEffects { get; set; } = [];
+    /// <summary>The steps <see cref="Filter"/> (or <see cref="FilterObject"/>) stands for, in order.</summary>
+    public FilterStep[] FilterSteps { get; set; } = [];
 
     /// <summary>The <c>CanvasFilter</c> the filter was set to, which is what reading <c>filter</c> gives back, when it was set to one.</summary>
     public object? FilterObject { get; set; }
@@ -380,7 +383,7 @@ internal sealed class CanvasState
         MiterLimit = MiterLimit, LineDash = LineDash, LineDashOffset = LineDashOffset, GlobalAlpha = GlobalAlpha, Composite = Composite,
         ShadowColor = ShadowColor, ShadowColorText = ShadowColorText, ShadowBlur = ShadowBlur, ShadowOffsetX = ShadowOffsetX, ShadowOffsetY = ShadowOffsetY,
         Font = Font, TextAlign = TextAlign, TextBaseline = TextBaseline, Direction = Direction, ImageSmoothing = ImageSmoothing,
-        ImageSmoothingQuality = ImageSmoothingQuality, Filter = Filter, FilterEffects = FilterEffects, FilterObject = FilterObject, Clips = [.. Clips],
+        ImageSmoothingQuality = ImageSmoothingQuality, Filter = Filter, FilterSteps = FilterSteps, FilterObject = FilterObject, Clips = [.. Clips],
     };
 }
 
@@ -451,13 +454,13 @@ internal sealed class CanvasBitmap(ScriptDocument document, double width, double
     /// <summary>Whether a layer is open: the drawing is not whole until it ends, so it cannot be read.</summary>
     public bool HasOpenLayers => _layers.Count > 0;
 
-    private sealed class LayerFrame(CanvasState outer, int saveDepth, LayerEffect[] effects)
+    private sealed class LayerFrame(CanvasState outer, int saveDepth, FilterStep[] effects)
     {
         public CanvasState Outer { get; } = outer;
 
         public int SaveDepth { get; } = saveDepth;
 
-        public LayerEffect[] Effects { get; } = effects;
+        public FilterStep[] Effects { get; } = effects;
 
         public List<Action<PeachDrawing.Core.Canvas>> Ops { get; } = [];
     }
@@ -466,7 +469,7 @@ internal sealed class CanvasBitmap(ScriptDocument document, double width, double
     /// Opens a layer: what is drawn until <see cref="EndLayer"/> is drawn on a layer of its own with the compositing state (alpha, operator, shadow, filter) reset, and the
     /// layer is composited with the state the canvas had when it opened. The transform, clips and styles carry in unchanged.
     /// </summary>
-    public void BeginLayer(LayerEffect[] effects)
+    public void BeginLayer(FilterStep[] effects)
     {
         var outer = State.Clone();
         _layers.Push(new LayerFrame(outer, Saved.Count, effects));
@@ -479,7 +482,7 @@ internal sealed class CanvasBitmap(ScriptDocument document, double width, double
         State.ShadowOffsetX = 0;
         State.ShadowOffsetY = 0;
         State.Filter = "none";
-        State.FilterEffects = [];
+        State.FilterSteps = [];
         State.FilterObject = null;
     }
 
@@ -503,13 +506,11 @@ internal sealed class CanvasBitmap(ScriptDocument document, double width, double
         var composite = State.Clone();
         composite.Transform = Affine2D.Identity;
         _needsGroup |= effects.Length > 0;
-        RecordWith(composite, composite.Composite, canvas =>
+        RecordWith(composite, composite.Composite, canvas => DrawFiltered(canvas, effects, bounds, target =>
         {
-            using var layer = canvas.BeginLayer(new LayerOptions(1.0, PaintBlendMode.Normal, null, bounds, effects.Length == 0 ? null : effects));
-            var target = layer?.Canvas ?? canvas;
             foreach (var op in ops)
                 op(target);
-        });
+        }));
     }
 
     private void AddOp(Action<PeachDrawing.Core.Canvas> op)
@@ -753,14 +754,10 @@ internal sealed class CanvasBitmap(ScriptDocument document, double width, double
         var (width, height) = (Width, Height);
 
         // The filter acts on the shape alone: before the shadow (which is the filtered shape's) and before alpha and compositing.
-        var filterEffects = state.FilterEffects;
-        var filterMargin = FilterMargin(filterEffects);
-        void Content(PeachDrawing.Core.Canvas target)
+        var filterSteps = state.FilterSteps;
+        var filterMargin = FilterMargin(filterSteps);
+        void Content(PeachDrawing.Core.Canvas target) => DrawFiltered(target, filterSteps, new Rect(-filterMargin, -filterMargin, width + 2 * filterMargin, height + 2 * filterMargin), inner =>
         {
-            using var filter = filterEffects.Length > 0
-                ? target.BeginLayer(new LayerOptions(1.0, PaintBlendMode.Normal, null, new Rect(-filterMargin, -filterMargin, width + 2 * filterMargin, height + 2 * filterMargin), filterEffects))
-                : null;
-            var inner = filter?.Canvas ?? target;
             inner.PushTransform(matrix);
             try
             {
@@ -770,7 +767,7 @@ internal sealed class CanvasBitmap(ScriptDocument document, double width, double
             {
                 inner.PopTransform();
             }
-        }
+        });
 
         AddOp(canvas =>
         {
@@ -837,10 +834,10 @@ internal sealed class CanvasBitmap(ScriptDocument document, double width, double
     }
 
     // How far beyond the canvas what a filter draws can reach, so a layer is cut wide enough that a blur or a shadow is not clipped at the canvas's edge.
-    private static double FilterMargin(LayerEffect[] effects)
+    private static double FilterMargin(FilterStep[] steps)
     {
         double margin = 0;
-        foreach (var effect in effects)
+        foreach (var effect in steps.SelectMany(step => step.Effects))
         {
             margin += effect switch
             {
@@ -850,7 +847,43 @@ internal sealed class CanvasBitmap(ScriptDocument document, double width, double
             };
         }
 
-        return effects.Length == 0 ? 0 : margin + 2;
+        return steps.Length == 0 ? 0 : margin + 2;
+    }
+
+    // Draws what <paramref name="draw"/> draws through a filter. Effects alone are a layer with those effects (on the GPU where the canvas can); a filter of the document's
+    // is run over the pixels, so the drawing goes to a raster surface, through the steps in order, and is placed on the canvas.
+    private static void DrawFiltered(PeachDrawing.Core.Canvas canvas, FilterStep[] steps, Rect bounds, Action<PeachDrawing.Core.Canvas> draw)
+    {
+        if (steps.Length == 0)
+        {
+            draw(canvas);
+            return;
+        }
+
+        if (steps.All(step => step.Svg is null))
+        {
+            using var layer = canvas.BeginLayer(new LayerOptions(1.0, PaintBlendMode.Normal, null, bounds, steps.SelectMany(step => step.Effects).ToArray()));
+            draw(layer?.Canvas ?? canvas);
+            return;
+        }
+
+        using var scope = canvas.BeginRasterSurface(bounds);
+        if (scope is null)
+        {
+            draw(canvas);
+            return;
+        }
+
+        draw(scope.Graphics);
+        foreach (var step in steps)
+        {
+            if (step.Svg is { } svg)
+                svg.Apply(canvas, scope.Surface, bounds);
+            else if (step.Effects.Length > 0)
+                PeachDrawing.RasterLayerEffects.Apply(scope.Surface, step.Effects);
+        }
+
+        canvas.DrawRaster(scope.Surface);
     }
 
     /// <summary>Starts over: everything drawn so far is dropped (what <c>clearRect</c> over the whole canvas comes to).</summary>

@@ -868,6 +868,7 @@ PeachBrackets.ScriptHosting.ScriptDocument : sealed class
   method ScriptNode CreateTextNode(String text)
   method ScriptNode GetElementById(String id)
   method ScriptNode QuerySelector(String selector)
+  method ScriptSvgFilter GetSvgFilter(String id)
   method String GetComputedValue(ScriptNode element, String property)
   method ValueTask<ScriptImageInfo> LoadImageAsync(String address)
   method ValueTask<ScriptNetworkResponse> SendAsync(ScriptNetworkRequest request, CancellationToken cancellationToken = null)
@@ -1004,6 +1005,8 @@ PeachBrackets.ScriptHosting.ScriptNodeKind : enum Int32
   Fragment = 3
   ProcessingInstruction = 5
   Text = 2
+PeachBrackets.ScriptHosting.ScriptSvgFilter : sealed class
+  method Void Apply(Canvas canvas, RasterSurface surface, Rect region)
 PeachBrackets.ScriptHosting.ScriptValue : struct
   method Boolean AsBoolean()
   method Double AsNumber()
