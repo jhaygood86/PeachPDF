@@ -2,8 +2,8 @@
   "formatVersion": 1,
   "wptCommit": "33926aca0f4313541f0ac5d67d4a4ab949d50b16",
   "floors": {
-    "css-backgrounds": 396,
-    "css-color": 216,
+    "css-backgrounds": 425,
+    "css-color": 230,
     "css-flexbox": 542,
     "css-grid": 920,
     "css-lists": 56,
@@ -18,5 +18,6 @@
     "css2-generated": 212,
     "css2-positioning": 451,
     "css2-tables": 174
-  }
+  },
+  "margins": {}
 }

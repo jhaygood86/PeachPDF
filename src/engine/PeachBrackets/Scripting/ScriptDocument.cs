@@ -442,11 +442,31 @@ public sealed class ScriptDocument
     /// <param name="css">the text</param>
     /// <param name="color">the color</param>
     /// <returns>whether the text is a color</returns>
-    public bool TryParseColor(string css, out PeachDrawing.Core.PaintColor color)
+    public bool TryParseColor(string css, out PeachDrawing.Core.PaintColor color) => TryParseColor(css, null, out color);
+
+    /// <summary>
+    /// Reads a CSS color as the HTML standard says a canvas does: <c>currentcolor</c> is the computed <c>color</c> of <paramref name="element"/> (the canvas) at this moment,
+    /// and opaque black when there is no element, it is not in the document, or the host gave no layout to read it from.
+    /// </summary>
+    /// <param name="css">the text</param>
+    /// <param name="element">the element whose <c>color</c> is <c>currentcolor</c>, or null for black</param>
+    /// <param name="color">the color</param>
+    /// <returns>whether the text is a color</returns>
+    public bool TryParseColor(string css, ScriptNode? element, out PeachDrawing.Core.PaintColor color)
     {
         ArgumentNullException.ThrowIfNull(css);
         var parser = new Html.Parse.CssValueParser(_container.RenderContext);
         var text = css.Trim();
+
+        if (text.Contains("currentcolor", StringComparison.OrdinalIgnoreCase))
+        {
+            var current = PeachDrawing.Core.PaintColor.Black;
+            if (element is not null && GetComputedValue(element, "color") is { } computed && parser.IsColorValid(computed))
+                current = parser.GetActualColor(computed);
+
+            text = Html.Parse.CssValueParser.SubstituteCurrentColor(text, current);
+        }
+
         if (!parser.IsColorValid(text))
         {
             color = default;

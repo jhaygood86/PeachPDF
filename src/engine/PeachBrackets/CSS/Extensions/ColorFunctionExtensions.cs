@@ -168,7 +168,7 @@ namespace PeachBrackets.Css
         // ── rgb()/rgba(): 3 components (int or % of 255) + optional alpha ─────────
         private static Color? ParseRgb(IEnumerable<Token> args)
         {
-            if (!Extract(args, 3, out var comps, out var alphaTok)) return null;
+            if (!ExtractFunctionGrammar(args, hsl: false, out var comps, out var alphaTok)) return null;
             // none (a missing component) is only part of the space-separated syntax, not the legacy comma one.
             if (HasComma(args) && (comps.Any(IsNone) || (alphaTok is { } legacyAlpha && IsNone(legacyAlpha)))) return null;
             var r = RgbComponent(comps[0]);
@@ -182,14 +182,18 @@ namespace PeachBrackets.Css
         // ── hsl()/hsla(): hue angle + saturation% + lightness% + optional alpha ──
         private static Color? ParseHsl(IEnumerable<Token> args)
         {
-            if (!Extract(args, 3, out var comps, out var alphaTok)) return null;
+            if (!ExtractFunctionGrammar(args, hsl: true, out var comps, out var alphaTok)) return null;
             if (HasComma(args) && (comps.Any(IsNone) || (alphaTok is { } legacyAlpha && IsNone(legacyAlpha)))) return null;
             var hue = HueDegrees(comps[0]);
             var sat = PercentValue(comps[1]);
             var light = PercentValue(comps[2]);
             if (hue is null || sat is null || light is null) return null;
             var a = Alpha(alphaTok);
-            return Color.FromHsla((float)(hue.Value / 360.0), sat.Value, light.Value, a);
+
+            // The hue is an angle that goes round: any number of turns is the same color. Saturation and lightness are clamped to their range when the color is read.
+            var turns = hue.Value / 360.0;
+            turns -= Math.Floor(turns);
+            return Color.FromHsla((float)turns, Math.Clamp(sat.Value, 0f, 1f), Math.Clamp(light.Value, 0f, 1f), a);
         }
 
         // ── hwb(): hue angle + whiteness% + blackness% + optional alpha ──────────
@@ -568,6 +572,78 @@ namespace PeachBrackets.Css
             return true;
         }
 
+        // The grammar of rgb() and hsl() (CSS Color 4 section 4 and 7): exactly three components and an optional alpha, written either in the legacy comma form
+        //   rgb(<number>#{3} [, <alpha>]?)   rgb(<percentage>#{3} [, <alpha>]?)   hsl(<hue>, <percentage>, <percentage> [, <alpha>]?)
+        // or in the modern space form with the alpha after a slash
+        //   rgb([<number> | <percentage> | none]{3} [/ [<alpha> | none]]?)   hsl([<hue> | none] [<percentage> | <number> | none]{2} [/ [<alpha> | none]]?)
+        // never a mix of the two: no slash with commas, no comma without all of them, no trailing comma, no component or alpha left over, a legacy rgb() all numbers or all
+        // percentages, and in the space form no alpha without the slash.
+        private static bool ExtractFunctionGrammar(IEnumerable<Token> args, bool hsl, out List<Token> components, out Token? alpha)
+        {
+            components = [];
+            alpha = null;
+
+            var sequence = args.Where(token => token.Type != TokenType.Whitespace).ToList();
+            var legacy = sequence.Any(token => token.Type == TokenType.Comma);
+
+            static bool IsValue(Token token) => token.Type is not (TokenType.Comma or TokenType.Delim);
+            static bool IsNumber(Token token) => token.Type == TokenType.Number;
+            static bool IsPercentage(Token token) => token.Type == TokenType.Percentage;
+            static bool IsAlpha(Token token) => token.Type is TokenType.Number or TokenType.Percentage || IsNone(token);
+
+            List<Token> values;
+            if (legacy)
+            {
+                // value , value , value [, value]: values at the even places, a comma at each odd one.
+                if (sequence.Count is not (5 or 7)) return false;
+                values = [];
+                for (var i = 0; i < sequence.Count; i++)
+                {
+                    if (i % 2 == 0 ? !IsValue(sequence[i]) : sequence[i].Type != TokenType.Comma) return false;
+                    if (i % 2 == 0) values.Add(sequence[i]);
+                }
+
+                if (values.Any(IsNone)) return false;
+                if (hsl)
+                {
+                    if (!IsPercentage(values[1]) || !IsPercentage(values[2]) || !(IsNumber(values[0]) || values[0].Type == TokenType.Dimension)) return false;
+                }
+                else if (!(values.Take(3).All(IsNumber) || values.Take(3).All(IsPercentage)))
+                {
+                    return false;
+                }
+
+                if (values.Count == 4 && !IsAlpha(values[3])) return false;
+            }
+            else
+            {
+                // value value value [/ value]
+                if (sequence.Count is not (3 or 5)) return false;
+                if (sequence.Count == 5 && !(sequence[3].Type == TokenType.Delim && sequence[3].Data.Is("/"))) return false;
+                values = [sequence[0], sequence[1], sequence[2]];
+                if (values.Any(token => !IsValue(token))) return false;
+                if (sequence.Count == 5)
+                {
+                    if (!IsValue(sequence[4]) || !IsAlpha(sequence[4])) return false;
+                    values.Add(sequence[4]);
+                }
+
+                if (hsl)
+                {
+                    if (!(IsNone(values[0]) || IsNumber(values[0]) || values[0].Type == TokenType.Dimension)) return false;
+                    if (values.Skip(1).Take(2).Any(token => !(IsNone(token) || IsNumber(token) || IsPercentage(token)))) return false;
+                }
+                else if (values.Take(3).Any(token => !(IsNone(token) || IsNumber(token) || IsPercentage(token))))
+                {
+                    return false;
+                }
+            }
+
+            components = values.Take(3).ToList();
+            alpha = values.Count == 4 ? values[3] : null;
+            return true;
+        }
+
         private static List<List<Token>> SplitByComma(IEnumerable<Token> tokens)
         {
             var result = new List<List<Token>>();
@@ -608,7 +684,11 @@ namespace PeachBrackets.Css
         private static float Alpha(Token? token)
         {
             if (token is not { } t) return 1f;
-            return IsNone(t) ? 0f : AsTokens(t).ToAlphaValue() ?? 1f;
+            if (IsNone(t)) return 0f;
+
+            // Out of range is clamped, not ignored: an alpha of -2 is transparent and one of 2 is opaque.
+            if (AsTokens(t).ToSingle() is { } number) return Math.Clamp(number, 0f, 1f);
+            return AsTokens(t).ToPercent() is { } percent ? Math.Clamp(percent.NormalizedValue, 0f, 1f) : 1f;
         }
 
         // A number (returned as-is) or a percentage resolved against `reference`; "none" resolves to 0.

@@ -640,8 +640,11 @@ internal sealed class CanvasBitmap(ScriptDocument document, double width, double
             case "radial":
                 return new RadialGradientBrush(new PaintPoint(g[3], g[4]), new PaintPoint(g[0], g[1]), g[5], g[5], list, GradientSpread.Pad) { FocusRadius = g[2] };
             default:
-                var angles = stops.Select(s => g[0] + s.Offset * Math.PI * 2).ToList();
-                return new ConicGradientBrush(new PaintPoint(g[1], g[2]), 1e6, list, angles);
+                // A canvas measures the start angle clockwise from the positive x axis (3 o'clock); the brush measures from the top, as CSS does.
+                // A conic brush's stop positions are those angles, in radians, not offsets from 0 to 1 (see RenderContext.GetConicGradientBrush).
+                var angles = stops.Select(s => g[0] + Math.PI / 2 + s.Offset * Math.PI * 2).ToList();
+                var conicStops = stops.Select((s, i) => new GradientStop(s.Color, angles[i])).ToList();
+                return new ConicGradientBrush(new PaintPoint(g[1], g[2]), 1e6, conicStops, angles);
         }
     }
 
@@ -888,5 +891,21 @@ internal sealed class CanvasBitmap(ScriptDocument document, double width, double
     public static string ColorText(PaintColor color) =>
         color.A == 255
             ? $"#{color.R:x2}{color.G:x2}{color.B:x2}"
-            : string.Create(CultureInfo.InvariantCulture, $"rgba({color.R}, {color.G}, {color.B}, {Math.Round(color.A / 255.0, 2)})");
+            : string.Create(CultureInfo.InvariantCulture, $"rgba({color.R}, {color.G}, {color.B}, {AlphaText(color.A)})");
+
+    /// <summary>The alpha of a color as the HTML standard serializes it: the shortest number, of two decimal places and else three, that reads back as the same 8-bit alpha.</summary>
+    internal static string AlphaText(byte alpha)
+    {
+        if (alpha == 0)
+            return "0";
+
+        foreach (var digits in new[] { 2, 3 })
+        {
+            var rounded = Math.Round(alpha / 255.0, digits, MidpointRounding.AwayFromZero);
+            if ((int)Math.Round(rounded * 255, MidpointRounding.AwayFromZero) == alpha)
+                return rounded.ToString("0.###", CultureInfo.InvariantCulture);
+        }
+
+        return Math.Round(alpha / 255.0, 3, MidpointRounding.AwayFromZero).ToString("0.###", CultureInfo.InvariantCulture);
+    }
 }

@@ -168,6 +168,8 @@ internal sealed partial class ScriptRuntime
         {
             var gradient = ((GradientObject)self).Model;
             var offset = Num(args, 0);
+            if (!double.IsFinite(offset))
+                throw TypeError("The offset is not finite.");
             if (!(offset >= 0 && offset <= 1))
                 throw DomError("IndexSizeError", "The offset must be between 0 and 1.");
             if (!Document.TryParseColor(Js.AsText(Js.Arg(args, 1)), out var color))
@@ -270,7 +272,7 @@ internal sealed partial class ScriptRuntime
 
     // ---- state: transform, styles, line and text settings
 
-    private PaintSource StyleFrom(JsValue value, PaintSource current)
+    private PaintSource StyleFrom(JsValue value, PaintSource current, ScriptNode element)
     {
         switch (value)
         {
@@ -280,7 +282,7 @@ internal sealed partial class ScriptRuntime
                 return new PaintSource.PatternSource(pattern.Model);
         }
 
-        return Document.TryParseColor(Js.AsText(value), out var color) ? new PaintSource.ColorSource(color, CanvasBitmap.ColorText(color)) : current;
+        return Document.TryParseColor(Js.AsText(value), element, out var color) ? new PaintSource.ColorSource(color, CanvasBitmap.ColorText(color)) : current;
     }
 
     private JsValue StyleValue(PaintSource source) => source switch
@@ -346,8 +348,8 @@ internal sealed partial class ScriptRuntime
             return Engine.Evaluate("(function (a) { return new DOMMatrix(a); })").Call(JsValue.Undefined, [Js.Array(Engine, [Js.Num(m.M11), Js.Num(m.M12), Js.Num(m.M21), Js.Num(m.M22), Js.Num(m.M31), Js.Num(m.M32)])]);
         });
 
-        Js.Accessor(Engine, p, "fillStyle", self => StyleValue(S(self).FillStyle), (self, value) => S(self).FillStyle = StyleFrom(value, S(self).FillStyle));
-        Js.Accessor(Engine, p, "strokeStyle", self => StyleValue(S(self).StrokeStyle), (self, value) => S(self).StrokeStyle = StyleFrom(value, S(self).StrokeStyle));
+        Js.Accessor(Engine, p, "fillStyle", self => StyleValue(S(self).FillStyle), (self, value) => S(self).FillStyle = StyleFrom(value, S(self).FillStyle, Cx(self).Canvas));
+        Js.Accessor(Engine, p, "strokeStyle", self => StyleValue(S(self).StrokeStyle), (self, value) => S(self).StrokeStyle = StyleFrom(value, S(self).StrokeStyle, Cx(self).Canvas));
         Js.Accessor(Engine, p, "lineWidth", self => Js.Num(S(self).LineWidth), (self, value) =>
         {
             var number = TypeConverter.ToNumber(value);
@@ -408,7 +410,7 @@ internal sealed partial class ScriptRuntime
         });
         Js.Accessor(Engine, p, "shadowColor", self => Js.Str(S(self).ShadowColorText), (self, value) =>
         {
-            if (Document.TryParseColor(Js.AsText(value), out var color))
+            if (Document.TryParseColor(Js.AsText(value), Cx(self).Canvas, out var color))
             {
                 S(self).ShadowColor = color;
                 S(self).ShadowColorText = CanvasBitmap.ColorText(color);
