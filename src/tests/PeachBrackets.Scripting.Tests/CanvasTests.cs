@@ -157,7 +157,8 @@ public class CanvasTests
     [InlineData("g.roundRect(2, 2, 30, 14, [3, 6]);")]
     [InlineData("g.roundRect(2, 2, 30, 14, [3, 6, 9]);")]
     [InlineData("g.roundRect(2, 2, 30, 14, [1, 2, 3, 4]);")]
-    [InlineData("g.roundRect(32, 16, -30, -14, [1, 2, 3, 4, 5]);")]
+    [InlineData("g.roundRect(32, 16, -30, -14, [1, 2, 3, 4]);")]
+    [InlineData("g.roundRect(2, 2, 30, 14, [new DOMPoint(8, 3), { x: 2, y: 5 }, 4, 6]);")]
     [InlineData("g.roundRect(2, 2, 30, 14);")]
     public async Task ARoundedRectangleIsFilled(string path)
     {

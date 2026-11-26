@@ -619,56 +619,130 @@ internal sealed partial class ScriptRuntime
         });
         Js.StrictMethod(Engine, p, "roundRect", 4, (self, args) =>
         {
-            if (!Finite(args, 4)) return JsValue.Undefined;
+            // Web IDL first: every argument is converted (a BigInt is a TypeError) before the method does anything.
+            var numbers = new double[4];
+            for (var i = 0; i < 4; i++)
+                numbers[i] = TypeConverter.ToNumber(Js.Arg(args, i));
+
+            var radii = RoundRectRadii(Js.Arg(args, 4), out var finite);
+
+            // Then the algorithm: a rectangle that is not finite does nothing, and neither do radii that are not; a negative radius or a list of the wrong length is a RangeError.
+            if (numbers.Any(n => !double.IsFinite(n)))
+                return JsValue.Undefined;
+            if (radii.Count is 0 or > 4)
+                throw RangeError("roundRect takes one to four radii.");
+            if (!finite)
+                return JsValue.Undefined;
+            if (radii.Any(r => r.X < 0 || r.Y < 0))
+                throw RangeError("A radius is negative.");
+
             var (path, m) = target(self);
-            var radii = RoundRectRadii(Js.Arg(args, 4));
-            RoundRect(path, m, Num(args, 0), Num(args, 1), Num(args, 2), Num(args, 3), radii);
+            RoundRect(path, m, numbers[0], numbers[1], numbers[2], numbers[3], radii);
             return JsValue.Undefined;
         });
     }
 
-    // The four corner radii (top-left, top-right, bottom-right, bottom-left) of roundRect's argument: a number, or a list of one to four.
-    private static double[] RoundRectRadii(JsValue value)
+    private Exception RangeError(string message) => new JavaScriptException(Engine.Construct(Engine.Evaluate("RangeError"), [Js.Str(message)]));
+
+    // The radii of roundRect's argument as (horizontal, vertical) pairs: a number or a point (DOMPointInit, a DOMPoint among them) is one corner's radius, a list is one to four. A
+    // missing argument is a radius of 0. `finite` says whether every number in them is.
+    private static List<(double X, double Y)> RoundRectRadii(JsValue value, out bool finite)
     {
-        if (value.IsUndefined()) return [0, 0, 0, 0];
-        if (value is not ObjectInstance { } list || !list.IsArray())
+        finite = true;
+        var items = new List<(double X, double Y)>();
+
+        (double X, double Y) Item(JsValue v)
         {
-            var radius = Math.Max(0, TypeConverter.ToNumber(value));
-            return [radius, radius, radius, radius];
+            // A number is a circle's radius; null, undefined and any object are read as a point dictionary whose x and y default to 0.
+            if (v is ObjectInstance point)
+                return (Component(point, "x"), Component(point, "y"));
+            if (v.IsUndefined() || v.IsNull())
+                return (0, 0);
+
+            var radius = TypeConverter.ToNumber(v);
+            return (radius, radius);
         }
 
-        var count = (int)TypeConverter.ToNumber(list.Get("length"));
-        var v = Enumerable.Range(0, count).Select(i => Math.Max(0, TypeConverter.ToNumber(list.Get(i.ToString(CultureInfo.InvariantCulture))))).ToArray();
-        return v.Length switch
+        double Component(ObjectInstance point, string name)
         {
-            1 => [v[0], v[0], v[0], v[0]],
-            2 => [v[0], v[1], v[0], v[1]],
-            3 => [v[0], v[1], v[2], v[1]],
-            4 => v,
-            _ => [0, 0, 0, 0],
-        };
+            var component = point.Get(name);
+            return component.IsUndefined() ? 0 : TypeConverter.ToNumber(component);
+        }
+
+        if (value.IsUndefined())
+        {
+            items.Add((0, 0));
+        }
+        else if (value is ObjectInstance list && list.IsArray())
+        {
+            var count = (int)TypeConverter.ToNumber(list.Get("length"));
+            for (var i = 0; i < count; i++)
+                items.Add(Item(list.Get(i.ToString(CultureInfo.InvariantCulture))));
+        }
+        else
+        {
+            items.Add(Item(value));
+        }
+
+        finite = items.All(r => double.IsFinite(r.X) && double.IsFinite(r.Y));
+        return items;
     }
 
-    private static void RoundRect(PathData path, Matrix3x2 m, double x, double y, double w, double h, double[] r)
+    // The path of a rounded rectangle, each corner with its own horizontal and vertical radius. The corners are those of the rectangle as the caller gave it: a negative width or
+    // height starts the path at (x, y) and goes the other way, so the first radius is the one at (x, y) wherever that is, and the outline winds the other way as a rectangle does.
+    private static void RoundRect(PathData path, Matrix3x2 m, double x, double y, double w, double h, List<(double X, double Y)> radii)
     {
-        if (w < 0) { x += w; w = -w; }
-        if (h < 0) { y += h; h = -h; }
-        var scale = Math.Min(1, Math.Min(w / Math.Max(1e-9, r[0] + r[1]), Math.Min(w / Math.Max(1e-9, r[3] + r[2]), Math.Min(h / Math.Max(1e-9, r[0] + r[3]), h / Math.Max(1e-9, r[1] + r[2])))));
-        r = [.. r.Select(v => v * scale)];
-        var sub = new PathData();
-        Vector2 P(double px, double py) => PathData.T(m, px, py);
-        var start = P(x + r[0], y);
+        // One value for all four corners; two are the diagonals (top left and bottom right, then top right and bottom left); three have the last two of the diagonal pairs sharing;
+        // four are the corners clockwise from the top left.
+        var (ul, ur, lr, ll) = radii.Count switch
+        {
+            1 => (radii[0], radii[0], radii[0], radii[0]),
+            2 => (radii[0], radii[1], radii[0], radii[1]),
+            3 => (radii[0], radii[1], radii[2], radii[1]),
+            _ => (radii[0], radii[1], radii[2], radii[3]),
+        };
+
+        var (width, height) = (Math.Abs(w), Math.Abs(h));
+
+        // Radii that would overlap along an edge are all scaled down together until the worst edge just fits.
+        var scale = 1.0;
+        void Fit(double length, double sum)
+        {
+            if (sum > 0 && length / sum < scale)
+                scale = length / sum;
+        }
+
+        Fit(width, ul.X + ur.X);
+        Fit(height, ur.Y + lr.Y);
+        Fit(width, lr.X + ll.X);
+        Fit(height, ul.Y + ll.Y);
+        if (scale < 1)
+        {
+            ul = (ul.X * scale, ul.Y * scale);
+            ur = (ur.X * scale, ur.Y * scale);
+            lr = (lr.X * scale, lr.Y * scale);
+            ll = (ll.X * scale, ll.Y * scale);
+        }
+
+        // The outline is built for a positive size at the origin and carried to (x, y) by a mirror: the same code gives every sign of width and height.
+        var local = Matrix3x2.CreateScale(w < 0 ? -1f : 1f, h < 0 ? -1f : 1f) * Matrix3x2.CreateTranslation((float)x, (float)y) * m;
+        Vector2 P(double px, double py) => PathData.T(local, px, py);
+
+        var start = P(ul.X, 0);
         path.MoveTo(start.X, start.Y);
-        var p1 = P(x + w - r[1], y); path.LineTo(p1.X, p1.Y);
-        path.AddArc(x + w - r[1], y + r[1], r[1], r[1], 0, -Math.PI / 2, 0, false, m);
-        var p2 = P(x + w, y + h - r[2]); path.LineTo(p2.X, p2.Y);
-        path.AddArc(x + w - r[2], y + h - r[2], r[2], r[2], 0, 0, Math.PI / 2, false, m);
-        var p3 = P(x + r[3], y + h); path.LineTo(p3.X, p3.Y);
-        path.AddArc(x + r[3], y + h - r[3], r[3], r[3], 0, Math.PI / 2, Math.PI, false, m);
-        var p4 = P(x, y + r[0]); path.LineTo(p4.X, p4.Y);
-        path.AddArc(x + r[0], y + r[0], r[0], r[0], 0, Math.PI, Math.PI * 1.5, false, m);
+        var a = P(width - ur.X, 0); path.LineTo(a.X, a.Y);
+        path.AddArc(width - ur.X, ur.Y, ur.X, ur.Y, 0, -Math.PI / 2, 0, false, local);
+        var b = P(width, height - lr.Y); path.LineTo(b.X, b.Y);
+        path.AddArc(width - lr.X, height - lr.Y, lr.X, lr.Y, 0, 0, Math.PI / 2, false, local);
+        var c = P(ll.X, height); path.LineTo(c.X, c.Y);
+        path.AddArc(ll.X, height - ll.Y, ll.X, ll.Y, 0, Math.PI / 2, Math.PI, false, local);
+        var d = P(0, ul.Y); path.LineTo(d.X, d.Y);
+        path.AddArc(ul.X, ul.Y, ul.X, ul.Y, 0, Math.PI, Math.PI * 1.5, false, local);
         path.Close();
-        _ = sub;
+
+        // Like rect(), roundRect leaves a new subpath started at (x, y).
+        var origin = P(0, 0);
+        path.MoveTo(origin.X, origin.Y);
     }
 
     // arcTo in the space the path is built in: the current point is brought back out of the matrix, the arc worked out there, and the result put back through it.

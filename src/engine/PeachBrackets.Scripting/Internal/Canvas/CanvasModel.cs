@@ -573,9 +573,10 @@ internal sealed class CanvasBitmap(ScriptDocument document, double width, double
         var blend = BlendFor(composite) ?? PaintBlendMode.Normal;
         _usesOperators |= blend >= PaintBlendMode.SourceIn;
         _needsGroup |= blend != PaintBlendMode.Normal;
-        var shadow = state.ShadowColor.A > 0 && (state.ShadowBlur > 0 || state.ShadowOffsetX != 0 || state.ShadowOffsetY != 0)
-            ? new DropShadowEffect(state.ShadowOffsetX, state.ShadowOffsetY, state.ShadowBlur / 2, state.ShadowBlur / 2, state.ShadowColor)
-            : null;
+        // A shadow is the shape's own alpha, in the shadow color, moved by the offset (which no transform touches) and blurred, drawn first and with the same
+        // alpha and compositing as the shape; then the shape is drawn.
+        var hasShadow = state.ShadowColor.A > 0 && (state.ShadowBlur > 0 || state.ShadowOffsetX != 0 || state.ShadowOffsetY != 0);
+        var (shadowDx, shadowDy, sigma, shadowColor) = (state.ShadowOffsetX, state.ShadowOffsetY, state.ShadowBlur / 2, state.ShadowColor);
         var (width, height) = (Width, Height);
 
         AddOp(canvas =>
@@ -588,12 +589,12 @@ internal sealed class CanvasBitmap(ScriptDocument document, double width, double
 
             try
             {
+                if (hasShadow)
+                    DrawShadow(canvas, draw, matrix, (shadowDx, shadowDy), sigma, shadowColor, alpha, blend, width, height);
+
                 CanvasLayer? layer = null;
-                if (alpha < 1 || blend != PaintBlendMode.Normal || shadow is not null)
-                {
-                    var margin = shadow is null ? 0 : shadow.SigmaX * 3 + Math.Abs(shadow.OffsetX) + Math.Abs(shadow.OffsetY) + 2;
-                    layer = canvas.BeginLayer(new LayerOptions(alpha, blend, null, new Rect(-margin, -margin, width + 2 * margin, height + 2 * margin), shadow is null ? null : [shadow]));
-                }
+                if (alpha < 1 || blend != PaintBlendMode.Normal)
+                    layer = canvas.BeginLayer(new LayerOptions(alpha, blend, null, new Rect(0, 0, width, height)));
 
                 try
                 {
@@ -619,6 +620,38 @@ internal sealed class CanvasBitmap(ScriptDocument document, double width, double
                     canvas.PopClip();
             }
         });
+    }
+
+    // The shadow of one drawing: the drawing in a layer over the visible canvas (and as far beyond it as the blur reaches), moved by the offset first so that a shape outside
+    // the canvas whose shadow falls inside it is still drawn, recolored to the shadow color with the shape's alpha kept, and blurred. A backend that cannot make the layer
+    // draws no shadow.
+    private static void DrawShadow(PeachDrawing.Core.Canvas canvas, Action<PeachDrawing.Core.Canvas> draw, Matrix3x2 matrix, (double X, double Y) offset, double sigma, PaintColor color,
+        double alpha, PaintBlendMode blend, double width, double height)
+    {
+        // Every color becomes the shadow color and the alpha is the shape's times the shadow color's.
+        var linear = new Matrix4x4 { M44 = color.A / 255f };
+        var recolor = new ColorMatrix(linear, new Vector4(color.R / 255f, color.G / 255f, color.B / 255f, 0));
+        var effects = new List<LayerEffect> { new ColorMatrixEffect(recolor) };
+        if (sigma > 0)
+            effects.Add(new BlurEffect(sigma, sigma));
+
+        var margin = sigma * 3 + 2;
+        using var layer = canvas.BeginLayer(new LayerOptions(alpha, blend, null, new Rect(-margin, -margin, width + 2 * margin, height + 2 * margin), effects));
+        if (layer is null)
+            return;
+
+        var target = layer.Canvas;
+        target.PushTransform(Matrix3x2.CreateTranslation((float)offset.X, (float)offset.Y));
+        target.PushTransform(matrix);
+        try
+        {
+            draw(target);
+        }
+        finally
+        {
+            target.PopTransform();
+            target.PopTransform();
+        }
     }
 
     /// <summary>Starts over: everything drawn so far is dropped (what <c>clearRect</c> over the whole canvas comes to).</summary>
