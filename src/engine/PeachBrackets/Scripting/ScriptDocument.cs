@@ -321,6 +321,48 @@ public sealed class ScriptDocument
         return element;
     }
 
+    private bool _fontFacesLoaded;
+
+    /// <summary>Whether <see cref="LoadFontFacesAsync"/> has finished.</summary>
+    public bool FontFacesLoaded => _fontFacesLoaded;
+
+    /// <summary>
+    /// Registers the <c>@font-face</c> fonts of the page's style sheets (its <c>style</c> elements and linked sheets) with the render context, so a script (a canvas's text, <c>document.fonts</c>)
+    /// can use them before the page is laid out, which is when they are otherwise registered. Done once per document.
+    /// </summary>
+    public async ValueTask LoadFontFacesAsync()
+    {
+        if (_fontFacesLoaded)
+            return;
+
+        _fontFacesLoaded = true;
+        try
+        {
+            var renderContext = _container.RenderContext;
+            var css = new Html.CssData(renderContext);
+            var parser = new Html.Parse.CssParser(renderContext, _container);
+            foreach (var element in Descendants(Root).ToList())
+            {
+                if (string.Equals(element.TagName, "style", StringComparison.OrdinalIgnoreCase))
+                {
+                    await parser.ParseStyleSheet(css, element.TextContent, BaseUri);
+                }
+                else if (string.Equals(element.TagName, "link", StringComparison.OrdinalIgnoreCase) && element.GetAttribute("href") is { Length: > 0 } href
+                    && (element.GetAttribute("rel") ?? "").Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries).Any(token => token.Equals("stylesheet", StringComparison.OrdinalIgnoreCase)))
+                {
+                    if (await LoadTextAsync(href) is { } sheet)
+                        await parser.ParseStyleSheet(css, sheet, CommonUtils.ResolveAgainstDocumentBase(_container, href));
+                }
+            }
+
+            await Html.Parse.DomParser.CascadeApplyStyleFonts(css, renderContext, _container.SynchronousOnly);
+        }
+        catch (Exception ex) when (ex is not SynchronousOnlyViolationException and not OutOfMemoryException)
+        {
+            // A font that cannot be loaded is the page's own business; the page lays out with what it has.
+        }
+    }
+
     /// <summary>The elements with the given name, in document order. <c>*</c> names every element.</summary>
     /// <param name="tagName">the element name, matched without regard to case</param>
     /// <returns>the elements</returns>

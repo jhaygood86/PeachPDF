@@ -26,10 +26,26 @@ internal sealed partial class WptRenderer(string wptRoot) : IReftestRenderer
     [GeneratedRegex(@"^\s*(<!--.*?-->\s*)*<!DOCTYPE[^>]*>", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Singleline)]
     private static partial Regex Doctype();
 
-    private string? AhemPath()
+    /// <summary>
+    /// The fonts a page is drawn with whatever the machine has: each generic family resolved as a browser's platform would, the serif, sans-serif and monospace families pinned
+    /// to the bundled Liberation faces (so the floors do not depend on the fonts of the runner image: they differed between Windows and Linux by dozens of reftests), and the
+    /// WPT harness's own Ahem (every glyph an em square, metrics known exactly), which a test that sets <c>font-family: Ahem</c> without an @font-face rule relies on.
+    /// </summary>
+    internal static async Task InstallFontsAsync(RasterRenderContext context, string wptRoot)
     {
-        var path = Path.Combine(wptRoot, "fonts", "Ahem.ttf");
-        return File.Exists(path) ? path : null;
+        var fontSet = new FontSet();
+        foreach (var (keyword, generic) in FontDefaults.GenericFamilies)
+            if (fontSet.ResolveGeneric(generic, context.IsFontExists) is { } family)
+                context.AddFontFamilyMapping(keyword, family);
+
+        await PinGenericFontsAsync(context);
+
+        var ahem = Path.Combine(wptRoot, "fonts", "Ahem.ttf");
+        if (File.Exists(ahem))
+        {
+            await using var stream = File.OpenRead(ahem);
+            await context.AddFont(stream, "Ahem");
+        }
     }
 
     private static readonly string[] LiberationFaces =
@@ -87,22 +103,7 @@ internal sealed partial class WptRenderer(string wptRoot) : IReftestRenderer
 
         // A browser resolves each generic family (`monospace`...) to its platform's real family; without this the raster context falls back to
         // whatever the font set finds first, and a reftest written with `font: 24px monospace` measures a different font than the browser's.
-        var fontSet = new FontSet();
-        foreach (var (keyword, generic) in FontDefaults.GenericFamilies)
-            if (fontSet.ResolveGeneric(generic, context.IsFontExists) is { } family)
-                context.AddFontFamilyMapping(keyword, family);
-
-        // Pinned: the serif, sans-serif and monospace families are the bundled Liberation faces whatever the machine has installed, so the
-        // floors do not depend on the fonts of the runner image (they differed between Windows and Linux by dozens of reftests).
-        await PinGenericFontsAsync(context);
-
-        // The WPT harness installs the Ahem font (every glyph an em square, metrics known exactly) on the machine, and a test that sets
-        // `font-family: Ahem` without an @font-face rule relies on that.
-        if (AhemPath() is { } ahem)
-        {
-            await using var stream = File.OpenRead(ahem);
-            await context.AddFont(stream, "Ahem");
-        }
+        await InstallFontsAsync(context, wptRoot);
 
         var options = new HtmlDocumentOptions
         {

@@ -357,6 +357,20 @@ internal sealed class CanvasState
 
     public string Font { get; set; } = "10px sans-serif";
 
+    public string LetterSpacing { get; set; } = "0px";
+
+    public string WordSpacing { get; set; } = "0px";
+
+    public string FontKerning { get; set; } = "auto";
+
+    public string FontStretch { get; set; } = "normal";
+
+    public string FontVariantCaps { get; set; } = "normal";
+
+    public string TextRendering { get; set; } = "auto";
+
+    public string Lang { get; set; } = "inherit";
+
     public string TextAlign { get; set; } = "start";
 
     public string TextBaseline { get; set; } = "alphabetic";
@@ -382,7 +396,7 @@ internal sealed class CanvasState
         Transform = Transform, FillStyle = FillStyle, StrokeStyle = StrokeStyle, LineWidth = LineWidth, LineCap = LineCap, LineJoin = LineJoin,
         MiterLimit = MiterLimit, LineDash = LineDash, LineDashOffset = LineDashOffset, GlobalAlpha = GlobalAlpha, Composite = Composite,
         ShadowColor = ShadowColor, ShadowColorText = ShadowColorText, ShadowBlur = ShadowBlur, ShadowOffsetX = ShadowOffsetX, ShadowOffsetY = ShadowOffsetY,
-        Font = Font, TextAlign = TextAlign, TextBaseline = TextBaseline, Direction = Direction, ImageSmoothing = ImageSmoothing,
+        Font = Font, LetterSpacing = LetterSpacing, WordSpacing = WordSpacing, FontKerning = FontKerning, FontStretch = FontStretch, FontVariantCaps = FontVariantCaps, TextRendering = TextRendering, Lang = Lang, TextAlign = TextAlign, TextBaseline = TextBaseline, Direction = Direction, ImageSmoothing = ImageSmoothing,
         ImageSmoothingQuality = ImageSmoothingQuality, Filter = Filter, FilterSteps = FilterSteps, FilterObject = FilterObject, Clips = [.. Clips],
     };
 }

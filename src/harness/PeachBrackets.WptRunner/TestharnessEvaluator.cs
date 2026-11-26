@@ -95,6 +95,7 @@ internal sealed partial class TestharnessEvaluator(string wptRoot) : IWptEvaluat
         var errors = new List<string>();
         var diagnostics = new List<string>();
         var context = new RasterRenderContext { DocumentAddress = pageAddress, ResourceLoader = uri => LoadAsync(server, uri) };
+        await WptRenderer.InstallFontsAsync(context, wptRoot);
         var options = new HtmlDocumentOptions
         {
             MediaType = MediaType.Screen,

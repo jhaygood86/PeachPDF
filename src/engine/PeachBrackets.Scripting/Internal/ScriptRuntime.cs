@@ -184,6 +184,10 @@ internal sealed partial class ScriptRuntime
         FireEvent(DocumentObject, "DOMContentLoaded", bubbles: true, cancelable: false);
         RunMicrotasks();
 
+        await Document.LoadFontFacesAsync();
+        ResolveFontsReady();
+        RunMicrotasks();
+
         await LoadInitialImagesAsync();
         RunMicrotasks();
         LoadInitialFrames();

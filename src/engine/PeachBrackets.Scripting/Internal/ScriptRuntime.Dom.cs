@@ -684,12 +684,34 @@ internal sealed partial class ScriptRuntime
             Js.Method(Engine, p, no, 0, (self, _) => JsValue.Undefined);
     }
 
+    private ObjectInstance? _fontFaceSet;
+    private JsValue _fontsReadyResolve = JsValue.Undefined;
+
+    /// <summary>Settles <c>document.fonts.ready</c>: the fonts of the page's style sheets are registered.</summary>
+    private void ResolveFontsReady()
+    {
+        if (_fontsReadyResolve is { } resolve && !resolve.IsUndefined())
+            resolve.Call(JsValue.Undefined, []);
+
+        if (_fontFaceSet is not null)
+            Js.Value(_fontFaceSet, "status", Js.Str("loaded"));
+
+        _fontsReadyResolve = JsValue.Undefined;
+    }
+
     private JsValue FontFaceSet()
     {
+        if (_fontFaceSet is not null)
+            return _fontFaceSet;
+
+        // ready is a promise that is settled when the page's fonts are registered, which happens once its scripts have run (before the load event).
         var fonts = Js.NewObject(Engine);
-        Js.Value(fonts, "ready", Engine.Evaluate("Promise.resolve()"));
-        Js.Value(fonts, "status", Js.Str("loaded"));
-        Js.Method(Engine, fonts, "load", 1, (_, _) => Engine.Evaluate("Promise.resolve([])"));
+        var made = (ObjectInstance)Engine.Evaluate("(function () { var resolve; var promise = new Promise(function (r) { resolve = r; }); return { promise: promise, resolve: resolve }; })()");
+        Js.Value(fonts, "ready", made.Get("promise"));
+        _fontsReadyResolve = made.Get("resolve");
+        Js.Value(fonts, "status", Js.Str(Document.FontFacesLoaded ? "loaded" : "loading"));
+        _fontFaceSet = fonts;
+        Js.Method(Engine, fonts, "load", 1, (_, _) => Engine.Evaluate("(function (ready) { return ready.then(function () { return []; }); })").Call(JsValue.Undefined, [fonts.Get("ready")]));
         Js.Method(Engine, fonts, "check", 1, (_, _) => JsBoolean.True);
         Js.Method(Engine, fonts, "forEach", 1, (_, _) => JsValue.Undefined);
         Js.Method(Engine, fonts, "add", 1, (_, _) => JsValue.Undefined);

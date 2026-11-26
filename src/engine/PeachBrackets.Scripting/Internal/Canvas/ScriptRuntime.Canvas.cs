@@ -487,8 +487,25 @@ internal sealed partial class ScriptRuntime
 
         Js.Accessor(Engine, p, "font", self => Js.Str(S(self).Font), (self, value) =>
         {
-            var text = Js.AsText(value);
-            if (ParseFont(text) is not null) S(self).Font = text;
+            // The CSS font shorthand: kept as the canvas serializes it, with the size resolved against the canvas element; text that is not a font is ignored.
+            if (CanvasFont.Parse(Js.AsText(value), FontEnvironmentOf(Cx(self).Canvas)) is { } font)
+                S(self).Font = font.Serialize();
+        });
+        EnumAccessor(p, "fontKerning", ["auto", "normal", "none"], state => state.FontKerning, (state, text) => state.FontKerning = text);
+        EnumAccessor(p, "fontStretch", ["ultra-condensed", "extra-condensed", "condensed", "semi-condensed", "normal", "semi-expanded", "expanded", "extra-expanded", "ultra-expanded"],
+            state => state.FontStretch, (state, text) => state.FontStretch = text);
+        EnumAccessor(p, "fontVariantCaps", ["normal", "small-caps", "all-small-caps", "petite-caps", "all-petite-caps", "unicase", "titling-caps"], state => state.FontVariantCaps, (state, text) => state.FontVariantCaps = text);
+        EnumAccessor(p, "textRendering", ["auto", "optimizeSpeed", "optimizeLegibility", "geometricPrecision"], state => state.TextRendering, (state, text) => state.TextRendering = text);
+        Js.Accessor(Engine, p, "lang", self => Js.Str(S(self).Lang), (self, value) => S(self).Lang = TypeConverter.ToString(value));
+        Js.Accessor(Engine, p, "letterSpacing", self => Js.Str(S(self).LetterSpacing), (self, value) =>
+        {
+            if (CanvasFont.TryParseSpacing(TypeConverter.ToString(value), out var spacing))
+                S(self).LetterSpacing = spacing;
+        });
+        Js.Accessor(Engine, p, "wordSpacing", self => Js.Str(S(self).WordSpacing), (self, value) =>
+        {
+            if (CanvasFont.TryParseSpacing(TypeConverter.ToString(value), out var spacing))
+                S(self).WordSpacing = spacing;
         });
         Js.Accessor(Engine, p, "textAlign", self => Js.Str(S(self).TextAlign), (self, value) =>
         {
@@ -526,53 +543,39 @@ internal sealed partial class ScriptRuntime
 
     // ---- fonts
 
-    private sealed record FontSpec(string[] Families, double SizePixels, bool Italic, double Weight);
-
-    // The CSS font shorthand: style, variant, weight and stretch in any order, then a size, then families.
-    private static FontSpec? ParseFont(string text)
-    {
-        var tokens = text.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        var italic = false;
-        var weight = 400.0;
-        var index = 0;
-        for (; index < tokens.Length; index++)
+    // A text style that is one of a list of words: what is assigned that is not one of them (not even in another case) is ignored.
+    private void EnumAccessor(ObjectInstance p, string name, string[] values, Func<CanvasState, string> get, Action<CanvasState, string> set) =>
+        Js.Accessor(Engine, p, name, self => Js.Str(get(Cx(self).Bitmap.State)), (self, value) =>
         {
-            var token = tokens[index].ToLowerInvariant();
-            if (token is "italic" or "oblique") italic = true;
-            else if (token is "bold") weight = 700;
-            else if (token is "bolder") weight = 700;
-            else if (token is "lighter") weight = 300;
-            else if (double.TryParse(token, NumberStyles.Float, CultureInfo.InvariantCulture, out var number) && number is >= 1 and <= 1000) weight = number;
-            else if (token is "normal" or "small-caps" or "ultra-condensed" or "extra-condensed" or "condensed" or "semi-condensed" or "semi-expanded" or "expanded" or "extra-expanded" or "ultra-expanded") continue;
-            else break;
-        }
+            var text = TypeConverter.ToString(value);
+            if (values.Contains(text, StringComparer.Ordinal))
+                set(Cx(self).Bitmap.State, text);
+        });
 
-        if (index >= tokens.Length - 0 || index >= tokens.Length)
-            return null;
+    // What the canvas element's relative units are relative to: its own computed font and line height, the root's font, the window.
+    private FontEnvironment FontEnvironmentOf(ScriptNode canvas)
+    {
+        if (!canvas.IsConnected)
+            return FontEnvironment.Detached;
 
-        var sizeToken = tokens[index].Split('/')[0].ToLowerInvariant();
-        double size;
-        if (sizeToken.EndsWith("px", StringComparison.Ordinal) && double.TryParse(sizeToken[..^2], NumberStyles.Float, CultureInfo.InvariantCulture, out size)) { }
-        else if (sizeToken.EndsWith("pt", StringComparison.Ordinal) && double.TryParse(sizeToken[..^2], NumberStyles.Float, CultureInfo.InvariantCulture, out size)) size *= 96.0 / 72.0;
-        else if (sizeToken.EndsWith("rem", StringComparison.Ordinal) && double.TryParse(sizeToken[..^3], NumberStyles.Float, CultureInfo.InvariantCulture, out size)) size *= 16;
-        else if (sizeToken.EndsWith("em", StringComparison.Ordinal) && double.TryParse(sizeToken[..^2], NumberStyles.Float, CultureInfo.InvariantCulture, out size)) size *= 10;
-        else if (sizeToken.EndsWith('%') && double.TryParse(sizeToken[..^1], NumberStyles.Float, CultureInfo.InvariantCulture, out size)) size = size / 100 * 10;
-        else return null;
+        double Pixels(ScriptNode element, string property, double fallback) =>
+            Document.GetComputedValue(element, property) is { } text && CanvasFont.TryLength(text, FontEnvironment.Detached, out var value) ? value : fallback;
 
-        var families = string.Join(' ', tokens[(index + 1)..]).Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Select(f => f.Trim('"', '\'')).ToArray();
-        return families.Length == 0 || size < 0 ? null : new FontSpec(families, size, italic, weight);
+        var size = Pixels(canvas, "font-size", 16);
+        var root = Document.Root.FirstChild is { } first ? Pixels(first, "font-size", 16) : 16;
+        var lineHeight = Pixels(canvas, "line-height", size * 1.2);
+        return new FontEnvironment(size, root, lineHeight, 800, 600);
     }
 
     private Font? FontFor(ContextObject context)
     {
-        if (ParseFont(context.Bitmap.State.Font) is not { } spec)
+        if (CanvasFont.Parse(context.Bitmap.State.Font, FontEnvironment.Detached) is not { } spec)
             return null;
 
-        var style = (spec.Weight >= 600 ? PaintFontStyle.Bold : PaintFontStyle.Regular) | (spec.Italic ? PaintFontStyle.Italic : PaintFontStyle.Regular);
+        var style = (spec.Weight >= 600 ? PaintFontStyle.Bold : PaintFontStyle.Regular) | (spec.Style != "normal" ? PaintFontStyle.Italic : PaintFontStyle.Regular);
         foreach (var family in spec.Families)
         {
-            if (context.Canvas.OwnerDocument.GetFont(family, spec.SizePixels, style, spec.Weight) is { } font)
+            if (context.Canvas.OwnerDocument.GetFont(family.Name, spec.SizePixels, style, spec.Weight) is { } font)
                 return font;
         }
 
