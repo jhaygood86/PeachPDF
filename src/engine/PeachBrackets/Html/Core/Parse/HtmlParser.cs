@@ -59,7 +59,7 @@ namespace PeachBrackets.Html.Parse
             // page, and the first token that is not white space - which decides the mode - would no longer be the DOCTYPE.
             if (document && source.StartsWith('\uFEFF')) source = source[1..];
 
-            var state = new ParserState(root) { IsDocument = document, Phase = document ? DocumentPhase.Initial : DocumentPhase.InBody };
+            var state = new ParserState(root) { IsDocument = document, Phase = document ? DocumentPhase.Initial : DocumentPhase.InBody, KeepTokenText = scripting || KeepMathTokenText.Value };
             MathSourceParser? mathParser = null;
 
             using var sourceReader = new StringReader(source);
@@ -114,7 +114,7 @@ namespace PeachBrackets.Html.Parse
                             ParseHtmlTag(tag, state);
 
                             if (!tag.IsEndTag && !ReferenceEquals(before, state.Current) && state.Current is CssBoxMath { SourceStarted: false } mathBox
-                                && !ParseMathAsBoxes.Value && !IsInsideMath(mathBox))
+                                && !ParseMathAsBoxes.Value && !scripting && !IsInsideMath(mathBox))
                             {
                                 mathParser = new MathSourceParser(mathBox);
                             }
@@ -274,6 +274,9 @@ namespace PeachBrackets.Html.Parse
         /// For tests that check the two agree.
         /// </summary>
         internal static readonly AsyncLocal<bool> ParseMathAsBoxes = new();
+
+        /// <summary>Keeps a MathML token's text as a child text node (see <see cref="CssBox.ForeignText"/>) in a parse that is not a scripting one but whose tree a script reads.</summary>
+        internal static readonly AsyncLocal<bool> KeepMathTokenText = new();
 
         /// <summary>Whether <paramref name="box"/> is inside another inline <c>&lt;math&gt;</c>, whose builder reads the boxes under it.</summary>
         private static bool IsInsideMath(CssBox box)

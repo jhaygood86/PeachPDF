@@ -33,7 +33,7 @@ internal sealed class ReftestEvaluator(IReftestRenderer renderer, string dumpDir
             // A reference that is missing or needs script makes the whole test unrunnable.
             foreach (var link in info.Links)
             {
-                if (!File.Exists(renderer.FullPath(link.Path)))
+                if (!Exists(link.Path))
                     return new TestResult(Outcome.Skipped, $"reference file missing: {link.Path}");
                 if (Info(link.Path).SkipReason is { } why)
                     return new TestResult(Outcome.Skipped, why);
@@ -98,7 +98,7 @@ internal sealed class ReftestEvaluator(IReftestRenderer renderer, string dumpDir
         string? last = null;
         foreach (var link in next)
         {
-            if (!File.Exists(renderer.FullPath(link.Path)))
+            if (!Exists(link.Path))
                 continue;
             last = await CheckMatchAsync(Info(referencePath), reference, link.Path, [.. chain, referencePath]);
             if (last is null)
@@ -119,13 +119,16 @@ internal sealed class ReftestEvaluator(IReftestRenderer renderer, string dumpDir
         {
             if (!_infos.TryGetValue(path, out var info))
             {
-                info = ReftestParser.Parse(path, File.ReadAllText(renderer.FullPath(path)));
+                info = ReftestParser.Parse(path, path == WptRenderer.BlankPage ? string.Empty : File.ReadAllText(renderer.FullPath(path)));
                 _infos[path] = info;
             }
 
             return info;
         }
     }
+
+    /// <summary>Whether the reference exists: a file in the checkout, or <c>about:blank</c>, which every browser has.</summary>
+    private bool Exists(string path) => path == WptRenderer.BlankPage || File.Exists(renderer.FullPath(path));
 
     private static string Name(string path) => path[(path.LastIndexOf('/') + 1)..];
 

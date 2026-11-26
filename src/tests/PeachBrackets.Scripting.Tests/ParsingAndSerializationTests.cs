@@ -124,4 +124,50 @@ public class ParsingAndSerializationTests
 
         Assert.Equal(["true", "[]", "<b>ab</b>c", "<i id=\"r\">r+</i>"], log);
     }
+
+    [Fact]
+    public async Task MathMLElements_AreNodesAScriptCanReach_WithTheirTextAndEndTags()
+    {
+        var log = await LogAsync("""
+            var t = document.getElementById('t');
+            t.innerHTML = '<math><mspace id="s" width="1em"/><mfrac id="f"><mi>x</mi><mn>2</mn></mfrac></math>';
+            Log.info([document.getElementById('s') !== null, document.getElementById('f').children.length, document.getElementById('f').textContent].join('|'));
+            Log.info(t.innerHTML);
+            var parsed = new DOMParser().parseFromString('<math><mi id="m">y</mi></math>', 'text/html');
+            Log.info(parsed.getElementById('m').textContent);
+            """);
+
+        Assert.Equal(
+        [
+            "true|2|x2",
+            "<math><mspace id=\"s\" width=\"1em\"></mspace><mfrac id=\"f\"><mi>x</mi><mn>2</mn></mfrac></math>",
+            "y",
+        ],
+            log);
+    }
+
+    [Fact]
+    public async Task SelfClosingForeignElements_AreSerializedWithAnEndTag()
+    {
+        var log = await LogAsync("""
+            var t = document.getElementById('t');
+            t.innerHTML = '<svg><path d="M0 0"/><rect/></svg><br>';
+            Log.info(t.innerHTML);
+            """);
+
+        Assert.Equal(["<svg><path d=\"M0 0\"></path><rect></rect></svg><br>"], log);
+    }
+
+    [Fact]
+    public async Task DocumentFonts_IsAnIterableSetThatHasAlreadyLoaded()
+    {
+        var log = await LogAsync("""
+            Log.info([[...document.fonts].length, document.fonts.size, document.fonts.status, document.fonts === document.fonts, document.fonts.check('12px x')].join('|'));
+            for (const face of document.fonts) Log.info('never');
+            document.fonts.ready.then(() => Log.info('ready'));
+            Promise.allSettled([...document.fonts].map(f => f.load())).then(r => Log.info('settled ' + r.length));
+            """);
+
+        Assert.Equal(["0|0|loaded|true|true", "ready", "settled 0"], log);
+    }
 }

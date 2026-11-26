@@ -72,7 +72,23 @@ public sealed class ScriptDocument
     public ScriptDocument ParseDocument(string html)
     {
         ArgumentNullException.ThrowIfNull(html);
-        var root = Html.Parse.HtmlParser.ParseDocument(html, out var mode, null, document: true, scripting: false);
+        // A script reads this document's DOM, so an inline <math> in it holds its elements as nodes (see HtmlParser.ParseMathAsBoxes).
+        var mathAsBoxes = Html.Parse.HtmlParser.ParseMathAsBoxes.Value;
+        var keepText = Html.Parse.HtmlParser.KeepMathTokenText.Value;
+        Html.Parse.HtmlParser.ParseMathAsBoxes.Value = true;
+        Html.Parse.HtmlParser.KeepMathTokenText.Value = true;
+        CssBox root;
+        DocumentMode mode;
+        try
+        {
+            root = Html.Parse.HtmlParser.ParseDocument(html, out mode, null, document: true, scripting: false);
+        }
+        finally
+        {
+            Html.Parse.HtmlParser.ParseMathAsBoxes.Value = mathAsBoxes;
+            Html.Parse.HtmlParser.KeepMathTokenText.Value = keepText;
+        }
+
         return new ScriptDocument(_container, root, mode, html: true, declareDoctype: true);
     }
 
