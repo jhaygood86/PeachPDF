@@ -311,6 +311,7 @@ public class HtmlViewEmbeddingTests
             for (var attempt = 0; attempt < 100 && widthAfter == widthBefore; attempt++)
             {
                 await Task.Delay(50);
+                view.UserStyleSheet = "/* load again " + attempt + " */";
                 view.Measure(new Size(600, double.PositiveInfinity));
                 widthAfter = view.Document!.GetElementBounds("s")!.Value.Width;
             }
