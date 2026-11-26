@@ -1,8 +1,6 @@
 {
   "formatVersion": 1,
   "tests": {
-    "css/css-text/text-transform/text-transform-upperlower-016.html": "The reference expects the simple uppercase mapping of the Greek Extended letters (U+1F80 gives U+1F88), but css-text-3 section 2.1.1 requires the full case mappings (U+1F80 gives U+1F08 U+0399), which the German sharp s tests need too.",
-    "html/canvas/element/path-objects/2d.path.isPointInPath.basic.html": "The canvas transform is single precision, so a scale of Number.MAX_VALUE overflows and isPointInPath finds nothing (see .claude/accepted-gaps/canvas-transform-is-single-precision.md).",
-    "html/canvas/offscreen/path-objects/2d.path.isPointInPath.basic.html": "The canvas transform is single precision, so a scale of Number.MAX_VALUE overflows and isPointInPath finds nothing (see .claude/accepted-gaps/canvas-transform-is-single-precision.md)."
+    "css/css-text/text-transform/text-transform-upperlower-016.html": "The reference expects the simple uppercase mapping of the Greek Extended letters (U+1F80 gives U+1F88), but css-text-3 section 2.1.1 requires the full case mappings (U+1F80 gives U+1F08 U+0399), which the German sharp s tests need too."
   }
 }

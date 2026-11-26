@@ -150,10 +150,13 @@ internal sealed class PathData
     }
 
     /// <summary>A copy with every point moved by the matrix.</summary>
-    public PathData Transformed(Matrix3x2 matrix)
+    public PathData Transformed(Matrix3x2 matrix) => Transformed(Affine2D.From(matrix));
+
+    /// <summary>A copy with every point moved by the transform, in double precision.</summary>
+    public PathData Transformed(Affine2D matrix)
     {
         var copy = new PathData();
-        Vector2 P(double x, double y) => Vector2.Transform(new Vector2((float)x, (float)y), matrix);
+        (double X, double Y) P(double x, double y) => matrix.Apply(x, y);
         foreach (var s in Segments)
         {
             switch (s.Type)
@@ -317,7 +320,7 @@ internal sealed class CanvasPattern(Image image, string repetition)
 /// <summary>The settings <c>save()</c> and <c>restore()</c> keep.</summary>
 internal sealed class CanvasState
 {
-    public Matrix3x2 Transform { get; set; } = Matrix3x2.Identity;
+    public Affine2D Transform { get; set; } = Affine2D.Identity;
 
     public PaintSource FillStyle { get; set; } = new PaintSource.ColorSource(PaintColor.Black, "#000000");
 
@@ -487,7 +490,9 @@ internal sealed class CanvasBitmap(ScriptDocument document, double width, double
     public void EndLayer()
     {
         var frame = _layers.Pop();
+        var inside = State.Transform;
         State = frame.Outer;
+        RebasePath(inside, State.Transform);
 
         var ops = frame.Ops.ToArray();
         var effects = frame.Effects;
@@ -496,7 +501,7 @@ internal sealed class CanvasBitmap(ScriptDocument document, double width, double
 
         // The layer's own transform is already in each operation; the state's alpha, operator, shadow and clips composite the whole.
         var composite = State.Clone();
-        composite.Transform = Matrix3x2.Identity;
+        composite.Transform = Affine2D.Identity;
         _needsGroup |= effects.Length > 0;
         RecordWith(composite, composite.Composite, canvas =>
         {
@@ -663,7 +668,11 @@ internal sealed class CanvasBitmap(ScriptDocument document, double width, double
     public void Restore()
     {
         if (Saved.Count > 0)
+        {
+            var old = State.Transform;
             State = Saved.Pop();
+            RebasePath(old, State.Transform);
+        }
     }
 
     public void Reset()
@@ -680,7 +689,7 @@ internal sealed class CanvasBitmap(ScriptDocument document, double width, double
     }
 
     /// <summary>Whether a transformation matrix can be undone.</summary>
-    private static bool Invertible(Matrix3x2 m) => Matrix3x2.Invert(m, out _);
+    private static bool Invertible(Affine2D m) => m.IsInvertible;
 
     // ---- recording
 
@@ -732,7 +741,7 @@ internal sealed class CanvasBitmap(ScriptDocument document, double width, double
     private void RecordWith(CanvasState state, string composite, Action<PeachDrawing.Core.Canvas> draw)
     {
         Revision++;
-        var (clips, matrix) = (state.Clips.ToArray(), state.Transform);
+        var (clips, matrix) = (state.Clips.ToArray(), state.Transform.ToMatrix3x2());
         var alpha = state.GlobalAlpha;
         var blend = BlendFor(composite) ?? PaintBlendMode.Normal;
         _usesOperators |= blend >= PaintBlendMode.SourceIn;
@@ -928,8 +937,8 @@ internal sealed class CanvasBitmap(ScriptDocument document, double width, double
         if (!Invertible(State.Transform) || path.Segments.Count == 0)
             return;
 
-        Matrix3x2.Invert(State.Transform, out var inverse);
-        var user = path.Transformed(inverse);
+        // The path is in the space the transform makes (a copy: the script may go on adding to it before this is drawn).
+        var user = path.Clone();
         var brush = State.FillStyle;
         var alpha = 1.0;
         Record(canvas =>
@@ -988,8 +997,7 @@ internal sealed class CanvasBitmap(ScriptDocument document, double width, double
         if (!Invertible(State.Transform) || path.Segments.Count == 0)
             return;
 
-        Matrix3x2.Invert(State.Transform, out var inverse);
-        var user = path.PrunedForStroke().Transformed(inverse);
+        var user = path.PrunedForStroke();
         if (user.Segments.Count == 0)
             return;
 
@@ -1011,7 +1019,7 @@ internal sealed class CanvasBitmap(ScriptDocument document, double width, double
         {
             var rectangle = new PathData();
             rectangle.AddRect(Math.Min(x, x + w), Math.Min(y, y + h), Math.Abs(w), Math.Abs(h), Matrix3x2.Identity);
-            FillPath(rectangle.Transformed(State.Transform), FillMode.Nonzero);
+            FillPath(rectangle, FillMode.Nonzero);
             return;
         }
 
@@ -1031,7 +1039,7 @@ internal sealed class CanvasBitmap(ScriptDocument document, double width, double
             line.LineTo(x + w, y + h);
             line.LineTo(x, y);
             line.Close();
-            StrokePath(line.Transformed(State.Transform));
+            StrokePath(line);
             return;
         }
 
@@ -1043,8 +1051,8 @@ internal sealed class CanvasBitmap(ScriptDocument document, double width, double
     {
         // Clearing all of the drawing, which is what animation loops do, starts over and keeps nothing to composite.
         var m = State.Transform;
-        var corners = new[] { PathData.T(m, x, y), PathData.T(m, x + w, y), PathData.T(m, x, y + h), PathData.T(m, x + w, y + h) };
-        if (m.M12 == 0 && m.M21 == 0 && State.Clips.Count == 0
+        var corners = new[] { m.Apply(x, y), m.Apply(x + w, y), m.Apply(x, y + h), m.Apply(x + w, y + h) };
+        if (m.B == 0 && m.C == 0 && State.Clips.Count == 0
             && corners.Min(c => c.X) <= 0 && corners.Min(c => c.Y) <= 0 && corners.Max(c => c.X) >= Width && corners.Max(c => c.Y) >= Height)
         {
             ClearDrawing();
@@ -1059,7 +1067,8 @@ internal sealed class CanvasBitmap(ScriptDocument document, double width, double
         RecordWith(eraser, "destination-out", canvas => canvas.DrawRectangle(new SolidBrush(PaintColor.Black), Math.Min(x, x + w), Math.Min(y, y + h), Math.Abs(w), Math.Abs(h)));
     }
 
-    public void ClipPath(PathData path, FillMode rule) => State.Clips = [.. State.Clips, (path.Clone(), rule)];
+    /// <summary>Clips to a path in the space the transform makes: a clip is kept where it lies on the canvas, whatever the transform becomes.</summary>
+    public void ClipPath(PathData path, FillMode rule) => State.Clips = [.. State.Clips, (path.Transformed(State.Transform), rule)];
 
     public void DrawImage(Image image, Rect source, Rect destination)
     {
@@ -1181,7 +1190,24 @@ internal sealed class CanvasBitmap(ScriptDocument document, double width, double
     }
 
     /// <summary>The state's transform moved by a matrix applied first (what <c>transform()</c> and <c>translate()</c> do).</summary>
-    public void Concat(Matrix3x2 matrix) => State.Transform = matrix * State.Transform;
+    public void Concat(Affine2D matrix) => SetTransform(matrix * State.Transform);
+
+    /// <summary>
+    /// Changes the transform. The path being built is kept in the space the transform makes, so it moves with it: where it lies on the canvas is the same before and after.
+    /// A transform that cannot be undone leaves the path as it is.
+    /// </summary>
+    public void SetTransform(Affine2D matrix)
+    {
+        var old = State.Transform;
+        State.Transform = matrix;
+        RebasePath(old, matrix);
+    }
+
+    private void RebasePath(Affine2D from, Affine2D to)
+    {
+        if (from != to && to.TryInvert(out var inverse) && from.IsInvertible && Path.Segments.Count > 0)
+            Path = Path.Transformed(from * inverse);
+    }
 
     public static string ColorText(PaintColor color) =>
         color.A == 255

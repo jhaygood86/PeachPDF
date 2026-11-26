@@ -199,16 +199,16 @@ internal static class CanvasPixelExtensions
     public static bool StrokeContains(this CanvasBitmap bitmap, PathData path, double x, double y)
     {
         var transform = bitmap.State.Transform;
-        if (!Matrix3x2.Invert(transform, out var inverse))
+        if (!transform.TryInvert(out var inverse))
             return false;
 
-        var user = path.PrunedForStroke().Transformed(inverse);
+        var user = path.PrunedForStroke();
         if (user.Segments.Count == 0)
             return false;
 
-        var scale = Math.Sqrt(Math.Abs(transform.GetDeterminant()));
-        var tolerance = scale > 0 ? 0.1 / scale : 0.1;
-        var point = PathData.T(inverse, x, y);
+        var scale = Math.Sqrt(Math.Abs(transform.A * transform.D - transform.B * transform.C));
+        var tolerance = scale > 0 && double.IsFinite(scale) ? 0.1 / scale : 0.1;
+        var point = inverse.Apply(x, y);
 
         var context = new RasterRenderContext();
         using var measuring = context.CreateCanvas(1, 1);

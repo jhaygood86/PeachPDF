@@ -122,4 +122,31 @@ public class CanvasGeometryTests
 
         Assert.Equal(["0 255"], log);
     }
+
+    [Fact]
+    public async Task ThePathBeingBuilt_StaysWhereItLiesOnTheCanvasWhenTheTransformChanges()
+    {
+        var log = await LogAsync("""
+            g.beginPath(); g.rect(10, 10, 10, 10);
+            g.translate(100, 100); g.scale(2, 2);
+            var moved = [g.isPointInPath(15, 15), g.isPointInPath(115, 115)];
+            g.save(); g.setTransform(1, 0, 0, 1, 0, 0); g.restore();
+            g.fillStyle = '#f00'; g.setTransform(1, 0, 0, 1, 0, 0); g.fill();
+            Log.info(moved.join(' ') + ' ' + g.getImageData(15, 15, 1, 1).data[3] + ' ' + g.getImageData(115, 115, 1, 1).data[3]);
+            """);
+
+        Assert.Equal(["true false 255 0"], log);
+    }
+
+    [Fact]
+    public async Task AScaleTooLargeForASingleFloat_StillLetsAPointBeFoundInAPath()
+    {
+        var log = await LogAsync("""
+            g.scale(Number.MAX_VALUE, Number.MAX_VALUE);
+            g.beginPath(); g.rect(-10, -10, 20, 20);
+            Log.info([g.isPointInPath(0, 0, 'nonzero'), g.isPointInPath(0, 0, 'evenodd')].join(' '));
+            """);
+
+        Assert.Equal(["true true"], log);
+    }
 }

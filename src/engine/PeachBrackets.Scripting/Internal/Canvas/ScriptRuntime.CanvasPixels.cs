@@ -66,7 +66,7 @@ internal sealed partial class ScriptRuntime
             PathData path = B(self).Path;
             if (Js.Arg(args, 0) is Path2DObject own)
             {
-                path = own.Path.Transformed(B(self).State.Transform);
+                path = own.Path;
                 index = 1;
             }
 
@@ -83,10 +83,12 @@ internal sealed partial class ScriptRuntime
                     throw TypeError($"The provided value '{name}' is not a valid enum value of type CanvasFillRule.");
             }
 
-            if (!double.IsFinite(x) || !double.IsFinite(y))
+            if (!double.IsFinite(x) || !double.IsFinite(y) || !B(self).State.Transform.TryInvert(out var inverse))
                 return JsBoolean.False;
 
-            return Js.Bool(path.Contains(x, y, rule));
+            // The point is on the canvas; the path is in the space the transform makes.
+            var (ux, uy) = inverse.Apply(x, y);
+            return Js.Bool(path.Contains(ux, uy, rule));
         });
         Js.StrictMethod(Engine, p, "isPointInStroke", 2, (self, args) =>
         {
@@ -94,7 +96,7 @@ internal sealed partial class ScriptRuntime
             PathData path = B(self).Path;
             if (Js.Arg(args, 0) is Path2DObject own)
             {
-                path = own.Path.Transformed(B(self).State.Transform);
+                path = own.Path;
                 index = 1;
             }
 

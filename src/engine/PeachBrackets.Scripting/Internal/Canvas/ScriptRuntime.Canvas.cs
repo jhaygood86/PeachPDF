@@ -143,7 +143,8 @@ internal sealed partial class ScriptRuntime
         InstallCanvasFilter();
         InstallCanvasElement();
         InstallContextState();
-        InstallPathMethods(ContextPrototype, self => (Cx(self).Bitmap.Path, Cx(self).Bitmap.State.Transform));
+        // The path a context builds is kept in the space its transform makes, so what is added to it is not moved by the transform.
+        InstallPathMethods(ContextPrototype, self => (Cx(self).Bitmap.Path, Matrix3x2.Identity));
         InstallPathMethods(Path2DPrototype, self => (((Path2DObject)self).Path, Matrix3x2.Identity));
         InstallContextDrawing();
 
@@ -164,7 +165,7 @@ internal sealed partial class ScriptRuntime
         {
             if (Js.Arg(args, 0) is Path2DObject other)
             {
-                var matrix = args.Length > 1 && args[1] is ObjectInstance init ? MatrixFrom(init) : Matrix3x2.Identity;
+                var matrix = args.Length > 1 && args[1] is ObjectInstance init ? MatrixFrom(init) : Affine2D.Identity;
                 ((Path2DObject)self).Path.Append(other.Path.Transformed(matrix));
             }
 
@@ -187,10 +188,10 @@ internal sealed partial class ScriptRuntime
         });
     }
 
-    private static Matrix3x2 MatrixFrom(ObjectInstance init)
+    private static Affine2D MatrixFrom(ObjectInstance init)
     {
         double Get(string name, double fallback) => init.HasProperty(name) && !init.Get(name).IsUndefined() ? TypeConverter.ToNumber(init.Get(name)) : fallback;
-        return new Matrix3x2((float)Get("a", 1), (float)Get("b", 0), (float)Get("c", 0), (float)Get("d", 1), (float)Get("e", 0), (float)Get("f", 0));
+        return new Affine2D(Get("a", 1), Get("b", 0), Get("c", 0), Get("d", 1), Get("e", 0), Get("f", 0));
     }
 
     // ---- the element
@@ -361,23 +362,23 @@ internal sealed partial class ScriptRuntime
 
         Js.StrictMethod(Engine, p, "scale", 2, (self, args) =>
         {
-            if (Finite(args, 2)) Cx(self).Bitmap.Concat(Matrix3x2.CreateScale((float)Num(args, 0), (float)Num(args, 1)));
+            if (Finite(args, 2)) Cx(self).Bitmap.Concat(Affine2D.CreateScale(Num(args, 0), Num(args, 1)));
             return JsValue.Undefined;
         });
         Js.StrictMethod(Engine, p, "rotate", 1, (self, args) =>
         {
-            if (Finite(args, 1)) Cx(self).Bitmap.Concat(Matrix3x2.CreateRotation((float)Num(args, 0)));
+            if (Finite(args, 1)) Cx(self).Bitmap.Concat(Affine2D.CreateRotation(Num(args, 0)));
             return JsValue.Undefined;
         });
         Js.StrictMethod(Engine, p, "translate", 2, (self, args) =>
         {
-            if (Finite(args, 2)) Cx(self).Bitmap.Concat(Matrix3x2.CreateTranslation((float)Num(args, 0), (float)Num(args, 1)));
+            if (Finite(args, 2)) Cx(self).Bitmap.Concat(Affine2D.CreateTranslation(Num(args, 0), Num(args, 1)));
             return JsValue.Undefined;
         });
         Js.StrictMethod(Engine, p, "transform", 6, (self, args) =>
         {
             if (Finite(args, 6))
-                Cx(self).Bitmap.Concat(new Matrix3x2((float)Num(args, 0), (float)Num(args, 1), (float)Num(args, 2), (float)Num(args, 3), (float)Num(args, 4), (float)Num(args, 5)));
+                Cx(self).Bitmap.Concat(new Affine2D(Num(args, 0), Num(args, 1), Num(args, 2), Num(args, 3), Num(args, 4), Num(args, 5)));
             return JsValue.Undefined;
         });
         // Two overloads: six numbers, or an optional matrix (none, or an object). Anything between is the six-number form with arguments missing.
@@ -387,18 +388,18 @@ internal sealed partial class ScriptRuntime
                 throw TypeError($"Failed to execute 'setTransform': 6 arguments required, but only {args.Length} present.");
 
             if (args.Length == 0)
-                S(self).Transform = Matrix3x2.Identity;
+                Cx(self).Bitmap.SetTransform(Affine2D.Identity);
             else if (args[0] is ObjectInstance init)
-                S(self).Transform = MatrixFrom(init);
+                Cx(self).Bitmap.SetTransform(MatrixFrom(init));
             else if (Finite(args, 6))
-                S(self).Transform = new Matrix3x2((float)Num(args, 0), (float)Num(args, 1), (float)Num(args, 2), (float)Num(args, 3), (float)Num(args, 4), (float)Num(args, 5));
+                Cx(self).Bitmap.SetTransform(new Affine2D(Num(args, 0), Num(args, 1), Num(args, 2), Num(args, 3), Num(args, 4), Num(args, 5)));
             return JsValue.Undefined;
         });
-        Js.StrictMethod(Engine, p, "resetTransform", 0, (self, _) => { S(self).Transform = Matrix3x2.Identity; return JsValue.Undefined; });
+        Js.StrictMethod(Engine, p, "resetTransform", 0, (self, _) => { Cx(self).Bitmap.SetTransform(Affine2D.Identity); return JsValue.Undefined; });
         Js.StrictMethod(Engine, p, "getTransform", 0, (self, _) =>
         {
             var m = S(self).Transform;
-            return Engine.Evaluate("(function (a) { return new DOMMatrix(a); })").Call(JsValue.Undefined, [Js.Array(Engine, [Js.Num(m.M11), Js.Num(m.M12), Js.Num(m.M21), Js.Num(m.M22), Js.Num(m.M31), Js.Num(m.M32)])]);
+            return Engine.Evaluate("(function (a) { return new DOMMatrix(a); })").Call(JsValue.Undefined, [Js.Array(Engine, [Js.Num(m.A), Js.Num(m.B), Js.Num(m.C), Js.Num(m.D), Js.Num(m.E), Js.Num(m.F)])]);
         });
 
         Js.Accessor(Engine, p, "fillStyle", self => StyleValue(S(self).FillStyle), (self, value) => S(self).FillStyle = StyleFrom(value, S(self).FillStyle, Cx(self).Canvas));
@@ -839,7 +840,7 @@ internal sealed partial class ScriptRuntime
             var index = 0;
             if (Js.Arg(args, 0) is Path2DObject own)
             {
-                path = own.Path.Transformed(B(self).State.Transform);
+                path = own.Path;
                 index = 1;
             }
 
@@ -855,7 +856,7 @@ internal sealed partial class ScriptRuntime
         });
         Js.StrictMethod(Engine, p, "stroke", 0, (self, args) =>
         {
-            var path = Js.Arg(args, 0) is Path2DObject own ? own.Path.Transformed(B(self).State.Transform) : B(self).Path;
+            var path = Js.Arg(args, 0) is Path2DObject own ? own.Path : B(self).Path;
             B(self).StrokePath(path);
             return JsValue.Undefined;
         });
