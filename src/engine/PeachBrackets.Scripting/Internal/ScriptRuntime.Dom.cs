@@ -483,8 +483,8 @@ internal sealed partial class ScriptRuntime
             return data;
         });
 
-        Js.Method(Engine, p, "getBoundingClientRect", 0, (self, _) => RectObject(LayoutOf(Sn(self))));
-        Js.Method(Engine, p, "getClientRects", 0, (self, _) => Js.Array(Engine, [RectObject(LayoutOf(Sn(self)))]));
+        Js.Method(Engine, p, "getBoundingClientRect", 0, (self, _) => RectObject(PageRectOf(Sn(self))));
+        Js.Method(Engine, p, "getClientRects", 0, (self, _) => Js.Array(Engine, [RectObject(PageRectOf(Sn(self)))]));
         Js.Accessor(Engine, p, "offsetWidth", self => Js.Num(Math.Round(LayoutOf(Sn(self)).Width)));
         Js.Accessor(Engine, p, "offsetHeight", self => Js.Num(Math.Round(LayoutOf(Sn(self)).Height)));
         Js.Accessor(Engine, p, "offsetLeft", self => Js.Num(Math.Round(LayoutOf(Sn(self)).X)));
@@ -663,7 +663,9 @@ internal sealed partial class ScriptRuntime
         Js.Method(Engine, p, "importNode", 1, (self, args) => ImportNode(D(self), NodeArg(args, 0), TypeConverter.ToBoolean(Js.Arg(args, 1))));
         Js.Method(Engine, p, "adoptNode", 1, (self, args) => AdoptNode(D(self), NodeArg(args, 0)));
         Js.Method(Engine, p, "hasFocus", 0, (self, _) => JsBoolean.True);
-        Js.Method(Engine, p, "elementFromPoint", 2, (self, _) => WrapOrNull(D(self).Body));
+        Js.Method(Engine, p, "elementFromPoint", 2, (self, args) =>
+            Document.CanMeasure ? WrapOrNull(ElementsAtPoint(Num(args, 0), Num(args, 1)).FirstOrDefault()) : WrapOrNull(D(self).Body));
+        Js.Method(Engine, p, "elementsFromPoint", 2, (self, args) => Js.Array(Engine, ElementsAtPoint(Num(args, 0), Num(args, 1)).Select(e => (JsValue)Wrap(e)).ToArray()));
         Js.Method(Engine, p, "createEvent", 1, (self, args) => CreateLegacyEvent(Js.AsText(Js.Arg(args, 0))));
         Js.Method(Engine, p, "write", 1, (self, args) =>
         {

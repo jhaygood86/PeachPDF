@@ -385,4 +385,24 @@ public class HtmlInCanvasTests
 
         Assert.Equal(["InvalidStateError,InvalidStateError,InvalidStateError false 1 true 25"], log);
     }
+
+    [Fact]
+    public async Task AnElementWithGeometry_IsFoundWhereTheCanvasPutIt_AboveTheCanvas_AndIsClosedByClose()
+    {
+        var log = await LogAsync("", Setup + """
+            paint().then(function () {
+                kg.drawElementImage(kid, 0, 0);
+                k.updateElementGeometry(kid, { canvasTransform: new DOMMatrix().translate(10, 10) });
+                var box = k.getBoundingClientRect();
+                var r = kid.getBoundingClientRect();
+                var hit = document.elementsFromPoint(box.left + 15, box.top + 15).slice(0, 2).map(function (e) { return e.id || e.tagName; }).join('/');
+                var miss = document.elementFromPoint(box.left + 55, box.top + 35).id;
+                var image = k.captureElementImage(kid);
+                image.close();
+                Log.info([r.left - box.left, r.top - box.top, r.width, r.height, hit, miss, name(function () { kg.drawElementImage(image, 0, 0); })].join(' '));
+            });
+            """);
+
+        Assert.Equal(["10 10 30 20 kid/k k InvalidStateError"], log);
+    }
 }

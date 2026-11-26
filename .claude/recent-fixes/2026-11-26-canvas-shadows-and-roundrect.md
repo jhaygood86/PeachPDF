@@ -150,3 +150,12 @@
 - Also `Node.moveBefore` (an `insertBefore` with the checks of a move).
 - html-canvas 3926/5028 subtests; floor 3926. Left in `manual/draw-element-image`: hit testing (`elementsFromPoint`, `elementFromPoint` with the geometry a canvas gave an element), `getBoundingClientRect` following the canvas transform, nested canvases and
   shadow DOM post-tree paint order, iframes, `ElementImage.close`, the `canvas pixel grid` size of an element image, the privacy tests (a drawn element ignores cross-origin images, `:visited` colors and the like), OffscreenCanvas and workers, `dialog` top layer.
+
+## Phase 8, hit testing and transforms for html-in-canvas
+- `HtmlCanvasState.Transforms` holds the matrix a drawable child has on its canvas (set by `updateElementGeometry`, or by `drawElementImage` as the draw's placement composed with the context's transform; `preserveElementGeometry` keeps the old one) and
+  `HitOrder` the order elements were drawn or updated in. `getBoundingClientRect`/`getClientRects` answer through `PageRectOf` (canvas origin + the bounding box of the transformed layout rect), so a child follows its canvas transform.
+- `elementFromPoint`/`elementsFromPoint` are real: the page's elements in reverse pre-order, skipping inert, `display: none`, `pointer-events: none` and hidden ones, and a canvas's `HitOrder` (last drawn first) is inserted above the canvas itself.
+  Canvas descendants are found only through that list. The transformed rectangle is the bounding box, so a rotated child is hit by its box, not its outline.
+- `ElementImage.close()` (a closed image is an InvalidStateError to draw or size); `OffscreenCanvas` gets `getElementImageDefaultSize`/`updateElementGeometry`/`clearElementGeometry` and draws an `ElementImage` of a page canvas.
+- A trap: inside a lambda whose first parameter is `_`, `_ = Foo()` assigns the parameter and fails to compile with a baffling conversion error; name the variable.
+- html-canvas 3968/5028 subtests; floor 3958. Left: `clip` in the geometry, object-fit hit tests, nested canvases, iframes, the pixel grid size, the privacy tests, workers, `dialog` top layer.

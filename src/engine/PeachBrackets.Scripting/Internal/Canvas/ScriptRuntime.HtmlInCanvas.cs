@@ -4,6 +4,7 @@ using Jint.Native.Object;
 using Jint.Runtime.Descriptors;
 using Jint.Runtime;
 using PeachBrackets.ScriptHosting;
+using PeachBrackets.Scripting.Internal.Canvas;
 using PeachDrawing.Core;
 using System;
 using System.Collections.Generic;
@@ -31,6 +32,9 @@ internal sealed class ElementImageObject : ObjectInstance
     public double Width { get; }
 
     public double Height { get; }
+
+    /// <summary>Whether <c>close()</c> was called: a closed image can no longer be drawn or asked its size.</summary>
+    public bool Closed { get; set; }
 }
 
 // HTML in canvas: a canvas with content="drawable" lays out its children, the ones marked drawable are drawn onto its 2D context with drawElementImage, and the canvas says when
@@ -55,6 +59,9 @@ internal sealed partial class ScriptRuntime
 
         /// <summary>The transform each element was given (updateElementGeometry or drawElementImage), as the 16 numbers of a DOMMatrix and whether it is 2D.</summary>
         public Dictionary<ScriptNode, (double[] Values, bool Is2D)> Transforms { get; } = [];
+
+        /// <summary>The elements that can be hit, the one drawn or updated last at the end (so the one on top).</summary>
+        public List<ScriptNode> HitOrder { get; } = [];
     }
 
     private readonly Dictionary<ScriptNode, HtmlCanvasState> _htmlCanvases = [];
@@ -215,7 +222,7 @@ internal sealed partial class ScriptRuntime
     {
         image = source as ElementImageObject;
         if (image is not null)
-            return image.Element;
+            return image.Closed ? throw DomError("InvalidStateError", "The ElementImage is closed.") : image.Element;
 
         return source is NodeObject { Node: { Kind: ScriptNodeKind.Element } element } ? element : throw TypeError("The argument is not an element or an ElementImage.");
     }
@@ -244,11 +251,138 @@ internal sealed partial class ScriptRuntime
         Engine.Evaluate("(function (a) { return new DOMMatrix(a); })").Call(JsValue.Undefined,
             [Js.Array(Engine, (transform.Is2D ? [transform.Values[0], transform.Values[1], transform.Values[4], transform.Values[5], transform.Values[12], transform.Values[13]] : transform.Values).Select(Js.Num).ToArray())]);
 
+    // An element drawn, or given its geometry, is where a pointer can find it, on top of what was there before (unless asked to leave the order).
+    private static void Touch(HtmlCanvasState state, ScriptNode element, bool preserveOrder)
+    {
+        if (preserveOrder && state.HitOrder.Contains(element))
+            return;
+
+        state.HitOrder.Remove(element);
+        state.HitOrder.Add(element);
+    }
+
+    private static (double X, double Y, double Width, double Height) Transformed((double[] Values, bool Is2D) transform, double width, double height)
+    {
+        var v = transform.Values;
+        double A = v[0], B = v[1], C = v[4], D = v[5], E = v[12], F = v[13];
+        double left = double.MaxValue, top = double.MaxValue, right = double.MinValue, bottom = double.MinValue;
+        foreach (var (x, y) in new[] { (0.0, 0.0), (width, 0.0), (0.0, height), (width, height) })
+        {
+            var (tx, ty) = (A * x + C * y + E, B * x + D * y + F);
+            left = Math.Min(left, tx); right = Math.Max(right, tx);
+            top = Math.Min(top, ty); bottom = Math.Max(bottom, ty);
+        }
+
+        return (left, top, right - left, bottom - top);
+    }
+
+    private ScriptNode? DrawableCanvasOf(ScriptNode element)
+    {
+        for (var current = element.Parent; current is not null; current = current.Parent)
+        {
+            if (IsContentDrawable(current))
+                return current;
+        }
+
+        return null;
+    }
+
+    // An element's rectangle on the page, in CSS pixels: where the canvas it is a drawable child of has put it (the canvas's origin and the transform it was given), or where it is laid out.
+    private (double X, double Y, double Width, double Height) PageRectOf(ScriptNode element)
+    {
+        var layout = LayoutOf(element);
+        if (DrawableCanvasOf(element) is { } canvas && _htmlCanvases.TryGetValue(canvas, out var state) && state.Transforms.TryGetValue(element, out var transform)
+            && Document.GetLayoutBox(canvas) is { } origin)
+        {
+            var (x, y, width, height) = Transformed(transform, layout.Width, layout.Height);
+            return (origin.X + x, origin.Y + y, width, height);
+        }
+
+        return layout;
+    }
+
+    private bool IsHittable(ScriptNode element)
+    {
+        if (element.Kind != ScriptNodeKind.Element)
+            return false;
+
+        for (var current = element; current is not null && current.Kind == ScriptNodeKind.Element; current = current.Parent)
+        {
+            if (current.HasAttribute("inert") || Document.GetComputedValue(current, "display") == "none")
+                return false;
+        }
+
+        return Document.GetComputedValue(element, "pointer-events") != "none" && Document.GetComputedValue(element, "visibility") is not ("hidden" or "collapse");
+    }
+
+    /// <summary>The elements under a point (CSS pixels from the top left of the page), the top one first. What a canvas drew or gave geometry to is found by where it put it, in the reverse order it did, above the canvas.</summary>
+    private List<ScriptNode> ElementsAtPoint(double x, double y)
+    {
+        var result = new List<ScriptNode>();
+        if (!Document.CanMeasure)
+            return result;
+
+        var all = Document.QuerySelectorAll("*").ToList();
+        for (var i = all.Count - 1; i >= 0; i--)
+        {
+            var element = all[i];
+            if (DrawableCanvasOf(element) is not null || !IsHittable(element))
+                continue;
+
+            var (left, top, width, height) = LayoutOf(element);
+            var isRoot = ReferenceEquals(element, Document.DocumentElement);
+            if (!isRoot && !(x >= left && x < left + width && y >= top && y < top + height))
+                continue;
+
+            if (IsContentDrawable(element) && _htmlCanvases.TryGetValue(element, out var state))
+            {
+                for (var h = state.HitOrder.Count - 1; h >= 0; h--)
+                {
+                    var candidate = state.HitOrder[h];
+                    if (!IsHittable(candidate) || !state.Transforms.ContainsKey(candidate) && !state.Painted.ContainsKey(candidate))
+                        continue;
+
+                    var (cx, cy, cw, ch) = PageRectOf(candidate);
+                    if (x >= cx && x < cx + cw && y >= cy && y < cy + ch)
+                        result.Add(candidate);
+                }
+            }
+
+            result.Add(element);
+        }
+
+        return result;
+    }
+
+    // updateElementGeometry(element or ElementImage, {canvasTransform, preserveHitTestOrder}).
+    private void ApplyGeometry(ScriptNode canvas, JsValue source, JsValue options)
+    {
+        var (state, element) = RequireDrawableChild(canvas, source, needsPaint: false);
+        var preserveOrder = options is ObjectInstance order && order.Get("preserveHitTestOrder") is { } keep && !keep.IsUndefined() && TypeConverter.ToBoolean(keep);
+        if (!state.Transforms.ContainsKey(element))
+            state.Transforms[element] = (Identity16, true);
+
+        Touch(state, element, preserveOrder);
+        if (options is ObjectInstance init && init.Get("canvasTransform") is ObjectInstance matrix)
+        {
+            var values = Engine.Evaluate("(function (m) { return Array.from(m.toFloat64Array()); })").Call(JsValue.Undefined, [matrix]);
+            var list = (ObjectInstance)values;
+            var numbers = Enumerable.Range(0, (int)TypeConverter.ToNumber(list.Get("length"))).Select(i => TypeConverter.ToNumber(list.Get(i.ToString(CultureInfo.InvariantCulture)))).ToArray();
+            if (numbers.Length == 16)
+                state.Transforms[element] = (numbers, TypeConverter.ToBoolean(matrix.Get("is2D")));
+        }
+    }
+
     private void InstallHtmlInCanvas()
     {
         ElementImagePrototype = new JsObject(Engine) { Prototype = Engine.Intrinsics.Object.PrototypeObject };
         Tag(ElementImagePrototype, "ElementImage");
         Define(Engine.Global, "ElementImage", Js.Constructor(Engine, "ElementImage", ElementImagePrototype, 0, (_, _, _) => throw TypeError("Illegal constructor")));
+        Js.StrictMethod(Engine, ElementImagePrototype, "close", 0, (self, _) =>
+        {
+            (self as ElementImageObject ?? throw TypeError("Illegal invocation")).Closed = true;
+            return JsValue.Undefined;
+        });
 
         CanvasPaintEventPrototype = new JsObject(Engine) { Prototype = EventPrototype };
         Tag(CanvasPaintEventPrototype, "CanvasPaintEvent");
@@ -305,21 +439,39 @@ internal sealed partial class ScriptRuntime
         });
         Js.StrictMethod(Engine, canvasElement, "updateElementGeometry", 1, (self, args) =>
         {
-            var (state, element) = RequireDrawableChild(Sn(self), Js.Arg(args, 0), needsPaint: false);
-            if (Js.Arg(args, 1) is ObjectInstance init && init.Get("canvasTransform") is ObjectInstance matrix)
-            {
-                var values = Engine.Evaluate("(function (m) { return Array.from(m.toFloat64Array()); })").Call(JsValue.Undefined, [matrix]);
-                var numbers = ((ObjectInstance)values).GetOwnPropertyKeys(Types.String).Select(k => TypeConverter.ToNumber(((ObjectInstance)values).Get(k))).ToArray();
-                if (numbers.Length == 16)
-                    state.Transforms[element] = (numbers, TypeConverter.ToBoolean(matrix.Get("is2D")));
-            }
-
+            ApplyGeometry(Sn(self), Js.Arg(args, 0), Js.Arg(args, 1));
             return JsValue.Undefined;
         });
         Js.StrictMethod(Engine, canvasElement, "clearElementGeometry", 1, (self, args) =>
         {
             var (state, element) = RequireDrawableChild(Sn(self), Js.Arg(args, 0), needsPaint: false);
             state.Transforms.Remove(element);
+            state.HitOrder.Remove(element);
+            return JsValue.Undefined;
+        });
+
+        // An OffscreenCanvas works with the ElementImage of a canvas of the page: its size, and the geometry (and so the place in the hit testing order) of the element it came from.
+        Js.StrictMethod(Engine, OffscreenPrototype, "getElementImageDefaultSize", 1, (_, args) =>
+        {
+            var image = Js.Arg(args, 0) as ElementImageObject ?? throw DomError("InvalidStateError", "An OffscreenCanvas answers for an ElementImage only.");
+            ElementOf(image, out ElementImageObject? unused);
+            var size = Js.NewObject(Engine);
+            size.FastSetProperty("width", new PropertyDescriptor(Js.Num(image.Width), PropertyFlag.ConfigurableEnumerableWritable));
+            size.FastSetProperty("height", new PropertyDescriptor(Js.Num(image.Height), PropertyFlag.ConfigurableEnumerableWritable));
+            return size;
+        });
+        Js.StrictMethod(Engine, OffscreenPrototype, "updateElementGeometry", 1, (_, args) =>
+        {
+            var image = Js.Arg(args, 0) as ElementImageObject ?? throw DomError("InvalidStateError", "An OffscreenCanvas updates the geometry of an ElementImage only.");
+            ApplyGeometry(image.Canvas, image, Js.Arg(args, 1));
+            return JsValue.Undefined;
+        });
+        Js.StrictMethod(Engine, OffscreenPrototype, "clearElementGeometry", 1, (_, args) =>
+        {
+            var image = Js.Arg(args, 0) as ElementImageObject ?? throw DomError("InvalidStateError", "An OffscreenCanvas clears the geometry of an ElementImage only.");
+            var (state, element) = RequireDrawableChild(image.Canvas, image, needsPaint: false);
+            state.Transforms.Remove(element);
+            state.HitOrder.Remove(element);
             return JsValue.Undefined;
         });
 
@@ -328,6 +480,16 @@ internal sealed partial class ScriptRuntime
         {
             var context = Cx(self);
             var canvas = context.Canvas;
+
+            // An OffscreenCanvas draws the ElementImage of a canvas of the page (an element is only for the canvas it is a child of).
+            if (ReferenceEquals(context.Prototype, OffscreenContextPrototype))
+            {
+                if (Js.Arg(args, 0) is not ElementImageObject)
+                    throw DomError("InvalidStateError", "An OffscreenCanvas draws only an ElementImage.");
+
+                canvas = ((ElementImageObject)Js.Arg(args, 0)).Canvas;
+            }
+
             var (state, element) = RequireDrawableChild(canvas, Js.Arg(args, 0), needsPaint: true);
             var painted = Js.Arg(args, 0) is ElementImageObject captured ? (captured.Width, captured.Height) : state.Painted[element];
             // A trailing dictionary {preserveElementGeometry} says whether the element keeps the transform it has instead of getting the one this draw makes.
@@ -338,8 +500,8 @@ internal sealed partial class ScriptRuntime
                 args = args[..^1];
             }
 
-            if (args.Length is not (3 or 5 or 9))
-                throw TypeError("drawElementImage takes 3, 5 or 9 arguments.");
+            if (args.Length is not (3 or 5 or 7 or 9))
+                throw TypeError("drawElementImage takes 3, 5, 7 or 9 arguments.");
 
             var numbers = args.Skip(1).Select(TypeConverter.ToNumber).ToArray();
             double sx = 0, sy = 0, sw = painted.Item1, sh = painted.Item2, dx, dy, dw, dh;
@@ -347,6 +509,8 @@ internal sealed partial class ScriptRuntime
                 (dx, dy, dw, dh) = (numbers[0], numbers[1], painted.Item1, painted.Item2);
             else if (numbers.Length == 4)
                 (dx, dy, dw, dh) = (numbers[0], numbers[1], numbers[2], numbers[3]);
+            else if (numbers.Length == 6)
+                (sx, sy, sw, sh, dx, dy, dw, dh) = (numbers[0], numbers[1], numbers[2], numbers[3], numbers[4], numbers[5], numbers[2], numbers[3]);
             else
                 (sx, sy, sw, sh, dx, dy, dw, dh) = (numbers[0], numbers[1], numbers[2], numbers[3], numbers[4], numbers[5], numbers[6], numbers[7]);
 
@@ -361,8 +525,14 @@ internal sealed partial class ScriptRuntime
 
             var scaleX = dw / sw;
             var scaleY = dh / sh;
+            Touch(state, element, preserveOrder: false);
             if (!preserve)
-                state.Transforms[element] = ([scaleX, 0, 0, 0, 0, scaleY, 0, 0, 0, 0, 1, 0, dx - sx * scaleX, dy - sy * scaleY, 0, 1], true);
+            {
+                // The element's own space to the canvas: placed where it was drawn, then carried by the context's transform.
+                var drawn = new Affine2D(scaleX, 0, 0, scaleY, dx - sx * scaleX, dy - sy * scaleY) * context.Bitmap.State.Transform;
+                state.Transforms[element] = ([drawn.A, drawn.B, 0, 0, drawn.C, drawn.D, 0, 0, 0, 0, 1, 0, drawn.E, drawn.F, 0, 1], true);
+            }
+
 
             // A zero-size element has nothing to show.
             if (!(painted.Item1 > 0) || !(painted.Item2 > 0))
