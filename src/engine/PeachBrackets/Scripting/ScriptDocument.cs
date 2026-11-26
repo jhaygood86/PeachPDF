@@ -363,6 +363,54 @@ public sealed class ScriptDocument
         }
     }
 
+    /// <summary>Whether text is a CSS <c>src</c> list a font face can be loaded from (<c>url(...)</c> or <c>local(...)</c>, with their formats).</summary>
+    /// <param name="source">the text</param>
+    public bool IsFontSource(string source) => Html.Parse.CssValueParser.GetFontFacePropertyValue(source).Any(c => c.Url is not null || c.Local is not null);
+
+    /// <summary>Loads a font a script made (<c>new FontFace(...)</c>) and registers it, so the page's text and canvases can use it.</summary>
+    /// <param name="family">the family name the font is known by</param>
+    /// <param name="source">the CSS <c>src</c> (<c>url(...)</c>, <c>local(...)</c>), or null when <paramref name="data"/> is the font</param>
+    /// <param name="data">the font file's bytes, or null</param>
+    /// <param name="weight">the <c>font-weight</c> descriptor, or null</param>
+    /// <param name="style">the <c>font-style</c> descriptor, or null</param>
+    /// <param name="stretch">the <c>font-stretch</c> descriptor, or null</param>
+    /// <param name="unicodeRange">the <c>unicode-range</c> descriptor, or null</param>
+    /// <returns>whether a font was loaded</returns>
+    public async ValueTask<bool> LoadFontFaceAsync(string family, string? source, byte[]? data, string? weight, string? style, string? stretch, string? unicodeRange)
+    {
+        try
+        {
+            var context = _container.RenderContext;
+            if (data is not null)
+            {
+                // The bytes go in as a data address, which the context reads like any other source.
+                return await context.AddFontFamilyFromUrl(family, "data:font/ttf;base64," + Convert.ToBase64String(data), null, BaseUri,
+                    Html.Utils.FontFaceDescriptorResolver.Resolve(weight, style, stretch), Html.Utils.UnicodeRangeParser.Parse(unicodeRange));
+            }
+
+            var descriptors = Html.Utils.FontFaceDescriptorResolver.Resolve(weight, style, stretch);
+            var ranges = Html.Utils.UnicodeRangeParser.Parse(unicodeRange);
+            foreach (var candidate in Html.Parse.CssValueParser.GetFontFacePropertyValue(source ?? ""))
+            {
+                var loaded = false;
+                if (candidate.Local is not null)
+                    loaded = await context.AddLocalFontFamily(family, candidate.Local, descriptors, ranges);
+
+                if (!loaded && candidate.Url is not null)
+                    loaded = await context.AddFontFamilyFromUrl(family, candidate.Url, candidate.Format, BaseUri, descriptors, ranges);
+
+                if (loaded)
+                    return true;
+            }
+
+            return false;
+        }
+        catch (Exception ex) when (ex is not SynchronousOnlyViolationException and not OutOfMemoryException)
+        {
+            return false;
+        }
+    }
+
     /// <summary>The elements with the given name, in document order. <c>*</c> names every element.</summary>
     /// <param name="tagName">the element name, matched without regard to case</param>
     /// <returns>the elements</returns>

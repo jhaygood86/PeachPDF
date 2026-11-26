@@ -142,6 +142,7 @@ internal sealed partial class ScriptRuntime
         Tag(PatternPrototype, "CanvasPattern");
 
         InstallCanvasFilter();
+        _ = FontsObject();
         InstallCanvasElement();
         InstallContextState();
         // The path a context builds is kept in the space its transform makes, so what is added to it is not moved by the transform.

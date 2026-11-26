@@ -28,8 +28,11 @@ namespace PeachDrawing.Core
         private readonly LineBox? _line;
         private readonly int[] _graphemes;
 
-        private TextRunLayout(string text, ParagraphLayout layout, double fontAscent, double fontDescent)
+        private readonly bool _rightToLeft;
+
+        private TextRunLayout(string text, ParagraphLayout layout, double fontAscent, double fontDescent, bool rightToLeft)
         {
+            _rightToLeft = rightToLeft;
             Text = text;
             _layout = layout;
             _line = layout.Lines.Count > 0 ? layout.Lines[0] : null;
@@ -76,7 +79,7 @@ namespace PeachDrawing.Core
             builder.SetStyle(new ParagraphStyle { Direction = rightToLeft ? BaseDirection.Rtl : BaseDirection.Ltr, NoWrap = true });
             builder.AddText(text);
             var layout = builder.Build().Layout(1e9);
-            return new TextRunLayout(text, layout, typeface.Metrics.NormalLineAscent * scale, typeface.Metrics.NormalLineDescent * scale);
+            return new TextRunLayout(text, layout, typeface.Metrics.NormalLineAscent * scale, typeface.Metrics.NormalLineDescent * scale, rightToLeft);
         }
 
         /// <summary>The runs of the line, left to right.</summary>
@@ -115,8 +118,15 @@ namespace PeachDrawing.Core
             if (_line is null)
                 return 0;
 
-            // The layout finds the character boundary nearest to a point, in its own reading of the line's directions; a point half way between two goes to the one to its left.
-            var position = _layout.PositionAt(new System.Drawing.PointF((float)(x + _line.Left - 1e-4), (float)(_line.Top + _line.Height / 2)));
+            // A point on a boundary is that boundary (where two share it, as at the edge of a run of the other direction, the first in the text).
+            foreach (var boundary in _graphemes)
+            {
+                if (Math.Abs(CaretX(boundary) - x) < 1e-3)
+                    return boundary;
+            }
+
+            // The layout finds the character boundary nearest to a point, in its own reading of the line's directions; a point half way between two goes to the one before it in reading order.
+            var position = _layout.PositionAt(new System.Drawing.PointF((float)(x + _line.Left + -1e-4), (float)(_line.Top + _line.Height / 2)));
             return Math.Clamp(position.Index, 0, Text.Length);
         }
 

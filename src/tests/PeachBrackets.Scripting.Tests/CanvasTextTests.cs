@@ -75,4 +75,18 @@ public class CanvasTextTests
 
         Assert.Equal(["true loading", "settled loaded"], log);
     }
+
+    [Fact]
+    public async Task AFontFace_IsInTheFontSetOnceAdded_AndAnUnloadableOneRejectsWhenItLoads()
+    {
+        var log = await LogAsync("""
+            var good = new FontFace('Missing', "url('/no/such/font.ttf')");
+            var bad = new FontFace('Broken', 'not a source');
+            var seen = [good.family, good.status, bad.status, document.fonts.size, document.fonts.add(good) === document.fonts, document.fonts.has(good), document.fonts.size, document.fonts.delete(good), document.fonts.size];
+            good.load().then(function () { Log.info('loaded'); }, function (e) { Log.info('rejected ' + e.name + ' ' + good.status); });
+            Log.info(seen.join(' '));
+            """);
+
+        Assert.Equal(["Missing unloaded error 0 true true 1 true 0", "rejected NetworkError error"], log);
+    }
 }

@@ -840,11 +840,13 @@ PeachBrackets.ScriptHosting.ScriptCanvasPainting : sealed class
   property IDisposable Owner { get; init; }
 PeachBrackets.ScriptHosting.ScriptDocument : sealed class
   method Boolean DrawSvgImage(Canvas canvas, String address, Rect viewport)
+  method Boolean IsFontSource(String source)
   method Boolean IsSvgImage(String address)
   method Boolean TryParseColor(String css, ScriptNode element, out PaintColor color)
   method Boolean TryParseColor(String css, ScriptNode element, out PaintColor color, out String serialized)
   method Boolean TryParseColor(String css, out PaintColor color)
   method Canvas CreateMeasuringCanvas()
+  method Font GetFallbackFont(Rune rune, Double sizePixels, PaintFontStyle style, Double weight)
   method Font GetFont(String family, Double sizePixels, PaintFontStyle style, Double weight)
   method IReadOnlyList<ScriptNode> GetElementsByClassName(String classNames)
   method IReadOnlyList<ScriptNode> GetElementsByTagName(String tagName)
@@ -871,6 +873,7 @@ PeachBrackets.ScriptHosting.ScriptDocument : sealed class
   method ScriptSvgFilter GetSvgFilter(String id)
   method String GetComputedValue(ScriptNode element, String property)
   method ValueTask LoadFontFacesAsync()
+  method ValueTask<Boolean> LoadFontFaceAsync(String family, String source, Byte[] data, String weight, String style, String stretch, String unicodeRange)
   method ValueTask<ScriptImageInfo> LoadImageAsync(String address)
   method ValueTask<ScriptNetworkResponse> SendAsync(ScriptNetworkRequest request, CancellationToken cancellationToken = null)
   method ValueTask<String> LoadTextAsync(String address)

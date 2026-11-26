@@ -185,8 +185,7 @@ internal sealed partial class ScriptRuntime
         RunMicrotasks();
 
         await Document.LoadFontFacesAsync();
-        ResolveFontsReady();
-        RunMicrotasks();
+        await RunFontLoadsAsync();
 
         await LoadInitialImagesAsync();
         RunMicrotasks();
