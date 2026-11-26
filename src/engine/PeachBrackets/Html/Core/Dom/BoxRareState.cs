@@ -66,6 +66,7 @@ namespace PeachBrackets.Html.Dom
         internal bool IsReplacedBlockWrapper;
         internal bool IsInlineBoxSplitByBlock;
         internal Dictionary<int, double>? PageBreakBottoms;
+        internal bool TableBrokeInsideARow;
         internal IPageGrid? SlicedRowGrid;
         internal TableGrid? CollapsedBorderGrid;
         internal TableGrid? TableGrid;

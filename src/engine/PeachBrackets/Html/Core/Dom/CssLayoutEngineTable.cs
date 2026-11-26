@@ -4029,7 +4029,11 @@ namespace PeachBrackets.Html.Dom
             // Reset page-break tracking so re-layout doesn't accumulate stale entries. A resumed pass is
             // not a re-layout: where the table's slice ended on the pages earlier passes filled is what
             // clips its borders there, so those entries have to accumulate rather than be thrown away.
-            if (!_continuesAPreviousPass) _tableBox.PageBreakBottoms = null;
+            if (!_continuesAPreviousPass)
+            {
+                _tableBox.PageBreakBottoms = null;
+                _tableBox.TableBrokeInsideARow = false;
+            }
 
             // Steps 1-3, once per table: take the repeating groups out of the tree and lay each out once
             // to learn its height. A continuation inherits both from what settled them (AssignBoxKinds
@@ -5229,6 +5233,10 @@ namespace PeachBrackets.Html.Dom
 
             if (_tableBox.TableContinuation is { } stopped)
             {
+                // A break inside a row, which PageBreakBottoms does not say: see CssBox.TableBrokeInsideARow.
+                // Not one inside the first body row: nothing of the table is left above it on the page it
+                // leaves, so the table did not fragment - it can still be moved whole, as the mover does.
+                if (placedRows > 1) _tableBox.TableBrokeInsideARow = true;
                 _tableBox.SetPendingBreakToken(stopped);
             }
 
