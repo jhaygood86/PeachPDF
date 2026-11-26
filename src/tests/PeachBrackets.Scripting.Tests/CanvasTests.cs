@@ -51,6 +51,17 @@ public class CanvasTests
     }
 
     [Fact]
+    public async Task PutImageDataWithADirtyRectangle_DrawsOnlyThatPart()
+    {
+        // The seven-argument form used to throw: the check for finite numbers included the ImageData argument.
+        var (page, _) = await PaintAsync("var d = g.createImageData(10, 10); for (var i = 0; i < d.data.length; i += 4) { d.data[i] = 255; d.data[i + 3] = 255; } g.putImageData(d, 10, 5, 2, 2, 4, 4);");
+
+        // The page is in points (0.75 a CSS pixel). The dirty rectangle lands at canvas pixels (12, 7)-(16, 11), the image itself at (10, 5)-(20, 15).
+        Assert.Equal((255, 0, 0), At(page, 10, 6));
+        Assert.Equal((255, 255, 255), At(page, 8, 5)); // inside the image, outside the dirty rectangle: not drawn
+    }
+
+    [Fact]
     public async Task ARectangleIsFilledInTheCanvasElement()
     {
         var (page, _) = await PaintAsync("g.fillStyle = '#ff0000'; g.fillRect(0, 0, 20, 10);");

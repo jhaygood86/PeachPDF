@@ -155,7 +155,8 @@ internal sealed partial class ScriptRuntime
             var (rx, ry, rw, rh) = (0, 0, w, h);
             if (args.Length >= 7)
             {
-                if (!Finite(args, 7))
+                // Argument 0 is the ImageData: only the four dirty-rectangle numbers are checked here (the position was above).
+                if (!Enumerable.Range(3, 4).All(i => double.IsFinite(Num(args, i))))
                     throw TypeError("The dirty rectangle is not finite.");
 
                 (rx, ry, rw, rh) = ((int)Num(args, 3), (int)Num(args, 4), (int)Num(args, 5), (int)Num(args, 6));
