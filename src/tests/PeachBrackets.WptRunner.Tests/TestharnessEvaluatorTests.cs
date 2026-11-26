@@ -123,7 +123,6 @@ public sealed class TestharnessEvaluatorTests : IDisposable
     }
 
     [Theory]
-    [InlineData("dom/a.sub.html", "needs server-side substitution")]
     [InlineData("dom/a.worker.js", "worker global")]
     [InlineData("dom/a.serviceworker.js", "worker global")]
     public async Task WhatNeedsAServerOrAWorker_IsSkippedWithItsReason(string path, string reason)
@@ -133,6 +132,31 @@ public sealed class TestharnessEvaluatorTests : IDisposable
         Assert.Equal(Outcome.Skipped, result.Outcome);
         Assert.Equal(reason, result.Reason);
     }
+
+    [Fact]
+    public async Task ASubstitutionPage_IsRun_WithItsVariablesFilledIn()
+    {
+        Write("dom/s.sub.html", Page + "<script>test(function () { if ('{{location[scheme]}}:{{ports[https][0]}}' !== 'http:8443') throw new Error('substitution'); }, 'a'); done();</script>");
+
+        var result = await RunAsync("dom/s.sub.html");
+        Assert.True(result.Outcome == Outcome.Pass, result.Reason);
+    }
+
+    [Fact]
+    public async Task APageWithHttpsInItsName_IsLoadedOverHttps()
+    {
+        Write("dom/s.https.sub.html", Page + "<script>test(function () { if ('{{location[scheme]}}:{{location[port]}}' !== 'https:8443') throw new Error('origin'); }, 'a'); done();</script>");
+
+        var result = await RunAsync("dom/s.https.sub.html");
+        Assert.True(result.Outcome == Outcome.Pass, result.Reason);
+    }
+
+    [Theory]
+    [InlineData("dom/a.html", "http://web-platform.test:8000")]
+    [InlineData("dom/a.https.html", "https://web-platform.test:8443")]
+    [InlineData("dom/a.https.sub.html", "https://web-platform.test:8443")]
+    public void TheOriginATestIsLoadedFrom_FollowsItsName(string path, string origin) =>
+        Assert.Equal(origin, PeachBrackets.WptRunner.Server.WptServer.OriginFor(path));
 
     [Fact]
     public async Task AnAnyJsFileForWorkersOnly_IsSkipped()

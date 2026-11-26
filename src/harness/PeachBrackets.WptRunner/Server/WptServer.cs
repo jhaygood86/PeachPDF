@@ -20,6 +20,15 @@ internal sealed partial class WptServer(string root)
     /// <summary>The origin a test page is loaded from.</summary>
     public const string Origin = "http://web-platform.test:8000";
 
+    /// <summary>The origin a secure test page (<c>.https.</c> in its name) is loaded from.</summary>
+    public const string SecureOrigin = "https://web-platform.test:8443";
+
+    /// <summary>The origin of the test page this server is serving, which a request the page makes names as its <c>Origin</c>; <see cref="Origin"/> unless a test says otherwise.</summary>
+    public string PageOrigin { get; set; } = Origin;
+
+    /// <summary>The origin a test is loaded from: WPT serves a file with <c>.https.</c> in its name over TLS.</summary>
+    public static string OriginFor(string wptPath) => System.IO.Path.GetFileName(wptPath).Contains(".https.", StringComparison.Ordinal) ? SecureOrigin : Origin;
+
     private static readonly string[] Subdomains = ["www", "www1", "www2", "xn--n8j6ds53lwwkrqhv28a", "xn--lve-6lad"];
 
     private readonly string _root = Path.GetFullPath(root);
@@ -191,8 +200,8 @@ internal sealed partial class WptServer(string root)
                 sent["Referer"] = referer;
 
             // A browser names the page's origin on a request that is not a plain same-origin GET or HEAD.
-            if (!sent.ContainsKey("Origin") && (method is not ("GET" or "HEAD") || !string.Equals(uri.GetLeftPart(UriPartial.Authority), Origin, StringComparison.OrdinalIgnoreCase)))
-                sent["Origin"] = Origin;
+            if (!sent.ContainsKey("Origin") && (method is not ("GET" or "HEAD") || !string.Equals(uri.GetLeftPart(UriPartial.Authority), PageOrigin, StringComparison.OrdinalIgnoreCase)))
+                sent["Origin"] = PageOrigin;
 
             var response = Handle(new ServerRequest(method, uri, sent, body));
             foreach (var (_, value) in response.Headers.Where(h => h.Key.Equals("Set-Cookie", StringComparison.OrdinalIgnoreCase)))

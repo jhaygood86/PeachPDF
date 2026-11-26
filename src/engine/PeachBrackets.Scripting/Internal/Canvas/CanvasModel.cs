@@ -735,13 +735,16 @@ internal sealed class CanvasBitmap(ScriptDocument document, double width, double
             return;
 
         var scale = Matrix3x2.CreateScale((float)(destination.Width / other.Width), (float)(destination.Height / other.Height)) * Matrix3x2.CreateTranslation((float)destination.X, (float)destination.Y);
-        var painting = other.Painting;
+        // The source is read when drawImage is called (a snapshot, as the spec says), not when this canvas is painted: a live reference would replay a canvas
+        // drawn onto itself, or two drawn onto each other, forever.
+        var snapshot = other._ops.ToArray();
         Record(canvas =>
         {
             canvas.PushTransform(scale);
             try
             {
-                painting.Paint(canvas);
+                foreach (var op in snapshot)
+                    op(canvas);
             }
             finally
             {

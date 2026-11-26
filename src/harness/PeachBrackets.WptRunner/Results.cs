@@ -100,7 +100,50 @@ internal static class ResultsWriter
             text.AppendLine();
         }
 
+        text.AppendLine("## Directories with files that do not pass").AppendLine();
+        text.AppendLine("The 15 directories (to four path segments deep) with the most files that fail, blank or are skipped, per module.").AppendLine();
+        foreach (var m in modules)
+        {
+            var rows = DirectoryRows(m).Where(r => r.Pass < r.Total).OrderByDescending(r => r.Total - r.Pass).ThenBy(r => r.Directory, StringComparer.Ordinal).Take(15).ToList();
+            if (rows.Count == 0)
+                continue;
+            text.AppendLine($"### {m.Module}").AppendLine();
+            text.AppendLine("| Directory | Pass | Fail | Skipped |").AppendLine("|---|---:|---:|---:|");
+            foreach (var r in rows)
+                text.AppendLine($"| {r.Directory} | {r.Pass} | {r.Fail + r.Blank} | {r.Skipped} |");
+            text.AppendLine();
+        }
+
         File.WriteAllText(Path.Combine(dir, "summary.md"), text.ToString());
+    }
+
+    /// <summary>Counts a module's files by the directory they sit in, cut at four path segments so a generated tree groups by feature rather than by file.</summary>
+    internal static List<DirectoryRow> DirectoryRows(ModuleResult module)
+    {
+        static string Directory(string path)
+        {
+            var parts = path.Split('/');
+            return string.Join('/', parts.Take(Math.Min(parts.Length - 1, 4)));
+        }
+
+        var rows = new Dictionary<string, DirectoryRow>(StringComparer.Ordinal);
+        DirectoryRow Row(string path) => rows.TryGetValue(Directory(path), out var row) ? row : rows[Directory(path)] = new DirectoryRow(Directory(path));
+
+        foreach (var path in module.Pass) { var r = Row(path); r.Pass++; r.Total++; }
+        foreach (var path in module.Blank) { var r = Row(path); r.Blank++; r.Total++; }
+        foreach (var path in module.Fail.Keys) { var r = Row(path); r.Fail++; r.Total++; }
+        foreach (var path in module.Skipped.Keys) { var r = Row(path); r.Skipped++; r.Total++; }
+        return [.. rows.Values];
+    }
+
+    internal sealed class DirectoryRow(string directory)
+    {
+        public string Directory { get; } = directory;
+        public int Total { get; set; }
+        public int Pass { get; set; }
+        public int Fail { get; set; }
+        public int Blank { get; set; }
+        public int Skipped { get; set; }
     }
 
     /// <summary>Strips the numbers and names from a failure reason so like failures group together.</summary>

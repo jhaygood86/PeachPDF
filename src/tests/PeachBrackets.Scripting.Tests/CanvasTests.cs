@@ -39,6 +39,18 @@ public class CanvasTests
     }
 
     [Fact]
+    public async Task ACanvasDrawnOntoItselfDrawsWhatItHeldWhenDrawImageWasCalled()
+    {
+        // A live reference replayed the canvas inside itself until the stack overflowed; drawImage reads the source when it is called.
+        var (page, _) = await PaintAsync("g.fillStyle = '#ff0000'; g.fillRect(0, 0, 10, 10); g.drawImage(c, 20, 0); g.fillStyle = '#0000ff'; g.fillRect(0, 10, 10, 10);");
+
+        Assert.Equal((255, 0, 0), At(page, 3, 3));
+        Assert.Equal((255, 0, 0), At(page, 20, 3));   // the copy, drawn from the red square
+        Assert.Equal((255, 255, 255), At(page, 20, 12)); // the blue square came after the copy was taken
+        Assert.Equal((0, 0, 255), At(page, 3, 12));
+    }
+
+    [Fact]
     public async Task ARectangleIsFilledInTheCanvasElement()
     {
         var (page, _) = await PaintAsync("g.fillStyle = '#ff0000'; g.fillRect(0, 0, 20, 10);");
