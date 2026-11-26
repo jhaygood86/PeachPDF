@@ -15,6 +15,7 @@ PeachDrawing.Skia.SkiaCanvas : sealed class
   method virtual Object AddDestinationLink(Rect bounds, String destinationName, IReadOnlyList<PaintPoint> quad = null)
   method virtual Object AddLink(Rect bounds, String uri, IReadOnlyList<PaintPoint> quad = null)
   method virtual Object SetAntiAliasSmoothingMode()
+  method virtual OffscreenSurface CreateOffscreenSurface(Int32 widthPixels, Int32 heightPixels)
   method virtual RasterRegion BeginRasterSurface(Rect layoutBounds, Double? dpiOverride = null)
   method virtual RetainedLayer CreateRetainedLayer(Rect bounds)
   method virtual Size MeasureString(String str, Font font, ShapeSettings? features = null)

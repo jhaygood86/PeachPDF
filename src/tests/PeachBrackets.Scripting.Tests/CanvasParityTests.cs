@@ -14,7 +14,7 @@ public class CanvasParityTests
     private const string Red = "#d22", Green = "#2a2", Blue = "#22d";
 
     // Each scene runs against a 60x40 canvas c with context g.
-    private static readonly (string Name, string Script)[] Scenes =
+    internal static readonly (string Name, string Script)[] Scenes =
     [
         ("fill-alpha", $"g.fillStyle = '{Red}'; g.fillRect(2, 2, 30, 20); g.globalAlpha = 0.5; g.fillStyle = '{Blue}'; g.fillRect(16, 10, 30, 20);"),
         ("linear-gradient", $"var l = g.createLinearGradient(0, 0, 60, 0); l.addColorStop(0, '{Red}'); l.addColorStop(0.5, '#fff'); l.addColorStop(1, '{Blue}'); g.fillStyle = l; g.fillRect(0, 0, 60, 40);"),
@@ -53,7 +53,7 @@ public class CanvasParityTests
     private static string PorterDuff(string operation) =>
         $"g.fillStyle = '{Red}'; g.fillRect(0, 0, 30, 40); g.globalCompositeOperation = '{operation}'; g.fillStyle = '{Blue}'; g.fillRect(15, 0, 30, 40);";
 
-    private const string ReadBackScript = """
+    internal const string ReadBackScript = """
         var c = document.getElementById('c'), g = c.getContext('2d');
         function px(x, y) { return Array.from(g.getImageData(x, y, 1, 1).data).join(','); }
         g.fillStyle = '#d22'; g.fillRect(0, 0, 15, 20);
@@ -70,12 +70,12 @@ public class CanvasParityTests
         Log.info('erased ' + [px(2, 2), px(12, 12)].join(' '));
         """;
 
-    private static async Task<(RasterCanvas Page, List<string> Log)> PaintAsync(string body, string canvasAttributes)
+    internal static async Task<(RasterCanvas Page, List<string> Log)> PaintAsync(string body, string canvasAttributes, bool surfaces = false)
     {
         var logger = new CollectingLogger();
         var host = new JintScriptHost(new JintScriptOptions { Logger = logger });
         var context = await TestDocument.NewContextAsync();
-        var options = new HtmlDocumentOptions { MediaType = MediaType.Screen, PageWidthPoints = 200, ScriptHost = host, MeasuringCanvasFactory = () => context.CreateCanvas(1, 1) };
+        var options = new HtmlDocumentOptions { MediaType = MediaType.Screen, PageWidthPoints = 200, ScriptHost = host, MeasuringCanvasFactory = () => context.CreateCanvas(1, 1), CanvasSurfaces = surfaces };
         options.SetMargins(0);
         using var document = await HtmlDocument.LoadAsync(
             TestDocument.Wrap($"<canvas id=c style=\"display:block\" {canvasAttributes}></canvas><script>{body}</script>"),
@@ -92,7 +92,7 @@ public class CanvasParityTests
         return (page, logger.Texts);
     }
 
-    private static string Hash(RasterCanvas page) => Convert.ToHexString(SHA256.HashData(page.ToPixelBuffer().PremultipliedRgba.Span));
+    internal static string Hash(RasterCanvas page) => Convert.ToHexString(SHA256.HashData(page.ToPixelBuffer().PremultipliedRgba.Span));
 
     private static string SourcePath => Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "Baselines", "CanvasParity.txt"));
 

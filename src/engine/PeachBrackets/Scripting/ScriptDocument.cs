@@ -406,7 +406,25 @@ public sealed class ScriptDocument
     // The drawings of the canvas elements still in the tree, by the position the layout knows each element by.
     internal void PublishCanvasPaintings(Dictionary<int, ScriptCanvasPainting> target)
     {
+        // What an earlier run of the scripts drew is replaced; release what it held unless it is still in use.
+        var earlier = target.Values.ToList();
         target.Clear();
+        try
+        {
+            PublishInto(target);
+        }
+        finally
+        {
+            foreach (var painting in earlier)
+            {
+                if (painting.Owner is { } owner && !target.Values.Any(p => ReferenceEquals(p.Owner, owner)))
+                    owner.Dispose();
+            }
+        }
+    }
+
+    private void PublishInto(Dictionary<int, ScriptCanvasPainting> target)
+    {
         if (_canvases.Count == 0)
             return;
 
@@ -454,6 +472,21 @@ public sealed class ScriptDocument
     /// <summary>Makes a small canvas text can be measured on (what the host gave as <see cref="HtmlDocumentOptions.MeasuringCanvasFactory"/>), or null when it gave none.</summary>
     /// <returns>the canvas, which the caller disposes</returns>
     public PeachDrawing.Core.Canvas? CreateMeasuringCanvas() => _container.MeasuringCanvasFactory?.Invoke();
+
+    /// <summary>
+    /// A bitmap of the host's backend for a canvas element to draw into (see <see cref="HtmlDocumentOptions.CanvasSurfaces"/>), or null when the host did not ask for
+    /// them or its canvases have none to give. The caller owns it.
+    /// </summary>
+    /// <param name="widthPixels">the width, in pixels</param>
+    /// <param name="heightPixels">the height, in pixels</param>
+    public PeachDrawing.Core.OffscreenSurface? CreateCanvasSurface(int widthPixels, int heightPixels)
+    {
+        if (!_container.CanvasSurfaces)
+            return null;
+
+        using var measuring = CreateMeasuringCanvas();
+        return measuring?.CreateOffscreenSurface(widthPixels, heightPixels);
+    }
 
     /// <summary>Decodes an encoded image (PNG, JPEG...) with the document's render context.</summary>
     /// <param name="bytes">the file's bytes</param>

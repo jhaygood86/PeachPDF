@@ -1606,6 +1606,9 @@ namespace PeachBrackets.Html
         /// <summary>Makes the canvas scripts measure text on, when the host gave one.</summary>
         internal System.Func<PeachDrawing.Core.Canvas>? MeasuringCanvasFactory { get; set; }
 
+        /// <summary>Whether a script's canvas keeps a bitmap of the host's backend (<see cref="HtmlDocumentOptions.CanvasSurfaces"/>).</summary>
+        internal bool CanvasSurfaces { get; set; }
+
         /// <summary>What scripts drew on <c>canvas</c> elements, by the element's source ordinal.</summary>
         internal System.Collections.Generic.Dictionary<int, ScriptHosting.ScriptCanvasPainting> CanvasPaintings { get; } = [];
 
@@ -6286,6 +6289,10 @@ namespace PeachBrackets.Html
             try
             {
                 EndScriptSession();
+                foreach (var painting in CanvasPaintings.Values)
+                    painting.Owner?.Dispose();
+
+                CanvasPaintings.Clear();
                 AnimationClock?.Dispose();
                 AnimationClock = null;
                 _shadowLayers?.Dispose();

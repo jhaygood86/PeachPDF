@@ -655,6 +655,7 @@ PeachBrackets.HtmlDocumentOptions : sealed class
   ctor()
   method Void SetMargins(Double points)
   property Boolean AnimationsEnabled { get; set; }
+  property Boolean CanvasSurfaces { get; set; }
   property Boolean CollectFormFields { get; set; }
   property Boolean EnableIncrementalUpdates { get; set; }
   property Boolean EnableSelectionStyling { get; set; }
@@ -826,9 +827,9 @@ PeachBrackets.ScriptHosting.ScriptCallback : sealed class
   ctor(Func<IReadOnlyList<ScriptValue>, ScriptValue> invoke)
   method ScriptValue Invoke(ScriptValue[] arguments)
 PeachBrackets.ScriptHosting.ScriptCanvasPainting : sealed class
-  ctor(Double Width, Double Height, Action<Canvas> Paint)
+  ctor(Double Width, Double Height, Action<Canvas> Paint, IDisposable Owner = null)
   method ScriptCanvasPainting <Clone>$()
-  method Void Deconstruct(out Double Width, out Double Height, out Action<Canvas> Paint)
+  method Void Deconstruct(out Double Width, out Double Height, out Action<Canvas> Paint, out IDisposable Owner)
   method virtual Boolean Equals(Object obj)
   method virtual Boolean Equals(ScriptCanvasPainting other)
   method virtual Int32 GetHashCode()
@@ -836,6 +837,7 @@ PeachBrackets.ScriptHosting.ScriptCanvasPainting : sealed class
   property Action<Canvas> Paint { get; init; }
   property Double Height { get; init; }
   property Double Width { get; init; }
+  property IDisposable Owner { get; init; }
 PeachBrackets.ScriptHosting.ScriptDocument : sealed class
   method Boolean TryParseColor(String css, out PaintColor color)
   method Canvas CreateMeasuringCanvas()
@@ -846,6 +848,7 @@ PeachBrackets.ScriptHosting.ScriptDocument : sealed class
   method Image DecodeImage(Byte[] bytes)
   method Image GetLoadedImage(String address)
   method Int32 OrdinalOf(ScriptNode element)
+  method OffscreenSurface CreateCanvasSurface(Int32 widthPixels, Int32 heightPixels)
   method ScriptBox? GetLayoutBox(ScriptNode element)
   method ScriptDocument CreateDocument(Boolean html, Boolean withDocumentType, String contentType = null)
   method ScriptDocument ParseDocument(String html)

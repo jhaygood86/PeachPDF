@@ -490,6 +490,15 @@ namespace PeachDrawing.Core
         public virtual bool SupportsCompositeOperators => false;
 
         /// <summary>
+        /// A bitmap of this canvas's backend that can be drawn into again and again and put on a canvas of this backend without being read back, or <see langword="null"/>
+        /// when the backend has none to give (a PDF or SVG writer, a canvas that only measures, a size that is not positive or is more pixels than
+        /// <see cref="RenderContext.MaxRasterPixels"/>). A caller that gets <see langword="null"/> keeps what it draws as a recording.
+        /// </summary>
+        /// <param name="widthPixels">the width, in pixels</param>
+        /// <param name="heightPixels">the height, in pixels</param>
+        public virtual OffscreenSurface? CreateOffscreenSurface(int widthPixels, int heightPixels) => null;
+
+        /// <summary>
         /// Whether painting through <paramref name="paint"/> would need transparency (a transparency group, a soft mask, a
         /// constant alpha) on this canvas. A canvas whose output forbids transparency (PDF/A-1, PDF/X-1a/X-3) answers by
         /// running <paramref name="paint"/> against a scratch target of its own that is never saved, so the answer comes from

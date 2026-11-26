@@ -35,6 +35,10 @@ internal sealed class SkiaImage : PeachDrawing.Core.Image
             counts.Surface(1);
     }
 
+    /// <summary>An image of a surface's snapshot: the <see cref="SKImage"/> is the image's to dispose.</summary>
+    internal static SkiaImage FromSnapshot(SKImage snapshot, int width, int height, SkiaResourceCounts counts) =>
+        new(width, height, null, snapshot, counts);
+
     public override double Width { get; }
 
     public override double Height { get; }

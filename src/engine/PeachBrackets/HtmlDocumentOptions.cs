@@ -261,6 +261,16 @@ public sealed class HtmlDocumentOptions
     public Func<PeachDrawing.Core.Canvas>? MeasuringCanvasFactory { get; set; }
 
     /// <summary>
+    /// Whether each <c>canvas</c> a script draws on keeps a bitmap of the backend <see cref="MeasuringCanvasFactory"/> makes canvases for (an
+    /// <see cref="PeachDrawing.Core.OffscreenSurface"/>: on the graphics device where the backend has one), draws into it as the script draws, and is shown
+    /// as that bitmap, instead of playing the whole drawing again each time the page is painted. For a host that shows the page on a screen and may repaint
+    /// a canvas many times a second. The default, <see langword="false"/>, keeps the drawing as a recording that any canvas can play: a PDF or SVG gets
+    /// the shapes and text as vector content. Only read when <see cref="ScriptHost"/> is set and the factory makes canvases that can give a surface; with
+    /// any other (a PDF writer's, say) the recording is kept whatever this says.
+    /// </summary>
+    public bool CanvasSurfaces { get; set; }
+
+    /// <summary>
     /// How many times a script host may change a laid-out document and have it laid out again (<see cref="PeachBrackets.ScriptHosting.IScriptHost.LayoutCompletedAsync"/>).
     /// When the limit is reached the last change is not laid out. The default is 16; 0 means no limit, which lets a script that changes the document
     /// on every pass run forever.

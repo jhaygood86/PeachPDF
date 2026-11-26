@@ -257,6 +257,14 @@ public sealed partial class RasterCanvas : Canvas
     {
     }
 
+    // ---- offscreen surfaces -----------------------------------------------------------------------------
+
+    /// <inheritdoc/>
+    public override OffscreenSurface? CreateOffscreenSurface(int widthPixels, int heightPixels) =>
+        widthPixels <= 0 || heightPixels <= 0 || (long)widthPixels * heightPixels > Math.Min(MaxTilePixels, _renderContext.MaxRasterPixels)
+            ? null
+            : new RasterOffscreenSurface(_renderContext, widthPixels, heightPixels);
+
     // ---- tiles ------------------------------------------------------------------------------------------
 
     /// <inheritdoc/>

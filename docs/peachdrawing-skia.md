@@ -69,6 +69,7 @@ dash lengths are in points. The `SKCanvas`'s user space is the layout units, und
 | Conic gradient | A native sweep gradient |
 | `TileBrush`, hatch brush | A picture or image shader that repeats; a hatch is a tile made for the call |
 | `PushClip` (rectangle, path), `PushClipExclude` | `Save` + `ClipRect` / `ClipPath` (intersect) or `ClipRect` (difference) |
+| `CreateOffscreenSurface` | A raster `SKSurface` (premultiplied RGBA8) and a canvas over it, one unit a pixel. A snapshot is a copy-on-write `SKImage`, uploaded as a texture on the render context's `GpuContext` when it is drawn. Not itself on the graphics hardware: that may only be drawn on the GL thread |
 | `CreateRetainedLayer` + `Draw` | The group is drawn once into a bitmap at the density of the host's matrix (up to 8192 pixels a side; larger returns `null`) and kept as an `SKImage`, uploaded to the `GpuContext`; each draw is one `DrawImage` under the current matrix with the opacity as the paint's alpha |
 | `PushTransform` / `PopTransform` | `Save` + `Concat` |
 | `PushBlendMode` | `SKPaint.BlendMode` on every draw: all sixteen blend modes, including the non-separable ones |

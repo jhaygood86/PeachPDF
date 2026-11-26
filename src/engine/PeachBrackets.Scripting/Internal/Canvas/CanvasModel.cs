@@ -287,7 +287,7 @@ internal sealed class CanvasState
 /// The drawing a script makes on a canvas: every call is kept as an operation that can be played again on any <see cref="PeachDrawing.Core.Canvas"/>, so
 /// a PDF or SVG gets the shapes and text as vector content. The state (clips, transform, alpha, shadow, blend) each operation was made with travels with it.
 /// </summary>
-internal sealed class CanvasBitmap(ScriptDocument document, double width, double height)
+internal sealed class CanvasBitmap(ScriptDocument document, double width, double height) : IDisposable
 {
     private readonly List<Action<PeachDrawing.Core.Canvas>> _ops = [];
 
@@ -305,22 +305,87 @@ internal sealed class CanvasBitmap(ScriptDocument document, double width, double
 
     public int OperationCount => _ops.Count;
 
-    public ScriptCanvasPainting Painting => new(Width, Height, Replay);
+    // The bitmap on the host's backend the drawing is also made on, when the host asked for one (HtmlDocumentOptions.CanvasSurfaces): what is drawn is drawn
+    // there as it is recorded, and the page shows that, rather than playing the whole recording again at every paint. The recording is kept all the same, for
+    // a PDF or SVG or any canvas of another backend, which plays it.
+    private OffscreenSurface? _surface;
+    private (int Revision, PeachDrawing.Core.Image Image)? _snapshot;
+
+    /// <summary>Whether the drawing is kept on a bitmap of the host's backend as well as recorded.</summary>
+    public bool HasSurface => _surface is not null;
+
+    /// <summary>Asks the host for a bitmap to keep the drawing on, if it gave this document a way to make one.</summary>
+    public void UseSurface()
+    {
+        if (_surface is not null || Width < 1 || Height < 1 || Width > int.MaxValue || Height > int.MaxValue)
+            return;
+
+        _surface = Document.CreateCanvasSurface((int)Width, (int)Height);
+    }
+
+    public ScriptCanvasPainting Painting => new(Width, Height, PaintTo, _surface is null ? null : this);
+
+    private void PaintTo(PeachDrawing.Core.Canvas canvas)
+    {
+        if (_surface is { } surface && surface.CanDraw(canvas))
+        {
+            // One snapshot per change, kept until the drawing changes again (the previous one is released then, a paint later than the one that used it).
+            if (_snapshot is not { } current || current.Revision != Revision)
+            {
+                var image = surface.CreateSnapshot();
+                _snapshot?.Image.Dispose();
+                _snapshot = (Revision, image);
+            }
+
+            canvas.DrawImage(_snapshot.Value.Image, new Rect(0, 0, Width, Height));
+            return;
+        }
+
+        Replay(canvas);
+    }
+
+    private void AddOp(Action<PeachDrawing.Core.Canvas> op)
+    {
+        _ops.Add(op);
+        if (_surface is null)
+            return;
+
+        try
+        {
+            op(_surface.Canvas);
+        }
+        catch (Exception error) when (error is not OutOfMemoryException)
+        {
+            // A call the backend cannot make is left out, as a replay on a canvas that does not understand it leaves it out.
+        }
+    }
+
+    public void Dispose()
+    {
+        _snapshot?.Image.Dispose();
+        _snapshot = null;
+        _surface?.Dispose();
+        _surface = null;
+    }
 
     /// <summary>Whether the drawing uses a Porter-Duff operator, which a document writer cannot express as vector content.</summary>
     private bool _usesOperators;
 
+    /// <summary>Whether the drawing composites with anything but source-over, so it must be a group of its own: the mode acts on the canvas, not on the page behind it.</summary>
+    private bool _needsGroup;
+
     /// <summary>
-    /// Plays the drawing on a canvas. One that uses a Porter-Duff operator is played as a group of its own, so the operators act on the canvas and not on the page
-    /// behind it: in a layer on a canvas that composites with them, or, when the target cannot (a PDF or SVG writer), onto a raster surface placed with
-    /// <see cref="PeachDrawing.Core.Canvas.DrawRaster"/>. Vector wherever the format can express the drawing, a bitmap only where it cannot.
+    /// Plays the drawing on a canvas. One that composites with anything but source-over (a blend mode, <c>lighter</c>, an operator) is played as a group of its
+    /// own, so the mode acts on the canvas and not on the page behind it: in a layer, or, for a Porter-Duff operator when the target cannot composite with them (a PDF
+    /// or SVG writer), onto a raster surface placed with <see cref="PeachDrawing.Core.Canvas.DrawRaster"/>. Vector wherever the format can express the drawing, a
+    /// bitmap only where it cannot.
     /// </summary>
     public void Replay(PeachDrawing.Core.Canvas canvas)
     {
-        if (_usesOperators)
+        if (_needsGroup)
         {
             var bounds = new Rect(0, 0, Width, Height);
-            if (!canvas.SupportsCompositeOperators)
+            if (_usesOperators && !canvas.SupportsCompositeOperators)
             {
                 if (canvas.BeginRasterSurface(bounds) is { } region)
                 {
@@ -378,16 +443,33 @@ internal sealed class CanvasBitmap(ScriptDocument document, double width, double
         if (_pixels is { } cached && cached.Revision == Revision)
             return cached.Pixels;
 
-        var rendered = this.RenderPixels();
+        var rendered = _surface is null ? this.RenderPixels() : ReadSurface(_surface);
         _pixels = (Revision, rendered);
         return rendered;
+    }
+
+    // The surface's premultiplied pixels as the straight-alpha RGBA a script reads.
+    private static byte[] ReadSurface(OffscreenSurface surface)
+    {
+        var pixels = surface.ReadPixels();
+        var source = pixels.PremultipliedRgba.Span;
+        var rgba = new byte[source.Length];
+        for (var i = 0; i + 3 < rgba.Length; i += 4)
+        {
+            var alpha = source[i + 3];
+            rgba[i + 3] = alpha;
+            for (var c = 0; c < 3; c++)
+                rgba[i + c] = alpha == 0 ? (byte)0 : alpha == 255 ? source[i + c] : (byte)Math.Min(255, (source[i + c] * 255 + alpha / 2) / alpha);
+        }
+
+        return rgba;
     }
 
     /// <summary>Puts pixels on the canvas as they are: no transform, clip, alpha or shadow applies to this.</summary>
     public void PutPixels(Image image, Rect source, Rect destination)
     {
         Revision++;
-        _ops.Add(canvas => canvas.DrawImage(image, destination, source, ImageSampling.Pixelated));
+        AddOp(canvas => canvas.DrawImage(image, destination, source, ImageSampling.Pixelated));
     }
 
     public void Save() => Saved.Push(State.Clone());
@@ -402,7 +484,9 @@ internal sealed class CanvasBitmap(ScriptDocument document, double width, double
     {
         Revision++;
         _ops.Clear();
+        _surface?.Clear();
         _usesOperators = false;
+        _needsGroup = false;
         Saved.Clear();
         State = new CanvasState();
         Path = new PathData();
@@ -465,12 +549,13 @@ internal sealed class CanvasBitmap(ScriptDocument document, double width, double
         var alpha = state.GlobalAlpha;
         var blend = BlendFor(composite) ?? PaintBlendMode.Normal;
         _usesOperators |= blend >= PaintBlendMode.SourceIn;
+        _needsGroup |= blend != PaintBlendMode.Normal;
         var shadow = state.ShadowColor.A > 0 && (state.ShadowBlur > 0 || state.ShadowOffsetX != 0 || state.ShadowOffsetY != 0)
             ? new DropShadowEffect(state.ShadowOffsetX, state.ShadowOffsetY, state.ShadowBlur / 2, state.ShadowBlur / 2, state.ShadowColor)
             : null;
         var (width, height) = (Width, Height);
 
-        _ops.Add(canvas =>
+        AddOp(canvas =>
         {
             foreach (var (clip, rule) in clips)
             {
@@ -518,7 +603,9 @@ internal sealed class CanvasBitmap(ScriptDocument document, double width, double
     {
         Revision++;
         _ops.Clear();
+        _surface?.Clear();
         _usesOperators = false;
+        _needsGroup = false;
     }
 
     // ---- brushes and pens
@@ -715,6 +802,7 @@ internal sealed class CanvasBitmap(ScriptDocument document, double width, double
         // drawn onto itself, or two drawn onto each other, forever.
         var snapshot = other._ops.ToArray();
         _usesOperators |= other._usesOperators;
+        _needsGroup |= other._needsGroup;
         Record(canvas =>
         {
             canvas.PushTransform(scale);

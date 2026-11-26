@@ -130,6 +130,9 @@ public sealed partial class Win2dCanvas
             case Win2dTileImage vector:
                 source = vector.Content;
                 break;
+            case Win2dBitmapImage bitmap:
+                source = bitmap.Bitmap;
+                break;
             default:
                 source = ImageFor(tile.Tile).GetBitmap(_session);
                 break;

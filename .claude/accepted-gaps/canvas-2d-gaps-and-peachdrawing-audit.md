@@ -21,3 +21,6 @@ Raster, CoreGraphics) needed a change in this phase.
 
 No GitHub issue is filed yet: file one for the compositing/raster path and one for pixel reads before building them. Not verified in this environment: the Win2D and
 CoreGraphics backends (the replay uses only members they already implement).
+
+- **A canvas on a GPU surface (Skia), `OffscreenCanvas`/`ImageBitmap` as surfaces, `drawImage` of a canvas as a sampled surface, and the views turning `CanvasSurfaces` on.** The surface exists (`OffscreenSurface`, see its recent-fixes entry); Skia's is a CPU raster
+  surface because a GPU one may only be drawn on its GL thread, and a script does not run there. `OffscreenCanvas`, `ImageBitmap` and `drawImage(canvas)` still use CPU images and replayed recordings.

@@ -318,6 +318,30 @@ The content is still recorded once, so an animation of a blur radius or a shadow
 ink margin (three standard deviations of each blur and shadow, plus a shadow's offset). A canvas that cannot make an effect layer draws the layer without the effects. The default is built
 on `BeginLayer`, so it works on every canvas; a `RetainedLayer` subclass with a better way can override it.
 
+### Offscreen surfaces
+
+A layer is composited once and gone; a `RetainedLayer` is recorded once and sealed. An `OffscreenSurface` is a drawing surface that stays open: `Canvas.CreateOffscreenSurface(width, height)`
+gives a bitmap of the canvas's own backend (a render target on the device where there is one) that you draw into with its `Canvas` (one unit a pixel, top left at the origin), whenever you like,
+and put on another canvas of the same backend without reading it back. It is what a 2D canvas element or an off-screen bitmap needs: draw a little each frame, show the whole thing.
+
+```csharp
+using var surface = canvas.CreateOffscreenSurface(256, 256)!;
+surface.Canvas.DrawRectangle(brush, 0, 0, 64, 64);        // drawn into the bitmap, as many times as you like
+if (surface.CanDraw(canvas))
+{
+    using var snapshot = surface.CreateSnapshot();         // the content now; later drawing does not change it
+    canvas.DrawImage(snapshot, new Rect(10, 10, 256, 256));
+}
+PixelBuffer pixels = surface.ReadPixels();                 // the one call that brings pixels to the CPU
+surface.Clear();                                           // every pixel transparent
+```
+
+`CanDraw(target)` says whether a snapshot can be drawn on `target` without a conversion (a canvas of the same backend and device). The surface's canvas composites with the Porter-Duff operators
+(`SupportsCompositeOperators`). `CreateOffscreenSurface` returns `null` when the backend has no bitmap to give: a PDF or SVG writer, a measuring canvas, a size that is not positive, or one
+larger than `RenderContext.MaxRasterPixels`; keep a recording to play again instead. Raster keeps a pixel buffer. Win2D keeps a `CanvasRenderTarget` on the device and a snapshot is a copy made there.
+CoreGraphics keeps a bitmap context. Skia keeps a raster `SKSurface`: a surface on the graphics hardware may only be drawn on the thread that owns its GL context, which is not the thread a caller draws on, so
+the snapshot is uploaded as a texture when it is drawn on a canvas that has a `SkiaRenderContext.GpuContext`.
+
 
 ## Links and destinations
 

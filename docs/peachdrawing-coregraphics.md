@@ -79,6 +79,7 @@ Rectangles, lines, polygons, image rectangles, brush geometry and text positions
 | `DrawImageWithOpacity` | The context's alpha and blend mode, then the image |
 | `DrawImageMasked`, `DrawImageAlphaMasked`, `DrawImageBlendedOver` | An isolated bitmap of the destination: the content is drawn, then the mask with a destination-in (or destination-out, inverted) blend - a luminosity mask first becomes opacity in Core Image - or the two images with the blend mode between them |
 | `DrawImageWithColorMatrix` | Core Image's color matrix filter |
+| `CreateOffscreenSurface` | A `CGBitmapContext` of premultiplied RGBA8 and a canvas over it, one unit a pixel; a snapshot is the context's `CGImage`. Written against the API and not built or run on a Mac |
 | `BeginLayer` | The group is drawn into a bitmap of its own and composited back through its opacity, blend mode, color matrix and effects when the layer is disposed |
 | `BlurEffect`, `DropShadowEffect`, `ColorMatrixEffect` | Core Image (see below); `HasNativeLayerEffects` is true |
 | `BeginRasterSurface` / `DrawRaster` | The shared `PeachDrawing` software rasterizer for what is not expressible as vector content; its pixels are drawn as an image |

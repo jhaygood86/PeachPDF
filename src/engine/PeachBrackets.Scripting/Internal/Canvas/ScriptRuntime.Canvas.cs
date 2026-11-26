@@ -214,7 +214,9 @@ internal sealed partial class ScriptRuntime
 
             var settings = ReadContextSettings(Js.Arg(args, 1));
             var (width, height) = CanvasSize(node);
-            var context = new ContextObject(Engine, ContextPrototype, node, new CanvasBitmap(node.OwnerDocument, width, height)) { Settings = settings };
+            var bitmap = new CanvasBitmap(node.OwnerDocument, width, height);
+            bitmap.UseSurface();
+            var context = new ContextObject(Engine, ContextPrototype, node, bitmap) { Settings = settings };
             _contexts[node] = context;
             node.OwnerDocument.SetCanvasPainting(node, context.Bitmap.Painting);
             return context;
@@ -260,7 +262,9 @@ internal sealed partial class ScriptRuntime
             return;
 
         var (width, height) = CanvasSize(node);
+        context.Bitmap.Dispose();
         context.Bitmap = new CanvasBitmap(node.OwnerDocument, width, height);
+        context.Bitmap.UseSurface();
         node.OwnerDocument.SetCanvasPainting(node, context.Bitmap.Painting);
     }
 

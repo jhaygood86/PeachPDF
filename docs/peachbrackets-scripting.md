@@ -142,6 +142,10 @@ All script output goes to `JintScriptOptions.Logger`; with none set it is discar
   the document **as the script has left it so far**: the first read after a change lays the document out again (once per batch of changes, however many
   changes there were). PeachPDF supplies the canvas to measure on; a host using PeachBrackets directly sets `HtmlDocumentOptions.MeasuringCanvasFactory`,
   and without it layout reads answer zero and computed styles come from the element's own `style` attribute.
+- **Canvas surfaces**: with `HtmlDocumentOptions.CanvasSurfaces` set, each `<canvas>` keeps a bitmap of the backend the measuring canvas belongs to (`Canvas.CreateOffscreenSurface`: on the
+  graphics device for Win2D), draws into it as the script draws, reads `getImageData` and `toDataURL` from it, and is shown as that bitmap rather than by playing the whole drawing again at every
+  paint. For a host that shows the page on a screen; the default keeps the drawing as a recording that a PDF or SVG plays as vector content. A backend with no bitmap to give keeps the recording whatever
+  the option says.
 - **Node kinds**: comments, processing instructions, CDATA sections (XML documents) and document types are nodes (`createComment`, `createProcessingInstruction`, `createCDATASection`, `implementation.createDocumentType`, `document.doctype`); attributes are `Attr` nodes (`attributes`, `getAttributeNode`, `setAttributeNode`, `createAttribute`) with the namespaced methods (`setAttributeNS`, `getAttributeNS`, `lookupNamespaceURI`...).
 - **Other documents**: `document.implementation.createHTMLDocument`/`createDocument`, `new Document()`, `DOMParser` (HTML and XML), an `<iframe>`'s `contentDocument` (loaded from its `src` through the document's network when a script first asks), and moving nodes between documents with `adoptNode`, `importNode` or any insertion. The documents share the page's resource loader and are never laid out.
 - **Live lists**: `childNodes`, `children` and `getElementsByTagName`/`ClassName`/`Name`/`TagNameNS`, `scripts`, `forms`, `images` and `links` follow the tree.
