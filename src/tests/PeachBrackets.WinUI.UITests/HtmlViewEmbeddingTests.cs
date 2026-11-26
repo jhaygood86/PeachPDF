@@ -306,8 +306,16 @@ public class HtmlViewEmbeddingTests
             HtmlViewFonts.AddFile(path, new AddOptions { FamilyName = family });
             view.UserStyleSheet = "/* load again */";
             view.Measure(new Size(600, double.PositiveInfinity));
-            await Task.Yield();
-            return (widthBefore, view.Document!.GetElementBounds("s")!.Value.Width);
+            // The view loads again on its own schedule; give it a few seconds on a slow runner before comparing.
+            var widthAfter = widthBefore;
+            for (var attempt = 0; attempt < 100 && widthAfter == widthBefore; attempt++)
+            {
+                await Task.Delay(50);
+                view.Measure(new Size(600, double.PositiveInfinity));
+                widthAfter = view.Document!.GetElementBounds("s")!.Value.Width;
+            }
+
+            return (widthBefore, widthAfter);
         });
 
         Assert.NotEqual(before, after);
