@@ -136,6 +136,7 @@ internal sealed partial class ScriptRuntime
         });
         Js.StrictMethod(Engine, p, "getImageData", 4, (self, args) =>
         {
+            RequireNoOpenLayers(B(self));
             // [EnforceRange] long: a number that is not finite, or that does not fit a long once its fraction is cut off, is a TypeError rather than wrapping round.
             for (var i = 0; i < 4; i++)
             {
@@ -176,6 +177,7 @@ internal sealed partial class ScriptRuntime
         });
         Js.StrictMethod(Engine, p, "putImageData", 3, (self, args) =>
         {
+            RequireNoOpenLayers(B(self));
             if (Js.Arg(args, 0) is not ObjectInstance data || !IsImageData(data))
                 throw TypeError("The first argument is not an ImageData.");
 
@@ -438,6 +440,7 @@ internal sealed partial class ScriptRuntime
         if (bitmap.Width <= 0 || bitmap.Height <= 0)
             return "data:,";
 
+        RequireNoOpenLayers(bitmap);
         var pixels = bitmap.Pixels();
         return pixels.Length == 0 ? "data:," : "data:image/png;base64," + Convert.ToBase64String(PngWriter.Encode((int)bitmap.Width, (int)bitmap.Height, pixels));
     }
@@ -492,6 +495,7 @@ internal sealed partial class ScriptRuntime
             case NodeObject { Node: { Kind: ScriptNodeKind.Element } canvas } when _contexts.TryGetValue(canvas, out var context):
                 if (context.Bitmap.Width <= 0 || context.Bitmap.Height <= 0)
                     throw DomError("InvalidStateError", "The canvas is empty.");
+                RequireNoOpenLayers(context.Bitmap);
                 var read = context.Bitmap.Pixels();
                 if (read.Length == 0)
                     throw DomError("InvalidStateError", "The canvas is too large.");

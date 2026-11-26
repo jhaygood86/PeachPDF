@@ -328,7 +328,34 @@ internal sealed partial class ScriptRuntime
         CanvasState S(JsValue self) => Cx(self).Bitmap.State;
 
         Js.StrictMethod(Engine, p, "save", 0, (self, _) => { Cx(self).Bitmap.Save(); return JsValue.Undefined; });
-        Js.StrictMethod(Engine, p, "restore", 0, (self, _) => { Cx(self).Bitmap.Restore(); return JsValue.Undefined; });
+        Js.StrictMethod(Engine, p, "restore", 0, (self, _) =>
+        {
+            // A restore cannot reach past a layer to a state saved before the layer opened.
+            if (!Cx(self).Bitmap.CanRestore)
+                throw DomError("InvalidStateError", "restore() cannot pop a state saved before the open layer.");
+
+            Cx(self).Bitmap.Restore();
+            return JsValue.Undefined;
+        });
+        Js.StrictMethod(Engine, p, "beginLayer", 0, (self, args) =>
+        {
+            // The options are a dictionary: nothing, null and any object are one, a primitive is not. Its filter is read (and may throw) before the layer opens.
+            var options = Js.Arg(args, 0);
+            if (!options.IsUndefined() && !options.IsNull() && options is not ObjectInstance)
+                throw TypeError("Failed to execute 'beginLayer': The options are not a dictionary.");
+
+            var effects = options is ObjectInstance dictionary ? LayerFilterEffects(dictionary.Get("filter")) : [];
+            Cx(self).Bitmap.BeginLayer(effects);
+            return JsValue.Undefined;
+        });
+        Js.StrictMethod(Engine, p, "endLayer", 0, (self, _) =>
+        {
+            if (!Cx(self).Bitmap.CanEndLayer)
+                throw DomError("InvalidStateError", "endLayer() has no layer to end, or a save() made in it is still open.");
+
+            Cx(self).Bitmap.EndLayer();
+            return JsValue.Undefined;
+        });
         Js.StrictMethod(Engine, p, "reset", 0, (self, _) => { Cx(self).Bitmap.Reset(); return JsValue.Undefined; });
 
         Js.StrictMethod(Engine, p, "scale", 2, (self, args) =>
@@ -903,6 +930,7 @@ internal sealed partial class ScriptRuntime
                     4 => (numbers[0], numbers[1], numbers[2], numbers[3]),
                     _ => (numbers[4], numbers[5], numbers[6], numbers[7]),
                 };
+                RequireNoOpenLayers(other.Bitmap);
                 B(self).DrawCanvas(other.Bitmap, Normalized(new Rect(dx, dy, dw, dh)));
                 return JsValue.Undefined;
             }
@@ -1006,6 +1034,7 @@ internal sealed partial class ScriptRuntime
             return w <= 0 || h <= 0 ? null : canvasNode.OwnerDocument.DecodeImage(PngWriter.Encode((int)w, (int)h, new byte[(int)w * (int)h * 4]));
         }
 
+        RequireNoOpenLayers(context.Bitmap);
         var pixels = context.Bitmap.Pixels();
         return pixels.Length == 0 ? null : canvasNode.OwnerDocument.DecodeImage(PngWriter.Encode((int)context.Bitmap.Width, (int)context.Bitmap.Height, pixels));
     }

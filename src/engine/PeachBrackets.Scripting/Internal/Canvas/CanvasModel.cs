@@ -436,8 +436,76 @@ internal sealed class CanvasBitmap(ScriptDocument document, double width, double
         Replay(canvas);
     }
 
+    // The layers open (beginLayer without its endLayer), innermost last: what is drawn goes to the innermost one's own list, and reaches the canvas when it ends.
+    private readonly Stack<LayerFrame> _layers = [];
+
+    /// <summary>Whether a layer is open: the drawing is not whole until it ends, so it cannot be read.</summary>
+    public bool HasOpenLayers => _layers.Count > 0;
+
+    private sealed class LayerFrame(CanvasState outer, int saveDepth, LayerEffect[] effects)
+    {
+        public CanvasState Outer { get; } = outer;
+
+        public int SaveDepth { get; } = saveDepth;
+
+        public LayerEffect[] Effects { get; } = effects;
+
+        public List<Action<PeachDrawing.Core.Canvas>> Ops { get; } = [];
+    }
+
+    /// <summary>
+    /// Opens a layer: what is drawn until <see cref="EndLayer"/> is drawn on a layer of its own with the compositing state (alpha, operator, shadow, filter) reset, and the
+    /// layer is composited with the state the canvas had when it opened. The transform, clips and styles carry in unchanged.
+    /// </summary>
+    public void BeginLayer(LayerEffect[] effects)
+    {
+        var outer = State.Clone();
+        _layers.Push(new LayerFrame(outer, Saved.Count, effects));
+        State = outer.Clone();
+        State.GlobalAlpha = 1;
+        State.Composite = "source-over";
+        State.ShadowColor = PaintColor.Transparent;
+        State.ShadowColorText = "rgba(0, 0, 0, 0)";
+        State.ShadowBlur = 0;
+        State.ShadowOffsetX = 0;
+        State.ShadowOffsetY = 0;
+        State.Filter = "none";
+    }
+
+    /// <summary>Whether <see cref="EndLayer"/> can close a layer here: one is open and no <c>save()</c> made inside it is still waiting for its restore.</summary>
+    public bool CanEndLayer => _layers.Count > 0 && _layers.Peek().SaveDepth == Saved.Count;
+
+    /// <summary>Closes the innermost layer and composites it onto what is under it, with the state the canvas had when the layer was opened (which it also gets back).</summary>
+    public void EndLayer()
+    {
+        var frame = _layers.Pop();
+        State = frame.Outer;
+
+        var ops = frame.Ops.ToArray();
+        var effects = frame.Effects;
+        var bounds = new Rect(0, 0, Width, Height);
+
+        // The layer's own transform is already in each operation; the state's alpha, operator, shadow and clips composite the whole.
+        var composite = State.Clone();
+        composite.Transform = Matrix3x2.Identity;
+        _needsGroup |= effects.Length > 0;
+        RecordWith(composite, composite.Composite, canvas =>
+        {
+            using var layer = canvas.BeginLayer(new LayerOptions(1.0, PaintBlendMode.Normal, null, bounds, effects.Length == 0 ? null : effects));
+            var target = layer?.Canvas ?? canvas;
+            foreach (var op in ops)
+                op(target);
+        });
+    }
+
     private void AddOp(Action<PeachDrawing.Core.Canvas> op)
     {
+        if (_layers.Count > 0)
+        {
+            _layers.Peek().Ops.Add(op);
+            return;
+        }
+
         _ops.Add(op);
         if (_surface is null)
             return;
@@ -580,6 +648,9 @@ internal sealed class CanvasBitmap(ScriptDocument document, double width, double
 
     public void Save() => Saved.Push(State.Clone());
 
+    /// <summary>Whether <see cref="Restore"/> can pop here: a layer does not let a restore reach a state saved before it opened.</summary>
+    public bool CanRestore => _layers.Count == 0 || _layers.Peek().SaveDepth < Saved.Count;
+
     public void Restore()
     {
         if (Saved.Count > 0)
@@ -590,6 +661,7 @@ internal sealed class CanvasBitmap(ScriptDocument document, double width, double
     {
         Revision++;
         _ops.Clear();
+        _layers.Clear();
         _surface?.Clear();
         _usesOperators = false;
         _needsGroup = false;
@@ -741,6 +813,14 @@ internal sealed class CanvasBitmap(ScriptDocument document, double width, double
     public void ClearDrawing()
     {
         Revision++;
+
+        // Inside a layer only the layer's own drawing is cleared.
+        if (_layers.Count > 0)
+        {
+            _layers.Peek().Ops.Clear();
+            return;
+        }
+
         _ops.Clear();
         _surface?.Clear();
         _usesOperators = false;
