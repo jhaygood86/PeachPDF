@@ -74,6 +74,15 @@ public sealed class RasterRenderContext : RenderContext
     /// </summary>
     public Func<Uri, ValueTask<RNetworkResponse?>>? ResourceLoader { get; set; }
 
+    /// <summary>
+    /// The address a document's relative references resolve against when it declares no <c>&lt;base href&gt;</c> of its own: the document's own address.
+    /// <see langword="null"/> (the default) leaves relative references unresolved.
+    /// </summary>
+    public Uri? DocumentAddress { get; set; }
+
+    /// <inheritdoc/>
+    public override Uri? BaseUri => DocumentAddress;
+
     /// <inheritdoc/>
     public override ValueTask<RNetworkResponse?> GetResourceStream(Uri uri) => ResourceLoader is { } loader ? loader(uri) : default;
 

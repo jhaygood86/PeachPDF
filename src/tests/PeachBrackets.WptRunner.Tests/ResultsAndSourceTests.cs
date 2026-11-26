@@ -75,7 +75,7 @@ public sealed class ResultsAndSourceTests : IDisposable
         var html = WptRenderer.Prepare("css/a/t.html",
             "<html><head><link rel=stylesheet href=\"/fonts/ahem.css\"><style>@import \"local.css\";</style></head><body>x</body></html>");
 
-        Assert.Contains("<base href=\"http://wpt.test/css/a/\">", html);
+        Assert.Contains("<base href=\"http://web-platform.test:8000/css/a/\">", html);
         Assert.Contains("href=\"/fonts/ahem.css\"", html);
         Assert.Contains("@import \"local.css\"", html);
     }
@@ -83,7 +83,7 @@ public sealed class ResultsAndSourceTests : IDisposable
     [Fact]
     public void Prepare_AddsAHead_WhenThereIsNone()
     {
-        Assert.StartsWith("<head><base href=\"http://wpt.test/css/\"></head>", WptRenderer.Prepare("css/t.html", "<p>x"));
+        Assert.StartsWith("<head><base href=\"http://web-platform.test:8000/css/\"></head>", WptRenderer.Prepare("css/t.html", "<p>x"));
     }
 
     [Fact]
@@ -94,7 +94,7 @@ public sealed class ResultsAndSourceTests : IDisposable
         // The declaration and the CDATA section stay (the XML parser takes them), and the injected base element is well-formed.
         Assert.StartsWith("<?xml", xhtml);
         Assert.Contains("<![CDATA[ p { color: red } ]]>", xhtml);
-        Assert.Contains("<base href=\"http://wpt.test/css/\"/>", xhtml);
+        Assert.Contains("<base href=\"http://web-platform.test:8000/css/\"/>", xhtml);
         System.Xml.Linq.XDocument.Parse(xhtml);
     }
 
@@ -103,7 +103,7 @@ public sealed class ResultsAndSourceTests : IDisposable
     {
         var xhtml = WptRenderer.Prepare("css/t.xhtml", "<html xmlns=\"http://www.w3.org/1999/xhtml\"><body/></html>");
 
-        Assert.Contains("<head><base href=\"http://wpt.test/css/\"/></head>", xhtml);
+        Assert.Contains("<head><base href=\"http://web-platform.test:8000/css/\"/></head>", xhtml);
         System.Xml.Linq.XDocument.Parse(xhtml);
     }
 

@@ -129,6 +129,24 @@ public sealed partial class HtmlDocument : IDisposable
             container.PaintFormControls = options.PaintFormControls;
             container.DocumentModeOverride = options.DocumentMode;
             container.DocumentSyntax = options.Syntax;
+            container.ScriptHost = options.ScriptHost;
+            container.ScriptApis = [.. options.ScriptApis];
+            container.ScriptNetwork = options.ScriptNetwork;
+            container.MeasuringCanvasFactory = options.MeasuringCanvasFactory;
+            container.MaxLayoutPasses = options.MaxLayoutPasses;
+            if (options.ScriptHost is not null && options.MeasuringCanvasFactory is { } canvasFactory)
+            {
+                // What a script's layout reads are answered from: the document as it is then, loaded and laid out once more without the scripts.
+                var probeOptions = options.CloneWithoutScripts();
+                container.ScriptProbe = async markup =>
+                {
+                    var probe = await LoadAsync(markup, renderContext, probeOptions);
+                    using var canvas = canvasFactory();
+                    await probe.LayoutAsync(canvas);
+                    return probe;
+                };
+            }
+
             document.ApplyTextOptions(options);
 
             // Read while the DOM tree is generated, when every text box is cut into words: hyphens: auto and the language-dependent
@@ -357,6 +375,52 @@ public sealed partial class HtmlDocument : IDisposable
             throw new InvalidOperationException("The document is already laid out.");
 
         await LayOutAsync(measuringCanvas);
+        await RunScriptLayoutPassesAsync(measuringCanvas);
+    }
+
+    // What a script host is told about a layout; the boxes are described only if it asks.
+    private PeachBrackets.ScriptHosting.ScriptLayout MakeScriptLayout(PeachBrackets.ScriptHosting.ScriptDocument live, int pass)
+    {
+        var fragmentainers = _container.FragmentTree?.Fragmentainers ?? [];
+        return new PeachBrackets.ScriptHosting.ScriptLayout(_pages!.Count, pass, () =>
+        {
+            var elements = live.ElementsInOrder();
+            return Html.Boxes.BoxReportCollector.Collect(_container, fragmentainers, ordinal => ordinal >= 0 && ordinal < elements.Count ? elements[ordinal] : null);
+        });
+    }
+
+    // A script host that kept the document live is told it has been laid out. When it changes the document the markup is taken from its tree and the
+    // document is laid out again, until the host is done or the pass limit is reached; then it is told the layout is final.
+    private async ValueTask RunScriptLayoutPassesAsync(Canvas measuringCanvas)
+    {
+        if (_container.ScriptHost is not { } host || _container.LiveScriptDocument is not { } live || _options is null)
+            return;
+
+        var token = _container.ScriptCancellation;
+        var limit = _container.MaxLayoutPasses;
+        for (var pass = 1; ; pass++)
+        {
+            var version = live.Version;
+            var layout = MakeScriptLayout(live, pass);
+            var more = await host.LayoutCompletedAsync(live, layout, token);
+            foreach (var api in live.Apis)
+                api.NoteLayoutCompleted(layout);
+
+            var changed = live.Version != version;
+            if ((!changed && !more) || (limit > 0 && pass >= limit))
+                break;
+
+            if (changed)
+            {
+                _container.AdoptScriptedSource(live.Serialize());
+                await ReloadAsync(measuringCanvas);
+            }
+        }
+
+        var final = MakeScriptLayout(live, 0);
+        await host.LayoutFinishedAsync(live, final, token);
+        foreach (var api in live.Apis)
+            api.NoteLayoutFinished(final);
     }
 
     /// <summary>

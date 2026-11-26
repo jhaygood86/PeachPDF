@@ -21,6 +21,26 @@ namespace PeachPDF.Rendering
 
         public static PeachDrawing.PDF.PdfEmbeddedFileRelationship ToEngine(this PeachPDF.PdfAttachmentRelationship value) => (PeachDrawing.PDF.PdfEmbeddedFileRelationship)(int)value;
 
+        public static PeachDrawing.PDF.PdfPageMode ToEngine(this PeachPDF.PdfPageMode value) => (PeachDrawing.PDF.PdfPageMode)(int)value;
+
+        public static PeachDrawing.PDF.PdfPageLayout ToEngine(this PeachPDF.PdfPageLayout value) => (PeachDrawing.PDF.PdfPageLayout)(int)value;
+
+        public static PeachDrawing.PDF.PdfOpenAction ToEngine(this PeachPDF.PdfOpenAction value) => (PeachDrawing.PDF.PdfOpenAction)(int)value;
+
+        public static PeachDrawing.PDF.PdfViewerOptions? ToEngine(this PeachPDF.PdfViewerOptions? value) => value is null
+            ? null
+            : new PeachDrawing.PDF.PdfViewerOptions
+            {
+                DisplayDocTitle = value.DisplayDocTitle,
+                HideToolbar = value.HideToolbar,
+                HideMenubar = value.HideMenubar,
+                HideWindowUI = value.HideWindowUI,
+                FitWindow = value.FitWindow,
+                CenterWindow = value.CenterWindow,
+                PrintScaling = value.PrintScaling is { } scaling ? (PeachDrawing.PDF.PdfPrintScaling)(int)scaling : null,
+                Duplex = value.Duplex is { } duplex ? (PeachDrawing.PDF.PdfDuplex)(int)duplex : null,
+            };
+
         public static PeachDrawing.PDF.PdfEncryptionOptions? ToEngine(this PeachPDF.PdfEncryptionOptions? value) => value is null
             ? null
             : new PeachDrawing.PDF.PdfEncryptionOptions

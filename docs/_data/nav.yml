@@ -32,6 +32,8 @@
           url: /peachdrawing-pdf.html
         - title: PeachDrawing.Svg
           url: /peachdrawing-svg.html
+        - title: PeachBrackets.Scripting
+          url: /peachbrackets-scripting.html
         - title: PeachDrawing.Skia
           url: /peachdrawing-skia.html
         - title: PeachDrawing.Win2D
@@ -87,6 +89,9 @@
     - title: PeachDrawing.Svg
       url: /api/PeachDrawing.Svg/
       prefix: /api/PeachDrawing.Svg/
+    - title: PeachBrackets.Scripting
+      url: /api/PeachBrackets.Scripting/
+      prefix: /api/PeachBrackets.Scripting/
     - title: PeachDrawing.Win2D
       url: /api/PeachDrawing.Win2D/
       prefix: /api/PeachDrawing.Win2D/

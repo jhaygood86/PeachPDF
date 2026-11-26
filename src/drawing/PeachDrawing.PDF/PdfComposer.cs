@@ -359,6 +359,28 @@ public sealed partial class PdfComposer : IDisposable
         foreach (var page in _pages)
             page.ApplyPrintBoxes();
         WritePageLabels();
+        WriteOpenAction();
+    }
+
+    // The action that runs as the file opens: a destination on the first page, or the viewer's print dialog.
+    private void WriteOpenAction()
+    {
+        if (_openAction is not { } action)
+            return;
+
+        var catalog = _document.Catalog.Elements;
+        if (action == PdfOpenAction.Print)
+        {
+            var named = new PeachDrawing.PDF.Engine.PdfDictionary(_document);
+            named.Elements.SetName("/Type", "/Action");
+            named.Elements.SetName("/S", "/Named");
+            named.Elements.SetName("/N", "/Print");
+            catalog.SetObject("/OpenAction", named);
+            return;
+        }
+
+        var fit = action == PdfOpenAction.FitWidth ? "/FitH null" : "/Fit";
+        catalog.SetObject("/OpenAction", new PeachDrawing.PDF.Engine.PdfArray(_document, _document.Pages[0].RequiredReference, new PeachDrawing.PDF.Engine.PdfLiteral(fit)));
     }
 
     private PdfSigningOptions? _signing;

@@ -939,6 +939,72 @@ const string pointerHtml = """
         """, pdfConfig);
 }
 
+// --- JavaScript (PeachBrackets.Scripting) ---
+
+{
+    var scriptingConfig = new PdfGenerateConfig { ScriptHost = new PeachBrackets.Scripting.JintScriptHost() };
+    await SaveShowcaseAsync("scripting", "Layout", "JavaScript Builds the Page",
+        "A page that fills itself in with JavaScript while it loads, with the opt-in PeachBrackets.Scripting package: a table made from data, bars sized from layout reads, a class set by a timer and a computed style copied into text. Without a script host the same page shows only its noscript fallback.",
+        """
+        <!DOCTYPE html><html><head><style>
+          @page { size: a4; margin: 15mm }
+          body { font: 10pt Arial, sans-serif; margin: 0 }
+          table { border-collapse: collapse; width: 100% }
+          td, th { border: 1px solid #889; padding: 3pt 6pt; text-align: left }
+          .bar { height: 10pt; background: #3b7ea8 }
+          .ready { background: #e6f4e6 }
+          #status { margin-top: 10pt; padding: 6pt }
+        </style></head><body>
+        <h1>JavaScript builds the page</h1>
+        <noscript><p>Scripting is off: this is the fallback.</p></noscript>
+        <table><thead><tr><th>Region</th><th>Sales</th><th></th></tr></thead><tbody id="rows"></tbody></table>
+        <div id="status">Waiting for the timer...</div>
+        <script>
+          var data = [['North', 120], ['South', 80], ['East', 200], ['West', 45]];
+          var rows = document.getElementById('rows');
+          data.forEach(function (row) {
+            var tr = document.createElement('tr');
+            tr.innerHTML = '<td>' + row[0] + '</td><td>' + row[1] + '</td><td><div class="bar" style="width:' + row[1] + 'px"></div></td>';
+            rows.appendChild(tr);
+          });
+          var widest = Math.max.apply(null, [].map.call(document.querySelectorAll('.bar'), function (b) { return b.getBoundingClientRect().width; }));
+          setTimeout(function () {
+            var status = document.getElementById('status');
+            status.classList.add('ready');
+            status.textContent = 'Built ' + data.length + ' rows; the widest bar is ' + Math.round(widest) + 'px; background is ' + getComputedStyle(status).backgroundColor;
+          }, 100);
+        </script>
+        </body></html>
+        """, scriptingConfig);
+}
+
+{
+    var canvasConfig = new PdfGenerateConfig { ScriptHost = new PeachBrackets.Scripting.JintScriptHost() };
+    await SaveShowcaseAsync("canvas_2d", "Layout", "Canvas 2D drawn by JavaScript",
+        "A canvas element a script draws on with the 2D context (gradient fill, a translucent circle, a dashed round-capped curve, a shadow and text). The drawing is replayed as vector content in the PDF, not rasterized.",
+        """
+        <!DOCTYPE html><html><head><style>
+          @page { size: a4; margin: 15mm }
+          body { font: 10pt Arial, sans-serif; margin: 0 }
+          canvas { border: 1px solid #888; width: 100%; height: auto }
+        </style></head><body>
+        <h1>Canvas 2D</h1>
+        <canvas id="c" width="600" height="320"></canvas>
+        <script>
+          var g = document.getElementById('c').getContext('2d');
+          var grad = g.createLinearGradient(0, 0, 600, 0); grad.addColorStop(0, '#ff8a00'); grad.addColorStop(1, '#e52e71');
+          g.fillStyle = grad; g.fillRect(20, 20, 560, 110);
+          g.fillStyle = 'rgba(0, 80, 200, 0.6)'; g.beginPath(); g.arc(150, 230, 70, 0, Math.PI * 2); g.fill();
+          g.strokeStyle = '#222'; g.lineWidth = 10; g.lineCap = 'round'; g.setLineDash([22, 14]);
+          g.beginPath(); g.moveTo(300, 290); g.bezierCurveTo(380, 150, 480, 330, 570, 200); g.stroke(); g.setLineDash([]);
+          g.shadowColor = 'rgba(0,0,0,0.5)'; g.shadowBlur = 10; g.shadowOffsetX = 5; g.shadowOffsetY = 5;
+          g.fillStyle = '#2a9d3f'; g.fillRect(240, 180, 60, 60);
+          g.shadowColor = 'transparent'; g.font = 'bold 44px serif'; g.fillStyle = '#fff'; g.fillText('Canvas 2D', 80, 90);
+        </script>
+        </body></html>
+        """, canvasConfig);
+}
+
 await SaveShowcaseAsync("progress_meter", "Forms & Interaction", "Progress & Meter",
     "<progress> bars filled to their value in the accent color (a blue by default), an indeterminate bar, and <meter> gauges that turn green, yellow or red by the region their value is in.",
     """

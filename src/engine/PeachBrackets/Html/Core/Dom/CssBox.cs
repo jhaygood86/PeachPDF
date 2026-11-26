@@ -1909,6 +1909,7 @@ namespace PeachBrackets.Html.Dom
             {
                 HtmlConstants.Img => new CssBoxImage(parent, tag),
                 HtmlConstants.Iframe => new CssBoxFrame(parent, tag),
+                "canvas" => new CssBoxCanvas(parent, tag),
                 HtmlConstants.Svg => new CssBoxSvg(parent, tag),
                 HtmlConstants.Math => new CssBoxMath(parent, tag),
                 HtmlConstants.Object => new CssBoxObject(parent, tag),

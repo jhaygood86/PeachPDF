@@ -124,6 +124,24 @@ public sealed class PdfComposerOptions
     public bool CompressContentStreams { get; set; } = true;
 
     /// <summary>
+    /// What a viewer shows beside the pages when it opens the file, or null (the default) to leave it to the writer: the bookmarks when the document
+    /// has any, otherwise only the pages.
+    /// </summary>
+    public PdfPageMode? PageMode { get; set; }
+
+    /// <summary>How a viewer lays the pages out when it opens the file, or null (the default) to leave it to the viewer.</summary>
+    public PdfPageLayout? PageLayout { get; set; }
+
+    /// <summary>
+    /// What a viewer does as it opens the file, or null (the default) for nothing beyond showing the first page. <see cref="PdfOpenAction.Print"/> is
+    /// an action that runs, which a PDF/A or PDF/X file may not have: <see cref="PdfComposer.Configure"/> throws for that combination.
+    /// </summary>
+    public PdfOpenAction? OpenAction { get; set; }
+
+    /// <summary>Preferences for how a viewer shows the file and offers to print it, or null (the default) for none.</summary>
+    public PdfViewerOptions? Viewer { get; set; }
+
+    /// <summary>
     /// Whether the file is written in the linearized layout ("fast web view", ISO 32000-1 Annex F): the first page's objects come first, then the
     /// other pages in order, with hint tables, so a viewer fetching the file over a network can show the first page before the rest has arrived.
     /// Defaults to <see langword="false"/>. A linearized file is a little larger.

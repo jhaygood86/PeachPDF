@@ -519,6 +519,10 @@ PeachPDF.PdfDocumentSyntax : enum Int32
   Auto = 0
   Html = 1
   Xml = 2
+PeachPDF.PdfDuplex : enum Int32
+  FlipLongEdge = 2
+  FlipShortEdge = 1
+  Simplex = 0
 PeachPDF.PdfEncryptionOptions : sealed class
   ctor()
   method static PdfEncryptionOptions ReadOnly(String userPassword = null, String ownerPassword = null)
@@ -526,6 +530,8 @@ PeachPDF.PdfEncryptionOptions : sealed class
   property PdfPermissions Permissions { get; set; }
   property String OwnerPassword { get; set; }
   property String UserPassword { get; set; }
+PeachPDF.PdfFailSafeException : sealed class
+  ctor()
 PeachPDF.PdfGenerateConfig : sealed class
   ctor()
   method Void SetMargins(Int32 value)
@@ -557,12 +563,15 @@ PeachPDF.PdfGenerateConfig : sealed class
   property Double? AnimationProgress { get; set; }
   property FacturXOptions FacturX { get; set; }
   property ICollection<PdfAttachment> Attachments { get; }
+  property ICollection<ScriptApi> ScriptApis { get; }
+  property IScriptHost ScriptHost { get; set; }
   property ImageCompression ImageCompression { get; set; }
   property Int32 DownscaleQuality { get; set; }
   property Int32 MarginBottom { get; set; }
   property Int32 MarginLeft { get; set; }
   property Int32 MarginRight { get; set; }
   property Int32 MarginTop { get; set; }
+  property Int32 MaxLayoutPasses { get; set; }
   property Int64 MaxRasterPixels { get; set; }
   property PageOrientation PageOrientation { get; set; }
   property PageSize PageSize { get; set; }
@@ -572,9 +581,13 @@ PeachPDF.PdfGenerateConfig : sealed class
   property PdfDocumentMode DocumentMode { get; set; }
   property PdfDocumentSyntax DocumentSyntax { get; set; }
   property PdfEncryptionOptions Encryption { get; set; }
+  property PdfOpenAction? OpenAction { get; set; }
+  property PdfPageLayout? PageLayout { get; set; }
+  property PdfPageMode? PageMode { get; set; }
   property PdfSigningOptions Signing { get; set; }
   property PdfUAConformance PdfUAConformance { get; set; }
   property PdfVersion PdfVersion { get; set; }
+  property PdfViewerOptions ViewerOptions { get; set; }
   property PdfXConformance PdfXConformance { get; set; }
   property RNetworkLoader NetworkLoader { get; set; }
   property String DefaultLanguage { get; set; }
@@ -624,6 +637,23 @@ PeachPDF.PdfLengthUnit : enum Int32
   Pixel = 1
   Point = 0
   Rem = 8
+PeachPDF.PdfOpenAction : enum Int32
+  FitPage = 0
+  FitWidth = 1
+  Print = 2
+PeachPDF.PdfPageLayout : enum Int32
+  OneColumn = 1
+  SinglePage = 0
+  TwoColumnLeft = 2
+  TwoColumnRight = 3
+  TwoPageLeft = 4
+  TwoPageRight = 5
+PeachPDF.PdfPageMode : enum Int32
+  FullScreen = 3
+  UseAttachments = 4
+  UseNone = 0
+  UseOutlines = 1
+  UseThumbs = 2
 PeachPDF.PdfPermissions : enum Int32
   All = 3900
   AllowAccessibilityExtract = 512
@@ -636,6 +666,9 @@ PeachPDF.PdfPermissions : enum Int32
   AllowPrint = 4
   None = 0
   ReadOnly = 2580
+PeachPDF.PdfPrintScaling : enum Int32
+  AppDefault = 0
+  None = 1
 PeachPDF.PdfSignatureBox : sealed class
   ctor()
   property Double FontSize { get; set; }
@@ -676,6 +709,16 @@ PeachPDF.PdfUAConformance : enum Int32
 PeachPDF.PdfVersion : enum Int32
   Pdf17 = 0
   Pdf20 = 1
+PeachPDF.PdfViewerOptions : sealed class
+  ctor()
+  property Boolean CenterWindow { get; set; }
+  property Boolean DisplayDocTitle { get; set; }
+  property Boolean FitWindow { get; set; }
+  property Boolean HideMenubar { get; set; }
+  property Boolean HideToolbar { get; set; }
+  property Boolean HideWindowUI { get; set; }
+  property PdfDuplex? Duplex { get; set; }
+  property PdfPrintScaling? PrintScaling { get; set; }
 PeachPDF.PdfXConformance : enum Int32
   None = 0
   X1a = 1

@@ -308,7 +308,7 @@ namespace PeachBrackets.Html.Dom
 
             // A frame that is a block container of its own (a blockified flex or grid item) has the block
             // layout add its border and padding around the word, so the word stays the content height.
-            if (word.OwnerBox is not CssBoxFrame { IsInline: false })
+            if (word.OwnerBox is not (CssBoxFrame { IsInline: false } or CssBoxCanvas { IsInline: false }))
                 word.Height += word.OwnerBox.ActualBorderBottomWidth + word.OwnerBox.ActualBorderTopWidth + word.OwnerBox.ActualPaddingTop + word.OwnerBox.ActualPaddingBottom;
         }
 
@@ -5861,7 +5861,7 @@ namespace PeachBrackets.Html.Dom
             // baseline, and the line's strut hangs its descent below the baseline: a 30px box alone on a line at 13px Arial is a 33px line (CSS 2.1 section
             // 10.8.1), where the line ended at the box's own bottom.
             if (BaselineIsBottomMarginEdge(b, coordinates.Line) && b.VerticalAlign.Value is { IsValue: false, Keyword: VerticalAlignment.Baseline }
-                && coordinates.Line.OwnerBox is { IsReplacedBlockWrapper: false } lineOwner && lineOwner is not (CssBoxImage or CssBoxSvg or CssBoxFrame)
+                && coordinates.Line.OwnerBox is { IsReplacedBlockWrapper: false } lineOwner && lineOwner is not (CssBoxImage or CssBoxSvg or CssBoxFrame or CssBoxCanvas)
                 && !SizesLinesTheQuirkyWay(lineOwner))
             {
                 coordinates.MaxBottom = Math.Max(coordinates.MaxBottom,
@@ -7112,7 +7112,7 @@ namespace PeachBrackets.Html.Dom
             // In quirks and limited-quirks mode a line with no text has no strut (Quirks Mode Standard 3.4): a line holding only an image is the image's
             // height, with no descent hanging below it. A line with text keeps the block's own strut, as in a browser; the standard's "ignored" is for
             // the minimum height a line of nothing but replaced content would get.
-            var extent = blockBox.IsReplacedBlockWrapper || blockBox is CssBoxImage or CssBoxSvg or CssBoxFrame || (word.IsImage && SizesLinesTheQuirkyWay(blockBox))
+            var extent = blockBox.IsReplacedBlockWrapper || blockBox is CssBoxImage or CssBoxSvg or CssBoxFrame or CssBoxCanvas || (word.IsImage && SizesLinesTheQuirkyWay(blockBox))
                 ? default
                 : ExtentOf(strutStyle, text: false);
 
@@ -10003,7 +10003,7 @@ namespace PeachBrackets.Html.Dom
             // A line holding nothing but this box still has its strut (CSS 2.1 section 10.8.1: every line box starts with a zero-width inline box with the
             // block's own font and line-height), whose descent hangs below the baseline the box sits on: an inline-block of 30px with nothing else on its line
             // is a 33px line at 13px Arial, as in a browser. Words on the line bring their own strut, so it is only added where there is none.
-            if (held is null && !blockBox.IsReplacedBlockWrapper && blockBox is not (CssBoxImage or CssBoxSvg or CssBoxFrame) && !SizesLinesTheQuirkyWay(blockBox))
+            if (held is null && !blockBox.IsReplacedBlockWrapper && blockBox is not (CssBoxImage or CssBoxSvg or CssBoxFrame or CssBoxCanvas) && !SizesLinesTheQuirkyWay(blockBox))
                 held = HalfLeadingExtentOf(blockBox.ActualFont, blockBox.ActualLineHeight);
 
             CommitLineExtent(coordinates, held is { } known ? known.Union(extent) : extent);

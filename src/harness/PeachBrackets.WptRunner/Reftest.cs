@@ -52,6 +52,12 @@ internal static partial class ReftestParser
     [GeneratedRegex(@"\b(maxDifference|totalPixels)\s*=\s*(\d+)(?:\s*-\s*(\d+))?", RegexOptions.CultureInvariant)]
     private static partial Regex FuzzyField();
 
+    /// <summary>
+    /// Whether the run has a script host, so a page with scripts (and <c>reftest-wait</c>, which a script ends) is rendered instead of skipped.
+    /// Set once, by <c>run --scripting</c>, before any test is parsed.
+    /// </summary>
+    public static bool ScriptingEnabled { get; set; }
+
     public static ReftestInfo Parse(string wptPath, string source)
     {
         var info = new ReftestInfo { Path = wptPath };
@@ -88,6 +94,10 @@ internal static partial class ReftestParser
         {
             info.IsTestharness = true;
             info.SkipReason = "testharness.js test";
+        }
+        else if (ScriptingEnabled)
+        {
+            // Run with the script host: the page's scripts, and the class they remove, are what the screenshot waits for.
         }
         else if (ReftestWait().IsMatch(source))
         {

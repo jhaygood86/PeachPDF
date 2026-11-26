@@ -10,6 +10,7 @@
   <ItemGroup>
     <!-- Public API only, the way a package consumer uses the engine (the WPT checkout is fetched, never vendored). -->
     <ProjectReference Include="..\..\engine\PeachBrackets\PeachBrackets.csproj" />
+    <ProjectReference Include="..\..\engine\PeachBrackets.Scripting\PeachBrackets.Scripting.csproj" />
     <ProjectReference Include="..\..\drawing\PeachDrawing\PeachDrawing.csproj" />
   </ItemGroup>
 
@@ -19,6 +20,13 @@
 
   <ItemGroup>
     <None Include="wpt\modules.json" Link="modules.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="wpt\testharness-modules.json" Link="testharness-modules.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <!-- The faces the generic font families are pinned to, so a run measures the same fonts on every machine. -->
+    <None Include="..\..\..\assets\fonts\Liberation*.woff" Link="fonts\%(Filename)%(Extension)">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <None Include="wpt\WPT_COMMIT" Link="WPT_COMMIT">

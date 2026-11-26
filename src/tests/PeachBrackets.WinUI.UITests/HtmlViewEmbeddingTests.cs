@@ -295,21 +295,38 @@ public class HtmlViewEmbeddingTests
         var family = "Late Test Sans " + Guid.NewGuid().ToString("N")[..6];
         var html = $"<style>body{{margin:0}}span{{white-space:nowrap}}</style><span id=s style=\"font-size:24px;font-family:'{family}', monospace\">Wide words in a face</span>";
 
-        var (before, after) = await UiThread.RunAsync(async window =>
+        // Another test may already have put the same face in the shared set, in which case it is also what 'monospace' falls back to here;
+        // so the view that was loaded first is compared with one that loads after the font was added, not with the fallback.
+        var (reloaded, expected) = await UiThread.RunAsync(async window =>
         {
             var view = Embedded(html);
-            window.Content = new StackPanel { Width = 600, Children = { view } };
+            var panel = new StackPanel { Width = 600, Children = { view } };
+            window.Content = panel;
             view.Measure(new Size(600, double.PositiveInfinity));
             await Task.Yield();
             var widthBefore = view.Document!.GetElementBounds("s")!.Value.Width;
 
             HtmlViewFonts.AddFile(path, new AddOptions { FamilyName = family });
-            view.UserStyleSheet = "/* load again */";
-            view.Measure(new Size(600, double.PositiveInfinity));
-            await Task.Yield();
-            return (widthBefore, view.Document!.GetElementBounds("s")!.Value.Width);
+            var fresh = Embedded(html);
+            panel.Children.Add(fresh);
+            fresh.Measure(new Size(600, double.PositiveInfinity));
+
+            var widthAfter = widthBefore;
+            var freshWidth = 0.0;
+            for (var attempt = 0; attempt < 100 && (freshWidth == 0 || widthAfter != freshWidth); attempt++)
+            {
+                await Task.Delay(50);
+                view.UserStyleSheet = "/* load again " + attempt + " */";
+                view.Measure(new Size(600, double.PositiveInfinity));
+                fresh.Measure(new Size(600, double.PositiveInfinity));
+                widthAfter = view.Document!.GetElementBounds("s")!.Value.Width;
+                freshWidth = fresh.Document?.GetElementBounds("s")?.Width ?? 0;
+            }
+
+            return (widthAfter, freshWidth);
         });
 
-        Assert.NotEqual(before, after);
+        Assert.NotEqual(0, expected);
+        Assert.Equal(expected, reloaded);
     }
 }

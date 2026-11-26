@@ -36,6 +36,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\PeachPDF\PeachPDF.csproj" />
+    <ProjectReference Include="..\engine\PeachBrackets.Scripting\PeachBrackets.Scripting.csproj" />
   </ItemGroup>
 
   <ItemGroup>

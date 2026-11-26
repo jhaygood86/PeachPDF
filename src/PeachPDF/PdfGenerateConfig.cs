@@ -92,6 +92,45 @@ namespace PeachPDF
         public PdfDocumentSyntax DocumentSyntax { get; set; } = PdfDocumentSyntax.Auto;
 
         /// <summary>
+        /// The host that runs the document's <c>&lt;script&gt;</c> elements, or null (the default) to leave scripting off, in which case scripts are
+        /// ignored. Add the <c>PeachBrackets.Scripting</c> package and set a <c>JintScriptHost</c> to run JavaScript while the document loads; what the
+        /// scripts leave in the document is what is rendered. PeachPDF itself does not depend on that package.
+        /// </summary>
+        public PeachBrackets.ScriptHosting.IScriptHost? ScriptHost { get; set; }
+
+        /// <summary>
+        /// How many times a script host may change the laid-out document and have it laid out again (a script that registers a function to run after
+        /// layout and then changes the document). When the limit is reached the last change is not laid out. The default is 16; 0 means no limit, which
+        /// lets a script that changes the document on every pass run forever. Only meaningful with a <see cref="ScriptHost"/>.
+        /// </summary>
+        public int MaxLayoutPasses { get; set; } = 16;
+
+        /// <summary>
+        /// Global objects to add to the document's scripts, in addition to what the script host provides: each is a <see cref="PeachBrackets.ScriptHosting.ScriptApi"/>
+        /// with properties, methods and events, which the host installs by name. Only used when <see cref="ScriptHost"/> is set. An object serves one
+        /// document, so a configuration that renders several documents should add fresh objects for each.
+        /// </summary>
+        public ICollection<PeachBrackets.ScriptHosting.ScriptApi> ScriptApis { get; } = [];
+
+        /// <summary>
+        /// What a PDF viewer shows beside the pages when it opens the file, or null (the default) to leave it to the writer: the bookmarks when the
+        /// document has any, otherwise only the pages. A script can set it through the <c>PDF</c> object when this is null.
+        /// </summary>
+        public PdfPageMode? PageMode { get; set; }
+
+        /// <summary>How a PDF viewer lays the pages out when it opens the file, or null (the default) to leave it to the viewer.</summary>
+        public PdfPageLayout? PageLayout { get; set; }
+
+        /// <summary>
+        /// What a PDF viewer does as it opens the file besides showing the first page, or null (the default) for nothing. <see cref="PdfOpenAction.Print"/>
+        /// is not allowed with <see cref="PdfAConformance"/> or <see cref="PdfXConformance"/>.
+        /// </summary>
+        public PdfOpenAction? OpenAction { get; set; }
+
+        /// <summary>Preferences for how a PDF viewer shows the file and offers to print it, or null (the default) for none.</summary>
+        public PdfViewerOptions? ViewerOptions { get; set; }
+
+        /// <summary>
         /// When set to <c>true</c>, the document's own author style sheets (its <c>&lt;style&gt;</c>
         /// elements and <c>&lt;link rel="stylesheet"&gt;</c> references) are ignored — only the user-agent
         /// default styles and any caller-supplied stylesheet (the <c>cssData</c> argument) are applied.

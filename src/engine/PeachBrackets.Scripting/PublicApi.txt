@@ -1,0 +1,50 @@
+PeachBrackets.Scripting.JintScriptHost : sealed class
+  ctor(JintScriptOptions options = null)
+  method virtual String EvaluateFunction(ScriptDocument document, String name, IReadOnlyList<String> arguments)
+  method virtual ValueTask LayoutFinishedAsync(ScriptDocument document, ScriptLayout layout, CancellationToken cancellationToken = null)
+  method virtual ValueTask RunAsync(ScriptDocument document, CancellationToken cancellationToken = null)
+  method virtual ValueTask<Boolean> LayoutCompletedAsync(ScriptDocument document, ScriptLayout layout, CancellationToken cancellationToken = null)
+  method virtual Void DocumentClosed(ScriptDocument document)
+  property JintScriptOptions Options { get; }
+PeachBrackets.Scripting.JintScriptOptions : sealed class
+  ctor()
+  property Boolean LoadExternalScripts { get; set; }
+  property Boolean PrinceCompatibility { get; set; }
+  property Boolean RunAuthorScripts { get; set; }
+  property Boolean RunModuleScripts { get; set; }
+  property IList<UserScript> UserScripts { get; }
+  property ILogger Logger { get; set; }
+  property Int32 MaxCallbacks { get; set; }
+  property Int32 MaxRecursionDepth { get; set; }
+  property Int64 MemoryLimitBytes { get; set; }
+  property TimeSpan MaxVirtualTime { get; set; }
+  property TimeSpan ScriptTimeout { get; set; }
+PeachBrackets.Scripting.ScriptDataEntry : sealed class
+  ctor(String Name, String Value)
+  method ScriptDataEntry <Clone>$()
+  method Void Deconstruct(out String Name, out String Value)
+  method virtual Boolean Equals(Object obj)
+  method virtual Boolean Equals(ScriptDataEntry other)
+  method virtual IEnumerator<KeyValuePair<String, Object>> GetEnumerator()
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property Int32 Count { get; }
+  property KeyValuePair<String, Object> Item[Int32 index] { get; }
+  property String Name { get; init; }
+  property String Value { get; init; }
+PeachBrackets.Scripting.ScriptLogEvents : static class
+  property static EventId Data { get; }
+  property static EventId Message { get; }
+  property static EventId PendingWork { get; }
+  property static EventId ScriptFailed { get; }
+  property static EventId ScriptLoadFailed { get; }
+PeachBrackets.Scripting.UserScript : sealed class
+  ctor(String Name, String Code)
+  method UserScript <Clone>$()
+  method Void Deconstruct(out String Name, out String Code)
+  method virtual Boolean Equals(Object obj)
+  method virtual Boolean Equals(UserScript other)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property String Code { get; init; }
+  property String Name { get; init; }

@@ -24,6 +24,8 @@ namespace PeachBrackets.WptRunner
                   --timeout <seconds>  per-test limit (default 60)
                   --out <dir>          write <dir>/<commit>/<module>.json and summary.md
                   --dump <dir>         write PNGs of every image compared
+                  --testharness        run the testharness.js tests of testharness-modules.json (PeachBrackets.Scripting); the floors count passing subtests
+                  --scripting          run the pages' JavaScript (PeachBrackets.Scripting) and test the pages that need it; use its own --floors file
                   --floors <file>      fail (exit 1) when a full module run has fewer passes than its committed floor
                   --update-floors      raise the floors in --floors to this run's pass counts (never lowers; --allow-lower overrides)
                   --expected-failures <file>  tests that must fail (each with its reason); fail (exit 1) when one passes, or is not found in a full run
@@ -92,7 +94,11 @@ namespace PeachBrackets.WptRunner
             var commit = PinnedCommit();
             var cache = o.GetValueOrDefault("cache") ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".peachbrackets-wpt");
             var dest = Path.Combine(cache, "wpt", commit);
-            if (File.Exists(Path.Combine(dest, ".complete")))
+            string[] wanted = ["css/", "fonts/", "images/", "common/", "resources/", "dom/", "html/resources/", "interfaces/", "xhr/", "fetch/", "url/", "FileAPI/", "webidl/", "domparsing/", "html/canvas/", "html/semantics/", "html/dom/", "streams/", "html/webappapis/", "html/infrastructure/", "webmessaging/", "encoding/"];
+
+            // The marker names what the checkout holds, so a checkout fetched before a directory was added is fetched again.
+            var marker = string.Join(',', wanted);
+            if (File.Exists(Path.Combine(dest, ".complete")) && File.ReadAllText(Path.Combine(dest, ".complete")).Trim() == marker)
             {
                 Console.WriteLine(dest);
                 return 0;
@@ -103,7 +109,6 @@ namespace PeachBrackets.WptRunner
                 Directory.Delete(partial, recursive: true);
             Directory.CreateDirectory(partial);
 
-            string[] wanted = ["css/", "fonts/", "images/", "common/", "resources/"];
             using var http = new HttpClient { Timeout = TimeSpan.FromMinutes(15) };
             await using var download = await http.GetStreamAsync($"https://codeload.github.com/web-platform-tests/wpt/tar.gz/{commit}");
             await using var gzip = new GZipStream(download, CompressionMode.Decompress);
@@ -128,7 +133,7 @@ namespace PeachBrackets.WptRunner
                 await entry.DataStream.CopyToAsync(file);
             }
 
-            await File.WriteAllTextAsync(Path.Combine(partial, ".complete"), string.Empty);
+            await File.WriteAllTextAsync(Path.Combine(partial, ".complete"), marker);
             if (Directory.Exists(dest))
                 Directory.Delete(dest, recursive: true);
             Directory.Move(partial, dest);
@@ -150,14 +155,16 @@ namespace PeachBrackets.WptRunner
             var floorsFile = o.GetValueOrDefault("floors");
             var expectedFile = o.GetValueOrDefault("expected-failures");
 
-            var modules = Modules.Load(Path.Combine(AppContext.BaseDirectory, "modules.json"));
+            var testharness = o.ContainsKey("testharness");
+            var modules = Modules.Load(Path.Combine(AppContext.BaseDirectory, testharness ? "testharness-modules.json" : "modules.json"));
             if (o.GetValueOrDefault("module") is { } id)
                 modules = [.. modules.Where(m => m.Id == id)];
             if (modules.Count == 0)
                 throw new ArgumentException("No such module.");
 
+            ReftestParser.ScriptingEnabled = o.ContainsKey("scripting");
             var renderer = new WptRenderer(wpt);
-            var evaluator = new ReftestEvaluator(renderer, dump);
+            IWptEvaluator evaluator = testharness ? new TestharnessEvaluator(wpt) : new ReftestEvaluator(renderer, dump);
             var floors = floorsFile is null ? new Floors() : Floors.Load(floorsFile);
             var expected = expectedFile is null ? new ExpectedFailures() : ExpectedFailures.Load(expectedFile);
             var seenExpected = new HashSet<string>(StringComparer.Ordinal);
@@ -167,7 +174,7 @@ namespace PeachBrackets.WptRunner
 
             foreach (var module in modules)
             {
-                var discovered = single is null ? Modules.Discover(wpt, module) : [single];
+                var discovered = single is null ? (testharness ? Modules.DiscoverTestharness(wpt, module) : Modules.Discover(wpt, module)) : [single];
                 var selected = discovered
                     .Where(p => filter is null || p.Contains(filter, StringComparison.Ordinal))
                     .Where((_, i) => i % stride == 0)
@@ -181,6 +188,9 @@ namespace PeachBrackets.WptRunner
                 });
 
                 var result = ModuleResult.From(commit, module.Id, discovered.Count, stride, results);
+                if (testharness)
+                    Console.WriteLine($"{module.Id,-18} files {result.Counts.Total,5}  pass {result.Counts.Pass,5}  fail {result.Counts.Fail,5}  skipped {result.Counts.Skipped,4}  subtests {result.Counts.SubtestPass}/{result.Counts.SubtestTotal}  ({clock.Elapsed.TotalSeconds:0.0}s)");
+                else
                 Console.WriteLine($"{module.Id,-18} total {result.Counts.Total,5}  pass {result.Counts.Pass,5}  fail {result.Counts.Fail,5}  blank {result.Counts.Blank,4}  skipped {result.Counts.Skipped,5}  rate {result.Rate}  ({clock.Elapsed.TotalSeconds:0.0}s)");
                 if (single is not null)
                 {
@@ -205,19 +215,24 @@ namespace PeachBrackets.WptRunner
 
                 if (gateable && floorsFile is not null)
                 {
+                    var score = testharness ? result.Counts.SubtestPass : result.Counts.Pass;
                     floors.Modules.TryGetValue(module.Id, out var floor);
-                    if (result.Counts.Pass < floor)
+                    if (score < floor)
                     {
                         regressions++;
-                        Console.Error.WriteLine($"REGRESSION: {module.Id} passes {result.Counts.Pass}, below its floor of {floor}.");
+                        Console.Error.WriteLine($"REGRESSION: {module.Id} passes {score}, below its floor of {floor}.");
                     }
-                    else if (result.Counts.Pass > floor && !o.ContainsKey("update-floors"))
+                    else if (score > floor && !o.ContainsKey("update-floors"))
                     {
-                        Console.WriteLine($"  note: {module.Id} passes {result.Counts.Pass} above its floor of {floor}; raise it with --update-floors.");
+                        Console.WriteLine($"  note: {module.Id} passes {score} above its floor of {floor}; raise it with --update-floors.");
                     }
 
-                    if (o.ContainsKey("update-floors") && (result.Counts.Pass > floor || o.ContainsKey("allow-lower")))
-                        floors.Modules[module.Id] = result.Counts.Pass;
+                    if (o.ContainsKey("update-floors"))
+                    {
+                        var written = score - floors.Margins.GetValueOrDefault(module.Id);
+                        if (written > floor || o.ContainsKey("allow-lower"))
+                            floors.Modules[module.Id] = written;
+                    }
                 }
             }
 
@@ -244,9 +259,18 @@ namespace PeachBrackets.WptRunner
             return regressions == 0 ? 0 : 1;
         }
 
-        private static async Task<TestResult> EvaluateWithTimeoutAsync(ReftestEvaluator evaluator, string path, TimeSpan timeout)
+        private static async Task<TestResult> EvaluateWithTimeoutAsync(IWptEvaluator evaluator, string path, TimeSpan timeout)
         {
-            var work = Task.Run(() => evaluator.EvaluateAsync(path));
+            // A page that recurses deeply (up to the engine's depth limit) overflows the stack of a pool thread (1 MB on Windows, and on Linux too for the
+            // popover and focus pages), which kills the whole process, so each test runs on a thread of its own with a large stack.
+            var completion = new TaskCompletionSource<TestResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var thread = new Thread(() =>
+            {
+                try { completion.SetResult(evaluator.EvaluateAsync(path).GetAwaiter().GetResult()); }
+                catch (Exception ex) { completion.SetException(ex); }
+            }, 128 * 1024 * 1024) { IsBackground = true };
+            thread.Start();
+            var work = completion.Task;
             if (await Task.WhenAny(work, Task.Delay(timeout)) == work)
                 return await work;
             return new TestResult(Outcome.Fail, $"error: timeout after {timeout.TotalSeconds:0}s");

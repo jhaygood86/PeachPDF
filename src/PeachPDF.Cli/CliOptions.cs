@@ -72,6 +72,15 @@ internal sealed class CliOptions
     public bool NoDefaultStyle { get; set; }
     public bool NoAuthorStyle { get; set; }
 
+    /// <summary>Whether the document's <c>&lt;script&gt;</c> elements run (<c>--enable-scripting</c>), with the JavaScript host of <c>PeachBrackets.Scripting</c>.</summary>
+    public bool EnableScripting { get; set; }
+
+    /// <summary>Scripts to run in the document before its own (<c>--script</c>, repeatable); they run even without <c>--enable-scripting</c>.</summary>
+    public List<string> UserScripts { get; } = [];
+
+    /// <summary>How many times a script may change the laid-out document and have it laid out again (<c>--max-passes</c>); null for the library default, 0 for no limit.</summary>
+    public int? MaxPasses { get; set; }
+
     /// <summary>The mode to lay the HTML out in (<c>--document-mode</c>); <see cref="PdfDocumentMode.Auto"/> takes it from the DOCTYPE, as a browser does.</summary>
     public PdfDocumentMode DocumentMode { get; set; } = PdfDocumentMode.Auto;
 

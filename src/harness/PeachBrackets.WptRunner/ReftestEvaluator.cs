@@ -10,10 +10,13 @@ internal interface IReftestRenderer
 
 internal enum Outcome { Pass, Fail, Blank, Skipped }
 
-internal readonly record struct TestResult(Outcome Outcome, string? Reason = null);
+/// <summary>The subtests of a testharness.js file: how many passed, of how many it reported.</summary>
+internal readonly record struct SubtestCounts(int Pass, int Total);
+
+internal readonly record struct TestResult(Outcome Outcome, string? Reason = null, SubtestCounts? Subtests = null);
 
 /// <summary>Applies the WPT reftest rules to one test: at least one <c>match</c> reference (and its chain) must be equal within the fuzzy allowance and every <c>mismatch</c> reference must differ.</summary>
-internal sealed class ReftestEvaluator(IReftestRenderer renderer, string dumpDirectory = "")
+internal sealed class ReftestEvaluator(IReftestRenderer renderer, string dumpDirectory = "") : IWptEvaluator
 {
     private readonly Dictionary<string, ReftestInfo> _infos = [];
 

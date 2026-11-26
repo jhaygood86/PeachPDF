@@ -2,7 +2,7 @@
 {
     internal sealed class ScriptingMediaFeature : MediaFeature
     {
-        private static readonly IValueConverter TheConverter = Map.ScriptingStates.ToConverter();
+        private static readonly IValueConverter TheConverter = Map.ScriptingStates.ToConverter().Option();
 
         public ScriptingMediaFeature() : base(FeatureNames.Scripting)
         {

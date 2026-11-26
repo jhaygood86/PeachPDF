@@ -157,6 +157,44 @@ public class CliConfigTranslationTests
     }
 
     [Fact]
+    public void Scripting_IsOffUnlessAsked()
+    {
+        Assert.Null(CliRunner.BuildConfig(ArgumentParser.Parse(["doc.html"])).ScriptHost);
+        Assert.IsType<PeachBrackets.Scripting.JintScriptHost>(CliRunner.BuildConfig(ArgumentParser.Parse(["--enable-scripting", "doc.html"])).ScriptHost);
+    }
+
+    [Fact]
+    public void MaxPasses_MapsToTheLayoutPassLimit_AndRejectsNonNumbers()
+    {
+        Assert.Equal(new PdfGenerateConfig().MaxLayoutPasses, CliRunner.BuildConfig(ArgumentParser.Parse(["doc.html"])).MaxLayoutPasses);
+        Assert.Equal(3, CliRunner.BuildConfig(ArgumentParser.Parse(["--max-passes", "3", "doc.html"])).MaxLayoutPasses);
+        Assert.Equal(0, CliRunner.BuildConfig(ArgumentParser.Parse(["--max-passes=0", "doc.html"])).MaxLayoutPasses);
+        Assert.Contains(ArgumentParser.Parse(["--max-passes=many", "doc.html"]).Errors, e => e.Contains("--max-passes", StringComparison.Ordinal));
+        Assert.Contains(ArgumentParser.Parse(["--max-passes=-1", "doc.html"]).Errors, e => e.Contains("--max-passes", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void ScriptFiles_TurnScriptingOnWithTheDocumentsOwnScriptsOff()
+    {
+        var file = Path.GetTempFileName();
+        try
+        {
+            File.WriteAllText(file, "Log.info('hi');");
+            var user = (PeachBrackets.Scripting.JintScriptHost)CliRunner.BuildConfig(ArgumentParser.Parse(["--script", file, "doc.html"])).ScriptHost!;
+            Assert.False(user.Options.RunAuthorScripts);
+            Assert.Equal(file, Assert.Single(user.Options.UserScripts).Name);
+
+            var both = (PeachBrackets.Scripting.JintScriptHost)CliRunner.BuildConfig(ArgumentParser.Parse(["--script=" + file, "--enable-scripting", "doc.html"])).ScriptHost!;
+            Assert.True(both.Options.RunAuthorScripts);
+            Assert.Single(both.Options.UserScripts);
+        }
+        finally
+        {
+            File.Delete(file);
+        }
+    }
+
+    [Fact]
     public void RasterDpi_DefaultsToTheLibraryDefault_AndMapsWhenGiven()
     {
         Assert.Equal(new PdfGenerateConfig().RasterizationDpi, CliRunner.BuildConfig(ArgumentParser.Parse(["doc.html"])).RasterizationDpi);

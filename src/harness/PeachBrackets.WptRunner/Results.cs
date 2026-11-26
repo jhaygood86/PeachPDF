@@ -12,6 +12,10 @@ internal sealed class ModuleCounts
     [JsonPropertyName("fail")] public int Fail { get; set; }
     [JsonPropertyName("blank")] public int Blank { get; set; }
     [JsonPropertyName("skipped")] public int Skipped { get; set; }
+
+    /// <summary>Testharness.js runs only: the subtests that passed and the subtests reported, over every file.</summary>
+    [JsonPropertyName("subtestPass")] public int SubtestPass { get; set; }
+    [JsonPropertyName("subtestTotal")] public int SubtestTotal { get; set; }
 }
 
 /// <summary>One module's results, the file <c>&lt;out&gt;/&lt;wpt-commit&gt;/&lt;module&gt;.json</c>. Tests are listed in ordinal path order so runs diff cleanly.</summary>
@@ -35,6 +39,11 @@ internal sealed class ModuleResult
         foreach (var (path, result) in results.OrderBy(p => p.Key, StringComparer.Ordinal))
         {
             r.Counts.Total++;
+            if (result.Subtests is { } subtests)
+            {
+                r.Counts.SubtestPass += subtests.Pass;
+                r.Counts.SubtestTotal += subtests.Total;
+            }
             switch (result.Outcome)
             {
                 case Outcome.Pass: r.Counts.Pass++; r.Pass.Add(path); break;
@@ -111,6 +120,12 @@ internal sealed class Floors
     [JsonPropertyName("formatVersion")] public int FormatVersion { get; set; } = 1;
     [JsonPropertyName("wptCommit")] public string WptCommit { get; set; } = "";
     [JsonPropertyName("floors")] public SortedDictionary<string, int> Modules { get; set; } = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// How far below a measured count a module's floor is written, for the modules whose count varies from run to run under load (a test that races a timer,
+    /// a script that nears its memory limit). <c>--update-floors</c> writes <c>measured - margin</c>, and still never lowers a floor.
+    /// </summary>
+    [JsonPropertyName("margins")] public SortedDictionary<string, int> Margins { get; set; } = new(StringComparer.Ordinal);
 
     private static readonly JsonSerializerOptions Options = new() { WriteIndented = true };
 

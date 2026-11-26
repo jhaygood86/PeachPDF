@@ -231,8 +231,8 @@ Form elements are rendered as static boxes by default. There is no interactive b
 
 | Element | MDN Reference | Notes |
 |---------|--------------|-------|
-| `script` | [script](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/script) | Completely ignored; JavaScript is not executed |
-| `noscript` | [noscript](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/noscript) | Content is always rendered, because JavaScript is never executed |
+| `script` | [script](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/script) | Ignored by default. With a script host set (the opt-in [PeachBrackets.Scripting](peachbrackets-scripting.md) package) its JavaScript runs once while the document loads |
+| `noscript` | [noscript](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/noscript) | Content is rendered unless a script host is set, which is when scripting is enabled and the element is hidden |
 
 ### Legacy Frames
 

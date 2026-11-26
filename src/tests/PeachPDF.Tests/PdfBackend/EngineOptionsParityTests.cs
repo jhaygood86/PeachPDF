@@ -17,6 +17,11 @@ namespace PeachPDF.Tests.PdfBackendTests
             { typeof(PeachPDF.PdfVersion), typeof(PeachDrawing.PDF.PdfVersion) },
             { typeof(PeachPDF.ImageCompression), typeof(PeachDrawing.PDF.ImageCompression) },
             { typeof(PeachPDF.PdfPermissions), typeof(PeachDrawing.PDF.PdfPermissions) },
+            { typeof(PeachPDF.PdfPageMode), typeof(PeachDrawing.PDF.PdfPageMode) },
+            { typeof(PeachPDF.PdfPageLayout), typeof(PeachDrawing.PDF.PdfPageLayout) },
+            { typeof(PeachPDF.PdfOpenAction), typeof(PeachDrawing.PDF.PdfOpenAction) },
+            { typeof(PeachPDF.PdfPrintScaling), typeof(PeachDrawing.PDF.PdfPrintScaling) },
+            { typeof(PeachPDF.PdfDuplex), typeof(PeachDrawing.PDF.PdfDuplex) },
             { typeof(PeachPDF.ColorBlackGeneration), typeof(PeachDrawing.PDF.ColorBlackGeneration) },
             { typeof(PeachPDF.ColorConversionMode), typeof(PeachDrawing.PDF.ColorConversionMode) },
             { typeof(PeachPDF.ColorRenderingIntent), typeof(PeachDrawing.PDF.ColorRenderingIntent) },
@@ -32,6 +37,7 @@ namespace PeachPDF.Tests.PdfBackendTests
         [Theory]
         [InlineData(typeof(PeachPDF.ColorOptions), typeof(PeachDrawing.PDF.ColorOptions))]
         [InlineData(typeof(PeachPDF.PdfEncryptionOptions), typeof(PeachDrawing.PDF.PdfEncryptionOptions))]
+        [InlineData(typeof(PeachPDF.PdfViewerOptions), typeof(PeachDrawing.PDF.PdfViewerOptions))]
         public void MirroredOptionClass_HasTheSamePublicProperties(Type original, Type mirror)
         {
             static string[] Properties(Type t) => [.. t.GetProperties(BindingFlags.Public | BindingFlags.Instance)

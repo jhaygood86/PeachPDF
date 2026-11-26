@@ -50,6 +50,92 @@ public class CliRunnerIntegrationTests
     }
 
     [Fact]
+    public async Task EnableScripting_RunsTheDocumentsJavaScript_AndOffIgnoresIt()
+    {
+        const string html = "<!DOCTYPE html><html><body><p id=p>plain</p><div style='width:80px;height:20px;background:#f00'></div><script>document.getElementById('p').textContent = 'a much longer paragraph written by the script';</script></body></html>";
+
+        async Task<byte[]> RenderAsync(params string[] args)
+        {
+            using var stdout = new MemoryStream();
+            var exit = await CliRunner.RunAsync(ArgumentParser.Parse([.. args, "--no-compress", "-", "-o", "-"]), new StringReader(html), stdout);
+            Assert.Equal(0, exit);
+            return stdout.ToArray();
+        }
+
+        var off = await RenderAsync();
+        var on = await RenderAsync("--enable-scripting");
+
+        // The script makes the paragraph longer, which puts more glyphs in the (uncompressed) page content.
+        Assert.NotEqual(off.Length, on.Length);
+        Assert.True(on.Length > off.Length);
+    }
+
+    [Fact]
+    public async Task AScriptFile_RunsInTheDocument_AndItsLogGoesToTheLogFile()
+    {
+        var dir = CreateTempDir();
+        try
+        {
+            var script = Path.Combine(dir, "user.js");
+            var log = Path.Combine(dir, "run.log");
+            File.WriteAllText(script, "document.getElementById('p').textContent = 'a much longer paragraph written by the user script'; Log.info('user script ran'); Log.data('answer', 42);");
+            const string html = "<!DOCTYPE html><html><body><p id=p>plain</p><script>Log.info('author script ran');</script></body></html>";
+
+            async Task<byte[]> RenderAsync(params string[] args)
+            {
+                using var stdout = new MemoryStream();
+                var exit = await CliRunner.RunAsync(ArgumentParser.Parse([.. args, "--no-compress", "-", "-o", "-"]), new StringReader(html), stdout);
+                Assert.Equal(0, exit);
+                return stdout.ToArray();
+            }
+
+            var off = await RenderAsync();
+            var on = await RenderAsync("--script", script, "--log", log);
+
+            Assert.True(on.Length > off.Length);
+            var written = await File.ReadAllTextAsync(log, TestContext.Current.CancellationToken);
+            Assert.Contains("user script ran", written, StringComparison.Ordinal);
+            Assert.Contains("answer=42", written, StringComparison.Ordinal);
+            Assert.DoesNotContain("author script ran", written, StringComparison.Ordinal);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task APostLayoutFunction_ChangesThePdf_AndTheFinalPageCountIsLogged()
+    {
+        var dir = CreateTempDir();
+        try
+        {
+            var script = Path.Combine(dir, "user.js");
+            var log = Path.Combine(dir, "run.log");
+            File.WriteAllText(script, "Prince.registerPostLayoutFunc(function () { document.body.appendChild(document.createTextNode(' added after layout')); }); Prince.addEventListener('complete', function () { Log.data('pages', Prince.pageCount); });");
+
+            async Task<byte[]> RenderAsync(params string[] args)
+            {
+                using var stdout = new MemoryStream();
+                var exit = await CliRunner.RunAsync(ArgumentParser.Parse([.. args, "--no-compress", "-", "-o", "-"]), new StringReader("<html><body><p>base</p></body></html>"), stdout);
+                Assert.Equal(0, exit);
+                return stdout.ToArray();
+            }
+
+            var off = await RenderAsync();
+            var on = await RenderAsync("--script", script, "--log", log);
+
+            // The text added after layout puts more glyphs in the page.
+            Assert.True(on.Length > off.Length);
+            Assert.Contains("pages=1", await File.ReadAllTextAsync(log, TestContext.Current.CancellationToken), StringComparison.Ordinal);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task FileInput_DefaultOutput_DerivesPdfName()
     {
         var dir = CreateTempDir();

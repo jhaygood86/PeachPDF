@@ -21,7 +21,8 @@ namespace PeachBrackets.Html
         /// <summary>Whether <paramref name="name"/> is a pseudo-class this answers.</summary>
         public static bool Handles(string name) =>
             name == PseudoClassNames.Checked || name == PseudoClassNames.Disabled || name == PseudoClassNames.Enabled || name == PseudoClassNames.Required
-            || name == PseudoClassNames.Optional || name == PseudoClassNames.ReadOnly || name == PseudoClassNames.ReadWrite;
+            || name == PseudoClassNames.Optional || name == PseudoClassNames.ReadOnly || name == PseudoClassNames.ReadWrite
+            || name == PseudoClassNames.PopoverOpen || name == PseudoClassNames.Open;
 
         /// <summary>Whether the pseudo-class <paramref name="name"/> matches <paramref name="box"/>.</summary>
         public static bool Matches(string name, CssBox box)
@@ -30,6 +31,10 @@ namespace PeachBrackets.Html
                 return false;
 
             var element = tag.Name.ToLowerInvariant();
+            if (name == PseudoClassNames.PopoverOpen)
+                return box.PopoverOpen;
+            if (name == PseudoClassNames.Open)
+                return element is "details" or "dialog" && tag.HasAttribute("open");
             if (name == PseudoClassNames.Checked)
                 return IsChecked(tag, element);
             if (name == PseudoClassNames.Disabled)

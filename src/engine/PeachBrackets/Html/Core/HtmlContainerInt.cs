@@ -10,6 +10,7 @@
 // - Sun Tsu,
 // "The Art of War"
 
+using PeachBrackets.ScriptHosting;
 using PeachBrackets.Tagging;
 using PeachBrackets.Html.Animation;
 using PeachBrackets.Html.CounterStyles;
@@ -1572,11 +1573,140 @@ namespace PeachBrackets.Html
             Clear();
             if (string.IsNullOrEmpty(htmlSource)) return;
 
+            // The scripts run once for a source. What they left is the document from then on, so the loads that follow (a restyle that has to parse
+            // again, a container query's next pass) start from that and not from the page the author wrote.
+            if (ScriptHost is { } scriptHost && DocumentSyntax != DocumentSyntax.Xml && !string.Equals(htmlSource, _scriptedSource, StringComparison.Ordinal))
+            {
+                htmlSource = await RunScriptsAsync(scriptHost, htmlSource);
+                _scriptedSource = htmlSource;
+                _lastHtmlSource = htmlSource;
+            }
+
             CssData = baseCssData ?? await DefaultCssDataCache.GetAsync(RenderContext);
 
             DomParser parser = new(CssParser);
             (Root, CssData, DocumentMetadata) = await parser.GenerateCssTree(htmlSource, this, CssData, containerSizes);
         }
+
+        /// <summary>Loads and lays out a copy of the document as it is, for the layout a script reads; null when the host gave no way to measure.</summary>
+        internal Func<string, ValueTask<HtmlDocument>>? ScriptProbe { get; set; }
+
+        /// <summary>The host that runs the document's scripts, or null when scripting is off.</summary>
+        internal IScriptHost? ScriptHost { get; set; }
+
+        // The markup the scripts left, once they have run: SetHtml recognizes it and does not run them again.
+        private string? _scriptedSource;
+
+        /// <summary>The global objects the host of the document added to its scripts.</summary>
+        internal IReadOnlyList<ScriptApi> ScriptApis { get; set; } = [];
+
+        /// <summary>How the document's scripts reach the network; null for the render context's loader.</summary>
+        internal IScriptNetwork? ScriptNetwork { get; set; }
+
+        /// <summary>Makes the canvas scripts measure text on, when the host gave one.</summary>
+        internal System.Func<PeachDrawing.Core.Canvas>? MeasuringCanvasFactory { get; set; }
+
+        /// <summary>What scripts drew on <c>canvas</c> elements, by the element's source ordinal.</summary>
+        internal System.Collections.Generic.Dictionary<int, ScriptHosting.ScriptCanvasPainting> CanvasPaintings { get; } = [];
+
+        private bool _apisStarted;
+
+        /// <summary>The script document the host kept live after its scripts ran (see <see cref="ScriptDocument.KeepAlive"/>), or null.</summary>
+        internal ScriptDocument? LiveScriptDocument { get; private set; }
+
+        private CssBox? _liveScriptRoot;
+
+        /// <summary>Makes the markup of the live script document the source of this document, so the next load parses what the scripts left.</summary>
+        internal void AdoptScriptedSource(string markup)
+        {
+            _scriptedSource = markup;
+            _lastHtmlSource = markup;
+        }
+
+        /// <summary>Ends the live script document: tells the host and releases its tree.</summary>
+        internal void EndScriptSession()
+        {
+            if (_apisStarted)
+            {
+                _apisStarted = false;
+                foreach (var api in ScriptApis)
+                    api.NoteClosed();
+            }
+
+            var document = LiveScriptDocument;
+            if (document is null)
+                return;
+
+            LiveScriptDocument = null;
+            try
+            {
+                ScriptHost?.DocumentClosed(document);
+            }
+            finally
+            {
+                document.ReleaseProbe();
+                _liveScriptRoot?.Dispose();
+                _liveScriptRoot = null;
+            }
+        }
+
+        /// <summary>
+        /// Calls a function the document's scripts registered for <c>prince-script()</c> and gives back its text, or null when there is no host, no kept
+        /// script document or no such function. Called while the document is laid out (and while margin boxes are made), so it must not wait.
+        /// </summary>
+        internal string? CallScriptFunction(string name, IReadOnlyList<string> arguments) =>
+            ScriptHost is { } host && LiveScriptDocument is { } document ? host.EvaluateFunction(document, name, arguments) : null;
+
+        /// <summary>How many layouts a script host may ask for; 0 for no limit.</summary>
+        internal int MaxLayoutPasses { get; set; } = 16;
+
+        private async ValueTask<string> RunScriptsAsync(IScriptHost host, string htmlSource)
+        {
+            var root = HtmlParser.ParseDocument(htmlSource, out var mode, document: true, scripting: true);
+            var document = new ScriptDocument(this, root, DocumentModeOverride ?? mode);
+            document.Probe = ScriptProbe;
+            document.Apis = ScriptApis;
+
+            EndScriptSession();
+            ParsingRoot = root;
+            var keep = false;
+            try
+            {
+                _apisStarted = true;
+                foreach (var api in ScriptApis)
+                    api.NoteScriptsStarting(document);
+
+                await host.RunAsync(document, ScriptCancellation);
+                foreach (var api in ScriptApis)
+                    api.NoteScriptsCompleted(document);
+
+                document.PublishCanvasPaintings(CanvasPaintings);
+
+                // A page the scripts left as it was keeps its own source: writing the tree back out is not exact for every construct (foreign content),
+                // and a page that changed nothing gains nothing from it.
+                var markup = document.Version == 0 ? htmlSource : document.Serialize();
+                keep = document.KeepAlive || ScriptApis.Any(api => api.ObservesLayout);
+                return markup;
+            }
+            finally
+            {
+                ParsingRoot = null;
+                if (keep)
+                {
+                    LiveScriptDocument = document;
+                    _liveScriptRoot = root;
+                }
+                else
+                {
+                    document.ReleaseProbe();
+                    root.Dispose();
+                    host.DocumentClosed(document);
+                }
+            }
+        }
+
+        /// <summary>Cancels the scripts of the document being set.</summary>
+        internal System.Threading.CancellationToken ScriptCancellation { get; set; }
 
         /// <summary>
         /// The size containers' sizes as the previous layout pass left them, which this pass was cascaded against
@@ -6155,6 +6285,7 @@ namespace PeachBrackets.Html
         {
             try
             {
+                EndScriptSession();
                 AnimationClock?.Dispose();
                 AnimationClock = null;
                 _shadowLayers?.Dispose();

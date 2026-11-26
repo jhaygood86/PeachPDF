@@ -15,7 +15,7 @@ namespace PeachBrackets.Html.Parse
     /// Builds the box tree of an XHTML document with an XML parser, as a browser does for a document served as <c>application/xhtml+xml</c>: the
     /// document must be well-formed (an error stops the parse), names are case-sensitive, an element is empty exactly when the markup says so, a CDATA
     /// section is text, no <c>html</c>, <c>head</c>, <c>body</c> or table section is made up, and the document is never in quirks mode. The tree it
-    /// returns is the one <see cref="HtmlParser.ParseDocument(string, out DocumentMode, CssBox?, bool)"/> returns, so the cascade and layout read it
+    /// returns is the one <see cref="HtmlParser.ParseDocument(string, out DocumentMode, CssBox?, bool, bool)"/> returns, so the cascade and layout read it
     /// the same way.
     /// </summary>
     internal static class XhtmlParser

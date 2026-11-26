@@ -679,8 +679,13 @@ PeachBrackets.HtmlDocumentOptions : sealed class
   property Double PageWidthPoints { get; set; }
   property Double? AnimationProgress { get; set; }
   property Double? ViewportHeightPoints { get; set; }
+  property Func<Canvas> MeasuringCanvasFactory { get; set; }
+  property IList<ScriptApi> ScriptApis { get; }
+  property IScriptHost ScriptHost { get; set; }
+  property IScriptNetwork ScriptNetwork { get; set; }
   property ImageSelectionOptions ImageSelection { get; set; }
   property InputCapabilities Input { get; set; }
+  property Int32 MaxLayoutPasses { get; set; }
   property Int32 PageNumberOffset { get; set; }
   property Int32? TotalPagesOverride { get; set; }
   property MediaType MediaType { get; set; }
@@ -746,6 +751,283 @@ PeachBrackets.PointerTypes : enum Int32
   Coarse = 1
   Fine = 2
   None = 0
+PeachBrackets.ScriptHosting.BoxEdges : struct
+  ctor(Double Top, Double Right, Double Bottom, Double Left)
+  method Void Deconstruct(out Double Top, out Double Right, out Double Bottom, out Double Left)
+  method virtual Boolean Equals(BoxEdges other)
+  method virtual Boolean Equals(Object obj)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property Double Bottom { get; init; }
+  property Double Left { get; init; }
+  property Double Right { get; init; }
+  property Double Top { get; init; }
+PeachBrackets.ScriptHosting.BoxReport : sealed class
+  property BoxEdges Border { get; }
+  property BoxEdges Margin { get; }
+  property BoxEdges Padding { get; }
+  property BoxReport Parent { get; }
+  property BoxReportKind Kind { get; }
+  property Double Height { get; }
+  property Double PageHeight { get; }
+  property Double PageWidth { get; }
+  property Double Width { get; }
+  property Double X { get; }
+  property Double Y { get; }
+  property IReadOnlyList<BoxReport> Children { get; }
+  property Int32 PageNumber { get; }
+  property ScriptNode Element { get; }
+  property String ImageSource { get; }
+  property String PseudoElement { get; }
+  property String Text { get; }
+PeachBrackets.ScriptHosting.BoxReportKind : enum Int32
+  Box = 2
+  Footnotes = 1
+  Image = 5
+  Page = 0
+  Span = 3
+  Svg = 6
+  Text = 4
+PeachBrackets.ScriptHosting.IScriptHost : interface
+  method abstract ValueTask RunAsync(ScriptDocument document, CancellationToken cancellationToken = null)
+  method virtual String EvaluateFunction(ScriptDocument document, String name, IReadOnlyList<String> arguments)
+  method virtual ValueTask LayoutFinishedAsync(ScriptDocument document, ScriptLayout layout, CancellationToken cancellationToken = null)
+  method virtual ValueTask<Boolean> LayoutCompletedAsync(ScriptDocument document, ScriptLayout layout, CancellationToken cancellationToken = null)
+  method virtual Void DocumentClosed(ScriptDocument document)
+PeachBrackets.ScriptHosting.IScriptNetwork : interface
+  method abstract ValueTask<ScriptNetworkResponse> SendAsync(ScriptNetworkRequest request, CancellationToken cancellationToken = null)
+PeachBrackets.ScriptHosting.ScriptApi : sealed class
+  ctor(String name)
+  method Boolean IsWritable(String name)
+  method ScriptApi AddEvent(String name)
+  method ScriptApi AddMethod(String name, Func<IReadOnlyList<ScriptValue>, ScriptValue> body)
+  method ScriptApi AddProperty(String name, Func<ScriptValue> get, Action<ScriptValue> set = null)
+  method ScriptApi AddValue(String name, ScriptValue value)
+  method ScriptValue Call(String name, ScriptValue[] arguments)
+  method ScriptValue GetProperty(String name)
+  method Void Raise(String name, ScriptValue detail = null)
+  method Void SetProperty(String name, ScriptValue value)
+  property IReadOnlyCollection<String> EventNames { get; }
+  property IReadOnlyCollection<String> MethodNames { get; }
+  property IReadOnlyCollection<String> PropertyNames { get; }
+  property String Name { get; }
+PeachBrackets.ScriptHosting.ScriptBox : struct
+  ctor(Double X, Double Y, Double Width, Double Height)
+  method Void Deconstruct(out Double X, out Double Y, out Double Width, out Double Height)
+  method virtual Boolean Equals(Object obj)
+  method virtual Boolean Equals(ScriptBox other)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property Double Height { get; init; }
+  property Double Width { get; init; }
+  property Double X { get; init; }
+  property Double Y { get; init; }
+PeachBrackets.ScriptHosting.ScriptCallback : sealed class
+  ctor(Func<IReadOnlyList<ScriptValue>, ScriptValue> invoke)
+  method ScriptValue Invoke(ScriptValue[] arguments)
+PeachBrackets.ScriptHosting.ScriptCanvasPainting : sealed class
+  ctor(Double Width, Double Height, Action<Canvas> Paint)
+  method ScriptCanvasPainting <Clone>$()
+  method Void Deconstruct(out Double Width, out Double Height, out Action<Canvas> Paint)
+  method virtual Boolean Equals(Object obj)
+  method virtual Boolean Equals(ScriptCanvasPainting other)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property Action<Canvas> Paint { get; init; }
+  property Double Height { get; init; }
+  property Double Width { get; init; }
+PeachBrackets.ScriptHosting.ScriptDocument : sealed class
+  method Boolean TryParseColor(String css, out PaintColor color)
+  method Canvas CreateMeasuringCanvas()
+  method Font GetFont(String family, Double sizePixels, PaintFontStyle style, Double weight)
+  method IReadOnlyList<ScriptNode> GetElementsByClassName(String classNames)
+  method IReadOnlyList<ScriptNode> GetElementsByTagName(String tagName)
+  method IReadOnlyList<ScriptNode> QuerySelectorAll(String selector)
+  method Image DecodeImage(Byte[] bytes)
+  method Image GetLoadedImage(String address)
+  method Int32 OrdinalOf(ScriptNode element)
+  method ScriptBox? GetLayoutBox(ScriptNode element)
+  method ScriptDocument CreateDocument(Boolean html, Boolean withDocumentType, String contentType = null)
+  method ScriptDocument ParseDocument(String html)
+  method ScriptNode AdoptNode(ScriptNode node)
+  method ScriptNode CreateCDataSection(String data)
+  method ScriptNode CreateComment(String data)
+  method ScriptNode CreateDocumentType(String name, String publicId, String systemId)
+  method ScriptNode CreateElement(String tagName)
+  method ScriptNode CreateEmptyFragment()
+  method ScriptNode CreateFragment(String html)
+  method ScriptNode CreateProcessingInstruction(String target, String data)
+  method ScriptNode CreateTextNode(String text)
+  method ScriptNode GetElementById(String id)
+  method ScriptNode QuerySelector(String selector)
+  method String GetComputedValue(ScriptNode element, String property)
+  method ValueTask<ScriptImageInfo> LoadImageAsync(String address)
+  method ValueTask<ScriptNetworkResponse> SendAsync(ScriptNetworkRequest request, CancellationToken cancellationToken = null)
+  method ValueTask<String> LoadTextAsync(String address)
+  method Void SetCanvasPainting(ScriptNode canvas, ScriptCanvasPainting painting)
+  property Boolean CanMeasure { get; }
+  property Boolean IsHtml { get; }
+  property Boolean KeepAlive { get; set; }
+  property IReadOnlyList<ScriptApi> Apis { get; }
+  property IReadOnlyList<ScriptNode> Scripts { get; }
+  property Int32 Version { get; }
+  property Object HostState { get; set; }
+  property ScriptNode Body { get; }
+  property ScriptNode DocumentElement { get; }
+  property ScriptNode DocumentType { get; }
+  property ScriptNode Head { get; }
+  property ScriptNode Root { get; }
+  property String CompatMode { get; }
+  property String ContentType { get; }
+  property String Title { get; }
+  property Uri BaseAddress { get; }
+  property Uri BaseUri { get; }
+PeachBrackets.ScriptHosting.ScriptImageInfo : sealed class
+  ctor(Double Width, Double Height, String Address)
+  method ScriptImageInfo <Clone>$()
+  method Void Deconstruct(out Double Width, out Double Height, out String Address)
+  method virtual Boolean Equals(Object obj)
+  method virtual Boolean Equals(ScriptImageInfo other)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property Double Height { get; init; }
+  property Double Width { get; init; }
+  property String Address { get; init; }
+PeachBrackets.ScriptHosting.ScriptLayout : sealed class
+  method IReadOnlyList<BoxReport> GetBoxes(ScriptNode element)
+  property IReadOnlyList<BoxReport> Pages { get; }
+  property Int32 PageCount { get; }
+  property Int32 Pass { get; }
+PeachBrackets.ScriptHosting.ScriptMutation : sealed class
+  ctor(ScriptMutationKind Kind, ScriptNode Target, IReadOnlyList<ScriptNode> Added = null, IReadOnlyList<ScriptNode> Removed = null, ScriptNode Previous = null, ScriptNode Next = null, String AttributeName = null, String OldValue = null)
+  method ScriptMutation <Clone>$()
+  method Void Deconstruct(out ScriptMutationKind Kind, out ScriptNode Target, out IReadOnlyList<ScriptNode> Added, out IReadOnlyList<ScriptNode> Removed, out ScriptNode Previous, out ScriptNode Next, out String AttributeName, out String OldValue)
+  method virtual Boolean Equals(Object obj)
+  method virtual Boolean Equals(ScriptMutation other)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property IReadOnlyList<ScriptNode> Added { get; init; }
+  property IReadOnlyList<ScriptNode> Removed { get; init; }
+  property ScriptMutationKind Kind { get; init; }
+  property ScriptNode Next { get; init; }
+  property ScriptNode Previous { get; init; }
+  property ScriptNode Target { get; init; }
+  property String AttributeName { get; init; }
+  property String OldValue { get; init; }
+PeachBrackets.ScriptHosting.ScriptMutationKind : enum Int32
+  Attributes = 1
+  CharacterData = 2
+  ChildList = 0
+PeachBrackets.ScriptHosting.ScriptNetworkRequest : sealed class
+  ctor(String Method, Uri Url, IReadOnlyList<KeyValuePair<String, String>> Headers, Byte[] Body, Boolean FollowRedirects = True, String Referrer = null, String ReferrerPolicy = )
+  method ScriptNetworkRequest <Clone>$()
+  method Void Deconstruct(out String Method, out Uri Url, out IReadOnlyList<KeyValuePair<String, String>> Headers, out Byte[] Body, out Boolean FollowRedirects, out String Referrer, out String ReferrerPolicy)
+  method virtual Boolean Equals(Object obj)
+  method virtual Boolean Equals(ScriptNetworkRequest other)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property Boolean FollowRedirects { get; init; }
+  property Byte[] Body { get; init; }
+  property IReadOnlyList<KeyValuePair<String, String>> Headers { get; init; }
+  property String Method { get; init; }
+  property String Referrer { get; init; }
+  property String ReferrerPolicy { get; init; }
+  property Uri Url { get; init; }
+PeachBrackets.ScriptHosting.ScriptNetworkResponse : sealed class
+  ctor(Int32 Status, String StatusText, IReadOnlyList<KeyValuePair<String, String>> Headers, Byte[] Body, Uri Url)
+  method ScriptNetworkResponse <Clone>$()
+  method Void Deconstruct(out Int32 Status, out String StatusText, out IReadOnlyList<KeyValuePair<String, String>> Headers, out Byte[] Body, out Uri Url)
+  method virtual Boolean Equals(Object obj)
+  method virtual Boolean Equals(ScriptNetworkResponse other)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property Byte[] Body { get; init; }
+  property IReadOnlyList<KeyValuePair<String, String>> Headers { get; init; }
+  property Int32 Status { get; init; }
+  property String StatusText { get; init; }
+  property Uri Url { get; init; }
+PeachBrackets.ScriptHosting.ScriptNode : sealed class
+  method Boolean HasAttribute(String name)
+  method Boolean Matches(String selector)
+  method Boolean RemoveAttribute(String name)
+  method IReadOnlyList<ScriptNode> QuerySelectorAll(String selector)
+  method ScriptNode AppendChild(ScriptNode child)
+  method ScriptNode CloneNode(Boolean deep)
+  method ScriptNode Closest(String selector)
+  method ScriptNode InsertBefore(ScriptNode child, ScriptNode reference)
+  method ScriptNode QuerySelector(String selector)
+  method ScriptNode RemoveChild(ScriptNode child)
+  method ScriptNode ReplaceChild(ScriptNode child, ScriptNode existing)
+  method String GetAttribute(String name)
+  method Void Remove()
+  method Void SetAttribute(String name, String value)
+  method virtual String ToString()
+  property Boolean IsCDataSection { get; }
+  property Boolean IsConnected { get; }
+  property Boolean IsLeaf { get; }
+  property Boolean IsPopoverOpen { get; set; }
+  property Boolean ScriptAlreadyStarted { get; set; }
+  property IReadOnlyList<ScriptNode> ChildElements { get; }
+  property IReadOnlyList<ScriptNode> Children { get; }
+  property IReadOnlyList<String> AttributeNames { get; }
+  property IReadOnlyList<String> ClassNames { get; }
+  property ScriptDocument OwnerDocument { get; }
+  property ScriptNode FirstChild { get; }
+  property ScriptNode LastChild { get; }
+  property ScriptNode NextSibling { get; }
+  property ScriptNode Parent { get; }
+  property ScriptNode PreviousSibling { get; }
+  property ScriptNodeKind Kind { get; }
+  property String Data { get; set; }
+  property String Id { get; }
+  property String InnerHtml { get; set; }
+  property String Name { get; }
+  property String OuterHtml { get; }
+  property String PublicId { get; }
+  property String SystemId { get; }
+  property String TagName { get; }
+  property String TextContent { get; set; }
+PeachBrackets.ScriptHosting.ScriptNodeKind : enum Int32
+  Comment = 4
+  Document = 0
+  DocumentType = 6
+  Element = 1
+  Fragment = 3
+  ProcessingInstruction = 5
+  Text = 2
+PeachBrackets.ScriptHosting.ScriptValue : struct
+  method Boolean AsBoolean()
+  method Double AsNumber()
+  method IReadOnlyDictionary<String, ScriptValue> AsObject()
+  method IReadOnlyList<ScriptValue> AsArray()
+  method ScriptCallback AsCallback()
+  method ScriptNode AsNode()
+  method String AsString()
+  method static ScriptValue From(Boolean value)
+  method static ScriptValue From(Double value)
+  method static ScriptValue From(IReadOnlyDictionary<String, ScriptValue> properties)
+  method static ScriptValue From(IReadOnlyList<ScriptValue> items)
+  method static ScriptValue From(ScriptCallback callback)
+  method static ScriptValue From(ScriptNode node)
+  method static ScriptValue From(String value)
+  method virtual Boolean Equals(Object obj)
+  method virtual Boolean Equals(ScriptValue other)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property Boolean IsNullish { get; }
+  property ScriptValueKind Kind { get; }
+  property static ScriptValue Null { get; }
+  property static ScriptValue Undefined { get; }
+PeachBrackets.ScriptHosting.ScriptValueKind : enum Int32
+  Array = 5
+  Boolean = 2
+  Function = 7
+  Node = 8
+  Null = 1
+  Number = 3
+  Object = 6
+  String = 4
+  Undefined = 0
 PeachBrackets.ScrollAlignment : enum Int32
   Center = 2
   End = 3

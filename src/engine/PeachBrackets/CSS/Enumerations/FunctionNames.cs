@@ -105,6 +105,7 @@ namespace PeachBrackets.Css
         public const string Running = "running";
         public const string TargetCounter = "target-counter";
         public const string TargetText = "target-text";
+        public const string ScriptFunction = "prince-script";
         public const string Leader = "leader";
         public const string Stylistic = "stylistic";
         public const string Styleset = "styleset";

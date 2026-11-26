@@ -1,5 +1,6 @@
 using PeachBrackets.Html;
 using System;
+using System.Collections.Generic;
 
 namespace PeachBrackets;
 
@@ -243,6 +244,51 @@ public sealed class HtmlDocumentOptions
     /// off for every document.
     /// </summary>
     public bool IncrementalRestyle { get; set; } = true;
+
+    /// <summary>
+    /// The host that runs the document's <c>&lt;script&gt;</c> elements, or null (the default) to leave scripting off: scripts are then ignored,
+    /// <c>&lt;noscript&gt;</c> content is shown and the <c>(scripting)</c> media feature reports <c>none</c>. The <c>PeachBrackets.Scripting</c>
+    /// package supplies a JavaScript host. Scripts run once while the document loads; what they leave is what is laid out.
+    /// </summary>
+    public PeachBrackets.ScriptHosting.IScriptHost? ScriptHost { get; set; }
+
+    /// <summary>
+    /// Makes a canvas to measure text on, for the layout a script asks for while it runs (<c>getBoundingClientRect</c>, <c>offsetWidth</c>,
+    /// <c>getComputedStyle</c>). Called each time the script needs the document laid out again after it changed. Null (the default) means scripts
+    /// get no layout: sizes read as zero and computed styles as what the element's own <c>style</c> attribute says. Only read when
+    /// <see cref="ScriptHost"/> is set.
+    /// </summary>
+    public Func<PeachDrawing.Core.Canvas>? MeasuringCanvasFactory { get; set; }
+
+    /// <summary>
+    /// How many times a script host may change a laid-out document and have it laid out again (<see cref="PeachBrackets.ScriptHosting.IScriptHost.LayoutCompletedAsync"/>).
+    /// When the limit is reached the last change is not laid out. The default is 16; 0 means no limit, which lets a script that changes the document
+    /// on every pass run forever.
+    /// </summary>
+    public int MaxLayoutPasses { get; set; } = 16;
+
+    /// <summary>
+    /// How the document's scripts reach the network with <c>XMLHttpRequest</c> and <c>fetch</c>, or null (the default) to let them read what the document's
+    /// resource loader can: a GET that either answers or fails. A host that wants every method, status and header sets one. Only read when
+    /// <see cref="ScriptHost"/> is set. No cross-origin check is made: whatever the network answers a script can read.
+    /// </summary>
+    public PeachBrackets.ScriptHosting.IScriptNetwork? ScriptNetwork { get; set; }
+
+    /// <summary>
+    /// Global objects the host adds to the document's scripts (see <see cref="PeachBrackets.ScriptHosting.ScriptApi"/>), installed by the
+    /// <see cref="ScriptHost"/>. Each object serves one document, so give each document its own. Only read when <see cref="ScriptHost"/> is set.
+    /// </summary>
+    public IList<PeachBrackets.ScriptHosting.ScriptApi> ScriptApis { get; private set; } = [];
+
+    internal HtmlDocumentOptions CloneWithoutScripts()
+    {
+        var copy = (HtmlDocumentOptions)MemberwiseClone();
+        // Not null: a document parses differently with scripting on (<noscript> is text), and the probe's elements must be numbered as the scripted tree's are.
+        copy.ScriptHost = PeachBrackets.ScriptHosting.IdleScriptHost.Instance;
+        copy.MeasuringCanvasFactory = null;
+        copy.ScriptApis = [];
+        return copy;
+    }
 
     /// <summary>The background of a selection where no <c>::selection</c> rule applies; light blue by default.</summary>
     public PeachDrawing.Core.PaintColor SelectionBackground { get; set; } = PeachDrawing.Core.PaintColor.FromArgb(255, 173, 214, 255);
