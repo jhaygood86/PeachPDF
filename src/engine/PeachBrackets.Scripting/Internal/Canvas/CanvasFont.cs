@@ -308,6 +308,7 @@ internal sealed class CanvasFont
             ("px", 1), ("pt", 4.0 / 3), ("pc", 16), ("in", 96), ("cm", 96 / 2.54), ("mm", 96 / 25.4), ("q", 96 / 101.6),
             ("rem", environment.RootFontSize), ("rlh", environment.RootFontSize * 1.2), ("em", environment.FontSize), ("ex", environment.FontSize / 2), ("ch", environment.FontSize / 2),
             ("ic", environment.FontSize), ("cap", environment.FontSize * 0.7), ("lh", environment.LineHeight),
+            ("rex", environment.RootFontSize / 2), ("rch", environment.RootFontSize / 2), ("ric", environment.RootFontSize), ("rcap", environment.RootFontSize * 0.7),
             ("vw", environment.ViewportWidth / 100), ("vh", environment.ViewportHeight / 100),
             ("vmin", Math.Min(environment.ViewportWidth, environment.ViewportHeight) / 100), ("vmax", Math.Max(environment.ViewportWidth, environment.ViewportHeight) / 100),
         ];

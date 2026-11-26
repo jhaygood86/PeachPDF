@@ -499,6 +499,24 @@ namespace PeachDrawing.Core
         public virtual OffscreenSurface? CreateOffscreenSurface(int widthPixels, int heightPixels) => null;
 
         /// <summary>
+        /// <see cref="CreateOffscreenSurface(int, int)"/> for a surface whose pixels are floating point when <paramref name="wide"/> is set: premultiplied RGBA floats not held to 0 to 1, read back with
+        /// <see cref="OffscreenSurface.ReadWidePixels"/>. A canvas that has no such surface answers <see langword="null"/> for it, and the caller keeps its eight-bit one.
+        /// </summary>
+        /// <param name="widthPixels">the width, in pixels</param>
+        /// <param name="heightPixels">the height, in pixels</param>
+        /// <param name="wide">whether the pixels are floating point</param>
+        public virtual OffscreenSurface? CreateOffscreenSurface(int widthPixels, int heightPixels, bool wide) =>
+            wide ? null : CreateOffscreenSurface(widthPixels, heightPixels);
+
+        /// <summary>
+        /// Makes an image of floating-point pixels, which a floating-point canvas draws without bringing them into range and any other draws as eight bits. A canvas that cannot answers <see langword="null"/>.
+        /// </summary>
+        /// <param name="widthPixels">the width, in pixels</param>
+        /// <param name="heightPixels">the height, in pixels</param>
+        /// <param name="straightRgba">the pixels, straight (not premultiplied) RGBA, four floats each, row-major from the top-left</param>
+        public virtual Image? CreateWideImage(int widthPixels, int heightPixels, ReadOnlySpan<float> straightRgba) => null;
+
+        /// <summary>
         /// Whether painting through <paramref name="paint"/> would need transparency (a transparency group, a soft mask, a
         /// constant alpha) on this canvas. A canvas whose output forbids transparency (PDF/A-1, PDF/X-1a/X-3) answers by
         /// running <paramref name="paint"/> against a scratch target of its own that is never saved, so the answer comes from

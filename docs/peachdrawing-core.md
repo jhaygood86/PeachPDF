@@ -503,6 +503,14 @@ shaped, so an implementation gets it by implementing `DrawGlyphs` and the path/c
   that draws them itself, and `PathText.GetGlyphFrame` is the one placement step (a distance along the path, the side, a
   perpendicular offset and an extra rotation in, a transform out). `PathTextOptions` has the start offset, anchor
   (start, middle, end), side and letter spacing.
+- `WideColor` is a color that is not held to eight bits or to 0 to 1 (`SolidBrush(WideColor)`; `PaintColor` is its eight-bit self). A `RasterSurface` made `wide: true`
+  (`RasterRenderContext.CreateCanvas(w, h, dpi, wide: true)`, `Canvas.CreateOffscreenSurface(w, h, wide: true)`) keeps premultiplied floats beside its bytes: such a color and an image from
+  `Canvas.CreateWideImage` (straight RGBA floats) are painted and composited as floats, `RasterSurface.WidePixels` and `OffscreenSurface.ReadWidePixels` give them back, and the bytes stay the view of the same picture.
+  Layer effects work on the bytes and write their result back into the floats; the other backends have no wide surface and answer null.
+- `SyntheticCaps` is small capitals for a font that has no `smcp`/`pcap` of its own: `Applies` says when it is needed (the shaping asks
+  for small or petite caps and the font lacks the feature), `Convert` upper-cases the lower-case letters and flags the ones that are
+  drawn small (0.72 of the size), and `Split` gives the pieces to draw at one size each. `TextRunMeasure` measures a run this way, so
+  what a host measures is what it draws.
 - `InkCrossings.Measure` finds where a run of text puts ink inside a horizontal band, one stretch per glyph: what a
   `text-decoration-skip-ink` underline needs to break around descenders. It is what `Canvas.GetInkCrossings` answers.
 - `ColorGlyphs.ColorGlyphPainter` walks one glyph's COLR v0 layers or v1 paint graph - palette and

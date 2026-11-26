@@ -31,6 +31,12 @@ internal sealed class ContextObject : ObjectInstance
     public CanvasBitmap Bitmap { get; set; }
 
     public ContextSettings Settings { get; set; } = new();
+
+    /// <summary>Whether this is the context of an <c>ImageBitmapRenderingContext</c> (which shows a bitmap it was given) rather than a 2D context.</summary>
+    public bool IsBitmapRenderer { get; init; }
+
+    /// <summary>The language a canvas that is not in the page inherits, as it was when the context was made.</summary>
+    public string? DetachedLanguage { get; init; }
 }
 
 /// <summary>The creation attributes of a 2D context (<c>getContext("2d", settings)</c>).</summary>
@@ -142,6 +148,7 @@ internal sealed partial class ScriptRuntime
         Tag(PatternPrototype, "CanvasPattern");
 
         InstallCanvasFilter();
+        InstallBitmapRenderer();
         _ = FontsObject();
         InstallCanvasElement();
         InstallContextState();
@@ -155,6 +162,16 @@ internal sealed partial class ScriptRuntime
         // Web IDL: an interface object's prototype property is neither writable nor configurable (its methods stay both).
         ((ObjectInstance)Engine.Global.Get("CanvasRenderingContext2D")).DefineOwnProperty("prototype", new PropertyDescriptor(ContextPrototype, PropertyFlag.AllForbidden));
         Define(Engine.Global, "CanvasGradient", Js.Constructor(Engine, "CanvasGradient", GradientPrototype, 0, (_, _, _) => throw TypeError("Illegal constructor")));
+        Js.Method(Engine, PatternPrototype, "setTransform", 0, (self, args) =>
+        {
+            var pattern = (self as PatternObject ?? throw TypeError("Illegal invocation")).Model;
+            if (args.Length > 0 && !args[0].IsUndefined() && !args[0].IsNull() && args[0] is not ObjectInstance)
+                throw TypeError("The transform is not a matrix.");
+
+            var matrix = args.Length > 0 && args[0] is ObjectInstance init ? MatrixFrom(init) : Affine2D.Identity;
+            pattern.Transform = matrix;
+            return JsValue.Undefined;
+        });
         Define(Engine.Global, "CanvasPattern", Js.Constructor(Engine, "CanvasPattern", PatternPrototype, 0, (_, _, _) => throw TypeError("Illegal constructor")));
         Define(Engine.Global, "Path2D", Js.Constructor(Engine, "Path2D", Path2DPrototype, 0, (_, args, _) =>
         {
@@ -181,7 +198,7 @@ internal sealed partial class ScriptRuntime
                 throw TypeError("The offset is not finite.");
             if (!(offset >= 0 && offset <= 1))
                 throw DomError("IndexSizeError", "The offset must be between 0 and 1.");
-            if (!Document.TryParseColor(Js.AsText(Js.Arg(args, 1)), gradient.Owner, out var color, out var serialized))
+            if (!Document.TryParseColor(Js.AsText(Js.Arg(args, 1)), null, out var color, out var serialized))
                 throw DomError("SyntaxError", "The color cannot be parsed.");
 
             gradient.NonLegacy |= serialized is not null;
@@ -190,10 +207,25 @@ internal sealed partial class ScriptRuntime
         });
     }
 
-    private static Affine2D MatrixFrom(ObjectInstance init)
+    // A DOMMatrixInit: the 2D names (a to f) and their aliases (m11, m12, m21, m22, m41, m42), which may both be given only when they agree.
+    private Affine2D MatrixFrom(ObjectInstance init)
     {
-        double Get(string name, double fallback) => init.HasProperty(name) && !init.Get(name).IsUndefined() ? TypeConverter.ToNumber(init.Get(name)) : fallback;
-        return new Affine2D(Get("a", 1), Get("b", 0), Get("c", 0), Get("d", 1), Get("e", 0), Get("f", 0));
+        double Get(string name, string alias, double fallback)
+        {
+            var named = init.HasProperty(name) && !init.Get(name).IsUndefined();
+            var aliased = init.HasProperty(alias) && !init.Get(alias).IsUndefined();
+            if (named && aliased)
+            {
+                var (one, other) = (TypeConverter.ToNumber(init.Get(name)), TypeConverter.ToNumber(init.Get(alias)));
+                if (!(one == other || double.IsNaN(one) && double.IsNaN(other)))
+                    throw TypeError($"The matrix members {name} and {alias} disagree.");
+                return one;
+            }
+
+            return named ? TypeConverter.ToNumber(init.Get(name)) : aliased ? TypeConverter.ToNumber(init.Get(alias)) : fallback;
+        }
+
+        return new Affine2D(Get("a", "m11", 1), Get("b", "m12", 0), Get("c", "m21", 0), Get("d", "m22", 1), Get("e", "m41", 0), Get("f", "m42", 0));
     }
 
     // ---- the element
@@ -208,6 +240,9 @@ internal sealed partial class ScriptRuntime
                 self => Js.Num(CanvasSize(Sn(self)) is var (w, h) && attribute == "width" ? w : CanvasSize(Sn(self)).Height),
                 (self, value) =>
                 {
+                    if (_transferred.Contains(Sn(self)))
+                        throw DomError("InvalidStateError", "The canvas's control has been transferred to an OffscreenCanvas.");
+
                     // An unsigned long: the value modulo 2^32 (200 - 2^32 is 200, "400x" is 0), and the default when it is more than the attribute can hold.
                     var number = TypeConverter.ToUint32(value);
                     var whole = number <= int.MaxValue ? number : (uint)defaultValue;
@@ -216,26 +251,73 @@ internal sealed partial class ScriptRuntime
                 });
         }
 
-        Js.StrictMethod(Engine, element, "getContext", 1, (self, args) =>
-        {
-            if (Js.AsText(Js.Arg(args, 0)) != "2d")
-                return JsValue.Null;
-
-            var node = Sn(self);
-            if (_contexts.TryGetValue(node, out var existing))
-                return existing;
-
-            var settings = ReadContextSettings(Js.Arg(args, 1));
-            var (width, height) = CanvasSize(node);
-            var bitmap = new CanvasBitmap(node.OwnerDocument, width, height);
-            bitmap.UseSurface();
-            var context = new ContextObject(Engine, ContextPrototype, node, bitmap) { Settings = settings };
-            _contexts[node] = context;
-            node.OwnerDocument.SetCanvasPainting(node, context.Bitmap.Painting);
-            return context;
-        });
+        Js.StrictMethod(Engine, element, "getContext", 1, (self, args) => GetContext(Sn(self), args, offscreen: false));
         Js.Accessor(Engine, ContextPrototype, "canvas", self => Wrap(Cx(self).Canvas));
     }
+
+    // getContext of a canvas element (null for a kind of context it does not have) and of an OffscreenCanvas (a TypeError, as its context id is an enum).
+    private JsValue GetContext(ScriptNode node, JsValue[] args, bool offscreen)
+    {
+        var id = Js.AsText(Js.Arg(args, 0));
+        if (_transferred.Contains(node))
+            throw DomError("InvalidStateError", "The canvas's control has been transferred to an OffscreenCanvas.");
+
+        // The other kinds of context a canvas can have are known names a host without them answers null to; any other name is an error for an OffscreenCanvas, where the id is an enum.
+        if (id is not ("2d" or "bitmaprenderer"))
+            return offscreen && id is not ("webgl" or "webgl2" or "webgpu") ? throw TypeError("The provided value is not a valid context type.") : JsValue.Null;
+
+        var renderer = id == "bitmaprenderer";
+        if (_contexts.TryGetValue(node, out var existing))
+            return existing.IsBitmapRenderer == renderer ? existing : JsValue.Null;
+
+        var settings = renderer ? new ContextSettings() : ReadContextSettings(Js.Arg(args, 1));
+        var (width, height) = CanvasSize(node);
+        var bitmap = new CanvasBitmap(node.OwnerDocument, width, height);
+        bitmap.ConfigureColor(settings.ColorSpace, settings.ColorType == "float16");
+        bitmap.UseSurface();
+        if (!renderer && !settings.Alpha)
+            bitmap.MakeOpaque();
+
+        var context = new ContextObject(Engine, renderer ? BitmapRendererPrototype : offscreen ? OffscreenContextPrototype : ContextPrototype, node, bitmap)
+        {
+            Settings = settings, DetachedLanguage = node.IsConnected ? null : InheritedLanguage(node), IsBitmapRenderer = renderer,
+        };
+        _contexts[node] = context;
+        node.OwnerDocument.SetCanvasPainting(node, context.Bitmap.Painting);
+        return context;
+    }
+
+    private ObjectInstance BitmapRendererPrototype = null!;
+
+    // ImageBitmapRenderingContext: the canvas shows the bitmap it was last given, which the context takes from it (the bitmap is detached).
+    private void InstallBitmapRenderer()
+    {
+        BitmapRendererPrototype = new JsObject(Engine) { Prototype = Engine.Intrinsics.Object.PrototypeObject };
+        Tag(BitmapRendererPrototype, "ImageBitmapRenderingContext");
+        Js.Accessor(Engine, BitmapRendererPrototype, "canvas", self => Wrap(Cx(self).Canvas));
+        Js.StrictMethod(Engine, BitmapRendererPrototype, "transferFromImageBitmap", 1, (self, args) =>
+        {
+            var context = Cx(self);
+            context.Bitmap.Reset();
+            if (Js.Arg(args, 0).IsNull())
+                return JsValue.Undefined;
+
+            if (Js.Arg(args, 0) is not BitmapObject bitmap)
+                throw TypeError("The argument is not an ImageBitmap.");
+            if (bitmap.Image is not { } image)
+                throw DomError("InvalidStateError", "The image bitmap is closed.");
+
+            context.Bitmap.DrawImage(image, new Rect(0, 0, image.Width, image.Height), new Rect(0, 0, image.Width, image.Height));
+            if (!bitmap.OriginClean)
+                context.Bitmap.Taint();
+
+            bitmap.Image = null;
+            return JsValue.Undefined;
+        });
+        Define(Engine.Global, "ImageBitmapRenderingContext", Js.Constructor(Engine, "ImageBitmapRenderingContext", BitmapRendererPrototype, 0, (_, _, _) => throw TypeError("Illegal constructor")));
+    }
+
+    private ObjectInstance OffscreenContextPrototype = null!;
 
     private static readonly string[] ColorSpaces = ["srgb", "display-p3", "srgb-linear", "display-p3-linear"];
 
@@ -264,8 +346,12 @@ internal sealed partial class ScriptRuntime
                 throw TypeError($"The provided value '{tone}' is not a valid enum value of type CanvasToneMappingMode.");
         }
 
-        return new ContextSettings(Flag("alpha", true), Flag("desynchronized", false), Flag("willReadFrequently", false),
-            Choice("colorSpace", ColorSpaces, "srgb"), Choice("colorType", ["unorm8", "float16"], "unorm8"), tone);
+        // The members are read in the order the dictionary lists them.
+        var alpha = Flag("alpha", true);
+        var colorSpace = Choice("colorSpace", ColorSpaces, "srgb");
+        var desynchronized = Flag("desynchronized", false);
+        var willReadFrequently = Flag("willReadFrequently", false);
+        return new ContextSettings(alpha, desynchronized, willReadFrequently, colorSpace, Choice("colorType", ["unorm8", "float16"], "unorm8"), tone);
     }
 
     // Setting width or height gives the canvas a new, empty bitmap.
@@ -277,7 +363,11 @@ internal sealed partial class ScriptRuntime
         var (width, height) = CanvasSize(node);
         context.Bitmap.Dispose();
         context.Bitmap = new CanvasBitmap(node.OwnerDocument, width, height);
+        context.Bitmap.ConfigureColor(context.Settings.ColorSpace, context.Settings.ColorType == "float16");
         context.Bitmap.UseSurface();
+        if (!context.IsBitmapRenderer && !context.Settings.Alpha)
+            context.Bitmap.MakeOpaque();
+
         node.OwnerDocument.SetCanvasPainting(node, context.Bitmap.Painting);
     }
 
@@ -296,17 +386,22 @@ internal sealed partial class ScriptRuntime
                 // CSSHWB, CSSLab, CSSLCH, CSSOKLab, CSSOKLCH and CSSColor stand for CSS text, which is read as any color is and so reads back serialized.
                 var text = Js.AsText(toText.Call(typed, []));
                 return Document.TryParseColor(text, element, out var typedColor, out var typedText)
-                    ? new PaintSource.ColorSource(typedColor, typedText ?? CanvasBitmap.ColorText(typedColor))
+                    ? ColorSourceOf(typedColor, typedText ?? CanvasBitmap.ColorText(typedColor), typedText ?? text)
                     : current;
             }
             case ObjectInstance when TryObjectColor(value, out var objectColor):
                 return new PaintSource.ColorSource(objectColor, CanvasBitmap.ColorText(objectColor));
         }
 
-        return Document.TryParseColor(Js.AsText(value), element, out var color, out var serialized)
-            ? new PaintSource.ColorSource(color, serialized ?? CanvasBitmap.ColorText(color))
+        var written = Js.AsText(value);
+        return Document.TryParseColor(written, element, out var color, out var serialized)
+            ? ColorSourceOf(color, serialized ?? CanvasBitmap.ColorText(color), serialized ?? written)
             : current;
     }
+
+    // A style color: its eight-bit sRGB reading, and where it really is when that reading had to lose it (a color() outside the sRGB gamut).
+    private static PaintSource.ColorSource ColorSourceOf(PaintColor color, string text, string written) =>
+        CanvasColorSpaces.TryParseExtended(written, out var extended) ? new PaintSource.ColorSource(color, text) { Extended = extended } : new PaintSource.ColorSource(color, text);
 
     private JsValue StyleValue(PaintSource source) => source switch
     {
@@ -564,7 +659,7 @@ internal sealed partial class ScriptRuntime
             Document.GetComputedValue(element, property) is { } text && CanvasFont.TryLength(text, FontEnvironment.Detached, out var value) ? value : fallback;
 
         var size = Pixels(canvas, "font-size", 16);
-        var root = Document.Root.FirstChild is { } first ? Pixels(first, "font-size", 16) : 16;
+        var root = Document.DocumentElement is { } first ? Pixels(first, "font-size", 16) : 16;
         var lineHeight = Pixels(canvas, "line-height", size * 1.2);
         return new FontEnvironment(size, root, lineHeight, 800, 600);
     }
@@ -906,16 +1001,41 @@ internal sealed partial class ScriptRuntime
         });
         Js.StrictMethod(Engine, p, "createPattern", 2, (self, args) =>
         {
-            var image = Js.Arg(args, 0) is NodeObject { Node: { Kind: ScriptNodeKind.Element } canvasNode } && string.Equals(canvasNode.TagName, "canvas", StringComparison.OrdinalIgnoreCase)
-                ? SnapshotOf(canvasNode)
-                : ImageOf(Js.Arg(args, 0));
-            var repetition = Js.IsNullish(Js.Arg(args, 1)) ? "repeat" : Js.AsText(Js.Arg(args, 1));
+            var source = Js.Arg(args, 0);
+            Image? image;
+            if (source is NodeObject { Node: { Kind: ScriptNodeKind.Element } canvasNode } && string.Equals(canvasNode.TagName, "canvas", StringComparison.OrdinalIgnoreCase))
+            {
+                if (CanvasSize(canvasNode) is var (canvasWidth, canvasHeight) && (canvasWidth == 0 || canvasHeight == 0))
+                    throw DomError("InvalidStateError", "The canvas has no width or height.");
+
+                image = SnapshotOf(canvasNode);
+            }
+            else if (source is BitmapObject)
+            {
+                image = ImageOf(source) ?? throw DomError("InvalidStateError", "The image bitmap is closed.");
+            }
+            else if (source is NodeObject { Node: { Kind: ScriptNodeKind.Element } picture } && (IsImage(picture) || picture.TagName?.ToLowerInvariant() is "image" or "video"))
+            {
+                if (IsImage(picture) && _images.TryGetValue(picture, out var state) && state.Status == 3)
+                    throw DomError("InvalidStateError", "The image is broken.");
+
+                image = ImageOf(source);
+            }
+            else
+            {
+                throw TypeError("The first argument is not a drawable image.");
+            }
+
+            // A null repetition is the empty string, which is "repeat"; a missing one is the word "undefined", which is not a repetition.
+            var repetition = args[1].IsNull() ? "" : Js.AsText(args[1]);
+            if (repetition.Length == 0)
+                repetition = "repeat";
             if (repetition is not ("repeat" or "repeat-x" or "repeat-y" or "no-repeat"))
                 throw DomError("SyntaxError", "The repetition is not valid.");
             if (image is null)
                 return JsValue.Null;
 
-            var model = new CanvasPattern(image, repetition);
+            var model = new CanvasPattern(image, repetition) { Tainted = SourceTainted(source) };
             var pattern = new PatternObject(Engine, PatternPrototype, model);
             _patterns[model] = pattern;
             return pattern;
@@ -924,6 +1044,9 @@ internal sealed partial class ScriptRuntime
         Js.StrictMethod(Engine, p, "drawImage", 3, (self, args) =>
         {
             var source = Js.Arg(args, 0);
+            if (SourceTainted(source))
+                B(self).Taint();
+
             var numbers = args.Skip(1).Select(TypeConverter.ToNumber).ToArray();
             if (numbers.Length is not (2 or 4 or 8) || numbers.Any(n => !double.IsFinite(n)))
             {
@@ -939,16 +1062,29 @@ internal sealed partial class ScriptRuntime
                     throw DomError("InvalidStateError", "The canvas has no width or height.");
 
                 if (!_contexts.TryGetValue(element, out var other))
+                {
+                    B(self).DrawTransparent(Normalized(numbers.Length switch
+                    {
+                        2 => new Rect(numbers[0], numbers[1], canvasWidth, canvasHeight),
+                        4 => new Rect(numbers[0], numbers[1], numbers[2], numbers[3]),
+                        _ => new Rect(numbers[4], numbers[5], numbers[6], numbers[7]),
+                    }));
                     return JsValue.Undefined;
+                }
 
-                var (dx, dy, dw, dh) = numbers.Length switch
+                RequireNoOpenLayers(other.Bitmap);
+                var (cdx, cdy, cdw, cdh) = numbers.Length switch
                 {
                     2 => (numbers[0], numbers[1], other.Bitmap.Width, other.Bitmap.Height),
                     4 => (numbers[0], numbers[1], numbers[2], numbers[3]),
                     _ => (numbers[4], numbers[5], numbers[6], numbers[7]),
                 };
-                RequireNoOpenLayers(other.Bitmap);
-                B(self).DrawCanvas(other.Bitmap, Normalized(new Rect(dx, dy, dw, dh)));
+                var (csx, csy, csw, csh) = numbers.Length == 8 ? (numbers[0], numbers[1], numbers[2], numbers[3]) : (0, 0, other.Bitmap.Width, other.Bitmap.Height);
+
+                // The canvas is drawn as the picture it is now (a snapshot), sampled as the context's smoothing says, like any other image.
+                if (SnapshotOf(element) is { } picture && csw != 0 && csh != 0 && cdw != 0 && cdh != 0)
+                    B(self).DrawImage(picture, Normalized(new Rect(csx, csy, csw, csh)), Normalized(new Rect(cdx, cdy, cdw, cdh)));
+
                 return JsValue.Undefined;
             }
 
@@ -1026,6 +1162,18 @@ internal sealed partial class ScriptRuntime
     /// <summary>A run of text as the context's text settings lay it out.</summary>
     private sealed record TextLayout(string Text, TextRunMetrics Metrics, TextRunLayout? Run, ShapeSettings Shape, double LetterSpacing, double WordSpacing, double LineOffset, double Anchor, double Width, Font Font, string Align, string Baseline);
 
+    // The language of a canvas in the page: the closest lang attribute of the element or an ancestor. One that is not in the page (an OffscreenCanvas among them) has the document element's.
+    private static string? InheritedLanguage(ScriptNode canvas)
+    {
+        for (var node = canvas.IsConnected ? canvas : canvas.OwnerDocument.DocumentElement; node is not null; node = node.Parent)
+        {
+            if (node.Kind == ScriptNodeKind.Element && node.GetAttribute("lang") is { Length: > 0 } language)
+                return language;
+        }
+
+        return null;
+    }
+
     private bool IsRightToLeft(ContextObject context)
     {
         var direction = context.Bitmap.State.Direction;
@@ -1057,7 +1205,7 @@ internal sealed partial class ScriptRuntime
             "titling-caps" => CapsMode.TitlingCaps,
             _ => CapsMode.None,
         };
-        var lang = state.Lang is "inherit" ? null : state.Lang;
+        var lang = state.Lang is "inherit" ? (context.Canvas.IsConnected ? InheritedLanguage(context.Canvas) : context.DetachedLanguage) : state.Lang;
         var shape = new ShapeSettings { Kerning = state.FontKerning != "none", Caps = CanvasFont.Parse(state.Font, FontEnvironment.Detached)?.SmallCaps == true && caps == CapsMode.None ? CapsMode.SmallCaps : caps, Language = lang };
         var metrics = TextRunMeasure.Measure(font, text, letter, word, shape);
 
@@ -1077,7 +1225,7 @@ internal sealed partial class ScriptRuntime
         }
 
         // Text of the ASCII has no other direction and no other font: the plain measure (which keeps a trailing space and gives a control character the font's own width) is what it is.
-        var width = run is not null && text.Any(c => c > 0x7F) ? run.Width : metrics.Width;
+        var width = run is not null && text.Any(c => c > 0x7F) && !SyntheticCaps.Applies(font, shape) ? run.Width : metrics.Width;
         var anchor = textAlign switch
         {
             "center" => width / 2,
@@ -1123,8 +1271,23 @@ internal sealed partial class ScriptRuntime
         }
 
         RequireNoOpenLayers(context.Bitmap);
-        var pixels = context.Bitmap.Pixels();
-        return pixels.Length == 0 ? null : canvasNode.OwnerDocument.DecodeImage(PngWriter.Encode((int)context.Bitmap.Width, (int)context.Bitmap.Height, pixels));
+        var bitmap = context.Bitmap;
+        var pixels = bitmap.Pixels();
+        if (pixels.Length == 0)
+            return null;
+
+        // A canvas in floating point is a picture of floats (which a floating-point canvas keeps whole); every canvas's picture says which space it is in.
+        if (bitmap.Wide && canvasNode.OwnerDocument.CreateWideImage((int)bitmap.Width, (int)bitmap.Height, bitmap.WidePixels()) is { } wide)
+        {
+            CanvasColorSpaces.Tag(wide, bitmap.ColorSpace, (float[])bitmap.WidePixels().Clone());
+            return wide;
+        }
+
+        var image = canvasNode.OwnerDocument.DecodeImage(PngWriter.Encode((int)bitmap.Width, (int)bitmap.Height, pixels));
+        if (image is not null)
+            CanvasColorSpaces.Tag(image, bitmap.ColorSpace);
+
+        return image;
     }
 
     private Image? ImageOf(JsValue source)
@@ -1132,9 +1295,9 @@ internal sealed partial class ScriptRuntime
         if (source is BitmapObject { Image: { } bitmapImage })
             return bitmapImage;
 
-        if (source is NodeObject { Node: { Kind: ScriptNodeKind.Element } element } && IsImage(element)
+        if (source is NodeObject { Node: { Kind: ScriptNodeKind.Element } element } && (IsImage(element) || IsSvgImage(element))
             && _images.TryGetValue(element, out var state) && state.Status == 2)
-            return element.OwnerDocument.GetLoadedImage(element.GetAttribute("src") ?? string.Empty);
+            return element.OwnerDocument.GetLoadedImage(ImageAddressOf(element) ?? string.Empty);
 
         return null;
     }

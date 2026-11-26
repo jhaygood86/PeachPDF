@@ -87,6 +87,69 @@ internal static class BlendModes
         dst[3] = (byte)Math.Min(255, PixelKernels.Div255(sa * fa) + PixelKernels.Div255(da * fb));
     }
 
+    /// <summary>
+    /// <see cref="Blend(PaintBlendMode, Span{byte}, int, int, int, int)"/> on floating-point premultiplied pixels, which are not held to 0 to 1: the Porter-Duff operators and plain
+    /// source-over keep what they are given exactly; the blend functions work on colors brought into 0 to 1, as they are defined.
+    /// </summary>
+    public static void BlendWide(PaintBlendMode mode, Span<float> dst, float sr, float sg, float sb, float sa)
+    {
+        if (mode >= PaintBlendMode.SourceIn)
+        {
+            float da = dst[3];
+            float fa, fb;
+            switch (mode)
+            {
+                case PaintBlendMode.SourceIn: (fa, fb) = (da, 0); break;
+                case PaintBlendMode.SourceOut: (fa, fb) = (1 - da, 0); break;
+                case PaintBlendMode.SourceAtop: (fa, fb) = (da, 1 - sa); break;
+                case PaintBlendMode.DestinationOver: (fa, fb) = (1 - da, 1); break;
+                case PaintBlendMode.DestinationIn: (fa, fb) = (0, sa); break;
+                case PaintBlendMode.DestinationOut: (fa, fb) = (0, 1 - sa); break;
+                case PaintBlendMode.DestinationAtop: (fa, fb) = (1 - da, sa); break;
+                case PaintBlendMode.Xor: (fa, fb) = (1 - da, 1 - sa); break;
+                case PaintBlendMode.Copy: (fa, fb) = (1, 0); break;
+                default: (fa, fb) = (0, 0); break;
+            }
+
+            dst[0] = sr * fa + dst[0] * fb;
+            dst[1] = sg * fa + dst[1] * fb;
+            dst[2] = sb * fa + dst[2] * fb;
+            dst[3] = Math.Min(1f, sa * fa + da * fb);
+            return;
+        }
+
+        if (sa <= 0)
+            return;
+
+        if (mode == PaintBlendMode.Normal)
+        {
+            var keep = 1 - sa;
+            dst[0] = sr + dst[0] * keep;
+            dst[1] = sg + dst[1] * keep;
+            dst[2] = sb + dst[2] * keep;
+            dst[3] = sa + dst[3] * keep;
+            return;
+        }
+
+        if (mode == PaintBlendMode.Plus)
+        {
+            dst[0] += sr;
+            dst[1] += sg;
+            dst[2] += sb;
+            dst[3] = Math.Min(1f, dst[3] + sa);
+            return;
+        }
+
+        float ab = dst[3];
+        var (br, bg, bb) = ab > 0 ? (Math.Clamp(dst[0] / ab, 0f, 1f), Math.Clamp(dst[1] / ab, 0f, 1f), Math.Clamp(dst[2] / ab, 0f, 1f)) : (0f, 0f, 0f);
+        var (cr, cg, cb) = (Math.Clamp(sr / sa, 0f, 1f), Math.Clamp(sg / sa, 0f, 1f), Math.Clamp(sb / sa, 0f, 1f));
+        var (mr, mg, mb) = Blend(mode, (br, bg, bb), (cr, cg, cb));
+        dst[0] = (1 - ab) * sa * cr + (1 - sa) * ab * br + sa * ab * mr;
+        dst[1] = (1 - ab) * sa * cg + (1 - sa) * ab * bg + sa * ab * mg;
+        dst[2] = (1 - ab) * sa * cb + (1 - sa) * ab * bb + sa * ab * mb;
+        dst[3] = sa + ab * (1 - sa);
+    }
+
     private static byte ToByte(float v) => (byte)Math.Clamp((int)MathF.Round(v * 255f), 0, 255);
 
     private static (float, float, float) Blend(PaintBlendMode mode, (float R, float G, float B) cb, (float R, float G, float B) cs)

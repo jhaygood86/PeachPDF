@@ -1398,6 +1398,10 @@ internal static class WebStreamsScripts
                         result = {}; memory.set(v, result);
                         Object.keys(v).forEach(function (k) { result[k] = clone(v[k]); });
                         return result;
+                    } else if (typeof ImageBitmap === "function" && v instanceof ImageBitmap) {
+                        // An ImageBitmap is serializable: the copy shows the same picture (and is as clean or as tainted).
+                        result = global.__cloneImageBitmap(v);
+                        if (result === null) throw dataCloneError("An ImageBitmap is closed and could not be cloned");
                     } else throw dataCloneError("An object could not be cloned");
                     memory.set(v, result);
                     return result;

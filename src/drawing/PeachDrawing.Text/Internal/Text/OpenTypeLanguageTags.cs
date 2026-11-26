@@ -43,6 +43,9 @@ namespace PeachDrawing.Text.Internal.Text
             }
         }
 
+        /// <summary>As <see cref="Resolve"/>, but the tag as a font's layout tables write it: four characters, padded with spaces (<c>"TRK "</c>, where the table lists <c>"TRK"</c>).</summary>
+        public static string? ResolveSystemTag(string? bcp47) => Resolve(bcp47) is { } tag ? tag.PadRight(4) : null;
+
         private static IReadOnlyDictionary<string, string> LoadTags()
         {
             var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);

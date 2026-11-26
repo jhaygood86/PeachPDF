@@ -147,7 +147,7 @@ namespace PeachDrawing.Text.Internal.Text
 
             if (features.JoiningForms is { Count: > 0 } joiningForms)
             {
-                var languageTag = features.LanguageSystemTag ?? OpenTypeLanguageTags.Resolve(features.Language);
+                var languageTag = features.LanguageSystemTag ?? OpenTypeLanguageTags.ResolveSystemTag(features.Language);
                 var scriptPreference = ResolveScriptPreference(features.ScriptTag);
 
                 // Captured by ClusterStart BEFORE the ccmp/locl pre-stage runs just below - that stage
@@ -195,14 +195,14 @@ namespace PeachDrawing.Text.Internal.Text
 
             if (features.UseCategories is { Count: > 0 } useCategories)
             {
-                var languageTag = features.LanguageSystemTag ?? OpenTypeLanguageTags.Resolve(features.Language);
+                var languageTag = features.LanguageSystemTag ?? OpenTypeLanguageTags.ResolveSystemTag(features.Language);
                 var scriptPreference = ResolveScriptPreference(features.ScriptTag);
                 ApplyUseShaping(gsub, glyphs, useCategories, languageTag, scriptPreference, gdef);
             }
 
             if (features.KhmerCategories is { Count: > 0 } khmerCategories)
             {
-                var languageTag = features.LanguageSystemTag ?? OpenTypeLanguageTags.Resolve(features.Language);
+                var languageTag = features.LanguageSystemTag ?? OpenTypeLanguageTags.ResolveSystemTag(features.Language);
                 var scriptPreference = ResolveScriptPreference(features.ScriptTag);
                 ApplyKhmerShaping(gsub, glyphs, khmerCategories, languageTag, scriptPreference, gdef);
             }
@@ -461,7 +461,7 @@ namespace PeachDrawing.Text.Internal.Text
                     }
                 }
 
-                string? languageTag = key.LanguageSystemTag ?? OpenTypeLanguageTags.Resolve(key.Language);
+                string? languageTag = key.LanguageSystemTag ?? OpenTypeLanguageTags.ResolveSystemTag(key.Language);
                 IReadOnlyList<string> scriptPreference = ResolveScriptPreference(key.ScriptTag);
 
                 var result = new SortedDictionary<int, int>();

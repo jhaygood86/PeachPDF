@@ -72,6 +72,40 @@ internal static class PngWriter
 internal static class CanvasPixelExtensions
 {
     /// <summary>The canvas as straight RGBA, 4 bytes a pixel, rows from the top: the recording played onto a bitmap.</summary>
+    /// <summary>The picture played on a canvas that keeps floating-point pixels, read back as straight RGBA floats in the canvas's space (not brought into 0 to 1).</summary>
+    public static float[] RenderWidePixels(this CanvasBitmap bitmap)
+    {
+        var (width, height) = ((int)bitmap.Width, (int)bitmap.Height);
+        var result = new float[Math.Max(0, width) * Math.Max(0, height) * 4];
+        if (width <= 0 || height <= 0 || bitmap.Width * bitmap.Height * 4 > (1 << 24))
+            return result;
+
+        try
+        {
+            var context = new RasterRenderContext();
+            using var canvas = context.CreateCanvas(width, height, 96, wide: true);
+            bitmap.ReplayGuarded(canvas);
+            var source = canvas.Surface.WidePixels;
+            for (var i = 0; i + 3 < result.Length && i + 3 < source.Length; i += 4)
+            {
+                var a = source[i + 3];
+                if (a <= 0)
+                    continue;
+
+                result[i] = source[i] / a;
+                result[i + 1] = source[i + 1] / a;
+                result[i + 2] = source[i + 2] / a;
+                result[i + 3] = a;
+            }
+        }
+        catch (Exception error) when (error is not OutOfMemoryException)
+        {
+            Array.Clear(result);
+        }
+
+        return result;
+    }
+
     public static byte[] RenderPixels(this CanvasBitmap bitmap)
     {
         // A canvas too large to read back has no pixels to give.
@@ -86,7 +120,7 @@ internal static class CanvasPixelExtensions
         try
         {
             var context = new RasterRenderContext();
-            using var canvas = context.CreateCanvas(width, height);
+            using var canvas = context.CreateCanvas(width, height, 96, bitmap.Wide);
             bitmap.ReplayGuarded(canvas);
             var buffer = canvas.ToPixelBuffer();
             var source = buffer.PremultipliedRgba.Span;

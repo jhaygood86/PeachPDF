@@ -27,7 +27,7 @@ internal sealed class RasterImage : Image
     public override bool Interpolate { get; set; } = true;
 
     /// <summary>A sampling view of the surface's current pixels (built on first use, so paint into the tile first).</summary>
-    public Bitmap GetBitmap() => _bitmap ??= new Bitmap(Surface.Width, Surface.Height, Surface.Buffer);
+    public Bitmap GetBitmap() => _bitmap ??= new Bitmap(Surface.Width, Surface.Height, Surface.Buffer) { Wide = Surface.WideBuffer };
 
     public override PixelBuffer? GetPixels()
     {

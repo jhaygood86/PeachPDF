@@ -9,7 +9,7 @@ namespace PeachDrawing.Core
     /// </summary>
     /// <remarks>
     /// <para>
-    /// A surface comes from <see cref="Canvas.CreateOffscreenSurface"/>, and only a canvas that can make one does: the answer is <see langword="null"/> for a document writer
+    /// A surface comes from <see cref="Canvas.CreateOffscreenSurface(int, int)"/>, and only a canvas that can make one does: the answer is <see langword="null"/> for a document writer
     /// (a PDF or SVG has no bitmap to keep drawing into) and for a measuring canvas. The caller then keeps what was drawn some other way, as a recording to play again.
     /// </para>
     /// <para>
@@ -56,6 +56,15 @@ namespace PeachDrawing.Core
 
         /// <summary>Makes every pixel transparent.</summary>
         public abstract void Clear();
+
+        /// <summary>Whether this surface holds floating-point pixels (see <see cref="Canvas.CreateOffscreenSurface(int, int, bool)"/>).</summary>
+        public virtual bool IsWide => false;
+
+        /// <summary>
+        /// The surface's pixels as straight (not premultiplied) RGBA floats, four per pixel, row-major from the top-left, not brought into 0 to 1: what was painted on it, kept exactly.
+        /// <see langword="null"/> for a surface that is not wide.
+        /// </summary>
+        public virtual float[]? ReadWidePixels() => null;
 
         /// <summary>Releases the surface, its canvas and the memory they hold.</summary>
         public abstract void Dispose();

@@ -56,6 +56,7 @@ public sealed partial class Win2dCanvas
         {
             Win2dTileImage tile => tile.Content,
             Win2dBitmapImage bitmap => bitmap.Bitmap,
+            Win2dWideImage wide => wide.Bitmap,
             _ => ImageFor(image).GetBitmap(_session),
         };
 

@@ -102,14 +102,24 @@ namespace PeachDrawing.Core
             if (shaped.Length == 0)
                 return result;
 
+            // A font with no small capitals of its own gets capitals drawn smaller.
+            bool[]? small = null;
+            if (SyntheticCaps.Applies(font, settings))
+            {
+                shaped = SyntheticCaps.Convert(shaped, settings.Caps, out small);
+                settings = settings with { Caps = CapsMode.None };
+            }
+
             var run = Shaper.Shape(typeface, shaped, settings);
             var clusters = new List<TextRunCluster>();
             double pen = 0;
             double left = double.PositiveInfinity, right = double.NegativeInfinity, top = double.NegativeInfinity, bottom = double.PositiveInfinity;
+            var fullScale = scale;
 
             for (var i = 0; i < run.Glyphs.Count; i++)
             {
                 var glyph = run.Glyphs[i];
+                scale = small is not null && glyph.ClusterStart < small.Length && small[glyph.ClusterStart] ? fullScale * SyntheticCaps.Scale : fullScale;
                 var advance = glyph.IsHiddenIgnorable ? 0 : (typeface.GetAdvance((ushort)glyph.GlyphIndex) + glyph.XAdvanceDelta) * scale;
 
                 if (typeface.TryGetOutline((ushort)glyph.GlyphIndex, out var outline) && outline is not null && !outline.IsEmpty)

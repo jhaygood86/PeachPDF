@@ -143,9 +143,11 @@ PeachDrawing.Core.Canvas : abstract class
   method virtual Boolean PaintRequiresTransparency(Action<Canvas> paint)
   method virtual CanvasLayer BeginLayer(LayerOptions options)
   method virtual IReadOnlyList<InkSpan> GetInkCrossings(String str, Font font, PaintPoint origin, Double bandTop, Double bandBottom, Double letterSpacing = 0, ShapeSettings? features = null)
+  method virtual Image CreateWideImage(Int32 widthPixels, Int32 heightPixels, ReadOnlySpan<Single> straightRgba)
   method virtual Object AddDestinationLink(Rect bounds, String destinationName, IReadOnlyList<PaintPoint> quad = null)
   method virtual Object AddLink(Rect bounds, String uri, IReadOnlyList<PaintPoint> quad = null)
   method virtual OffscreenSurface CreateOffscreenSurface(Int32 widthPixels, Int32 heightPixels)
+  method virtual OffscreenSurface CreateOffscreenSurface(Int32 widthPixels, Int32 heightPixels, Boolean wide)
   method virtual RasterRegion BeginRasterSurface(Rect layoutBounds, Double? dpiOverride = null)
   method virtual RetainedLayer CreateRetainedLayer(Rect bounds)
   method virtual Void AddCursor(Rect bounds, CursorShape shape, IReadOnlyList<CursorImage> images = null)
@@ -680,6 +682,8 @@ PeachDrawing.Core.OffscreenSurface : abstract class
   method abstract PixelBuffer ReadPixels()
   method abstract Void Clear()
   method abstract Void Dispose()
+  method virtual Single[] ReadWidePixels()
+  property Boolean IsWide { get; }
   property Canvas Canvas { get; }
   property Int32 Height { get; }
   property Int32 Width { get; }
@@ -875,9 +879,13 @@ PeachDrawing.Core.RasterRegion : sealed class
   property RasterSurface Surface { get; }
 PeachDrawing.Core.RasterSurface : sealed class
   ctor(Int32 width, Int32 height, Int32 gridX, Int32 gridY, Double pixelsPerUnitX, Double pixelsPerUnitY)
+  ctor(Int32 width, Int32 height, Int32 gridX, Int32 gridY, Double pixelsPerUnitX, Double pixelsPerUnitY, Boolean wide)
   method Span<Byte> Row(Int32 y)
+  method Span<Single> WideRow(Int32 y)
   method Void Clear()
+  method Void SyncWideFromBytes(IntRect area)
   method virtual Void Dispose()
+  property Boolean IsWide { get; }
   property Double PixelsPerUnitX { get; }
   property Double PixelsPerUnitY { get; }
   property Int32 GridX { get; }
@@ -889,6 +897,7 @@ PeachDrawing.Core.RasterSurface : sealed class
   property Memory<Byte> PixelMemory { get; }
   property Rect LayoutRect { get; }
   property Span<Byte> Pixels { get; }
+  property Span<Single> WidePixels { get; }
 PeachDrawing.Core.Rect : struct
   ctor(Double x, Double y, Double width, Double height)
   ctor(PaintPoint location, Size size)
@@ -994,7 +1003,14 @@ PeachDrawing.Core.Size : struct
   property Double Width { get; set; }
 PeachDrawing.Core.SolidBrush : sealed class
   ctor(PaintColor color)
+  ctor(WideColor color)
   property PaintColor PaintColor { get; }
+  property WideColor WideColor { get; }
+PeachDrawing.Core.SyntheticCaps : static class
+  field const Double Scale
+  method static Boolean Applies(Font font, ShapeSettings? features)
+  method static IReadOnlyList<ValueTuple<String, Int32, Boolean>> Split(String text, Boolean[] small)
+  method static String Convert(String text, CapsMode caps, out Boolean[] small)
 PeachDrawing.Core.TextDecorations : enum Int32
   LineThrough = 4
   None = 0
@@ -1126,3 +1142,16 @@ PeachDrawing.Core.TypefaceFont : sealed class
   property String FaceKey { get; }
   property SyntheticStyle SyntheticStyle { get; }
   property Typeface Typeface { get; }
+PeachDrawing.Core.WideColor : struct
+  ctor(Single Red, Single Green, Single Blue, Single Alpha)
+  method PaintColor ToPaintColor()
+  method Void Deconstruct(out Single Red, out Single Green, out Single Blue, out Single Alpha)
+  method static WideColor FromPaintColor(PaintColor color)
+  method virtual Boolean Equals(Object obj)
+  method virtual Boolean Equals(WideColor other)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property Single Alpha { get; init; }
+  property Single Blue { get; init; }
+  property Single Green { get; init; }
+  property Single Red { get; init; }

@@ -122,4 +122,20 @@ public class CanvasTextTests
 
         Assert.Equal(["1 0 true 1 0 true 0 11"], log);
     }
+
+    [Fact]
+    public async Task SmallCaps_AreDrawnAndMeasuredAsSmallerCapitals_WhateverTheFontHas()
+    {
+        var log = await LogAsync("""
+            g.font = '32px TestSans';
+            var normal = g.measureText('Hello').width, capitals = g.measureText('HELLO').width;
+            g.fontVariantCaps = 'small-caps';
+            var small = g.measureText('Hello').width, lowerOnly = g.measureText('hello').width;
+            g.fontVariantCaps = 'all-small-caps';
+            var all = g.measureText('HELLO').width;
+            Log.info([small !== normal, small < capitals, lowerOnly < capitals, all < capitals].join(' '));
+            """);
+
+        Assert.Equal(["true true true true"], log);
+    }
 }

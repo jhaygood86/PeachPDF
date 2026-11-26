@@ -768,13 +768,32 @@ public sealed class ScriptDocument
     /// </summary>
     /// <param name="widthPixels">the width, in pixels</param>
     /// <param name="heightPixels">the height, in pixels</param>
-    public PeachDrawing.Core.OffscreenSurface? CreateCanvasSurface(int widthPixels, int heightPixels)
+    public PeachDrawing.Core.OffscreenSurface? CreateCanvasSurface(int widthPixels, int heightPixels) => CreateCanvasSurface(widthPixels, heightPixels, wide: false);
+
+    /// <summary>
+    /// <see cref="CreateCanvasSurface(int, int)"/> for a canvas that keeps floating-point pixels (<paramref name="wide"/>). Such a canvas needs its surface to keep what it draws exactly, so
+    /// it is made whether or not the host asked for surfaces; it is null when the host's canvases cannot make one, and the canvas then plays its recording on a floating-point raster canvas to read it.
+    /// </summary>
+    /// <param name="widthPixels">the width, in pixels</param>
+    /// <param name="heightPixels">the height, in pixels</param>
+    /// <param name="wide">whether the pixels are floating point</param>
+    public PeachDrawing.Core.OffscreenSurface? CreateCanvasSurface(int widthPixels, int heightPixels, bool wide)
     {
-        if (!_container.CanvasSurfaces)
+        if (!wide && !_container.CanvasSurfaces)
             return null;
 
         using var measuring = CreateMeasuringCanvas();
-        return measuring?.CreateOffscreenSurface(widthPixels, heightPixels);
+        return measuring?.CreateOffscreenSurface(widthPixels, heightPixels, wide);
+    }
+
+    /// <summary>An image of floating-point pixels (straight RGBA floats, four per pixel), which a floating-point canvas draws as they are; null when the host's canvases cannot make one.</summary>
+    /// <param name="widthPixels">the width, in pixels</param>
+    /// <param name="heightPixels">the height, in pixels</param>
+    /// <param name="straightRgba">the pixels</param>
+    public PeachDrawing.Core.Image? CreateWideImage(int widthPixels, int heightPixels, System.ReadOnlySpan<float> straightRgba)
+    {
+        using var measuring = CreateMeasuringCanvas();
+        return measuring?.CreateWideImage(widthPixels, heightPixels, straightRgba);
     }
 
     /// <summary>Decodes an encoded image (PNG, JPEG...) with the document's render context.</summary>

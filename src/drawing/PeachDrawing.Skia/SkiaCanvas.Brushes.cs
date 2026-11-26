@@ -71,7 +71,13 @@ public sealed partial class SkiaCanvas
                         break;
                     }
 
-                    paint.Color = ToColor(solid.PaintColor);
+                    // A color the eight-bit one would lose (outside 0 to 1) is given as floats, which a half-float surface keeps.
+                    var wide = solid.WideColor;
+                    if (wide.Red is < 0f or > 1f || wide.Green is < 0f or > 1f || wide.Blue is < 0f or > 1f)
+                        paint.ColorF = new SKColorF(wide.Red, wide.Green, wide.Blue, Math.Clamp(wide.Alpha, 0f, 1f));
+                    else
+                        paint.Color = ToColor(solid.PaintColor);
+
                     break;
 
                 case LinearGradientBrush linear:

@@ -19,6 +19,9 @@ internal sealed class Bitmap
 
     public byte[] Pixels { get; }
 
+    /// <summary>The same pixels as premultiplied floats (RGBA, four per pixel) that are not held to 0 to 1, or null for a bitmap of eight bits only.</summary>
+    public float[]? Wide { get; init; }
+
     /// <summary>Premultiplies straight-alpha RGBA in place.</summary>
     public static void Premultiply(Span<byte> rgba) => PixelMath.Premultiply(rgba);
 

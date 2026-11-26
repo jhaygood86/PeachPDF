@@ -38,6 +38,16 @@ public static class RasterLayerEffects
         ArgumentNullException.ThrowIfNull(surface);
         ArgumentNullException.ThrowIfNull(effects);
 
+        ApplyToBytes(surface, effects);
+
+        // The effects work on eight bits, so a surface that also keeps floats takes their result as the picture (a color outside 0 to 1 is brought into it by them).
+        if (surface.IsWide && effects.Count > 0)
+            surface.SyncWideFromBytes(surface.Bounds);
+    }
+
+    private static void ApplyToBytes(RasterSurface surface, IReadOnlyList<LayerEffect> effects)
+    {
+
         foreach (var effect in effects)
         {
             switch (effect)

@@ -84,4 +84,34 @@ public class TextRunLayoutTests
         // The first character of a right-to-left line is its right-most.
         Assert.True(layout.CaretX(0) > layout.CaretX(2) || layout.Runs.Any(r => r.IsRightToLeft) == false);
     }
+
+    [Fact]
+    public void ForAFontWithNoSmallCapitals_TheLowerCaseLettersAreCapitalsAtASmallerSize()
+    {
+        var small = new PeachDrawing.Text.Shaping.ShapeSettings { Caps = PeachDrawing.Text.Shaping.CapsMode.SmallCaps };
+        var noSmallCaps = Load(BundledFonts.ColorV0);
+        Assert.True(SyntheticCaps.Applies(noSmallCaps, small));
+
+        var normal = TextRunMeasure.Measure(noSmallCaps, "Hello").Width;
+        var allCapitals = TextRunMeasure.Measure(noSmallCaps, "HELLO").Width;
+        var withSmall = TextRunMeasure.Measure(noSmallCaps, "Hello", features: small).Width;
+        var smallOnly = TextRunMeasure.Measure(noSmallCaps, "hello", features: small).Width;
+
+        Assert.NotEqual(normal, withSmall, 3);
+        Assert.True(withSmall < allCapitals);
+        Assert.Equal(TextRunMeasure.Measure(noSmallCaps, "HELLO").Width * SyntheticCaps.Scale, smallOnly, 2);
+        Assert.False(SyntheticCaps.Applies(noSmallCaps, new PeachDrawing.Text.Shaping.ShapeSettings()));
+    }
+
+    [Fact]
+    public void TheAllSmallCapsModeShrinksTheCapitalsToo_AndASplitKeepsTheSizesApart()
+    {
+        var text = SyntheticCaps.Convert("aBc", PeachDrawing.Text.Shaping.CapsMode.AllSmallCaps, out var small);
+        Assert.Equal("ABC", text);
+        Assert.Equal([true, true, true], small);
+
+        text = SyntheticCaps.Convert("aBc", PeachDrawing.Text.Shaping.CapsMode.SmallCaps, out small);
+        Assert.Equal([true, false, true], small);
+        Assert.Equal([("A", 0, true), ("B", 1, false), ("C", 2, true)], SyntheticCaps.Split(text, small));
+    }
 }

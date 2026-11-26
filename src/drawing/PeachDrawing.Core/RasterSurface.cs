@@ -19,6 +19,7 @@ namespace PeachDrawing.Core;
 public sealed class RasterSurface : IDisposable
 {
     private byte[]? _buffer;
+    private float[]? _wide;
 
     /// <summary>Creates a cleared, premultiplied-RGBA8 pixel buffer of <paramref name="width"/> x <paramref name="height"/> pixels.</summary>
     /// <param name="width">the buffer's width, in pixels</param>
@@ -28,6 +29,22 @@ public sealed class RasterSurface : IDisposable
     /// <param name="pixelsPerUnitX">pixels per layout unit, horizontally</param>
     /// <param name="pixelsPerUnitY">pixels per layout unit, vertically</param>
     public RasterSurface(int width, int height, int gridX, int gridY, double pixelsPerUnitX, double pixelsPerUnitY)
+        : this(width, height, gridX, gridY, pixelsPerUnitX, pixelsPerUnitY, wide: false)
+    {
+    }
+
+    /// <summary>
+    /// Creates a cleared surface that also holds its pixels as floating point (<paramref name="wide"/>): premultiplied RGBA floats that are not held to 0 to 1, which a canvas painting on it keeps
+    /// exactly, while <see cref="Pixels"/> keeps the eight-bit view of the same picture (each float brought into range and rounded).
+    /// </summary>
+    /// <param name="width">the buffer's width, in pixels</param>
+    /// <param name="height">the buffer's height, in pixels</param>
+    /// <param name="gridX">the surface's left edge, in whole pixels of the grid it sits on</param>
+    /// <param name="gridY">the surface's top edge, in whole pixels of the grid it sits on</param>
+    /// <param name="pixelsPerUnitX">pixels per layout unit, horizontally</param>
+    /// <param name="pixelsPerUnitY">pixels per layout unit, vertically</param>
+    /// <param name="wide">whether the surface also holds floating-point pixels</param>
+    public RasterSurface(int width, int height, int gridX, int gridY, double pixelsPerUnitX, double pixelsPerUnitY, bool wide)
     {
         if (width <= 0 || height <= 0)
             throw new ArgumentOutOfRangeException(nameof(width), "A raster surface needs a positive size.");
@@ -42,6 +59,43 @@ public sealed class RasterSurface : IDisposable
         var length = checked(width * height * 4);
         _buffer = ArrayPool<byte>.Shared.Rent(length);
         Array.Clear(_buffer, 0, length);
+        if (wide)
+            _wide = new float[length];
+    }
+
+    /// <summary>Whether the surface also holds its pixels as floating point.</summary>
+    public bool IsWide => _wide is not null;
+
+    /// <summary>The floating-point pixels, premultiplied RGBA, row-major from the top-left, four floats per pixel: what a canvas painting on a wide surface keeps exactly (see <see cref="IsWide"/>).</summary>
+    /// <exception cref="InvalidOperationException">the surface is not wide</exception>
+    public Span<float> WidePixels => _wide is null
+        ? throw new InvalidOperationException("The surface does not hold floating-point pixels.")
+        : _wide.AsSpan(0, Width * Height * 4);
+
+    internal float[]? WideBuffer => _wide;
+
+    /// <summary>The floating-point pixels of row <paramref name="y"/>.</summary>
+    /// <param name="y">the row</param>
+    public Span<float> WideRow(int y) => WidePixels.Slice(y * Width * 4, Width * 4);
+
+    /// <summary>Makes the floating-point pixels the eight-bit ones, over the rectangle (what a pass that works on eight-bit pixels, a filter say, leaves behind).</summary>
+    /// <param name="area">the pixels to bring over</param>
+    public void SyncWideFromBytes(IntRect area)
+    {
+        if (_wide is null || _buffer is null)
+            return;
+
+        var (left, top) = (Math.Max(0, area.Left), Math.Max(0, area.Top));
+        var (right, bottom) = (Math.Min(Width, area.Right), Math.Min(Height, area.Bottom));
+        for (var y = top; y < bottom; y++)
+        {
+            for (var x = left; x < right; x++)
+            {
+                var p = (y * Width + x) * 4;
+                for (var c = 0; c < 4; c++)
+                    _wide[p + c] = _buffer[p + c] / 255f;
+            }
+        }
     }
 
     /// <summary>The buffer's width, in pixels.</summary>
@@ -89,13 +143,18 @@ public sealed class RasterSurface : IDisposable
         : _buffer.AsMemory(0, Width * Height * 4);
 
     /// <summary>Fills every pixel with transparent black.</summary>
-    public void Clear() => Pixels.Clear();
+    public void Clear()
+    {
+        Pixels.Clear();
+        _wide?.AsSpan(0, Width * Height * 4).Clear();
+    }
 
     /// <summary>Releases the surface's backing pixel buffer.</summary>
     public void Dispose()
     {
         var buffer = _buffer;
         _buffer = null;
+        _wide = null;
         if (buffer is not null)
             ArrayPool<byte>.Shared.Return(buffer);
     }

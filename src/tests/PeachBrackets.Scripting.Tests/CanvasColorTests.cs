@@ -247,7 +247,7 @@ public class CanvasColorTests
     }
 
     [Fact]
-    public async Task CurrentColor_InAGradientStop_IsTheCanvasElementsColor()
+    public async Task CurrentColor_InAGradientStop_IsOpaqueBlack_NotTheCanvasElementsColor()
     {
         var (_, log) = await CanvasParityTests.PaintAsync("""
             var c = document.getElementById('c'), g = c.getContext('2d');
@@ -258,7 +258,8 @@ public class CanvasColorTests
             Log.info(Array.from(g.getImageData(5, 5, 1, 1).data).join(','));
             """, "width=10 height=10");
 
-        Assert.Equal(["34,170,34,255"], log);
+        // A gradient is not tied to an element, so there is no color for currentcolor to be: it is black (2d.gradient.object.current).
+        Assert.Equal(["0,0,0,255"], log);
     }
 
     [Theory]

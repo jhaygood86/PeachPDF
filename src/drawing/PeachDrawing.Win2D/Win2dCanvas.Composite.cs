@@ -48,7 +48,10 @@ public sealed partial class Win2dCanvas
 
         var dpi = target.Dpi;
         var size = target.Size;
-        var snapshot = new CanvasRenderTarget(target.Device, (float)size.Width, (float)size.Height, dpi);
+        // The copy is of the target's own format, so a wide target's values outside 0 to 1 are not brought into range by it.
+        var snapshot = target.Format == Windows.Graphics.DirectX.DirectXPixelFormat.B8G8R8A8UIntNormalized
+            ? new CanvasRenderTarget(target.Device, (float)size.Width, (float)size.Height, dpi)
+            : new CanvasRenderTarget(target.Device, (float)size.Width, (float)size.Height, dpi, target.Format, CanvasAlphaMode.Premultiplied);
         _context.Counts.Tile(1);
         made.Add(new ReleaseAction(() =>
         {

@@ -283,7 +283,11 @@ internal sealed class PathData
 /// <summary>What fillStyle and strokeStyle hold: a color, a gradient or a pattern.</summary>
 internal abstract record PaintSource
 {
-    public sealed record ColorSource(PaintColor Color, string Text) : PaintSource;
+    public sealed record ColorSource(PaintColor Color, string Text) : PaintSource
+    {
+        /// <summary>The color where an eight-bit sRGB one would lose it (a <c>color()</c> outside the sRGB gamut): extended sRGB red, green, blue and alpha.</summary>
+        public (double R, double G, double B, double A)? Extended { get; init; }
+    }
 
     public sealed record GradientSource(CanvasGradient Gradient) : PaintSource;
 
@@ -313,9 +317,15 @@ internal sealed class CanvasGradient(string kind, double[] geometry)
 /// <summary>A <c>CanvasPattern</c>: an image and how it repeats.</summary>
 internal sealed class CanvasPattern(Image image, string repetition)
 {
+    /// <summary>Whether its picture came from another origin without being allowed to be read: painting with it taints a canvas.</summary>
+    public bool Tainted { get; init; }
+
     public Image Image { get; } = image;
 
     public string Repetition { get; } = repetition;
+
+    /// <summary>The matrix <c>setTransform</c> gave: how the pattern's own space sits in the space of the path it fills.</summary>
+    public Affine2D Transform { get; set; } = Affine2D.Identity;
 }
 
 /// <summary>One step of a filter: effects a layer applies, or an SVG filter of the document run over the pixels.</summary>
@@ -424,6 +434,18 @@ internal sealed class CanvasBitmap(ScriptDocument document, double width, double
 
     public int OperationCount => _ops.Count;
 
+    /// <summary>The origin-clean flag: false once something from another origin that a script may not read has been drawn, after which the pixels cannot be read back.</summary>
+    public bool OriginClean { get; private set; } = true;
+
+    public void Taint() => OriginClean = false;
+
+    // Painting with a pattern of a picture a script may not read taints the canvas.
+    private void TaintFrom(PaintSource source)
+    {
+        if (source is PaintSource.PatternSource { Pattern.Tainted: true })
+            OriginClean = false;
+    }
+
     // The bitmap on the host's backend the drawing is also made on, when the host asked for one (HtmlDocumentOptions.CanvasSurfaces): what is drawn is drawn
     // there as it is recorded, and the page shows that, rather than playing the whole recording again at every paint. The recording is kept all the same, for
     // a PDF or SVG or any canvas of another backend, which plays it.
@@ -433,13 +455,147 @@ internal sealed class CanvasBitmap(ScriptDocument document, double width, double
     /// <summary>Whether the drawing is kept on a bitmap of the host's backend as well as recorded.</summary>
     public bool HasSurface => _surface is not null;
 
+    /// <summary>The color space the canvas keeps its pixels in: what a color or picture of another space is converted to when it is drawn.</summary>
+    public string ColorSpace { get; private set; } = "srgb";
+
+    /// <summary>Whether the canvas keeps floating-point pixels (a <c>float16</c> canvas), which a color outside the sRGB gamut or above 1 survives.</summary>
+    public bool Wide { get; private set; }
+
+    /// <summary>Sets the space and precision of the canvas, before anything is drawn on it.</summary>
+    public void ConfigureColor(string space, bool wide)
+    {
+        ColorSpace = space;
+        Wide = wide;
+    }
+
+    private (int Revision, float[] Pixels)? _widePixels;
+
+    /// <summary>The pixels as straight RGBA floats in the canvas's space (four per pixel, row-major), not brought into 0 to 1 on a wide canvas.</summary>
+    public float[] WidePixels()
+    {
+        if (_widePixels is { } cached && cached.Revision == Revision)
+            return cached.Pixels;
+
+        float[] floats;
+        if (_surface is { IsWide: true } surface && surface.ReadWidePixels() is { } read)
+        {
+            floats = read;
+        }
+        else if (Wide)
+        {
+            floats = this.RenderWidePixels();
+        }
+        else
+        {
+            var bytes = Pixels();
+            floats = new float[bytes.Length];
+            for (var i = 0; i < bytes.Length; i++)
+                floats[i] = bytes[i] / 255f;
+        }
+
+        _widePixels = (Revision, floats);
+        return floats;
+    }
+
+    // ---- color in the canvas's space
+
+    /// <summary>The brush of a style, its colors in the canvas's space (a wide color kept as it is on a floating-point canvas).</summary>
+    public Brush BrushFor(PaintSource source, double alpha = 1)
+    {
+        if (source is PaintSource.ColorSource color && (Wide || ColorSpace != "srgb"))
+        {
+            var (r, g, b, a) = color.Extended ?? (color.Color.R / 255.0, color.Color.G / 255.0, color.Color.B / 255.0, color.Color.A / 255.0);
+            var rgb = new[] { r, g, b };
+            CanvasColorSpaces.Convert(rgb, "srgb", ColorSpace, clip: !Wide);
+            return new SolidBrush(new WideColor((float)rgb[0], (float)rgb[1], (float)rgb[2], (float)(a * Math.Min(1, alpha))));
+        }
+
+        return MakeBrush(source, alpha, ColorSpace);
+    }
+
+    private PaintColor InSpace(PaintColor color) => CanvasColorSpaces.ConvertPaintColor(color, ColorSpace);
+
+    // A style color as an eight-bit color of the canvas's space (a color() outside the sRGB gamut keeps its place in a wider space).
+    private PaintColor InSpace(PaintSource.ColorSource color)
+    {
+        if (color.Extended is not { } e)
+            return InSpace(color.Color);
+
+        var rgb = new[] { e.R, e.G, e.B };
+        CanvasColorSpaces.Convert(rgb, "srgb", ColorSpace, clip: true);
+        return PaintColor.FromArgb(color.Color.A, (int)Math.Round(rgb[0] * 255), (int)Math.Round(rgb[1] * 255), (int)Math.Round(rgb[2] * 255));
+    }
+
+    private readonly System.Runtime.CompilerServices.ConditionalWeakTable<Image, Dictionary<string, Image>> _converted = new();
+
+    /// <summary>A picture in the canvas's space and precision: the picture itself when it is there already, else a converted copy (kept while the picture lives).</summary>
+    public Image ForCanvas(Image image)
+    {
+        var from = CanvasColorSpaces.SpaceOf(image);
+        var floats = CanvasColorSpaces.FloatsOf(image);
+        if (from == ColorSpace && (floats is not null || !Wide))
+            return image;
+
+        var key = ColorSpace + (Wide ? "/wide" : "");
+        var versions = _converted.GetOrCreateValue(image);
+        if (versions.TryGetValue(key, out var done))
+            return done;
+
+        float[] straight;
+        int width, height;
+        if (floats is not null && image.GetPixels() is { } own)
+        {
+            (width, height, straight) = (own.Width, own.Height, (float[])floats.Clone());
+        }
+        else if (image.GetPixels() is { } buffer)
+        {
+            (width, height) = (buffer.Width, buffer.Height);
+            straight = new float[width * height * 4];
+            var span = buffer.PremultipliedRgba.Span;
+            for (var i = 0; i + 3 < straight.Length; i += 4)
+            {
+                var a = span[i + 3];
+                for (var c = 0; c < 3; c++)
+                    straight[i + c] = a == 0 ? 0 : Math.Min(1f, span[i + c] / (float)a);
+
+                straight[i + 3] = a / 255f;
+            }
+        }
+        else
+        {
+            return image;
+        }
+
+        CanvasColorSpaces.ConvertFloats(straight, from, ColorSpace, clip: !Wide);
+        Image? result;
+        if (Wide)
+        {
+            result = Document.CreateWideImage(width, height, straight);
+        }
+        else
+        {
+            var bytes = new byte[straight.Length];
+            for (var i = 0; i < bytes.Length; i++)
+                bytes[i] = (byte)Math.Round(Math.Clamp(straight[i], 0f, 1f) * 255f);
+
+            result = Document.DecodeImage(PngWriter.Encode(width, height, bytes));
+        }
+
+        if (result is null)
+            return image;
+
+        CanvasColorSpaces.Tag(result, ColorSpace, Wide ? straight : null);
+        versions[key] = result;
+        return result;
+    }
+
     /// <summary>Asks the host for a bitmap to keep the drawing on, if it gave this document a way to make one.</summary>
     public void UseSurface()
     {
         if (_surface is not null || Width < 1 || Height < 1 || Width > int.MaxValue || Height > int.MaxValue)
             return;
 
-        _surface = Document.CreateCanvasSurface((int)Width, (int)Height);
+        _surface = Document.CreateCanvasSurface((int)Width, (int)Height, Wide);
     }
 
     public ScriptCanvasPainting Painting => new(Width, Height, PaintTo, _surface is null ? null : this);
@@ -452,6 +608,12 @@ internal sealed class CanvasBitmap(ScriptDocument document, double width, double
             if (_snapshot is not { } current || current.Revision != Revision)
             {
                 var image = surface.CreateSnapshot();
+                if (ColorSpace != "srgb" && PresentedInSrgb(image) is { } presented)
+                {
+                    image.Dispose();
+                    image = presented;
+                }
+
                 _snapshot?.Image.Dispose();
                 _snapshot = (Revision, image);
             }
@@ -461,6 +623,26 @@ internal sealed class CanvasBitmap(ScriptDocument document, double width, double
         }
 
         Replay(canvas);
+    }
+
+    // A canvas in another space is shown on a page in sRGB: the picture of it, converted.
+    private Image? PresentedInSrgb(Image image)
+    {
+        if (image.GetPixels() is not { } buffer)
+            return null;
+
+        var span = buffer.PremultipliedRgba.Span;
+        var bytes = new byte[span.Length];
+        for (var i = 0; i + 3 < bytes.Length; i += 4)
+        {
+            var a = span[i + 3];
+            bytes[i + 3] = a;
+            for (var c = 0; c < 3; c++)
+                bytes[i + c] = a == 0 ? (byte)0 : (byte)Math.Min(255, (span[i + c] * 255 + a / 2) / a);
+        }
+
+        CanvasColorSpaces.ConvertBytes(bytes, ColorSpace, "srgb");
+        return Document.DecodeImage(PngWriter.Encode(buffer.Width, buffer.Height, bytes));
     }
 
     // The layers open (beginLayer without its endLayer), innermost last: what is drawn goes to the innermost one's own list, and reaches the canvas when it ends.
@@ -694,6 +876,7 @@ internal sealed class CanvasBitmap(ScriptDocument document, double width, double
     public void Reset()
     {
         Revision++;
+        OriginClean = true;
         _ops.Clear();
         _layers.Clear();
         _surface?.Clear();
@@ -702,6 +885,8 @@ internal sealed class CanvasBitmap(ScriptDocument document, double width, double
         Saved.Clear();
         State = new CanvasState();
         Path = new PathData();
+        if (Opaque)
+            PaintOpaqueBase();
     }
 
     /// <summary>Whether a transformation matrix can be undone.</summary>
@@ -737,6 +922,7 @@ internal sealed class CanvasBitmap(ScriptDocument document, double width, double
         "destination-atop" => PaintBlendMode.DestinationAtop,
         "xor" => PaintBlendMode.Xor,
         "copy" => PaintBlendMode.Copy,
+        "clear" => PaintBlendMode.Clear,
         _ => null,
     };
 
@@ -765,7 +951,7 @@ internal sealed class CanvasBitmap(ScriptDocument document, double width, double
         // A shadow is the shape's own alpha, in the shadow color, moved by the offset (which no transform touches) and blurred, drawn first and with the same
         // alpha and compositing as the shape; then the shape is drawn.
         var hasShadow = state.ShadowColor.A > 0 && (state.ShadowBlur > 0 || state.ShadowOffsetX != 0 || state.ShadowOffsetY != 0);
-        var (shadowDx, shadowDy, sigma, shadowColor) = (state.ShadowOffsetX, state.ShadowOffsetY, state.ShadowBlur / 2, state.ShadowColor);
+        var (shadowDx, shadowDy, sigma, shadowColor) = (state.ShadowOffsetX, state.ShadowOffsetY, state.ShadowBlur / 2, InSpace(state.ShadowColor));
         var (width, height) = (Width, Height);
 
         // The filter acts on the shape alone: before the shadow (which is the filtered shape's) and before alpha and compositing.
@@ -917,34 +1103,61 @@ internal sealed class CanvasBitmap(ScriptDocument document, double width, double
         _surface?.Clear();
         _usesOperators = false;
         _needsGroup = false;
+        if (Opaque)
+            PaintOpaqueBase();
+    }
+
+    /// <summary>Whether the canvas has no alpha (<c>alpha: false</c>): it is opaque black where nothing has been drawn, and clearing it gives black again.</summary>
+    public bool Opaque { get; private set; }
+
+    /// <summary>Makes the canvas one with no alpha channel, black to begin with.</summary>
+    public void MakeOpaque()
+    {
+        Opaque = true;
+        PaintOpaqueBase();
+    }
+
+    private void PaintOpaqueBase()
+    {
+        var (w, h) = (Width, Height);
+        AddOp(canvas => canvas.DrawRectangle(new SolidBrush(PaintColor.Black), 0, 0, w, h));
     }
 
     // ---- brushes and pens
 
-    public static Brush MakeBrush(PaintSource source, double alpha = 1)
+    public static Brush MakeBrush(PaintSource source, double alpha = 1, string space = "srgb")
     {
         switch (source)
         {
             case PaintSource.ColorSource c:
-                return new SolidBrush(alpha >= 1 ? c.Color : PaintColor.FromArgb((int)Math.Round(c.Color.A * alpha), c.Color.R, c.Color.G, c.Color.B));
+                return new SolidBrush(CanvasColorSpaces.ConvertPaintColor(alpha >= 1 ? c.Color : PaintColor.FromArgb((int)Math.Round(c.Color.A * alpha), c.Color.R, c.Color.G, c.Color.B), space));
             case PaintSource.GradientSource g:
-                return MakeGradient(g.Gradient);
+                return MakeGradient(g.Gradient, space);
             default:
                 return new SolidBrush(PaintColor.Transparent);
         }
     }
 
-    private static Brush MakeGradient(CanvasGradient gradient)
+    private static Brush MakeGradient(CanvasGradient gradient, string space = "srgb")
     {
-        var stops = gradient.Stops.OrderBy(s => s.Offset).ToList();
+        var stops = gradient.Stops.OrderBy(s => s.Offset).Select(s => (s.Offset, Color: CanvasColorSpaces.ConvertPaintColor(s.Color, space))).ToList();
         if (gradient.NonLegacy && gradient.InterpolateInOklab is { } interpolate && stops.Count > 1)
             stops = interpolate(stops);
 
-        if (stops.Count == 0)
+        // A line with no length, and two equal circles, have no direction to paint along: nothing is painted.
+        var degenerate = gradient.Kind switch
+        {
+            "linear" => gradient.Geometry[0] == gradient.Geometry[2] && gradient.Geometry[1] == gradient.Geometry[3],
+            "radial" => gradient.Geometry[0] == gradient.Geometry[3] && gradient.Geometry[1] == gradient.Geometry[4] && gradient.Geometry[2] == gradient.Geometry[5],
+            _ => false,
+        };
+        if (stops.Count == 0 || degenerate)
             return new SolidBrush(PaintColor.Transparent);
         if (stops.Count == 1)
             return new SolidBrush(stops[0].Color);
 
+        // A canvas gradient mixes colors and alphas separately (not premultiplied, as the brush does), so a segment whose ends differ in alpha is given the colors in between.
+        stops = StraightAlphaStops(stops);
         var list = stops.Select(s => new GradientStop(s.Color, s.Offset)).ToList();
         var g = gradient.Geometry;
         switch (gradient.Kind)
@@ -962,11 +1175,38 @@ internal sealed class CanvasBitmap(ScriptDocument document, double width, double
         }
     }
 
+    private static List<(double Offset, PaintColor Color)> StraightAlphaStops(List<(double Offset, PaintColor Color)> stops)
+    {
+        if (stops.All(s => s.Color.A == stops[0].Color.A))
+            return stops;
+
+        const int steps = 32;
+        var result = new List<(double Offset, PaintColor Color)> { stops[0] };
+        for (var i = 1; i < stops.Count; i++)
+        {
+            var (from, to) = (stops[i - 1], stops[i]);
+            if (from.Color.A != to.Color.A && to.Offset > from.Offset)
+            {
+                for (var step = 1; step < steps; step++)
+                {
+                    var t = (double)step / steps;
+                    int Mix(int a, int b) => (int)Math.Round(a + (b - a) * t);
+                    result.Add((from.Offset + (to.Offset - from.Offset) * t, PaintColor.FromArgb(Mix(from.Color.A, to.Color.A), Mix(from.Color.R, to.Color.R), Mix(from.Color.G, to.Color.G), Mix(from.Color.B, to.Color.B))));
+                }
+            }
+
+            result.Add(to);
+        }
+
+        return result;
+    }
+
     public Pen MakePen(CanvasState state)
     {
+        TaintFrom(state.StrokeStyle);
         var pen = new Pen
         {
-            Paint = MakeBrush(state.StrokeStyle),
+            Paint = BrushFor(state.StrokeStyle),
             Width = state.LineWidth,
             LineCap = state.LineCap,
             LineJoin = state.LineJoin,
@@ -988,19 +1228,22 @@ internal sealed class CanvasBitmap(ScriptDocument document, double width, double
         // The path is in the space the transform makes (a copy: the script may go on adding to it before this is drawn).
         var user = path.Clone();
         var brush = State.FillStyle;
+        TaintFrom(brush);
+        var sampling = State.ImageSmoothing ? ImageSampling.Automatic : ImageSampling.Nearest;
+        var patternImage = brush is PaintSource.PatternSource fillPattern ? ForCanvas(fillPattern.Pattern.Image) : null;
         var alpha = 1.0;
         Record(canvas =>
         {
             using var built = user.Build(canvas, rule);
             if (brush is PaintSource.PatternSource pattern)
-                FillWithPattern(canvas, pattern.Pattern, built, user);
+                FillWithPattern(canvas, pattern.Pattern, patternImage!, built, BoundsOf(user), sampling);
             else
-                canvas.DrawPath(MakeBrush(brush, alpha), built);
+                canvas.DrawPath(BrushFor(brush, alpha), built);
         });
     }
 
     // A pattern fill: the path is the clip, and the image is drawn as many times as covers the path's bounds, as the repetition says.
-    private static void FillWithPattern(PeachDrawing.Core.Canvas canvas, CanvasPattern pattern, GraphicsPath clip, PathData bounds)
+    private static (double MinX, double MinY, double MaxX, double MaxY) BoundsOf(PathData bounds)
     {
         double minX = double.MaxValue, minY = double.MaxValue, maxX = double.MinValue, maxY = double.MinValue;
         foreach (var segment in bounds.Segments)
@@ -1012,30 +1255,50 @@ internal sealed class CanvasBitmap(ScriptDocument document, double width, double
             }
         }
 
+        return (minX, minY, maxX, maxY);
+    }
+
+    private static void FillWithPattern(PeachDrawing.Core.Canvas canvas, CanvasPattern pattern, Image tile, GraphicsPath clip, (double MinX, double MinY, double MaxX, double MaxY) box, ImageSampling sampling)
+    {
+        var (minX, minY, maxX, maxY) = box;
         double w = pattern.Image.Width, h = pattern.Image.Height;
-        if (w <= 0 || h <= 0 || minX > maxX)
+        if (w <= 0 || h <= 0 || minX > maxX || !pattern.Transform.TryInvert(out var inverse))
+            return;
+
+        // The path's box in the pattern's own space, which the tiles cover.
+        double tileMinX = double.MaxValue, tileMinY = double.MaxValue, tileMaxX = double.MinValue, tileMaxY = double.MinValue;
+        foreach (var (cornerX, cornerY) in new[] { (minX, minY), (maxX, minY), (minX, maxY), (maxX, maxY) })
+        {
+            var (px, py) = inverse.Apply(cornerX, cornerY);
+            tileMinX = Math.Min(tileMinX, px); tileMaxX = Math.Max(tileMaxX, px);
+            tileMinY = Math.Min(tileMinY, py); tileMaxY = Math.Max(tileMaxY, py);
+        }
+
+        if (!double.IsFinite(tileMinX + tileMaxX + tileMinY + tileMaxY))
             return;
 
         var repeatX = pattern.Repetition is "repeat" or "repeat-x";
         var repeatY = pattern.Repetition is "repeat" or "repeat-y";
-        var (startX, endX) = repeatX ? (Math.Floor(minX / w) * w, maxX) : (0.0, 0.0);
-        var (startY, endY) = repeatY ? (Math.Floor(minY / h) * h, maxY) : (0.0, 0.0);
+        var (startX, endX) = repeatX ? (Math.Floor(tileMinX / w) * w, tileMaxX) : (0.0, 0.0);
+        var (startY, endY) = repeatY ? (Math.Floor(tileMinY / h) * h, tileMaxY) : (0.0, 0.0);
         if ((endX - startX) / w * ((endY - startY) / h) > 40_000)
             return;
 
         canvas.PushClip(clip);
+        canvas.PushTransform(pattern.Transform.ToMatrix3x2());
         try
         {
             for (var y = startY; y <= endY; y += h)
             {
                 for (var x = startX; x <= endX; x += w)
-                    canvas.DrawImage(pattern.Image, new Rect(x, y, w, h), new Rect(0, 0, w, h), ImageSampling.Automatic);
+                    canvas.DrawImage(tile, new Rect(x, y, w, h), new Rect(0, 0, w, h), sampling);
                 if (!repeatX && !repeatY)
                     break;
             }
         }
         finally
         {
+            canvas.PopTransform();
             canvas.PopClip();
         }
     }
@@ -1050,6 +1313,26 @@ internal sealed class CanvasBitmap(ScriptDocument document, double width, double
             return;
 
         var pen = MakePen(State);
+        if (State.StrokeStyle is PaintSource.PatternSource stroked)
+        {
+            // A pattern is not a pen's paint: the line is made into an outline, which the pattern then fills.
+            var transform = State.Transform;
+            var scale = Math.Sqrt(Math.Abs(transform.A * transform.D - transform.B * transform.C));
+            var tolerance = scale > 0 && double.IsFinite(scale) ? 0.1 / scale : 0.1;
+            var smoothing = State.ImageSmoothing ? ImageSampling.Automatic : ImageSampling.Nearest;
+            var strokedImage = ForCanvas(stroked.Pattern.Image);
+            Record(canvas =>
+            {
+                using var built = user.Build(canvas, FillMode.Nonzero);
+                using var outline = canvas.GetGraphicsPath();
+                PeachDrawing.PathStroker.Stroke(built, pen, outline, tolerance);
+                var points = outline.Flatten(tolerance).SelectMany(c => c.Points).ToList();
+                if (points.Count > 0)
+                    FillWithPattern(canvas, stroked.Pattern, strokedImage, outline, (points.Min(q => q.X), points.Min(q => q.Y), points.Max(q => q.X), points.Max(q => q.Y)), smoothing);
+            });
+            return;
+        }
+
         Record(canvas =>
         {
             using var built = user.Build(canvas, FillMode.Nonzero);
@@ -1063,6 +1346,7 @@ internal sealed class CanvasBitmap(ScriptDocument document, double width, double
             return;
 
         var brush = State.FillStyle;
+        TaintFrom(brush);
         if (brush is PaintSource.PatternSource)
         {
             var rectangle = new PathData();
@@ -1071,7 +1355,7 @@ internal sealed class CanvasBitmap(ScriptDocument document, double width, double
             return;
         }
 
-        Record(canvas => canvas.DrawRectangle(MakeBrush(brush), Math.Min(x, x + w), Math.Min(y, y + h), Math.Abs(w), Math.Abs(h)));
+        Record(canvas => canvas.DrawRectangle(BrushFor(brush), Math.Min(x, x + w), Math.Min(y, y + h), Math.Abs(w), Math.Abs(h)));
     }
 
     public void StrokeRect(double x, double y, double w, double h)
@@ -1107,12 +1391,12 @@ internal sealed class CanvasBitmap(ScriptDocument document, double width, double
             return;
         }
 
-        // Part of the canvas: erase it, as destination-out with an opaque shape does.
+        // Part of the canvas: erase it, as destination-out with an opaque shape does (a canvas with no alpha is painted black instead).
         var eraser = State.Clone();
         eraser.FillStyle = new PaintSource.ColorSource(PaintColor.Black, "#000000");
         eraser.GlobalAlpha = 1;
         eraser.ShadowColor = PaintColor.Transparent;
-        RecordWith(eraser, "destination-out", canvas => canvas.DrawRectangle(new SolidBrush(PaintColor.Black), Math.Min(x, x + w), Math.Min(y, y + h), Math.Abs(w), Math.Abs(h)));
+        RecordWith(eraser, Opaque ? "source-over" : "destination-out", canvas => canvas.DrawRectangle(new SolidBrush(PaintColor.Black), Math.Min(x, x + w), Math.Min(y, y + h), Math.Abs(w), Math.Abs(h)));
     }
 
     /// <summary>Clips to a path in the space the transform makes: a clip is kept where it lies on the canvas, whatever the transform becomes.</summary>
@@ -1120,7 +1404,26 @@ internal sealed class CanvasBitmap(ScriptDocument document, double width, double
 
     public void DrawImage(Image image, Rect source, Rect destination)
     {
-        var sampling = State.ImageSmoothing ? ImageSampling.Automatic : ImageSampling.Pixelated;
+        image = ForCanvas(image);
+
+        // Smoothing off is the nearest pixel, shrinking or enlarging (Pixelated would still average a shrunk picture).
+        var sampling = State.ImageSmoothing ? ImageSampling.Automatic : ImageSampling.Nearest;
+
+        // The part of the source outside the picture is not drawn, and the destination shrinks with it (the spec's clipping of the source and destination rectangles).
+        if (!(source.Width > 0) || !(source.Height > 0))
+            return;
+
+        var (x0, y0, x1, y1) = (Math.Max(source.X, 0), Math.Max(source.Y, 0), Math.Min(source.X + source.Width, image.Width), Math.Min(source.Y + source.Height, image.Height));
+        if (!(x1 > x0) || !(y1 > y0))
+            return;
+
+        if (x0 != source.X || y0 != source.Y || x1 != source.X + source.Width || y1 != source.Y + source.Height)
+        {
+            var (scaleX, scaleY) = (destination.Width / source.Width, destination.Height / source.Height);
+            destination = new Rect(destination.X + (x0 - source.X) * scaleX, destination.Y + (y0 - source.Y) * scaleY, (x1 - x0) * scaleX, (y1 - y0) * scaleY);
+            source = new Rect(x0, y0, x1 - x0, y1 - y0);
+        }
+
         Record(canvas => canvas.DrawImage(image, destination, source, sampling));
     }
 
@@ -1146,6 +1449,10 @@ internal sealed class CanvasBitmap(ScriptDocument document, double width, double
             }
         });
     }
+
+    /// <summary>Draws a source that holds nothing (a canvas with a size and no context): transparent, which an operator that reaches the whole canvas still acts on.</summary>
+    public void DrawTransparent(Rect destination) =>
+        Record(canvas => canvas.DrawRectangle(canvas.GetSolidBrush(PaintColor.FromArgb(0, 0, 0, 0)), destination.X, destination.Y, destination.Width, destination.Height));
 
     public void DrawCanvas(CanvasBitmap other, Rect destination)
     {
@@ -1183,28 +1490,43 @@ internal sealed class CanvasBitmap(ScriptDocument document, double width, double
         if (text.Length == 0)
             return;
 
+        TaintFrom(fill);
         var scale = maxWidth is { } max && width > max && max > 0 ? max / width : 1.0;
         var left = x - anchor * scale;
-        var top = baselineY - font.Ascent;
 
         // With a word spacing the words are drawn each where the measure puts them; otherwise the run is one piece.
-        var pieces = new List<(string Text, double X)>();
-        if (wordSpacing != 0 && text.Contains(' ', StringComparison.Ordinal))
+        // A font with no small capitals is drawn with capitals at a smaller size: each size is a piece of its own, in a font of its own.
+        var shown = text;
+        Font? smallCapsFont = null;
+        var sizes =new List<(string Text, int Start, bool Small)> { (text, 0, false) };
+        if (SyntheticCaps.Applies(font, shape) && font.Typeface is { } typeface)
         {
-            var start = 0;
-            for (var i = 0; i <= text.Length; i++)
+            shown = SyntheticCaps.Convert(text, shape.Caps, out var small);
+            sizes = [.. SyntheticCaps.Split(shown, small)];
+            shape = shape with { Caps = CapsMode.None };
+            smallCapsFont = new TypefaceFont(typeface, font.Size * SyntheticCaps.Scale);
+        }
+
+        var pieces = new List<(string Text, double X, bool Small)>();
+        foreach (var (sizeText, sizeStart, isSmall) in sizes)
+        {
+            if (wordSpacing != 0 && sizeText.Contains(' ', StringComparison.Ordinal))
             {
-                if (i == text.Length || text[i] == ' ')
+                var start = 0;
+                for (var i = 0; i <= sizeText.Length; i++)
                 {
-                    if (i > start)
-                        pieces.Add((text[start..i], metrics.Clusters.FirstOrDefault(c => c.Start == start) is { Width: > 0 } cluster ? cluster.X : 0));
-                    start = i + 1;
+                    if (i == sizeText.Length || sizeText[i] == ' ')
+                    {
+                        if (i > start)
+                            pieces.Add((sizeText[start..i], metrics.Clusters.FirstOrDefault(c => c.Start == sizeStart + start) is { Width: > 0 } cluster ? cluster.X : 0, isSmall));
+                        start = i + 1;
+                    }
                 }
             }
-        }
-        else
-        {
-            pieces.Add((text, 0));
+            else
+            {
+                pieces.Add((sizeText, sizeStart == 0 ? 0 : metrics.Clusters.FirstOrDefault(c => c.Start == sizeStart).X, isSmall));
+            }
         }
 
         Record(canvas =>
@@ -1214,22 +1536,24 @@ internal sealed class CanvasBitmap(ScriptDocument document, double width, double
 
             try
             {
-                foreach (var (piece, offset) in pieces)
+                foreach (var (piece, offset, isSmall) in pieces)
                 {
                     var pieceLeft = left + offset;
-                    var advance = piece == text ? width : TextRunMeasure.Measure(font, piece, letterSpacing, 0, shape).Width;
+                    var pieceFont = isSmall && smallCapsFont is not null ? smallCapsFont : font;
+                    var pieceTop = baselineY - pieceFont.Ascent;
+                    var advance = piece == text && smallCapsFont is null ? width : TextRunMeasure.Measure(pieceFont, piece, letterSpacing, 0, shape).Width;
                     if (!stroke && fill is PaintSource.ColorSource color)
                     {
-                        canvas.DrawString(piece, font, color.Color, new PaintPoint(pieceLeft, top), new Size(advance, font.Height), letterSpacing, null, shape);
+                        canvas.DrawString(piece, pieceFont, InSpace(color), new PaintPoint(pieceLeft, pieceTop), new Size(advance, pieceFont.Height), letterSpacing, null, shape);
                     }
-                    else if (canvas.GetTextOutline(piece, font, new PaintPoint(pieceLeft, baselineY), letterSpacing, shape) is { } outline)
+                    else if (canvas.GetTextOutline(piece, pieceFont, new PaintPoint(pieceLeft, baselineY), letterSpacing, shape) is { } outline)
                     {
                         using (outline)
                         {
                             if (stroke && pen is not null)
                                 canvas.DrawPath(pen, outline);
                             else
-                                canvas.DrawPath(MakeBrush(fill), outline);
+                                canvas.DrawPath(BrushFor(fill), outline);
                         }
                     }
                 }
