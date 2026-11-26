@@ -16,7 +16,8 @@ namespace PeachDrawing.Core
     /// <summary>What a run of text measures: its advance, the box its ink covers, the metrics of its font, and its clusters.</summary>
     public sealed class TextRunMetrics
     {
-        internal TextRunMetrics()
+        /// <summary>Metrics of a run that takes no room: everything is 0.</summary>
+        public TextRunMetrics()
         {
         }
 
@@ -76,7 +77,7 @@ namespace PeachDrawing.Core
             ArgumentNullException.ThrowIfNull(font);
             ArgumentNullException.ThrowIfNull(text);
 
-            var typeface = font.Typeface;
+            var typeface = font.Typeface ?? throw new InvalidOperationException("The font has no typeface to measure with.");
             var metrics = typeface.Metrics;
             var scale = font.Size / metrics.UnitsPerEm;
             var result = new TextRunMetrics();

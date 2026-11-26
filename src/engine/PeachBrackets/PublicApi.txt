@@ -870,12 +870,14 @@ PeachBrackets.ScriptHosting.ScriptDocument : sealed class
   method ScriptNode QuerySelector(String selector)
   method ScriptSvgFilter GetSvgFilter(String id)
   method String GetComputedValue(ScriptNode element, String property)
+  method ValueTask LoadFontFacesAsync()
   method ValueTask<ScriptImageInfo> LoadImageAsync(String address)
   method ValueTask<ScriptNetworkResponse> SendAsync(ScriptNetworkRequest request, CancellationToken cancellationToken = null)
   method ValueTask<String> LoadTextAsync(String address)
   method Void SetCanvasPainting(ScriptNode canvas, ScriptCanvasPainting painting)
   method static Boolean TryParseNonNegativeInteger(String text, out UInt32 value)
   property Boolean CanMeasure { get; }
+  property Boolean FontFacesLoaded { get; }
   property Boolean IsHtml { get; }
   property Boolean KeepAlive { get; set; }
   property IReadOnlyList<ScriptApi> Apis { get; }

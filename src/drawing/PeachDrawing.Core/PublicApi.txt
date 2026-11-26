@@ -1008,6 +1008,33 @@ PeachDrawing.Core.TextMeasurement : static class
   field const Double BoldEmphasis
   field const Double ItalicSkewAngleSinus
   method static Size Measure(String text, Typeface typeface, Double size, SyntheticStyle synthesis, ShapeSettings features)
+PeachDrawing.Core.TextRunCluster : struct
+  ctor(Int32 Start, Int32 End, Double X, Double Width)
+  method Void Deconstruct(out Int32 Start, out Int32 End, out Double X, out Double Width)
+  method virtual Boolean Equals(Object obj)
+  method virtual Boolean Equals(TextRunCluster other)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property Double Width { get; init; }
+  property Double X { get; init; }
+  property Int32 End { get; init; }
+  property Int32 Start { get; init; }
+PeachDrawing.Core.TextRunMeasure : static class
+  method static TextRunMetrics Measure(Font font, String text, Double letterSpacing = 0, Double wordSpacing = 0, ShapeSettings? features = null)
+PeachDrawing.Core.TextRunMetrics : sealed class
+  ctor()
+  property Double EmAscent { get; }
+  property Double EmDescent { get; }
+  property Double FontAscent { get; }
+  property Double FontDescent { get; }
+  property Double HangingBaseline { get; }
+  property Double IdeographicBaseline { get; }
+  property Double InkAscent { get; }
+  property Double InkDescent { get; }
+  property Double InkLeft { get; }
+  property Double InkRight { get; }
+  property Double Width { get; }
+  property IReadOnlyList<TextRunCluster> Clusters { get; }
 PeachDrawing.Core.TileBrush : sealed class
   ctor(Image tile, Double cellWidth, Double cellHeight)
   ctor(Image tile, Double cellWidth, Double cellHeight, Matrix3x2 transform, ImageSampling sampling = Automatic)

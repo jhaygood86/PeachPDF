@@ -1024,11 +1024,11 @@ internal sealed partial class ScriptRuntime
             var context = Cx(self);
             var text = Js.AsText(Js.Arg(args, 0));
             var result = Js.NewObject(Engine);
-            if (FontFor(context) is not { } font)
-                return result;
-
-            var layout = LayoutText(context, font, text);
-            var metrics = layout.Metrics;
+            // With no font to measure with (a document with no fonts at all) the text takes no room.
+            var font = FontFor(context);
+            var layout = font is null ? null : LayoutText(context, font, text);
+            var metrics = layout?.Metrics ?? new TextRunMetrics();
+            layout ??= new TextLayout(text, metrics, ShapeSettings.Default, 0, 0, 0, 0);
 
             // Every measure is from the line the text's baseline setting names, up being positive.
             var line = layout.LineOffset;
