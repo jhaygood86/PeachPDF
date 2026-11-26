@@ -71,6 +71,11 @@ namespace PeachBrackets.Engine.Tests.Integration
         [InlineData("#0f0f0f0")]
         [InlineData("#0f0f0f0f0")]
         [InlineData("#ggg")]
+        [InlineData("#fg00")]
+        [InlineData("#00ff0g00")]
+        [InlineData("rgba(255, 0, 0, 1.)")]
+        [InlineData("rgb(255, 0, 0, 1.)")]
+        [InlineData("hsl(0, 100%, 50%, 1.)")]
         public void WhatTheGrammarRejects_IsRejected(string value)
         {
             Assert.False(Parser().IsColorValid(value));

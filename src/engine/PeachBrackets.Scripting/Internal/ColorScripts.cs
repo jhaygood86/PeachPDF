@@ -82,7 +82,67 @@ internal static class ColorScripts
             component(CSSHSL.prototype, "s", "_s"); component(CSSHSL.prototype, "l", "_l"); component(CSSHSL.prototype, "alpha", "_alpha");
             tag(CSSHSL, "CSSHSL");
 
-            [CSSStyleValue, CSSNumericValue, CSSUnitValue, CSSColorValue, CSSRGB, CSSHSL].forEach(function (c) { define(c.name, c); });
+            // The other color interfaces, which a canvas takes through the CSS text they stand for (_colorText) so that it reads back as that color serialized.
+            function text(v) {
+                if (typeof v === "number") return String(v);
+                return v._unit === "number" ? String(v._value) : v._value + (v._unit === "percent" ? "%" : v._unit);
+            }
+            // A number from 0 to 1 is a fraction (hwb's whiteness, hsl's lightness): CSS writes it as a percentage.
+            function fraction(v) {
+                if (typeof v === "number") return (v * 100) + "%";
+                return v._unit === "number" ? (v._value * 100) + "%" : text(v);
+            }
+            function makeColor(name, props, hueProp, toText) {
+                var ctor = function () {
+                    if (new.target === undefined) throw new TypeError("Failed to construct '" + name + "': Please use the 'new' operator.");
+                    if (arguments.length < props.length) throw new TypeError("Failed to construct '" + name + "': " + props.length + " arguments required.");
+                    for (var i = 0; i < props.length; i++) {
+                        var v = arguments[i];
+                        if (props[i] === hueProp && !(v instanceof CSSNumericValue)) throw new TypeError("Failed to construct '" + name + "': The hue is not a CSSNumericValue.");
+                        this["_" + props[i]] = props[i] === hueProp ? v : numberish(props[i], v);
+                    }
+                    var alpha = arguments[props.length];
+                    this._alpha = alpha === undefined ? CSS.number(1) : numberish("alpha", alpha);
+                };
+                Object.defineProperty(ctor, "name", { value: name, configurable: true });
+                Object.setPrototypeOf(ctor, CSSColorValue);
+                ctor.prototype = Object.create(CSSColorValue.prototype, { constructor: { value: ctor, writable: true, configurable: true } });
+                props.forEach(function (prop) {
+                    attribute(ctor.prototype, prop, function () { return this["_" + prop]; }, function (v) {
+                        if (prop === hueProp && !(v instanceof CSSNumericValue)) throw new TypeError("Failed to set the '" + prop + "' property: The provided value is not a CSSNumericValue.");
+                        this["_" + prop] = prop === hueProp ? v : numberish(prop, v);
+                    });
+                });
+                component(ctor.prototype, "alpha", "_alpha");
+                Object.defineProperty(ctor.prototype, "_colorText", { value: function () { return toText(this); }, writable: true, configurable: true });
+                tag(ctor, name);
+                define(name, ctor);
+                return ctor;
+            }
+            function slash(o) { return " / " + text(o._alpha) + ")"; }
+            makeColor("CSSHWB", ["h", "w", "b"], "h", function (o) { return "hwb(" + text(o._h) + " " + fraction(o._w) + " " + fraction(o._b) + slash(o); });
+            makeColor("CSSLab", ["l", "a", "b"], null, function (o) { return "lab(" + text(o._l) + " " + text(o._a) + " " + text(o._b) + slash(o); });
+            makeColor("CSSOKLab", ["l", "a", "b"], null, function (o) { return "oklab(" + text(o._l) + " " + text(o._a) + " " + text(o._b) + slash(o); });
+            makeColor("CSSLCH", ["l", "c", "h"], "h", function (o) { return "lch(" + text(o._l) + " " + text(o._c) + " " + text(o._h) + slash(o); });
+            makeColor("CSSOKLCH", ["l", "c", "h"], "h", function (o) { return "oklch(" + text(o._l) + " " + text(o._c) + " " + text(o._h) + slash(o); });
+
+            // CSSColor(colorSpace, channels, alpha): the color() function.
+            function CSSColor(colorSpace, channels, alpha) {
+                if (new.target === undefined) throw new TypeError("Failed to construct 'CSSColor': Please use the 'new' operator.");
+                if (arguments.length < 2) throw new TypeError("Failed to construct 'CSSColor': 2 arguments required.");
+                this._colorSpace = String(colorSpace);
+                this._channels = Array.prototype.map.call(channels, function (c) { return numberish("channels", c); });
+                this._alpha = alpha === undefined ? CSS.number(1) : numberish("alpha", alpha);
+            }
+            Object.setPrototypeOf(CSSColor, CSSColorValue);
+            CSSColor.prototype = Object.create(CSSColorValue.prototype, { constructor: { value: CSSColor, writable: true, configurable: true } });
+            attribute(CSSColor.prototype, "colorSpace", function () { return this._colorSpace; }, function (v) { this._colorSpace = String(v); });
+            attribute(CSSColor.prototype, "channels", function () { return this._channels; }, function (v) { this._channels = Array.prototype.map.call(v, function (c) { return numberish("channels", c); }); });
+            component(CSSColor.prototype, "alpha", "_alpha");
+            Object.defineProperty(CSSColor.prototype, "_colorText", { value: function () { return "color(" + this._colorSpace + " " + this._channels.map(text).join(" ") + slash(this); }, writable: true, configurable: true });
+            tag(CSSColor, "CSSColor");
+
+            [CSSStyleValue, CSSNumericValue, CSSUnitValue, CSSColorValue, CSSRGB, CSSHSL, CSSColor].forEach(function (c) { define(c.name, c); });
         })(globalThis);
         """;
 }

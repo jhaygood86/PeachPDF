@@ -933,7 +933,7 @@ namespace PeachBrackets.Html.Parse
                 else if (c is < '0' or > '9') return false;
             }
 
-            return points <= 1 && text.Length > points
+            return points <= 1 && text.Length > points && text[^1] != '.'
                 && double.TryParse(text, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var alpha) && alpha is >= 0 and <= 1;
         }
 

@@ -850,6 +850,7 @@ PeachBrackets.ScriptHosting.ScriptDocument : sealed class
   method Image DecodeImage(Byte[] bytes)
   method Image GetLoadedImage(String address)
   method Int32 OrdinalOf(ScriptNode element)
+  method List<ValueTuple<Double, PaintColor>> InterpolateGradientStops(IReadOnlyList<ValueTuple<Double, PaintColor>> stops)
   method OffscreenSurface CreateCanvasSurface(Int32 widthPixels, Int32 heightPixels)
   method ScriptBox? GetLayoutBox(ScriptNode element)
   method ScriptDocument CreateDocument(Boolean html, Boolean withDocumentType, String contentType = null)

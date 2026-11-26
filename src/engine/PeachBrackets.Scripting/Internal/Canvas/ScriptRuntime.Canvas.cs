@@ -172,9 +172,10 @@ internal sealed partial class ScriptRuntime
                 throw TypeError("The offset is not finite.");
             if (!(offset >= 0 && offset <= 1))
                 throw DomError("IndexSizeError", "The offset must be between 0 and 1.");
-            if (!Document.TryParseColor(Js.AsText(Js.Arg(args, 1)), out var color))
+            if (!Document.TryParseColor(Js.AsText(Js.Arg(args, 1)), gradient.Owner, out var color, out var serialized))
                 throw DomError("SyntaxError", "The color cannot be parsed.");
 
+            gradient.NonLegacy |= serialized is not null;
             gradient.Stops.Add((offset, color));
             return JsValue.Undefined;
         });
@@ -280,6 +281,14 @@ internal sealed partial class ScriptRuntime
                 return new PaintSource.GradientSource(gradient.Model);
             case PatternObject pattern:
                 return new PaintSource.PatternSource(pattern.Model);
+            case ObjectInstance typed when typed.Get("_colorText") is Jint.Native.Function.Function toText:
+            {
+                // CSSHWB, CSSLab, CSSLCH, CSSOKLab, CSSOKLCH and CSSColor stand for CSS text, which is read as any color is and so reads back serialized.
+                var text = Js.AsText(toText.Call(typed, []));
+                return Document.TryParseColor(text, element, out var typedColor, out var typedText)
+                    ? new PaintSource.ColorSource(typedColor, typedText ?? CanvasBitmap.ColorText(typedColor))
+                    : current;
+            }
             case ObjectInstance when TryObjectColor(value, out var objectColor):
                 return new PaintSource.ColorSource(objectColor, CanvasBitmap.ColorText(objectColor));
         }
@@ -749,21 +758,21 @@ internal sealed partial class ScriptRuntime
             return JsValue.Undefined;
         });
 
-        Js.Method(Engine, p, "createLinearGradient", 4, (_, args) =>
+        Js.Method(Engine, p, "createLinearGradient", 4, (self, args) =>
         {
             if (!Finite(args, 4)) throw TypeError("The gradient coordinates are not finite.");
-            return NewGradient(new CanvasGradient("linear", [Num(args, 0), Num(args, 1), Num(args, 2), Num(args, 3)]));
+            return NewGradient(new CanvasGradient("linear", [Num(args, 0), Num(args, 1), Num(args, 2), Num(args, 3)]) { Owner = Cx(self).Canvas, InterpolateInOklab = Document.InterpolateGradientStops });
         });
-        Js.Method(Engine, p, "createRadialGradient", 6, (_, args) =>
+        Js.Method(Engine, p, "createRadialGradient", 6, (self, args) =>
         {
             if (!Finite(args, 6)) throw TypeError("The gradient coordinates are not finite.");
             if (Num(args, 2) < 0 || Num(args, 5) < 0) throw DomError("IndexSizeError", "A radius is negative.");
-            return NewGradient(new CanvasGradient("radial", [Num(args, 0), Num(args, 1), Num(args, 2), Num(args, 3), Num(args, 4), Num(args, 5)]));
+            return NewGradient(new CanvasGradient("radial", [Num(args, 0), Num(args, 1), Num(args, 2), Num(args, 3), Num(args, 4), Num(args, 5)]) { Owner = Cx(self).Canvas, InterpolateInOklab = Document.InterpolateGradientStops });
         });
-        Js.Method(Engine, p, "createConicGradient", 3, (_, args) =>
+        Js.Method(Engine, p, "createConicGradient", 3, (self, args) =>
         {
             if (!Finite(args, 3)) throw TypeError("The gradient coordinates are not finite.");
-            return NewGradient(new CanvasGradient("conic", [Num(args, 0), Num(args, 1), Num(args, 2)]));
+            return NewGradient(new CanvasGradient("conic", [Num(args, 0), Num(args, 1), Num(args, 2)]) { Owner = Cx(self).Canvas, InterpolateInOklab = Document.InterpolateGradientStops });
         });
         Js.Method(Engine, p, "createPattern", 2, (self, args) =>
         {

@@ -217,4 +217,76 @@ public class CanvasColorTests
 
         Assert.Equal(["#ff00ff #008000 #000000 rgba(0, 0, 0, 0) #ffffff #00ffff #00ff00 #00ffff", "percent 10 5% true [object CSSHSL]"], log);
     }
+
+    [Fact]
+    public async Task AGradientWithAColorThatIsNotLegacySrgb_GoesFromStopToStopInOklab()
+    {
+        var (_, log) = await CanvasParityTests.PaintAsync("""
+            var c = document.getElementById('c'), g = c.getContext('2d');
+            function px(x) { return Array.from(g.getImageData(x, 25, 1, 1).data).join(','); }
+            var k = g.createLinearGradient(0, 0, 100, 0);
+            k.addColorStop(0, '#f00'); k.addColorStop(1, 'color-mix(in srgb, #0f0, #00f)');
+            g.fillStyle = k; g.fillRect(0, 0, 100, 50);
+            var legacy = g.createLinearGradient(0, 0, 100, 0);
+            legacy.addColorStop(0, '#f00'); legacy.addColorStop(1, '#008080');
+            g.fillStyle = legacy; g.fillRect(0, 50, 100, 50);
+            Log.info(px(25) + ' ' + px(50) + ' ' + px(75));
+            Log.info(Array.from(g.getImageData(25, 75, 1, 1).data).join(','));
+            """, "width=100 height=100");
+
+        // The WPT expectations for the mixed gradient (within 3), and a gradient of legacy colors for contrast: plain sRGB, 25% of the way from red to teal.
+        var near = log[0].Split(' ').Select(p => p.Split(',').Select(int.Parse).ToArray()).ToArray();
+        int[][] expected = [[212, 81, 61, 255], [167, 106, 88, 255], [113, 120, 109, 255]];
+        for (var i = 0; i < 3; i++)
+            Assert.All(Enumerable.Range(0, 4), channel => Assert.InRange(near[i][channel], expected[i][channel] - 3, expected[i][channel] + 3));
+
+        var legacy = log[1].Split(',').Select(int.Parse).ToArray();
+        Assert.InRange(legacy[0], 189, 193);
+        Assert.InRange(legacy[1], 30, 35);
+        Assert.InRange(legacy[2], 30, 35);
+    }
+
+    [Fact]
+    public async Task CurrentColor_InAGradientStop_IsTheCanvasElementsColor()
+    {
+        var (_, log) = await CanvasParityTests.PaintAsync("""
+            var c = document.getElementById('c'), g = c.getContext('2d');
+            c.setAttribute('style', 'display:block; color: #2a2');
+            var k = g.createLinearGradient(0, 0, 10, 0);
+            k.addColorStop(0, 'currentcolor'); k.addColorStop(1, 'currentcolor');
+            g.fillStyle = k; g.fillRect(0, 0, 10, 10);
+            Log.info(Array.from(g.getImageData(5, 5, 1, 1).data).join(','));
+            """, "width=10 height=10");
+
+        Assert.Equal(["34,170,34,255"], log);
+    }
+
+    [Theory]
+    [InlineData("new CSSHWB(CSS.deg(120), 0, 0)", "#00ff00")]
+    [InlineData("new CSSLab(CSS.percent(29), 39, 20)", "lab(29 39 20)")]
+    [InlineData("new CSSLab(29, 39, 20, 0.5)", "lab(29 39 20 / 0.5)")]
+    [InlineData("new CSSOKLab(0.5, 0.1, 0.1)", "oklab(0.5 0.1 0.1)")]
+    [InlineData("new CSSLCH(CSS.percent(50), 40, CSS.deg(59.5))", "lch(50 40 59.5)")]
+    [InlineData("new CSSOKLCH(0.5, 0.1, CSS.turn(0.5))", "oklch(0.5 0.1 180)")]
+    [InlineData("new CSSColor('display-p3', [0.96, 0.76, 0.79])", "color(display-p3 0.96 0.76 0.79)")]
+    [InlineData("new CSSColor('srgb', [1, CSS.percent(50), 0], 0.5)", "color(srgb 1 0.5 0 / 0.5)")]
+    public async Task TheOtherTypedColorObjects_AreColorsAndReadBackSerialized(string expression, string expected)
+    {
+        var (_, log) = await CanvasParityTests.PaintAsync(
+            "var g = document.getElementById('c').getContext('2d'); g.fillStyle = '#123456'; g.fillStyle = " + expression + "; Log.info(g.fillStyle);", "width=10 height=10");
+
+        Assert.Equal([expected], log);
+    }
+
+    [Fact]
+    public async Task ATypedColorObject_ThatIsMissingAnArgumentOrHasAnImpossibleOne_Throws()
+    {
+        var (_, log) = await CanvasParityTests.PaintAsync("""
+            function name(f) { try { f(); return 'none'; } catch (e) { return e.name; } }
+            Log.info([name(function () { new CSSLab(1, 2); }), name(function () { new CSSHWB(120, 0, 0); }), name(function () { new CSSRGB(1, 'x', 0); }), name(function () { CSSLab(1, 2, 3); }),
+                name(function () { new CSSColorValue(); })].join(' '));
+            """, "width=10 height=10");
+
+        Assert.Equal(["TypeError TypeError TypeError TypeError TypeError"], log);
+    }
 }

@@ -36,7 +36,7 @@ namespace PeachBrackets.Css
 
             // A hex color nested inside a function (e.g. a color-mix() operand) tokenizes as a Hash
             // token rather than a Color-typed one, so ToColor misses it - resolve it here.
-            if (element is { Type: TokenType.Hash } hash) return Color.FromHex(hash.Data.ToString());
+            if (element is { Type: TokenType.Hash } hash) return Color.IsHexColor(hash.Data.ToString()) ? Color.FromHex(hash.Data.ToString()) : null;
 
             return element is { Type: TokenType.Function } function ? ParseColorFunction(function, wantOklab, out oklab) : null;
         }

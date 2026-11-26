@@ -165,6 +165,21 @@ namespace PeachBrackets.Css
             return new(red, green, blue);
         }
 
+        /// <summary>Whether the text (without its <c>#</c>) is a hex color: three, four, six or eight hex digits and nothing else.</summary>
+        public static bool IsHexColor(string color)
+        {
+            if (color is null || color.Length is not (3 or 4 or 6 or 8))
+                return false;
+
+            foreach (var c in color)
+            {
+                if (!(c is >= '0' and <= '9' or >= 'a' and <= 'f' or >= 'A' and <= 'F'))
+                    return false;
+            }
+
+            return true;
+        }
+
         public static Color FromHex(string color)
         {
             int r = 0, g = 0, b = 0, a = 255;

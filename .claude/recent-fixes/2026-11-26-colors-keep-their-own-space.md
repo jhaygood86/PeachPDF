@@ -11,4 +11,11 @@
 
 **Verified.** html-canvas 1,616 files / 2,714 subtests (+19 files, +25 subtests); css-color 230 to 238 reftests. 59 canvas color tests (the whole of WPT `color.window.js`'s table, mixes, relative colors with `currentcolor`, object forms, `CSSRGB`/`CSSHSL`). Engine, PDF and Scripting suites pass.
 
-**Not done.** Painting a wide-gamut color wider than sRGB (display-p3 canvas storage); `currentcolor` in a gradient color stop; `fillStyle` read back from an object color as anything but sRGB; `CSSColorValue` subclasses beyond RGB and HSL (`CSSHWB`, `CSSLab`, ...).
+**Follow-up (same day).**
+- A gradient with a stop that is not legacy sRGB (`ScriptDocument.InterpolateGradientStops`, reusing `ColorSpaceConverter.Interpolate`) goes from stop to stop in Oklab, as CSS does: the engine's CSS gradients already resampled like this (15 colors a segment). The gradient is flagged when any stop's `TryParseColor` returns a serialization.
+- `currentcolor` in a gradient stop: the gradient remembers the canvas element that made it (`CanvasGradient.Owner`).
+- `CSSHWB`, `CSSLab`, `CSSLCH`, `CSSOKLab`, `CSSOKLCH` and `CSSColor` stand for the CSS text of their color (`_colorText`, read when the style is set), so they read back serialized with no second color path.
+- Two grammar leaks the WPT `invalid.*` tests found: `Color.FromHex` accepted any characters (`#fg00`), now `Color.IsHexColor` is checked where a hash becomes a color; and the CSS lexer swallowed the point of `1.` (`NumberRest` backed up one character, not two), so `rgba(255, 0, 0, 1.)` parsed as alpha 1. A point belongs to a number only when a digit follows (CSS Syntax 4.3.12). One existing tokenizer test pinned the swallowed point as a "pre-existing quirk" and was updated.
+- html-canvas 1,624 files / 2,722 subtests.
+
+**Not done.** Painting a wide-gamut color wider than sRGB, and a canvas whose pixels are display-p3 (`colorSpace: 'display-p3'`, `colorType: 'float16'`): that needs a float color through every backend and is Phase 7; interpolating a gradient with straight rather than premultiplied alpha (canvas gradients interpolate non-premultiplied, CSS gradients premultiplied: `2d.gradient.interpolate.coloralpha`); patterns and zero-size gradients (Phase 7).

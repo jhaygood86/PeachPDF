@@ -212,6 +212,15 @@ internal sealed class CanvasGradient(string kind, double[] geometry)
     public double[] Geometry { get; } = geometry;
 
     public List<(double Offset, PaintColor Color)> Stops { get; } = [];
+
+    /// <summary>The canvas element whose <c>color</c> a <c>currentcolor</c> in a stop is.</summary>
+    public ScriptNode? Owner { get; init; }
+
+    /// <summary>Whether a stop is a color that is not legacy sRGB, which has the gradient go from stop to stop in Oklab.</summary>
+    public bool NonLegacy { get; set; }
+
+    /// <summary>Adds the colors between the stops that make the gradient interpolate in Oklab (<see cref="ScriptDocument.InterpolateGradientStops"/>).</summary>
+    public Func<IReadOnlyList<(double Offset, PaintColor Color)>, List<(double Offset, PaintColor Color)>>? InterpolateInOklab { get; init; }
 }
 
 /// <summary>A <c>CanvasPattern</c>: an image and how it repeats.</summary>
@@ -626,6 +635,9 @@ internal sealed class CanvasBitmap(ScriptDocument document, double width, double
     private static Brush MakeGradient(CanvasGradient gradient)
     {
         var stops = gradient.Stops.OrderBy(s => s.Offset).ToList();
+        if (gradient.NonLegacy && gradient.InterpolateInOklab is { } interpolate && stops.Count > 1)
+            stops = interpolate(stops);
+
         if (stops.Count == 0)
             return new SolidBrush(PaintColor.Transparent);
         if (stops.Count == 1)

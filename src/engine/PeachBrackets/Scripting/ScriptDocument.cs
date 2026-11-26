@@ -492,6 +492,36 @@ public sealed class ScriptDocument
         return true;
     }
 
+    /// <summary>
+    /// The stops of a gradient with colors between them that make the gradient interpolate in Oklab, which is how a gradient with a color that is not legacy sRGB
+    /// (<c>color(display-p3 ...)</c>, <c>lab()</c>, a <c>color-mix()</c>) goes from one stop to the next (CSS Color 4 section 12). Each segment gains fifteen colors; a hard
+    /// stop (two stops at one offset) stays hard.
+    /// </summary>
+    /// <param name="stops">the stops in ascending offset, each an offset from 0 to 1 and a color</param>
+    /// <returns>the stops and the colors between them</returns>
+    public List<(double Offset, PeachDrawing.Core.PaintColor Color)> InterpolateGradientStops(IReadOnlyList<(double Offset, PeachDrawing.Core.PaintColor Color)> stops)
+    {
+        ArgumentNullException.ThrowIfNull(stops);
+        var result = new List<(double Offset, PeachDrawing.Core.PaintColor Color)>(stops.Count * 16);
+        for (var i = 0; i < stops.Count; i++)
+        {
+            if (i > 0 && stops[i].Offset > stops[i - 1].Offset)
+            {
+                var (from, to) = (stops[i - 1], stops[i]);
+                for (var k = 1; k <= 15; k++)
+                {
+                    var t = k / 16.0;
+                    result.Add((from.Offset + t * (to.Offset - from.Offset),
+                        Html.Utils.ColorSpaceConverter.Interpolate(from.Color, to.Color, t, Html.Entities.GradientColorSpace.Oklab, Html.Entities.HueInterpolationMethod.Shorter)));
+                }
+            }
+
+            result.Add(stops[i]);
+        }
+
+        return result;
+    }
+
     /// <summary>Finds a font by family name, as the document's render context knows it.</summary>
     /// <param name="family">one family name or a generic one</param>
     /// <param name="sizePixels">the size in CSS pixels</param>

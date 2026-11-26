@@ -482,8 +482,11 @@ namespace PeachBrackets.Engine.Tests.CSS
             Assert.Equal(TokenType.Number, number.Type);
             Assert.Equal(3d, number.Value, 5);
 
-            // The '.' itself is not re-surfaced as its own token here (a pre-existing NumberRest
-            // behavior, unrelated to the Token.Data redesign) - the next token starts from 'x'.
+            // A point belongs to a number only when a digit follows it (CSS Syntax 4.3.12), so the '.' is a token of its own and "1." is not a number.
+            var dot = tokenizer.Get();
+            Assert.Equal(TokenType.Delim, dot.Type);
+            Assert.Equal(".", dot.Data);
+
             var next = tokenizer.Get();
             Assert.Equal(TokenType.Ident, next.Type);
             Assert.Equal("x", next.Data);

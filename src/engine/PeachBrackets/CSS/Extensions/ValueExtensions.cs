@@ -644,7 +644,7 @@ namespace PeachBrackets.Css
 
             if (element is { Type: TokenType.Color } colorToken && !colorToken.IsValid)
             {
-                return Color.FromHex(colorToken.Data.ToString());
+                return Color.IsHexColor(colorToken.Data.ToString()) ? Color.FromHex(colorToken.Data.ToString()) : null;
             }
 
             return null;
