@@ -10,4 +10,14 @@
 - `strokeRect` with a zero width or height is a line out and back, closed (joins, no caps).
 - `FlatPath.ForStroke` (raster stroker): an open subpath that starts/ends on a curve gets one extra point 1e-3 of the parameter from that end, so a cap is square to the curve's tangent rather than the last flattened chord (a wide arc stroke showed a visible tilt). The pinned `arc-ellipse-curves` scene hash moved for that reason.
 - `isPointInPath` counts points on the edge as inside and validates the fill rule enum; `Finite()` now converts every argument first (WebIDL).
-- html-canvas now 1835 files, 2980/5030 subtests. Open: closed A-B-A strokes need round joins at the 180 degree turns (`strokeRect.zero.4/.5`, `line.join.round`), thick self-intersecting arcs, `isPointInStroke` dashed at scale, miter-limit shadow join.
+- html-canvas then 1835 files, 2980/5030 subtests.
+
+## Stroker leftovers (finished)
+- A turn straight back on itself (cross product 0, dot < 0) has no "outside" to pick from the cross sign; `Stroker.AddJoin` now draws a round join as the half disc the path was heading into and nothing for miter/bevel. A *closed* two-point subpath is a real closed contour (line out and back: joins, no caps), where it used to be treated as open and capped (`closed && Count > 2` became `> 1`).
+- A miter limit under 1 bevels every join (it used to fall back to 10); 0 still means "never set".
+- `FlatPath.ForStroke(path, tolerance, halfWidth)`: each chord is stroked as a rectangle, so a chord's turn moves its ends by halfWidth * angle. When the stroke is wide against the curve (a 200 px stroke on a radius 25 arc) the cubic is cut so no chord turns more than 2 * tolerance / halfWidth (cap 4000), otherwise the rectangles near the circle's center overlapped into the wedge the arc must not cover.
+- `arc()` between two angles a whole turn apart against its direction (0 to 2*pi counterclockwise, 2*pi to 0 clockwise) is a whole circle (what browsers draw), not no arc; equal angles are still no arc.
+- `isPointInStroke` no longer approximates: it strokes the path in user space with `PathStroker` (the shared stroker, so dashes, caps, joins and a non-uniform scale) and tests the point against the outline with the nonzero rule. `Touches` is gone.
+- Open: `isPointInPath` after `scale(Number.MAX_VALUE, ...)` (single-precision transform; issue 2495, accepted gap, expected failure).
+- html-canvas now 1849 files, 2994/5030 subtests; floor 2984. PeachDrawing.Tests (441), PeachPDF.Tests, PeachBrackets.Scripting.Tests and PeachDrawing.PDF.Tests pass, with the pinned parity hashes unchanged.
+- Native backends (Skia, Win2D, CoreGraphics) stroke with their own engines and were not changed; they were not checked against these cases (CoreGraphics cannot be built here).

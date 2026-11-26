@@ -227,6 +227,7 @@ internal sealed class PathData
     public void AddArc(double cx, double cy, double rx, double ry, double rotation, double start, double end, bool counterClockwise, Matrix3x2 m)
     {
         var sweep = end - start;
+        var raw = sweep;
         const double TwoPi = Math.PI * 2;
         if (!counterClockwise)
         {
@@ -238,6 +239,10 @@ internal sealed class PathData
             if (sweep <= -TwoPi) sweep = -TwoPi;
             else { sweep %= TwoPi; if (sweep > 0) sweep -= TwoPi; }
         }
+
+        // Two different angles a whole turn apart (0 to 2π against the direction of the arc) are a whole circle, not no arc: only equal angles are no arc.
+        if (sweep == 0 && raw != 0)
+            sweep = counterClockwise ? -TwoPi : TwoPi;
 
         var (cosR, sinR) = (Math.Cos(rotation), Math.Sin(rotation));
         Vector2 Point(double angle)

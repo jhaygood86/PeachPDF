@@ -102,8 +102,7 @@ internal sealed partial class ScriptRuntime
             if (!double.IsFinite(x) || !double.IsFinite(y))
                 return JsBoolean.False;
 
-            var scale = Math.Sqrt(Math.Abs(B(self).State.Transform.GetDeterminant()));
-            return Js.Bool(path.Touches(x, y, B(self).State.LineWidth * scale));
+            return Js.Bool(B(self).StrokeContains(path, x, y));
         });
 
         Js.StrictMethod(Engine, p, "createImageData", 1, (self, args) =>

@@ -77,4 +77,49 @@ public class CanvasGeometryTests
 
         Assert.Equal(["255 0 255"], log);
     }
+
+    [Fact]
+    public async Task AnArcFromZeroToATurnAgainstItsDirection_IsAWholeCircle()
+    {
+        var log = await LogAsync("""
+            g.fillStyle = '#f00';
+            g.beginPath(); g.moveTo(50, 25); g.arc(50, 25, 10, 0, 2 * Math.PI, true); g.fill();
+            g.beginPath(); g.arc(20, 25, 5, 2 * Math.PI, 0, false); g.fill();
+            Log.info([g.getImageData(50, 25, 1, 1).data[3], g.getImageData(20, 25, 1, 1).data[3], g.getImageData(80, 25, 1, 1).data[3]].join(' '));
+            """);
+
+        Assert.Equal(["255 255 0"], log);
+    }
+
+    [Fact]
+    public async Task IsPointInStroke_FollowsTheStrokesDashesCapsAndScale()
+    {
+        var log = await LogAsync("""
+            g.setLineDash([10, 10]); g.lineWidth = 4;
+            g.beginPath(); g.moveTo(10, 10); g.lineTo(70, 10);
+            var onDash = g.isPointInStroke(15, 10), inGap = g.isPointInStroke(25, 10), pastEnd = g.isPointInStroke(71, 10), besideIt = g.isPointInStroke(15, 14);
+            g.setLineDash([]); g.lineCap = 'square';
+            var square = g.isPointInStroke(71, 10);
+            g.scale(10, 10); g.lineWidth = 0.4; g.lineCap = 'butt';
+            var scaled = g.isPointInStroke(15, 11.5) + ' ' + g.isPointInStroke(15, 13);
+            Log.info([onDash, inGap, pastEnd, besideIt, square, scaled].join(' '));
+            """);
+
+        Assert.Equal(["true false false false true true false"], log);
+    }
+
+    [Fact]
+    public async Task AClosedLineOutAndBack_IsStrokedWithJoinsAndWithoutCaps()
+    {
+        var log = await LogAsync("""
+            g.strokeStyle = '#f00'; g.lineWidth = 20;
+            g.lineCap = 'round'; g.strokeRect(50, 25, 40, 0);
+            var capped = g.getImageData(45, 25, 1, 1).data[3];
+            g.clearRect(0, 0, 100, 50);
+            g.lineCap = 'butt'; g.lineJoin = 'round'; g.strokeRect(50, 25, 40, 0);
+            Log.info(capped + ' ' + g.getImageData(45, 25, 1, 1).data[3]);
+            """);
+
+        Assert.Equal(["0 255"], log);
+    }
 }

@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
+using System.Numerics;
 
 namespace PeachBrackets.Scripting.Internal.Canvas;
 
@@ -159,9 +160,14 @@ internal static class CanvasPixelExtensions
     /// <summary>Whether a point is inside the path under a fill rule.</summary>
     public static bool Contains(this PathData path, double x, double y, FillMode rule)
     {
+        return ContainsPolygons(Polygons(path), x, y, rule);
+    }
+
+    private static bool ContainsPolygons(IEnumerable<List<(double X, double Y)>> polygons, double x, double y, FillMode rule)
+    {
         var winding = 0;
         var crossings = 0;
-        foreach (var polygon in Polygons(path))
+        foreach (var polygon in polygons)
         {
             for (var i = 0; i < polygon.Count; i++)
             {
@@ -186,24 +192,31 @@ internal static class CanvasPixelExtensions
         return rule == FillMode.EvenOdd ? crossings % 2 == 1 : winding != 0;
     }
 
-    /// <summary>Whether a point is within half a line width of the path (both in the space the path is in).</summary>
-    public static bool Touches(this PathData path, double x, double y, double lineWidth)
+    /// <summary>
+    /// Whether a point (in the space <paramref name="path"/> is in) is inside the stroke the canvas's line style would draw along the path: the same outline the stroker
+    /// fills, with the width, caps, joins, miter limit and dashes, made in the space the pen works in (user space, so a transform that is not uniform has an elliptical pen).
+    /// </summary>
+    public static bool StrokeContains(this CanvasBitmap bitmap, PathData path, double x, double y)
     {
-        var reach = lineWidth / 2;
-        foreach (var polygon in Polygons(path))
-        {
-            for (var i = 0; i + 1 < polygon.Count; i++)
-            {
-                var (a, b) = (polygon[i], polygon[i + 1]);
-                var (dx, dy) = (b.X - a.X, b.Y - a.Y);
-                var length = dx * dx + dy * dy;
-                var t = length == 0 ? 0 : Math.Clamp(((x - a.X) * dx + (y - a.Y) * dy) / length, 0, 1);
-                var (px, py) = (a.X + t * dx - x, a.Y + t * dy - y);
-                if (px * px + py * py <= reach * reach)
-                    return true;
-            }
-        }
+        var transform = bitmap.State.Transform;
+        if (!Matrix3x2.Invert(transform, out var inverse))
+            return false;
 
-        return false;
+        var user = path.PrunedForStroke().Transformed(inverse);
+        if (user.Segments.Count == 0)
+            return false;
+
+        var scale = Math.Sqrt(Math.Abs(transform.GetDeterminant()));
+        var tolerance = scale > 0 ? 0.1 / scale : 0.1;
+        var point = PathData.T(inverse, x, y);
+
+        var context = new RasterRenderContext();
+        using var measuring = context.CreateCanvas(1, 1);
+        using var built = user.Build(measuring, FillMode.Nonzero);
+        using var outline = measuring.GetGraphicsPath();
+        var pen = bitmap.MakePen(bitmap.State);
+        PathStroker.Stroke(built, pen, outline, tolerance);
+
+        return ContainsPolygons(outline.Flatten(tolerance).Select(c => c.Points.Select(p => (p.X, p.Y)).ToList()), point.X, point.Y, FillMode.Nonzero);
     }
 }

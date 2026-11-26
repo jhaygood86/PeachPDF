@@ -47,7 +47,7 @@ public static class PathStroker
             pen.DashStyle == DashStyle.Custom ? pen.DashOffset : 0);
 
         var polygons = new PolygonSet();
-        Stroker.Stroke(FlatPath.ForStroke(path, tolerance), style, Affine.Identity, polygons);
+        Stroker.Stroke(FlatPath.ForStroke(path, tolerance, pen.Width / 2), style, Affine.Identity, polygons);
         polygons.NormalizeWinding();
 
         for (var i = 0; i < polygons.ContourCount; i++)
