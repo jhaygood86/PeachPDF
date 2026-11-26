@@ -125,4 +125,96 @@ public class CanvasColorTests
 
         Assert.Equal(["TypeError TypeError IndexSizeError SyntaxError"], log);
     }
+
+    [Theory]
+    [InlineData("rgb(255, 0, 255)", "#ff00ff")]
+    [InlineData("rgba(255, 0, 255, 1)", "#ff00ff")]
+    [InlineData("#ff00ffff", "#ff00ff")]
+    [InlineData("#ff00ff00", "rgba(255, 0, 255, 0)")]
+    [InlineData("rgba(255, 0, 255,    0)", "rgba(255, 0, 255, 0)")]
+    [InlineData("color(srgb 1 0 1)", "color(srgb 1 0 1)")]
+    [InlineData("color(srgb 1 0 1 / 1)", "color(srgb 1 0 1)")]
+    [InlineData("color(srgb 1 0 1/0)", "color(srgb 1 0 1 / 0)")]
+    [InlineData("color(srgb 1 none 1)", "color(srgb 1 none 1)")]
+    [InlineData("color(srgb none -1 2 / 3)", "color(srgb none -1 2)")]
+    [InlineData("color(display-p3 0.96 0.76  	 0.79)", "color(display-p3 0.96 0.76 0.79)")]
+    [InlineData("color(xyz 0.1 0.2 0.3)", "color(xyz-d65 0.1 0.2 0.3)")]
+    [InlineData("lab(29% 39 20)", "lab(29 39 20)")]
+    [InlineData("oklch(0.5 0.1 120 / 0.5)", "oklch(0.5 0.1 120 / 0.5)")]
+    [InlineData("oklch(0.5 none 120)", "oklch(0.5 none 120)")]
+    [InlineData("transparent", "rgba(0, 0, 0, 0)")]
+    [InlineData("rgb(none none none)", "#000000")]
+    [InlineData("rgb(300 none 400)", "#ff00ff")]
+    [InlineData("color-mix(in srgb, red, blue)", "color(srgb 0.5 0 0.5)")]
+    [InlineData("color-mix(in srgb, red 25%, blue)", "color(srgb 0.25 0 0.75)")]
+    [InlineData("color-mix(in srgb, red, color(srgb 1 0 0))", "color(srgb 1 0 0)")]
+    [InlineData("color-mix(in hsl, red, blue)", "#ff00ff")]
+    [InlineData("rgb(from red g r b)", "color(srgb 0 1 0)")]
+    [InlineData("color(from color(srgb 0.25 0.5 0.75 / 0.5) srgb r g b / alpha)", "color(srgb 0.25 0.5 0.75 / 0.5)")]
+    [InlineData("hsl(from red h s l)", "#ff0000")]
+    public async Task AColorReadsBackAsTheHtmlStandardSerializesIt(string input, string expected)
+    {
+        var script = "var g = document.getElementById('c').getContext('2d'); var s = " + System.Text.Json.JsonSerializer.Serialize(input) +
+            "; var out = []; ['fillStyle', 'strokeStyle', 'shadowColor'].forEach(function (p) { g[p] = '#123456'; g[p] = s; out.push(g[p]); }); Log.info(out.join('|'));";
+        var (_, log) = await CanvasParityTests.PaintAsync(script, "width=10 height=10");
+
+        Assert.Equal([string.Join('|', expected, expected, expected)], log);
+    }
+
+    [Fact]
+    public async Task ColorMixAndRelativeColors_TakeCurrentColorFromTheCanvasElement()
+    {
+        var (_, log) = await CanvasParityTests.PaintAsync("""
+            var c = document.getElementById('c'), g = c.getContext('2d');
+            c.setAttribute('style', 'display:block; color: magenta');
+            g.fillStyle = 'color-mix(in srgb, black, currentcolor)';
+            var mixed = g.fillStyle;
+            g.fillStyle = 'rgb(from currentcolor g r b)';
+            Log.info(mixed + ' ' + g.fillStyle);
+            """, "width=10 height=10");
+
+        Assert.Equal(["color(srgb 0.5 0 0.5) color(srgb 0 1 1)"], log);
+    }
+
+    [Fact]
+    public async Task AColorGivenAsAnObject_IsReadWhenTheStyleIsSet()
+    {
+        var (_, log) = await CanvasParityTests.PaintAsync("""
+            var c = document.getElementById('c'), g = c.getContext('2d');
+            function px() { g.fillRect(0, 0, 10, 10); var d = g.getImageData(5, 5, 1, 1).data; g.clearRect(0, 0, 10, 10); return Array.from(d).join(','); }
+            var out = [];
+            g.fillStyle = { r: 0.2, g: 0.4, b: 0.6 }; out.push(px());
+            g.fillStyle = { r: -1, g: 0, b: 0 }; out.push(px());
+            g.fillStyle = { r: 0, g: 2, b: 0 }; out.push(px());
+            g.fillStyle = { r: 0, g: 1, b: 0, a: 0.5 }; out.push(px());
+            g.fillStyle = { r: 0, g: 1, b: 0, a: -1 }; out.push(px());
+            g.fillStyle = '#123456'; g.fillStyle = { r: 1, g: 0 }; out.push(g.fillStyle);
+            Log.info(out.join(' | '));
+            """, "width=10 height=10");
+
+        Assert.Equal(["51,102,153,255 | 0,0,0,255 | 0,255,0,255 | 0,255,0,128 | 0,0,0,0 | #123456"], log);
+    }
+
+    [Fact]
+    public async Task CssRgbAndCssHslObjects_AreColorsAndTheirComponentsCanChange()
+    {
+        var (_, log) = await CanvasParityTests.PaintAsync("""
+            var c = document.getElementById('c'), g = c.getContext('2d');
+            var out = [];
+            g.fillStyle = new CSSRGB(1, 0, 1); out.push(g.fillStyle);
+            var rgb = new CSSRGB(0, CSS.percent(50), 0);
+            g.fillStyle = rgb; out.push(g.fillStyle);
+            rgb.g = 0; g.fillStyle = rgb; out.push(g.fillStyle);
+            rgb.alpha = 0; g.fillStyle = rgb; out.push(g.fillStyle);
+            var hsl = new CSSHSL(CSS.deg(180), 1, 1);
+            g.fillStyle = hsl; out.push(g.fillStyle);
+            hsl.l = 0.5; g.fillStyle = hsl; out.push(g.fillStyle);
+            hsl.h = CSS.deg(120); g.fillStyle = hsl; out.push(g.fillStyle);
+            hsl.h = CSS.turn(0.5); g.fillStyle = hsl; out.push(g.fillStyle);
+            Log.info(out.join(' '));
+            Log.info([CSS.percent(5).unit, CSS.deg(10).value, String(CSS.percent(5)), new CSSRGB(1, 1, 1) instanceof CSSColorValue, Object.prototype.toString.call(new CSSHSL(CSS.deg(0), 0, 0))].join(' '));
+            """, "width=10 height=10");
+
+        Assert.Equal(["#ff00ff #008000 #000000 rgba(0, 0, 0, 0) #ffffff #00ffff #00ff00 #00ffff", "percent 10 5% true [object CSSHSL]"], log);
+    }
 }

@@ -452,8 +452,20 @@ public sealed class ScriptDocument
     /// <param name="element">the element whose <c>color</c> is <c>currentcolor</c>, or null for black</param>
     /// <param name="color">the color</param>
     /// <returns>whether the text is a color</returns>
-    public bool TryParseColor(string css, ScriptNode? element, out PeachDrawing.Core.PaintColor color)
+    public bool TryParseColor(string css, ScriptNode? element, out PeachDrawing.Core.PaintColor color) => TryParseColor(css, element, out color, out _);
+
+    /// <summary>
+    /// <see cref="TryParseColor(string, ScriptNode?, out PeachDrawing.Core.PaintColor)"/> that also gives the color's serialization when it is not one of the legacy sRGB forms:
+    /// <c>color(display-p3 0.96 0.76 0.79)</c>, <c>lab(29 39 20)</c>, the result of <c>color-mix()</c> or relative color syntax, as the HTML standard has a canvas read them back.
+    /// </summary>
+    /// <param name="css">the text</param>
+    /// <param name="element">the element whose <c>color</c> is <c>currentcolor</c>, or null for black</param>
+    /// <param name="color">the color, reduced to 8-bit sRGB (what is painted)</param>
+    /// <param name="serialized">the serialization, or null when <paramref name="color"/> is the color (a name, hex, <c>rgb()</c>, <c>hsl()</c>, <c>hwb()</c>)</param>
+    /// <returns>whether the text is a color</returns>
+    public bool TryParseColor(string css, ScriptNode? element, out PeachDrawing.Core.PaintColor color, out string? serialized)
     {
+        serialized = null;
         ArgumentNullException.ThrowIfNull(css);
         var parser = new Html.Parse.CssValueParser(_container.RenderContext);
         var text = css.Trim();
@@ -474,6 +486,9 @@ public sealed class ScriptDocument
         }
 
         color = parser.GetActualColor(text);
+        if (parser.TryGetAuthoredColor(text, out var authored))
+            serialized = authored.ToCssString();
+
         return true;
     }
 

@@ -952,6 +952,20 @@ namespace PeachBrackets.Html.Parse
         }
 
         /// <summary>
+        /// A color that is not one of the legacy sRGB forms, as it was written and in the space it was written in (see <see cref="PeachBrackets.Css.AuthoredColor"/>): what a
+        /// canvas reads back for <c>color(display-p3 ...)</c>, <c>lab()</c>, a <c>color-mix()</c> or a relative color. False for any other color.
+        /// </summary>
+        internal bool TryGetAuthoredColor(string str, out PeachBrackets.Css.AuthoredColor authored)
+        {
+            authored = default;
+            if (string.IsNullOrEmpty(str) || str.IndexOf('(') < 0) return false;
+
+            using var pooledTokens = GetCssTokensPooled(str, inValueContext: true);
+            List<Token> tokens = pooledTokens;
+            return tokens.TryResolveAuthored(out authored);
+        }
+
+        /// <summary>
         /// A colour as an operand of an animation's mix in Oklab: its Oklab coordinates as written and the components that are missing in them (see
         /// <see cref="ColorFunctionExtensions.TryResolveMixOperand"/>). False when the text is not a colour this reads.
         /// </summary>

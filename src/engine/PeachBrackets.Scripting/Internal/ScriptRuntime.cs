@@ -37,6 +37,9 @@ internal sealed partial class ScriptRuntime
 
         InstallPrototypes();
         Window = InstallWindow();
+
+        // Extends the CSS object the window just defined, so it comes after it.
+        Engine.Execute(ColorScripts.Source);
         InstallHostApis();
     }
 

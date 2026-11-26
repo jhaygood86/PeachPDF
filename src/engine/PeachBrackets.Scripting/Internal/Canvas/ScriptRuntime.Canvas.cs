@@ -280,9 +280,13 @@ internal sealed partial class ScriptRuntime
                 return new PaintSource.GradientSource(gradient.Model);
             case PatternObject pattern:
                 return new PaintSource.PatternSource(pattern.Model);
+            case ObjectInstance when TryObjectColor(value, out var objectColor):
+                return new PaintSource.ColorSource(objectColor, CanvasBitmap.ColorText(objectColor));
         }
 
-        return Document.TryParseColor(Js.AsText(value), element, out var color) ? new PaintSource.ColorSource(color, CanvasBitmap.ColorText(color)) : current;
+        return Document.TryParseColor(Js.AsText(value), element, out var color, out var serialized)
+            ? new PaintSource.ColorSource(color, serialized ?? CanvasBitmap.ColorText(color))
+            : current;
     }
 
     private JsValue StyleValue(PaintSource source) => source switch
@@ -410,10 +414,10 @@ internal sealed partial class ScriptRuntime
         });
         Js.Accessor(Engine, p, "shadowColor", self => Js.Str(S(self).ShadowColorText), (self, value) =>
         {
-            if (Document.TryParseColor(Js.AsText(value), Cx(self).Canvas, out var color))
+            if (Document.TryParseColor(Js.AsText(value), Cx(self).Canvas, out var color, out var serialized))
             {
                 S(self).ShadowColor = color;
-                S(self).ShadowColorText = CanvasBitmap.ColorText(color);
+                S(self).ShadowColorText = serialized ?? CanvasBitmap.ColorText(color);
             }
         });
         foreach (var (name, setter) in new (string, Action<CanvasState, double>)[]
