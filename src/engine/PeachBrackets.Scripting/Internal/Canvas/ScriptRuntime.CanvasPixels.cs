@@ -71,10 +71,21 @@ internal sealed partial class ScriptRuntime
             }
 
             var (x, y) = (Num(args, index), Num(args, index + 1));
+
+            // The fill rule is an enumeration: anything but "nonzero" or "evenodd" (undefined is the default) is a TypeError.
+            var rule = FillMode.Nonzero;
+            if (args.Length > index + 2 && !args[index + 2].IsUndefined())
+            {
+                var name = TypeConverter.ToString(args[index + 2]);
+                if (name == "evenodd")
+                    rule = FillMode.EvenOdd;
+                else if (name != "nonzero")
+                    throw TypeError($"The provided value '{name}' is not a valid enum value of type CanvasFillRule.");
+            }
+
             if (!double.IsFinite(x) || !double.IsFinite(y))
                 return JsBoolean.False;
 
-            var rule = Js.Arg(args, index + 2) is { } text && text.IsString() && text.AsString() == "evenodd" ? FillMode.EvenOdd : FillMode.Nonzero;
             return Js.Bool(path.Contains(x, y, rule));
         });
         Js.StrictMethod(Engine, p, "isPointInStroke", 2, (self, args) =>

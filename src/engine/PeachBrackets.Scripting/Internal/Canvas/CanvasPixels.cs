@@ -141,6 +141,21 @@ internal static class CanvasPixelExtensions
         return result;
     }
 
+    private static bool OnSegment((double X, double Y) a, (double X, double Y) b, double x, double y)
+    {
+        var (dx, dy) = (b.X - a.X, b.Y - a.Y);
+        var length = dx * dx + dy * dy;
+        if (length == 0)
+            return false;
+
+        var t = ((x - a.X) * dx + (y - a.Y) * dy) / length;
+        if (t < 0 || t > 1)
+            return false;
+
+        var (px, py) = (a.X + t * dx - x, a.Y + t * dy - y);
+        return px * px + py * py <= 1e-12;
+    }
+
     /// <summary>Whether a point is inside the path under a fill rule.</summary>
     public static bool Contains(this PathData path, double x, double y, FillMode rule)
     {
@@ -151,6 +166,11 @@ internal static class CanvasPixelExtensions
             for (var i = 0; i < polygon.Count; i++)
             {
                 var (a, b) = (polygon[i], polygon[(i + 1) % polygon.Count]);
+
+                // A point on the path itself counts as inside, whatever the rule.
+                if (OnSegment(a, b, x, y))
+                    return true;
+
                 if ((a.Y <= y) == (b.Y <= y))
                     continue;
 

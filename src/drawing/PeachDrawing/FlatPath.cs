@@ -73,7 +73,55 @@ internal sealed class FlatPath
         return flat;
     }
 
-    private static void AddCubic(PolygonSet set, double x0, double y0, double x1, double y1, double x2, double y2, double x3, double y3, double tolerance)
+    /// <summary>
+    /// Like <see cref="From"/>, for stroking: the curves are flattened the same way, but an open subpath that starts or ends on a curve gets one extra point a hair from that end,
+    /// so the first and last pieces point along the curve's own tangent. A cap is drawn square to those pieces, and without the point it would be square to a chord that is as
+    /// much as half a flattening step off the curve - a visible tilt on a wide stroke.
+    /// </summary>
+    public static FlatPath ForStroke(GraphicsPath path, double tolerance)
+    {
+        const double Hair = 1e-3;
+        var flat = new FlatPath();
+        foreach (var contour in path.GetCurveContours())
+        {
+            flat.MoveTo(contour.Start.X, contour.Start.Y);
+            var (px, py) = (contour.Start.X, contour.Start.Y);
+            for (var i = 0; i < contour.Commands.Count; i++)
+            {
+                var c = contour.Commands[i];
+                if (c.Kind != PathCommandKind.Cubic)
+                {
+                    flat.LineTo(c.End.X, c.End.Y);
+                }
+                else
+                {
+                    var (x0, y0) = (px, py);
+                    if (!contour.Closed && i == 0)
+                        AddPointAt(flat.Contours, x0, y0, c, Hair);
+
+                    AddCubic(flat.Contours, x0, y0, c.Control1.X, c.Control1.Y, c.Control2.X, c.Control2.Y, c.End.X, c.End.Y, tolerance, !contour.Closed && i == contour.Commands.Count - 1 ? Hair : 0);
+                }
+
+                (px, py) = (c.End.X, c.End.Y);
+            }
+
+            if (contour.Closed)
+                flat.Close();
+        }
+
+        return flat;
+    }
+
+    private static void AddPointAt(PolygonSet set, double x0, double y0, PathCommand c, double t)
+    {
+        var mt = 1 - t;
+        var x = mt * mt * mt * x0 + 3 * mt * mt * t * c.Control1.X + 3 * mt * t * t * c.Control2.X + t * t * t * c.End.X;
+        var y = mt * mt * mt * y0 + 3 * mt * mt * t * c.Control1.Y + 3 * mt * t * t * c.Control2.Y + t * t * t * c.End.Y;
+        if (Math.Abs(x - x0) + Math.Abs(y - y0) > 1e-9)
+            set.Add(x, y);
+    }
+
+    private static void AddCubic(PolygonSet set, double x0, double y0, double x1, double y1, double x2, double y2, double x3, double y3, double tolerance, double hairBeforeEnd = 0)
     {
         // Uniform parameter subdivision; the segment count bounds the deviation by the curve's second
         // differences (Wang's formula), so it needs no recursion and is fully deterministic.
@@ -87,6 +135,15 @@ internal sealed class FlatPath
         for (var s = 1; s <= n; s++)
         {
             var t = (double)s / n;
+            if (s == n && hairBeforeEnd > 0)
+            {
+                var u = 1 - hairBeforeEnd;
+                var (ua, ub, uc, ud) = (hairBeforeEnd * hairBeforeEnd * hairBeforeEnd, 3 * hairBeforeEnd * hairBeforeEnd * u, 3 * hairBeforeEnd * u * u, u * u * u);
+                var (hx, hy) = (ua * x0 + ub * x1 + uc * x2 + ud * x3, ua * y0 + ub * y1 + uc * y2 + ud * y3);
+                if (Math.Abs(hx - x3) + Math.Abs(hy - y3) > 1e-9)
+                    set.Add(hx, hy);
+            }
+
             var mt = 1 - t;
             var a = mt * mt * mt;
             var b = 3 * mt * mt * t;

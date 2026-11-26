@@ -400,7 +400,7 @@ public sealed partial class RasterCanvas : Canvas
     /// <inheritdoc/>
     public override void DrawPath(Pen pen, GraphicsPath path)
     {
-        var flat = FlatPath.From(path, 0.1 / DeviceScale);
+        var flat = FlatPath.ForStroke(path, 0.1 / DeviceScale);
         StrokeFlat(flat, pen);
     }
 

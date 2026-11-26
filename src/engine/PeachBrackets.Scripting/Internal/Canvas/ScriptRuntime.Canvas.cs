@@ -86,13 +86,12 @@ internal sealed partial class ScriptRuntime
 
     private static bool Finite(JsValue[] args, int count)
     {
+        // Web IDL converts every argument before the method looks at any of them, so a later one's valueOf runs even when an earlier one is not finite.
+        var finite = true;
         for (var i = 0; i < count; i++)
-        {
-            if (!double.IsFinite(TypeConverter.ToNumber(Js.Arg(args, i))))
-                return false;
-        }
+            finite &= double.IsFinite(TypeConverter.ToNumber(Js.Arg(args, i)));
 
-        return true;
+        return finite;
     }
 
     private ContextObject Cx(JsValue self) => self as ContextObject ?? throw TypeError("Illegal invocation");

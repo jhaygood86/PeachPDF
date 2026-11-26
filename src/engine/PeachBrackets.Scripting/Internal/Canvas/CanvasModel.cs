@@ -71,6 +71,84 @@ internal sealed class PathData
         (CurrentX, CurrentY) = (StartX, StartY);
     }
 
+    /// <summary>
+    /// The path as it is stroked: zero-length line and curve pieces are removed, and a subpath left with nothing to draw (a lone moveTo, or a point closed on itself) is dropped, so
+    /// it leaves no dot however round its caps are.
+    /// </summary>
+    public PathData PrunedForStroke()
+    {
+        var result = new PathData();
+        var pending = new List<Segment>();
+        (double X, double Y) current = default, start = default;
+        var drawn = false;
+
+        void Flush()
+        {
+            if (drawn)
+            {
+                foreach (var s in pending)
+                {
+                    switch (s.Type)
+                    {
+                        case Kind.Move: result.MoveTo(s.X1, s.Y1); break;
+                        case Kind.Line: result.LineTo(s.X1, s.Y1); break;
+                        case Kind.Curve: result.CurveTo(s.X1, s.Y1, s.X2, s.Y2, s.X3, s.Y3); break;
+                        default: result.Close(); break;
+                    }
+                }
+            }
+
+            pending.Clear();
+            drawn = false;
+        }
+
+        foreach (var s in Segments)
+        {
+            switch (s.Type)
+            {
+                case Kind.Move:
+                    Flush();
+                    pending.Add(s);
+                    current = start = (s.X1, s.Y1);
+                    break;
+                case Kind.Line:
+                    if (pending.Count == 0)
+                        pending.Add(new Segment(Kind.Move, current.X, current.Y, 0, 0, 0, 0));
+
+                    if (s.X1 != current.X || s.Y1 != current.Y)
+                    {
+                        pending.Add(s);
+                        drawn = true;
+                        current = (s.X1, s.Y1);
+                    }
+
+                    break;
+                case Kind.Curve:
+                    if (pending.Count == 0)
+                        pending.Add(new Segment(Kind.Move, current.X, current.Y, 0, 0, 0, 0));
+
+                    if (!(s.X1 == current.X && s.Y1 == current.Y && s.X2 == current.X && s.Y2 == current.Y && s.X3 == current.X && s.Y3 == current.Y))
+                    {
+                        pending.Add(s);
+                        drawn = true;
+                    }
+
+                    current = (s.X3, s.Y3);
+                    break;
+                default:
+                    if (drawn)
+                        pending.Add(s);
+
+                    Flush();
+                    current = start;
+                    break;
+            }
+        }
+
+        Flush();
+        return result;
+    }
+
     /// <summary>A copy with every point moved by the matrix.</summary>
     public PathData Transformed(Matrix3x2 matrix)
     {
@@ -791,7 +869,10 @@ internal sealed class CanvasBitmap(ScriptDocument document, double width, double
             return;
 
         Matrix3x2.Invert(State.Transform, out var inverse);
-        var user = path.Transformed(inverse);
+        var user = path.PrunedForStroke().Transformed(inverse);
+        if (user.Segments.Count == 0)
+            return;
+
         var pen = MakePen(State);
         Record(canvas =>
         {
@@ -821,6 +902,18 @@ internal sealed class CanvasBitmap(ScriptDocument document, double width, double
     {
         if (w == 0 && h == 0)
             return;
+
+        // A rectangle with no width or no height is a line out and back, closed: it has joins at both ends and no caps.
+        if (w == 0 || h == 0)
+        {
+            var line = new PathData();
+            line.MoveTo(x, y);
+            line.LineTo(x + w, y + h);
+            line.LineTo(x, y);
+            line.Close();
+            StrokePath(line.Transformed(State.Transform));
+            return;
+        }
 
         var pen = MakePen(State);
         Record(canvas => canvas.DrawRectangle(pen, Math.Min(x, x + w), Math.Min(y, y + h), Math.Abs(w), Math.Abs(h)));
