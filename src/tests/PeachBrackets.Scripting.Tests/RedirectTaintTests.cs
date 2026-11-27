@@ -63,6 +63,28 @@ public class RedirectTaintTests
     }
 
     [Fact]
+    public async Task AnImageTheDocumentAlreadyLoaded_KeepsTheAddressItsRedirectEndedAt()
+    {
+        // The markup's <img> loads first and is cached; the script's Image asks for the same address and is answered from that cache.
+        var log = await RunAsync("https://page.test/a.png", "https://other.test/a.png", """
+            var markup = document.createElement('img');
+            markup.src = 'https://page.test/a.png';
+            markup.onload = function () {
+                var image = new Image();
+                image.onload = function () {
+                    var c = document.createElement('canvas'); c.width = 4; c.height = 4;
+                    c.getContext('2d').drawImage(image, 0, 0);
+                    var result = 'none'; try { c.toDataURL(); } catch (e) { result = e.name; }
+                    Log.info(result);
+                };
+                image.src = 'https://page.test/a.png';
+            };
+            """);
+
+        Assert.Equal(["SecurityError"], log);
+    }
+
+    [Fact]
     public async Task AnImageThatWasNotRedirected_IsTaintedByTheOriginItCameFrom()
     {
         Assert.Equal(["none"], await RunAsync("https://page.test/a.png", null, Script("https://page.test/a.png")));

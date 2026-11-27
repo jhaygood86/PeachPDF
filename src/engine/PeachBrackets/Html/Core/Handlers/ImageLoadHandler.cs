@@ -297,6 +297,7 @@ namespace PeachBrackets.Html.Handlers
             {
                 Image = cached.Image;
                 SvgDocument = cached.SvgDocument;
+                FinalAddress = _htmlContainer.GetResolvedImageFinalAddress(cacheKey);
                 ImageLoadComplete();
                 return;
             }
@@ -319,7 +320,7 @@ namespace PeachBrackets.Html.Handlers
                     await LoadImageFromStream(_imageStream, _srcHintsSvg || contentTypeHintsSvg, source);
 
                     // A picture drawn for a script may not show what the script could not read: an image of another origin keeps its size and shows nothing.
-                    if ((Image is not null || SvgDocument is not null) && _htmlContainer.HideCrossOriginImages && IsCrossOrigin(source))
+                    if ((Image is not null || SvgDocument is not null) && _htmlContainer.HideCrossOriginImages && IsCrossOrigin(FinalAddress ?? source))
                     {
                         var (blankWidth, blankHeight) = Image is not null ? ((int)Image.Width, (int)Image.Height) : ((int)(SvgDocument?.Width ?? SvgDocument?.ViewBox?.Width ?? 150), (int)(SvgDocument?.Height ?? SvgDocument?.ViewBox?.Height ?? 150));
                         SvgDocument = null;
@@ -328,7 +329,7 @@ namespace PeachBrackets.Html.Handlers
 
                     if (Image is not null || SvgDocument is not null)
                     {
-                        _htmlContainer.CacheResolvedImageResource(cacheKey, Image, SvgDocument);
+                        _htmlContainer.CacheResolvedImageResource(cacheKey, Image, SvgDocument, FinalAddress);
                     }
                 }
             }

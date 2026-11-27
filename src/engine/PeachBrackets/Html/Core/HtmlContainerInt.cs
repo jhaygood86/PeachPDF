@@ -1176,6 +1176,13 @@ namespace PeachBrackets.Html
         /// </summary>
         private readonly Dictionary<string, (Image? Image, SvgDocument? SvgDocument)> _resolvedImageResources = [];
 
+        // Where a resolved resource was finally read from when its request was redirected, by the same key: a cached image still taints by it.
+        private readonly Dictionary<string, Uri> _resolvedImageFinalAddresses = [];
+
+        /// <summary>The address a cached image was finally read from when its request was redirected, or null.</summary>
+        internal Uri? GetResolvedImageFinalAddress(string absoluteUri)
+            => _resolvedImageFinalAddresses.TryGetValue(absoluteUri, out var address) ? address : null;
+
         /// <summary>
         /// Looks up a previously resolved image/SVG resource by its resolved absolute source URI.
         /// </summary>
@@ -1189,8 +1196,11 @@ namespace PeachBrackets.Html
         /// reaches here on a hit, so this never actually overwrites a live entry today - but disposes one
         /// if it ever does, rather than silently orphaning it undisposed until this render's teardown.
         /// </summary>
-        internal void CacheResolvedImageResource(string absoluteUri, Image? image, SvgDocument? svgDocument)
+        internal void CacheResolvedImageResource(string absoluteUri, Image? image, SvgDocument? svgDocument, Uri? finalAddress = null)
         {
+            if (finalAddress is not null)
+                _resolvedImageFinalAddresses[absoluteUri] = finalAddress;
+
             if (_resolvedImageResources.TryGetValue(absoluteUri, out var existing) && !ReferenceEquals(existing.Image, image))
             {
                 existing.Image?.Dispose();
