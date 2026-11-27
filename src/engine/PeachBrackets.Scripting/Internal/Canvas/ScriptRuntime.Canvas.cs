@@ -1117,6 +1117,10 @@ internal sealed partial class ScriptRuntime
                     return JsValue.Undefined;
                 }
 
+                // A video with no picture yet draws nothing, and is no error.
+                if (source is NodeObject { Node: { Kind: ScriptNodeKind.Element } waiting } && IsVideo(waiting))
+                    return JsValue.Undefined;
+
                 throw TypeError("The image argument is not a drawable object.");
             }
 
@@ -1296,6 +1300,9 @@ internal sealed partial class ScriptRuntime
     {
         if (source is BitmapObject { Image: { } bitmapImage })
             return bitmapImage;
+
+        if (source is NodeObject { Node: { Kind: ScriptNodeKind.Element } video } && IsVideo(video))
+            return VideoFrameImage(video);
 
         if (source is NodeObject { Node: { Kind: ScriptNodeKind.Element } element } && (IsImage(element) || IsSvgImage(element))
             && _images.TryGetValue(element, out var state) && state.Status == 2)

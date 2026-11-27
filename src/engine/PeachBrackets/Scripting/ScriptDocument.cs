@@ -981,6 +981,21 @@ public sealed class ScriptDocument
         return ImageColorSources.Unoriented(image);
     }
 
+    /// <summary>
+    /// A picture of a video in a space other than sRGB, as straight Display P3 floats (colors outside that gamut are kept as values outside 0 to 1), for
+    /// drawing on a canvas of any space.
+    /// </summary>
+    /// <param name="straightRgba">the picture's pixels, straight (not premultiplied) eight-bit RGBA</param>
+    /// <param name="widthPixels">the width in pixels</param>
+    /// <param name="heightPixels">the height in pixels</param>
+    /// <param name="from">the space the pixels are in</param>
+    /// <returns>four floats per pixel, or null when the pixels cannot be converted</returns>
+    public float[]? ConvertMediaPixelsToDisplayP3(byte[] straightRgba, int widthPixels, int heightPixels, PeachBrackets.Media.MediaColorSpace from)
+    {
+        ArgumentNullException.ThrowIfNull(straightRgba);
+        return ImageColorSources.ToDisplayP3(straightRgba, widthPixels, heightPixels, from);
+    }
+
     /// <summary>Whether the document has a media provider, so that its <c>audio</c> and <c>video</c> elements can play.</summary>
     public bool HasMediaProvider => _container.MediaProvider is not null;
 

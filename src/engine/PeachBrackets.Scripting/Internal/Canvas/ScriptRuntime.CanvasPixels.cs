@@ -988,6 +988,9 @@ internal sealed partial class ScriptRuntime
             case NodeObject { Node: { Kind: ScriptNodeKind.Element } element } when IsImage(element) || IsSvgImage(element):
                 image = ImageOf(source) ?? RasterizeSvgImage(element) ?? throw DomError("InvalidStateError", "The image is not loaded.");
                 break;
+            case NodeObject { Node: { Kind: ScriptNodeKind.Element } video } when IsVideo(video):
+                image = VideoFrameImage(video) ?? throw DomError("InvalidStateError", "The video has no picture to take yet.");
+                break;
             case NodeObject { Node: { Kind: ScriptNodeKind.Element } bare } when string.Equals(bare.TagName, "canvas", StringComparison.OrdinalIgnoreCase) && !_contexts.ContainsKey(bare):
             {
                 // A canvas nothing was drawn on is a transparent picture of its size, if it has a size and that is one that can be held.

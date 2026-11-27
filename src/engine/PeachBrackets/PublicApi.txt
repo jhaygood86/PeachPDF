@@ -791,6 +791,10 @@ PeachBrackets.Media.MediaChange : enum Int32
 PeachBrackets.Media.MediaChangedEventArgs : sealed class
   ctor(MediaChange changes)
   property MediaChange Changes { get; }
+PeachBrackets.Media.MediaColorSpace : enum Int32
+  DisplayP3 = 1
+  Rec2020 = 2
+  Srgb = 0
 PeachBrackets.Media.MediaErrorCode : enum Int32
   Aborted = 1
   Decode = 3
@@ -801,6 +805,7 @@ PeachBrackets.Media.MediaFrame : sealed class
   ctor(Image image, TimeSpan time, Action release = null)
   method virtual Void Dispose()
   property Image Image { get; }
+  property MediaColorSpace ColorSpace { get; init; }
   property TimeSpan Time { get; }
 PeachBrackets.Media.MediaKind : enum Int32
   Audio = 0
@@ -970,6 +975,7 @@ PeachBrackets.ScriptHosting.ScriptDocument : sealed class
   method ScriptNode GetElementById(String id)
   method ScriptNode QuerySelector(String selector)
   method ScriptSvgFilter GetSvgFilter(String id)
+  method Single[] ConvertMediaPixelsToDisplayP3(Byte[] straightRgba, Int32 widthPixels, Int32 heightPixels, MediaColorSpace from)
   method String CanPlayMediaType(String mimeType)
   method String GetComputedValue(ScriptNode element, String property)
   method ValueTask LoadFontFacesAsync()

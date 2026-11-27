@@ -29,6 +29,12 @@ public sealed class MediaFrame : IDisposable
     /// <summary>The picture.</summary>
     public Image Image { get; }
 
+    /// <summary>
+    /// The RGB space the picture is in. A picture of pixels is converted from it when it is drawn on a canvas of another space; sRGB (the default) is
+    /// taken as it is.
+    /// </summary>
+    public MediaColorSpace ColorSpace { get; init; }
+
     /// <summary>Where in the media the picture belongs. Frames of one session with the same time are the same picture: the document paints again only when it changes.</summary>
     public TimeSpan Time { get; }
 

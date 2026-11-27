@@ -4,7 +4,9 @@ using Jint.Native.Object;
 using Jint.Runtime;
 using Jint.Runtime.Descriptors;
 using PeachBrackets.Media;
+using PeachBrackets.Scripting.Internal.Canvas;
 using PeachBrackets.ScriptHosting;
+using PeachDrawing.Core;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -107,6 +109,50 @@ internal sealed partial class ScriptRuntime
         node.Kind == ScriptNodeKind.Element && (string.Equals(node.TagName, "video", StringComparison.OrdinalIgnoreCase) || string.Equals(node.TagName, "audio", StringComparison.OrdinalIgnoreCase));
 
     private static MediaKind KindOf(ScriptNode media) => string.Equals(media.TagName, "audio", StringComparison.OrdinalIgnoreCase) ? MediaKind.Audio : MediaKind.Video;
+
+    private static bool IsVideo(ScriptNode node) =>
+        node.Kind == ScriptNodeKind.Element && string.Equals(node.TagName, "video", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// A picture of the video as it is now, for a canvas to draw: a copy, since a provider may reuse what its frame is made of once the frame is given back.
+    /// Null while the video has no picture to show (its readyState is below HAVE_CURRENT_DATA, or its provider has no picture there). A picture in a space
+    /// other than sRGB is kept as Display P3 floats (colors outside that gamut survive), which a canvas of any space converts from.
+    /// </summary>
+    private Image? VideoFrameImage(ScriptNode video)
+    {
+        if (!_media.TryGetValue(video, out var state) || state.Session is not { } session || session.ReadyState < MediaReadyState.CurrentData)
+            return null;
+
+        session.Update(TimeSpan.FromMilliseconds(NowMs));
+        using var frame = session.AcquireFrame();
+        if (frame?.Image.GetPixels() is not { Width: > 0, Height: > 0 } pixels)
+            return null;
+
+        var straight = new byte[pixels.PremultipliedRgba.Length];
+        var span = pixels.PremultipliedRgba.Span;
+        for (var i = 0; i + 3 < straight.Length; i += 4)
+        {
+            var alpha = span[i + 3];
+            straight[i + 3] = alpha;
+            for (var c = 0; c < 3; c++)
+                straight[i + c] = alpha == 0 ? (byte)0 : alpha == 255 ? span[i + c] : (byte)Math.Min(255, ((span[i + c] * 255) + (alpha / 2)) / alpha);
+        }
+
+        if (frame.ColorSpace != MediaColorSpace.Srgb && Document.ConvertMediaPixelsToDisplayP3(straight, pixels.Width, pixels.Height, frame.ColorSpace) is { } floats
+            && Document.CreateWideImage(pixels.Width, pixels.Height, floats) is { } wide)
+        {
+            CanvasColorSpaces.Tag(wide, "display-p3", floats);
+            return wide;
+        }
+
+        return Document.DecodeImage(PngWriter.Encode(pixels.Width, pixels.Height, straight));
+    }
+
+    /// <summary>Whether the video is from another origin than the document and was not asked for with a crossorigin attribute.</summary>
+    private bool VideoTainted(ScriptNode video) =>
+        video.GetAttribute("crossorigin") is null && _media.TryGetValue(video, out var state) && state.Session is not null
+        && OriginOf(Uri.TryCreate(state.CurrentSrc, UriKind.Absolute, out var resource) ? resource : null) is { } resourceOrigin
+        && !string.Equals(resourceOrigin, OriginOf(video.OwnerDocument.BaseUri), StringComparison.Ordinal);
 
     private MediaState MediaStateOf(ScriptNode node)
     {

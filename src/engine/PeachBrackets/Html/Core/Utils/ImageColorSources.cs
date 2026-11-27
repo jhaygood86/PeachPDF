@@ -190,6 +190,41 @@ internal static class ImageColorSources
     /// <summary>The image as stored, before its recorded orientation was applied (<c>imageOrientation: "none"</c>); the image itself when it was not turned.</summary>
     public static PeachDrawing.Core.Image Unoriented(PeachDrawing.Core.Image image) => Raws.TryGetValue(image, out var raw) ? raw : image;
 
+    /// <summary>
+    /// Straight RGBA bytes in a space other than sRGB, converted into Display P3 as floats (colors outside it are kept, as values below 0 or above 1), for
+    /// a picture a script draws on a canvas of any space.
+    /// </summary>
+    public static float[]? ToDisplayP3(byte[] straightRgba, int width, int height, PeachBrackets.Media.MediaColorSpace from)
+    {
+        if (width < 1 || height < 1 || straightRgba.Length < width * height * 4)
+            return null;
+
+        try
+        {
+            using var source = PeachImage.Image.Create(width, height, PeachImage.PixelFormat.Rgba32);
+            straightRgba.AsSpan(0, width * height * 4).CopyTo(source.PixelMemory.Span);
+            var named = from switch
+            {
+                PeachBrackets.Media.MediaColorSpace.DisplayP3 => PeachImage.NamedColorSpace.DisplayP3,
+                PeachBrackets.Media.MediaColorSpace.Rec2020 => PeachImage.NamedColorSpace.Rec2020,
+                _ => PeachImage.NamedColorSpace.Srgb,
+            };
+
+            using var converted = source.ConvertColorSpace(PeachImage.NamedColorSpace.DisplayP3, new PeachImage.ColorConversionOptions
+            {
+                SourceColorSpace = named,
+                TargetPixelFormat = PeachImage.PixelFormat.RgbaF32,
+                GamutHandling = PeachImage.GamutHandling.Preserve,
+            });
+
+            return MemoryMarshal.Cast<byte, float>(converted.PixelMemory.Span).ToArray();
+        }
+        catch (Exception ex) when (ex is NotSupportedException or InvalidOperationException or ArgumentException or PeachImage.IccProfileException)
+        {
+            return null;
+        }
+    }
+
     /// <summary>Whether the image came from a file that declares a space other than sRGB.</summary>
     public static bool Has(PeachDrawing.Core.Image image) => Sources.TryGetValue(image, out var source) && source.OtherSpace;
 

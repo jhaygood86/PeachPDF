@@ -206,6 +206,8 @@ internal sealed partial class ScriptRuntime
 
                 return OriginOf(Uri.TryCreate(state.CurrentSource, UriKind.Absolute, out var resource) ? resource : null) is { } resourceOrigin
                     && !string.Equals(resourceOrigin, OriginOf(image.OwnerDocument.BaseUri), StringComparison.Ordinal);
+            case NodeObject { Node: { Kind: ScriptNodeKind.Element } video } when IsVideo(video):
+                return VideoTainted(video);
             default:
                 return false;
         }

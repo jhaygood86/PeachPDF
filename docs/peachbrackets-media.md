@@ -47,7 +47,8 @@ pictures:
 * `AcquireFrame()` returns the picture at the current position. Asked again before the picture changes, it returns a frame with the same
   `MediaFrame.Time`; the document paints only when the time changes.
 * A `MediaFrame` is a lease: dispose it, and the provider may reuse what the picture is made of. The picture is upright and in RGB, with the stream's
-  rotation, matrix and range already applied by the decoder.
+  rotation, matrix and range already applied by the decoder. `MediaFrame.ColorSpace` (`Srgb` by default, `DisplayP3`, `Rec2020`) says which RGB space
+  the pixels are in; a canvas converts from it.
 
 The sound is the provider's: the document never sees audio samples.
 
@@ -71,6 +72,12 @@ can play, chosen by its `type` through `CanPlayType`) opens a session, and the e
 * A provider's state is read on the virtual clock, not when the provider changes it: while anything is playing or loading a timer, every 20 ms of script time,
   tells each session the time and turns what changed into events. Use `MediaProviderOptions.DeterministicClock` for sessions that play by that clock, so the
   position a script reads is the same on every machine.
+* **Canvas sources.** A `video` with a picture is a source for `drawImage`, `createPattern` and `createImageBitmap`: the picture the script's session shows at the
+  script's time now, at the size of the video (`videoWidth` by `videoHeight`). A video whose `readyState` is below `HAVE_CURRENT_DATA`, or that failed, draws nothing
+  (no error), has no pattern (`createPattern` returns `null`) and rejects `createImageBitmap` with `InvalidStateError`. The picture is copied when it is taken, and the
+  frame is given back at once, so a bitmap or a pattern keeps its picture while the video plays on. A picture in Display P3 or Rec. 2020 is converted into
+  the canvas's own space (colors outside the canvas gamut are clipped there, not before). A video from another origin than the document, asked for without a
+  `crossorigin` attribute, taints the canvas, so reading it back throws `SecurityError`; the server's CORS answer is not checked (as for images).
 * A script's session lives until its scripts are done; the document is then parsed again from what they left, and the video a viewer sees opens its own
   session. Playing state does not carry across.
 * Not supported: `srcObject` (always null), `captureStream`, text tracks, `webkitAudioDecodedByteCount`-style extensions, `<source>` fallback to a later source

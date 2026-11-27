@@ -7,6 +7,29 @@ namespace PeachBrackets.Scripting.Tests;
 /// <summary>The <c>audio</c> and <c>video</c> element API over a media provider, on the script's virtual clock.</summary>
 public class MediaElementTests
 {
+    /// <summary>A picture of one color.</summary>
+    internal sealed class SolidImage(int width, int height, (byte R, byte G, byte B) color) : Image
+    {
+        public override double Width => width;
+
+        public override double Height => height;
+
+        public override bool Interpolate { get; set; }
+
+        public override void Dispose()
+        {
+        }
+
+        public override PixelBuffer? GetPixels()
+        {
+            var pixels = new byte[width * height * 4];
+            for (var i = 0; i < pixels.Length; i += 4)
+                (pixels[i], pixels[i + 1], pixels[i + 2], pixels[i + 3]) = (color.R, color.G, color.B, 255);
+
+            return new PixelBuffer(width, height, pixels);
+        }
+    }
+
     /// <summary>A session that plays by the clock the document gives it, as a deterministic provider's does.</summary>
     internal sealed class FakeSession(double duration, int width, int height, MediaKind kind) : IMediaSession
     {
@@ -20,6 +43,15 @@ public class MediaElementTests
         public int DisposedOrder { get; private set; }
 
         public MediaReadyState Ready { get; set; } = MediaReadyState.EnoughData;
+
+        /// <summary>The color of the picture at a position.</summary>
+        public Func<TimeSpan, (byte R, byte G, byte B)> Color { get; set; } = _ => (255, 0, 0);
+
+        public MediaColorSpace Space { get; set; }
+
+        public int FramesLeased { get; private set; }
+
+        public int FramesReleased { get; private set; }
 
         public MediaKind Kind => kind;
 
@@ -88,7 +120,11 @@ public class MediaElementTests
             _last = documentTime;
         }
 
-        public MediaFrame? AcquireFrame() => null;
+        public MediaFrame? AcquireFrame()
+        {
+            FramesLeased++;
+            return new MediaFrame(new SolidImage(width, height, Color(Position)), Position, () => FramesReleased++) { ColorSpace = Space };
+        }
 
         public ValueTask<MediaFrame?> AcquireFrameAtAsync(TimeSpan position, CancellationToken cancellationToken = default) => new((MediaFrame?)null);
 
@@ -105,6 +141,10 @@ public class MediaElementTests
 
         public List<FakeSession> Sessions { get; } = [];
 
+        public Func<TimeSpan, (byte R, byte G, byte B)> Color { get; set; } = _ => (255, 0, 0);
+
+        public MediaColorSpace Space { get; set; }
+
         public string CanPlayType(string mimeType) => mimeType.StartsWith("video/webm", StringComparison.OrdinalIgnoreCase) ? "probably" : mimeType.StartsWith("video/ogg", StringComparison.OrdinalIgnoreCase) ? "maybe" : string.Empty;
 
         public ValueTask<IMediaSession?> OpenAsync(MediaRequest request, CancellationToken cancellationToken = default)
@@ -113,13 +153,13 @@ public class MediaElementTests
             if (request.Address.AbsolutePath.EndsWith(".bad", StringComparison.Ordinal))
                 return new ValueTask<IMediaSession?>((IMediaSession?)null);
 
-            var session = new FakeSession(request.Address.AbsolutePath.Contains("short", StringComparison.Ordinal) ? 2 : duration, 40, 20, request.Kind);
+            var session = new FakeSession(request.Address.AbsolutePath.Contains("short", StringComparison.Ordinal) ? 2 : duration, 40, 20, request.Kind) { Color = Color, Space = Space };
             Sessions.Add(session);
             return new ValueTask<IMediaSession?>(session);
         }
     }
 
-    private static async Task<(List<string> Log, HtmlDocument Document)> RunAsync(string body, IMediaProvider? provider)
+    internal static async Task<(List<string> Log, HtmlDocument Document)> RunAsync(string body, IMediaProvider? provider)
     {
         var logger = new CollectingLogger();
         var host = new JintScriptHost(new JintScriptOptions { Logger = logger });

@@ -79,6 +79,19 @@ public enum MediaChange
     Error = 64,
 }
 
+/// <summary>The RGB color space the pictures of a video are in, once the provider has applied the stream's matrix and range.</summary>
+public enum MediaColorSpace
+{
+    /// <summary>sRGB: Rec. 709 primaries and the sRGB transfer function (what an ordinary video is taken to be).</summary>
+    Srgb,
+
+    /// <summary>Display P3: DCI-P3 primaries with a D65 white and the sRGB transfer function.</summary>
+    DisplayP3,
+
+    /// <summary>Rec. 2020 primaries with the BT.709/BT.2020 transfer function.</summary>
+    Rec2020,
+}
+
 /// <summary>What a <see cref="IMediaSession.Changed"/> notification says changed.</summary>
 public sealed class MediaChangedEventArgs(MediaChange changes) : EventArgs
 {
