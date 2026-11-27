@@ -216,3 +216,9 @@
 - `webappapis` flapped between 960 and 961 because Jint's `Atomics.waitAsync` times out on the real clock: whether a 10 ms wait had resolved by the time the page's virtual timers ran depended on machine speed (alone it passed, in the module run under load it
   sometimes did not). `AtomicsScripts` wraps it at startup: the engine is asked with no timeout, and the timeout is a virtual `setTimeout` that resolves `"timed-out"`. A timed-out waiter stays in the engine's waiter list (a later `Atomics.notify` count includes it).
   Two full runs of every module are now identical. A floor is only trustworthy if the module count is deterministic; before adding a module or a test to a floor, run it twice.
+
+## A flaky test that looked like ContainerQuery: PaintStatisticsTests
+- `ContainerQueryLayoutIntegrationTests` did not flake: its `CssBox.Id` race was fixed in August (an `AsyncLocal` counter), and eight and more full Engine runs were clean. The flaky one was
+  `PaintStatisticsTests.APaint_ReportsHowMuchOfThePageItEnteredAndHowLongItTook`: `PaintStatistics` kept its counters in process-wide statics and `Report` zeroed them with `Interlocked.Exchange`, so a paint on another test's thread
+  reported first and this paint's line said `pageFragments=0`. The counters are `[ThreadStatic]` now (a page is painted by one thread from `Start` to `Report`) and `Start` zeroes them. Eight runs of the Engine suite, three of Scripting
+  and two of PeachPDF.Tests were clean after it (one in five failed before).
