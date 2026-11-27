@@ -2,6 +2,10 @@
 	<Import Project="..\..\Version.props" />
 	<Import Project="..\..\ApiReference.props" />
 	<PropertyGroup>
+		<!-- The Windows legs add the Windows provider; a program targeting plain net10.0 is served by GStreamer alone, and an app that targets Windows
+		     gets the Windows assembly of this package at run time whatever the library that references it was built for. -->
+		<TargetFrameworks>net10.0;net11.0</TargetFrameworks>
+		<TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('Windows'))">$(TargetFrameworks);net10.0-windows10.0.19041.0;net11.0-windows10.0.19041.0</TargetFrameworks>
 		<AssemblyName>PeachBrackets.Media.Platform</AssemblyName>
 		<RootNamespace>PeachBrackets.Media.Platform</RootNamespace>
 		<PackageId>PeachBrackets.Media.Platform</PackageId>
@@ -29,10 +33,15 @@
 		<IsTrimmable>true</IsTrimmable>
 		<EnableTrimAnalyzer>true</EnableTrimAnalyzer>
 		<IsAotCompatible>true</IsAotCompatible>
+		<!-- The Windows legs reference Win2D through the Windows provider; the application supplies its native binary. -->
+		<Win2DWarnNoPlatform>false</Win2DWarnNoPlatform>
 	</PropertyGroup>
 	<ItemGroup>
 		<ProjectReference Include="..\PeachBrackets\PeachBrackets.csproj" />
 		<ProjectReference Include="..\PeachBrackets.Media.GStreamer\PeachBrackets.Media.GStreamer.csproj" />
+	</ItemGroup>
+	<ItemGroup Condition="$(TargetFramework.Contains('-windows'))">
+		<ProjectReference Include="..\PeachBrackets.Media.Windows\PeachBrackets.Media.Windows.csproj" />
 	</ItemGroup>
 	<ItemGroup>
 		<InternalsVisibleTo Include="PeachBrackets.Media.Platform.Tests" />

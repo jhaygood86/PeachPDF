@@ -84,6 +84,24 @@ without it, or without the plugin for a codec, `CanPlayType` answers `""` for wh
 * **Not done.** Rotation tags are not applied; a stream that only starts to play after more data arrives is not a case, since the file is complete before
   playback; `PlaybackRate` in real time seeks (no pitch correction).
 
+## The Windows provider
+
+`PeachBrackets.Media.Windows` (`WindowsMediaProvider`, Windows only) plays through `Windows.Media.Playback.MediaPlayer`, so it plays what the machine has codecs for:
+H.264, HEVC, AAC, MP3 and WAV on a stock Windows, and WebM, VP9, AV1 and Ogg where their Store extensions are installed. `CanPlayType` answers from
+`CodecQuery` and the byte-stream handlers Media Foundation has registered, so a codec or container that is not installed answers "no".
+
+* **Pictures stay on the GPU.** The player is a frame server (`IsVideoFrameServerEnabled`): each picture it serves is copied with `CopyFrameToVideoSurface`
+  into a `CanvasRenderTarget` on the document's `Win2dRenderContext.Device` and wrapped with `Win2dRenderContext.WrapBitmap`, so a Win2D canvas draws it
+  without a copy or a read back. With a render context that is not a `Win2dRenderContext`, the session plays sound and has no pictures (`PlatformMediaProvider`
+  sends such a document to GStreamer when it is installed).
+* **Deterministic.** With `MediaProviderOptions.DeterministicClock` the player stays paused and the position is the document's; a picture is the one the
+  player serves after a seek to that position. The first picture a paused player serves on opening is an empty one, so the session seeks away and back
+  before it is handed over.
+* **Frame server limits.** A picture larger than 576 lines needs a hardware device (on the software device a hosted runner has, the frame never
+  comes), and Media Foundation decodes a picture of 576 lines or fewer with its own Rec. 601 handling whatever the stream is tagged, so the colors of a
+  small H.264 clip are a little off a browser's.
+* **The WinUI view** sets it by default (`HtmlView.MediaProvider`).
+
 ## One provider for the platform
 
 `PeachBrackets.Media.Platform` has one call, `PlatformMediaProvider.Create(options)`, that returns the provider for the operating system the program runs

@@ -142,6 +142,7 @@ PeachDrawing.Win2D.Win2dLinkOptions : sealed class
   property ISet<String> AllowedSchemes { get; init; }
 PeachDrawing.Win2D.Win2dRenderContext : class
   ctor(CanvasDevice device = null, Win2dTextEngine textEngine = PeachDrawing, Win2dImageCodec imageCodec = Auto, FontSet fontSet = null)
+  method Image WrapBitmap(CanvasBitmap bitmap, Boolean ownsBitmap = False)
   method ValueTask AddFont(Stream stream, String fontFamilyName)
   method ValueTask AddFont(Stream stream, String fontFamilyName, FontFaceDescriptors descriptors, IReadOnlyList<RuneInterval> unicodeRanges = null)
   method Void SyncFonts()

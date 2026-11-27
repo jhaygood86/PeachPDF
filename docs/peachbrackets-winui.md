@@ -58,6 +58,7 @@ when the control is resized, so it reflows the way a web page does. It is laid o
 | `UserStyleSheet`, `DocumentMargin` | A style sheet applied before the document's own, and the space left around the document (none by default). |
 | `AnimationsEnabled` | Plays CSS animations, transitions and animated images (GIF, WebP); off by default and always off when Windows' animation effects are. See [Animations](#animations). |
 | `AllowNetworkAccess`, `DocumentBaseUri` | Whether `http`/`https` resources may be fetched (off by default; `data:` URIs and files always load), and the address the document's relative references resolve against (set it when the HTML is a page you fetched yourself). See [Images, style sheets and fonts](#images-style-sheets-and-fonts). |
+| `MediaProvider` | What plays the document's `audio` and `video`: [`WindowsMediaProvider`](peachbrackets-media.md#the-windows-provider) by default (Media Foundation; each picture is copied into a bitmap on the view's Win2D device and drawn from there, with no read back). Assign another provider, or `null` for no media. It applies to documents loaded afterwards. |
 | `FontSet` | The fonts the view resolves families from; the shared [`HtmlViewFonts`](#fonts) set unless you give it another. |
 | `DocumentLoaded`, `DocumentFailed` | A document has laid out, or could not be loaded. |
 | `LinkClicked` | Raised before a link is followed; set `Cancel` to handle it yourself. |

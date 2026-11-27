@@ -25,3 +25,4 @@ naming discipline, clean-room process, the register below kept current with ever
 | `MediaProviderOptions.DeterministicClock` | Ours: the session follows the document's clock; for tests. |
 | `AcquireFrame` / `AcquireFrameAtAsync` | Ours: the picture is a lease the caller disposes. |
 | `Update(TimeSpan documentTime)` | Ours: how a deterministic session follows the document's clock. |
+| `GStreamerMediaProvider`, `WindowsMediaProvider`, `PlatformMediaProvider` | The provider over GStreamer, over Windows Media Foundation, and the one call that picks one for the OS | Ours: `<Backend><Base>` as `Win2dCanvas`/`PdfCanvas`; `IsAvailable` says whether the platform has it. Not `MediaPlayer`/`MediaPlayerElement`/`AVPlayer`. |

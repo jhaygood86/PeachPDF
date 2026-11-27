@@ -7,12 +7,15 @@ using System.Numerics;
 namespace PeachDrawing.Win2D;
 
 /// <summary>
-/// An <see cref="Image"/> that is a bitmap on the graphics device: a snapshot of an <see cref="OffscreenSurface"/>, drawn from the device without a read back.
+/// An <see cref="Image"/> that is a bitmap on the graphics device: a snapshot of an <see cref="OffscreenSurface"/>, or a bitmap a caller made on the device
+/// (see <c>Win2dRenderContext.WrapBitmap</c>), drawn from the device without a read back.
 /// </summary>
 internal sealed class Win2dBitmapImage : PeachDrawing.Core.Image
 {
     private readonly Win2dResourceCounts _counts;
-    private CanvasRenderTarget? _target;
+    private readonly bool _wrapped;
+    private readonly bool _ownsBitmap;
+    private CanvasBitmap? _target;
 
     public Win2dBitmapImage(CanvasRenderTarget target, int width, int height, Win2dResourceCounts counts)
     {
@@ -20,6 +23,19 @@ internal sealed class Win2dBitmapImage : PeachDrawing.Core.Image
         Width = width;
         Height = height;
         _counts = counts;
+        _ownsBitmap = true;
+    }
+
+    /// <summary>A bitmap the caller made; it is disposed with the image only when <paramref name="ownsBitmap"/>.</summary>
+    public Win2dBitmapImage(CanvasBitmap bitmap, bool ownsBitmap, Win2dResourceCounts counts)
+    {
+        _target = bitmap;
+        Width = bitmap.SizeInPixels.Width;
+        Height = bitmap.SizeInPixels.Height;
+        _counts = counts;
+        _wrapped = true;
+        _ownsBitmap = ownsBitmap;
+        counts.WrappedBitmap(1);
     }
 
     public override double Width { get; }
@@ -37,9 +53,14 @@ internal sealed class Win2dBitmapImage : PeachDrawing.Core.Image
         if (_target is null)
             return;
 
-        _target.Dispose();
+        if (_ownsBitmap)
+            _target.Dispose();
+
         _target = null;
-        _counts.OffscreenTarget(-1);
+        if (_wrapped)
+            _counts.WrappedBitmap(-1);
+        else
+            _counts.OffscreenTarget(-1);
     }
 }
 

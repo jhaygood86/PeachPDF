@@ -5,6 +5,8 @@ using Microsoft.UI.Input;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
+using PeachBrackets.Media;
+using PeachBrackets.Media.Windows;
 using PeachBrackets.Updates;
 using PeachDrawing.Core;
 using PeachDrawing.Win2D;
@@ -185,6 +187,24 @@ public sealed partial class HtmlView : UserControl
                 _context.TextRendering = value;
                 _canvas.Invalidate();
             }
+        }
+    }
+
+    private IMediaProvider? _mediaProvider;
+    private bool _mediaProviderSet;
+
+    /// <summary>
+    /// What plays the document's <c>audio</c> and <c>video</c>. The default is <see cref="WindowsMediaProvider"/>: Windows Media Foundation, with each picture
+    /// copied into a bitmap on this view's device and drawn from there. Assign another provider to play through it, or <see langword="null"/> for no media
+    /// (a video then shows its poster). It applies to documents loaded after it is set.
+    /// </summary>
+    public IMediaProvider? MediaProvider
+    {
+        get => _mediaProviderSet ? _mediaProvider : _mediaProvider ??= new WindowsMediaProvider();
+        set
+        {
+            _mediaProvider = value;
+            _mediaProviderSet = true;
         }
     }
 
@@ -606,6 +626,7 @@ public sealed partial class HtmlView : UserControl
         DevicePixelRatio = CurrentDevicePixelRatio(),
         AnimationsEnabled = PlaysAnimations,
         Preferences = PlaysAnimations ? new UserPreferences { ReducedMotion = false } : null,
+        MediaProvider = MediaProvider,
     };
 
     private static InputCapabilities DetectInput()

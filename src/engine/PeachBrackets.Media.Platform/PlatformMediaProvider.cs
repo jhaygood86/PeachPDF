@@ -1,5 +1,7 @@
 using PeachBrackets.Media.GStreamer;
 using System;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace PeachBrackets.Media.Platform;
 
@@ -38,7 +40,12 @@ public static class PlatformMediaProvider
         // Each branch is where that platform's own provider is tried first once it exists; GStreamer is what is left when it is absent.
         switch (kind)
         {
+#if WINDOWS
             case PlatformKind.Windows:
+                return WindowsRouted.Create(options);
+#else
+            case PlatformKind.Windows:
+#endif
             case PlatformKind.Apple:
             case PlatformKind.Android:
             case PlatformKind.Other:
@@ -47,3 +54,36 @@ public static class PlatformMediaProvider
         }
     }
 }
+
+#if WINDOWS
+/// <summary>
+/// Windows Media Foundation for a document drawn with Win2D, whose bitmaps the player's frames are copied into on the document's own device; GStreamer, when it is
+/// installed, for a document drawn any other way (a raster or PDF context has no device to serve frames to).
+/// </summary>
+internal sealed class WindowsRouted : IMediaProvider
+{
+    private readonly IMediaProvider _windows;
+    private readonly IMediaProvider? _fallback;
+
+    private WindowsRouted(IMediaProvider windows, IMediaProvider? fallback)
+    {
+        _windows = windows;
+        _fallback = fallback;
+    }
+
+    public static IMediaProvider? Create(MediaProviderOptions? options)
+    {
+        var fallback = GStreamerMediaProvider.IsAvailable ? new GStreamerMediaProvider(options) : null;
+        return PeachBrackets.Media.Windows.WindowsMediaProvider.IsAvailable ? new WindowsRouted(new PeachBrackets.Media.Windows.WindowsMediaProvider(options), fallback) : fallback;
+    }
+
+    public string CanPlayType(string mimeType)
+    {
+        var windows = _windows.CanPlayType(mimeType);
+        return windows.Length > 0 ? windows : _fallback?.CanPlayType(mimeType) ?? "";
+    }
+
+    public ValueTask<IMediaSession?> OpenAsync(MediaRequest request, CancellationToken cancellationToken = default) =>
+        request.RenderContext is PeachDrawing.Win2D.Win2dRenderContext || _fallback is null ? _windows.OpenAsync(request, cancellationToken) : _fallback.OpenAsync(request, cancellationToken);
+}
+#endif

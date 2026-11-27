@@ -28,6 +28,7 @@ surface, mirroring `PdfComposer`/`SvgComposer`. Do **not** reuse a Win2D name (`
 | `Win2dTextRendering` (`Outline`, `Grayscale`, `Lcd`) | How `PeachDrawing`-engine text becomes pixels; `Win2dRenderContext.TextRendering`/`LcdBgrStripes` read and set it | Ours; each value names the result (an outline fill, grayscale coverage, per-stripe LCD coverage) |
 | `Win2dImageCodec` (`Auto`, `PeachImage`, `Native`) | Which decoder turns an encoded image into pixels; `Win2dRenderContext.ImageCodec`/`FallbackToPeachImage` read and set it (`SkiaImageCodec` is the same switch) | Ours; each value names the decoder |
 | `Win2dLinkMap`, `Win2dLink`, `Win2dLinkOptions`, `Win2dLinkActivatingEventArgs`, `ILinkLauncher` | The links a page recorded, finding the one under a point, and opening it with the system's handler | Ours; `HitTest`/`TryActivateAsync`/`TryGetDestination` name what they do; `LinkActivating`/`Cancel` follow the .NET event idiom |
+| `Win2dRenderContext.WrapBitmap` | An `Image` over a bitmap a caller made on the context's device (a video frame), drawn without a copy | Ours; `Wrap` says the bitmap is borrowed unless `ownsBitmap` |
 | `Win2dDeviceLostException` | Reading a drawing whose device was lost | Ours |
 
 Everything else in the assembly is `internal` (`Win2dImage`, `Win2dTileImage`, `Win2dGraphicsPath`, `Win2dFont`, `DirectWriteFont`,

@@ -18,6 +18,7 @@ internal sealed class Win2dResourceCounts
     private int _clipSurfaces;
     private int _retainedLayers;
     private int _offscreenTargets;
+    private int _wrappedBitmaps;
 
     /// <summary>Clip layers (<c>CanvasActiveLayer</c>) pushed and not yet popped.</summary>
     public int Layers => Volatile.Read(ref _layers);
@@ -49,6 +50,11 @@ internal sealed class Win2dResourceCounts
     /// <summary>Render targets of offscreen surfaces and of their snapshots, made and not yet disposed.</summary>
     public int OffscreenTargets => Volatile.Read(ref _offscreenTargets);
 
+    /// <summary>Images made over a caller's bitmap (<c>Win2dRenderContext.WrapBitmap</c>) and not yet disposed.</summary>
+    public int WrappedBitmaps => Volatile.Read(ref _wrappedBitmaps);
+
+    public void WrappedBitmap(int delta) => Interlocked.Add(ref _wrappedBitmaps, delta);
+
     public void OffscreenTarget(int delta) => Interlocked.Add(ref _offscreenTargets, delta);
 
     public void RetainedLayer(int delta) => Interlocked.Add(ref _retainedLayers, delta);
@@ -70,5 +76,5 @@ internal sealed class Win2dResourceCounts
     public void Session(int delta) => Interlocked.Add(ref _sessions, delta);
 
     /// <summary>The sum of everything still alive.</summary>
-    public int Total => Layers + Tiles + CommandLists + Sessions + NativeTargets + ClipSurfaces + RetainedLayers + OffscreenTargets;
+    public int Total => Layers + Tiles + CommandLists + Sessions + NativeTargets + ClipSurfaces + RetainedLayers + OffscreenTargets + WrappedBitmaps;
 }
