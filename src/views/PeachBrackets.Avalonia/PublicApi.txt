@@ -60,6 +60,7 @@ PeachBrackets.Avalonia.HtmlView : sealed class
   property FontSet FontSet { get; set; }
   property HtmlDocument Document { get; }
   property HtmlViewScrollMode ScrollMode { get; set; }
+  property IMediaProvider MediaProvider { get; set; }
   property InputCapabilities Input { get; set; }
   property SkiaTextRendering TextRendering { get; set; }
   property String Html { get; set; }

@@ -26,6 +26,10 @@ internal sealed class WindowsMediaSession : IMediaSession
     private readonly bool _deterministic;
     private readonly MediaPlayer _player;
     private readonly Win2dRenderContext? _context;
+
+    // The device the pictures are made on: the document's own when it is drawn with Win2D (so a canvas draws them with no read back), else a shared one of ours,
+    // and each picture is then read back into pixels any canvas can draw.
+    private readonly CanvasDevice _device;
     private readonly object _gate = new();
 
     // The seek SeekAndWait is waiting on: where to, and what to signal when the picture served after it has been copied.
@@ -54,6 +58,7 @@ internal sealed class WindowsMediaSession : IMediaSession
         _deterministic = options.DeterministicClock;
         _player = player;
         _context = request.RenderContext as Win2dRenderContext;
+        _device = _context?.Device ?? CanvasDevice.GetSharedDevice();
     }
 
     public MediaKind Kind => _kind;
@@ -258,7 +263,7 @@ internal sealed class WindowsMediaSession : IMediaSession
 
     public MediaFrame? AcquireFrame()
     {
-        if (_disposed || _kind != MediaKind.Video || _context is null)
+        if (_disposed || _kind != MediaKind.Video)
             return null;
 
         if (_deterministic)
@@ -277,7 +282,7 @@ internal sealed class WindowsMediaSession : IMediaSession
 
     public ValueTask<MediaFrame?> AcquireFrameAtAsync(TimeSpan position, CancellationToken cancellationToken = default)
     {
-        if (_disposed || _kind != MediaKind.Video || _context is null)
+        if (_disposed || _kind != MediaKind.Video)
             return new ValueTask<MediaFrame?>((MediaFrame?)null);
 
         position = Clamp(position);
@@ -319,7 +324,7 @@ internal sealed class WindowsMediaSession : IMediaSession
 
         _width = (int)session.NaturalVideoWidth;
         _height = (int)session.NaturalVideoHeight;
-        if (_kind == MediaKind.Video && _width > 0 && _context is not null)
+        if (_kind == MediaKind.Video && _width > 0)
         {
             // The paused player serves one picture when it opens, and it is an empty one: the first real picture comes with a seek. Go some way in (to a different
             // picture, or the player serves nothing) and come back, so that the first frame is there, and is the first frame, when the session is handed over.
@@ -368,7 +373,7 @@ internal sealed class WindowsMediaSession : IMediaSession
 
     private void CopyFrame(MediaPlayer sender, TimeSpan? start)
     {
-        if (_disposed || _context is null)
+        if (_disposed)
             return;
 
         var width = _width > 0 ? _width : (int)sender.PlaybackSession.NaturalVideoWidth;
@@ -378,7 +383,7 @@ internal sealed class WindowsMediaSession : IMediaSession
 
         try
         {
-            var target = new CanvasRenderTarget(_context.Device, width, height, 96);
+            var target = new CanvasRenderTarget(_device, width, height, 96);
             sender.CopyFrameToVideoSurface(target);
             var frame = new FrameTarget(target);
             TaskCompletionSource? waiter = null;
@@ -420,16 +425,32 @@ internal sealed class WindowsMediaSession : IMediaSession
             frame?.Lease();
         }
 
-        if (frame is null || _context is null)
+        if (frame is null)
             return null;
 
-        var image = _context.WrapBitmap(frame.Target);
+        var image = _context is not null ? _context.WrapBitmap(frame.Target) : ReadBack(frame.Target);
         return new MediaFrame(image, start, () =>
         {
             image.Dispose();
             lock (_gate)
                 frame.Release();
         });
+    }
+
+    // A picture for a canvas of another backend: the bitmap's pixels (premultiplied BGRA) as premultiplied RGBA.
+    private static PeachDrawing.Core.Image ReadBack(CanvasRenderTarget target)
+    {
+        var bgra = target.GetPixelBytes();
+        var rgba = new byte[bgra.Length];
+        for (var i = 0; i + 3 < bgra.Length; i += 4)
+        {
+            rgba[i] = bgra[i + 2];
+            rgba[i + 1] = bgra[i + 1];
+            rgba[i + 2] = bgra[i];
+            rgba[i + 3] = bgra[i + 3];
+        }
+
+        return new PixelImage((int)target.SizeInPixels.Width, (int)target.SizeInPixels.Height, rgba);
     }
 
     private void OnEnded(MediaPlayer sender, object args)

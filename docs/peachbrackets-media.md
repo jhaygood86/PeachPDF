@@ -92,8 +92,8 @@ H.264, HEVC, AAC, MP3 and WAV on a stock Windows, and WebM, VP9, AV1 and Ogg whe
 
 * **Pictures stay on the GPU.** The player is a frame server (`IsVideoFrameServerEnabled`): each picture it serves is copied with `CopyFrameToVideoSurface`
   into a `CanvasRenderTarget` on the document's `Win2dRenderContext.Device` and wrapped with `Win2dRenderContext.WrapBitmap`, so a Win2D canvas draws it
-  without a copy or a read back. With a render context that is not a `Win2dRenderContext`, the session plays sound and has no pictures (`PlatformMediaProvider`
-  sends such a document to GStreamer when it is installed).
+  without a copy or a read back. With a render context that is not a `Win2dRenderContext` (an Avalonia or Skia host, a raster or PDF context), each picture is made on a shared device of the
+  provider's own and read back into pixels the canvas draws: a copy, where a Win2D document has none.
 * **Deterministic.** With `MediaProviderOptions.DeterministicClock` the player stays paused and the position is the document's; a picture is the one the
   player serves after a seek to that position. The first picture a paused player serves on opening is an empty one, so the session seeks away and back
   before it is handed over.
@@ -129,9 +129,18 @@ iOS reference assemblies from a Windows machine and nothing more.
 ## One provider for the platform
 
 `PeachBrackets.Media.Platform` has one call, `PlatformMediaProvider.Create(options)`, that returns the provider for the operating system the program runs
-on (null when it has no decoder, so a document shows its posters). Today every platform is served by the GStreamer provider; the Media Foundation,
-AVFoundation and Android providers take over their platforms as their packages land. The WPT runner uses it with `DeterministicClock`, so the
-audio and video tests run on a real decoder on a developer's machine and on the CI image alike.
+on, or null when it has none (a document then shows its posters). What it picks depends on what the **consuming program was built for**, because the package has
+one assembly per target framework:
+
+| The program targets | `Create` returns |
+|---|---|
+| `net10.0-windows10.0.19041.0` (or net11) | the Windows provider, else GStreamer when installed |
+| `net10.0-android` (package built with `-p:PeachIncludeAndroid=true`) | the Android provider |
+| plain `net10.0` / `net11.0`, on any OS | GStreamer when installed (the Apple provider is not wired in yet) |
+
+So an Avalonia desktop app that targets `net10.0-windows` gets Media Foundation, and one that targets plain `net10.0` gets GStreamer if it is installed; either can set
+`HtmlView.MediaProvider` itself. The WPT runner (plain `net10.0`) uses GStreamer with `DeterministicClock`, so the audio and video tests run on a real decoder on a
+developer's machine and on the CI image alike.
 
 ## Script media elements
 

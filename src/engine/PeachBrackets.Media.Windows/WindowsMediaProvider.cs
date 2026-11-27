@@ -10,8 +10,7 @@ namespace PeachBrackets.Media.Windows;
 /// Plays the audio and video of a document through Windows Media Foundation (<c>Windows.Media.Playback.MediaPlayer</c>): whatever codecs the machine has,
 /// which on a stock Windows is H.264, HEVC, AAC, MP3 and WAV, and WebM, VP9, AV1 and Ogg where their extensions are installed. A video's pictures are served
 /// by the player's frame server into Win2D bitmaps on the device the document draws with, so drawing one reads nothing back. Set it in
-/// <see cref="HtmlDocumentOptions.MediaProvider"/> of a document whose render context is a <see cref="Win2dRenderContext"/>; with any other context it plays
-/// sound and gives no pictures.
+/// <see cref="HtmlDocumentOptions.MediaProvider"/> of a document whose render context is a <see cref="Win2dRenderContext"/>; with any other context each picture is read back from a shared device into pixels any canvas can draw.
 /// </summary>
 public sealed class WindowsMediaProvider : IMediaProvider
 {

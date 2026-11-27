@@ -214,7 +214,7 @@ public class WindowsProviderTests
     }
 
     [Fact]
-    public async Task OnWindows_ADocumentDrawnAnyOtherWay_StillPlaysSound_AndHasNoPicture()
+    public async Task OnWindows_ADocumentDrawnAnyOtherWay_GetsItsPicturesAsPixels()
     {
         var provider = PlatformMediaProvider.Create(new MediaProviderOptions { DeterministicClock = true });
         Assert.NotNull(provider);
@@ -226,7 +226,12 @@ public class WindowsProviderTests
 
         Assert.NotNull(session);
         Assert.InRange(session.Duration!.Value.TotalSeconds, 2.8, 3.3);
-        Assert.Null(session.AcquireFrame());
+
+        // A picture read back from the shared device, as pixels any canvas can draw.
+        using var frame = session.AcquireFrame();
+        Assert.NotNull(frame);
+        Assert.Equal((64, 48), (frame.Image.Width, frame.Image.Height));
+        Assert.Equal(64 * 48 * 4, frame.Image.GetPixels()!.Value.PremultipliedRgba.Length);
     }
 
     [Fact]
