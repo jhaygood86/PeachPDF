@@ -117,6 +117,24 @@ public sealed class HtmlView : UIScrollView, IHtmlViewHost, IUIKeyInput, IUIGest
     // Named as on the other views; it hides UIView's static switch for UIKit's own view animations, which this property has nothing to do with.
     public new bool AnimationsEnabled { get; set; }
 
+    private PeachBrackets.Media.IMediaProvider? _mediaProvider;
+    private bool _mediaProviderSet;
+
+    /// <summary>
+    /// What plays the document's <c>audio</c> and <c>video</c>. The default is <see cref="PeachBrackets.Media.Apple.AppleMediaProvider"/>: AVFoundation, with a video's
+    /// pictures read from the player's video output. Assign another provider to play through it, or <see langword="null"/> for no media (a video then shows its
+    /// poster). It applies to documents loaded after it is set.
+    /// </summary>
+    public PeachBrackets.Media.IMediaProvider? MediaProvider
+    {
+        get => _mediaProviderSet ? _mediaProvider : _mediaProvider ??= new PeachBrackets.Media.Apple.AppleMediaProvider();
+        set
+        {
+            _mediaProvider = value;
+            _mediaProviderSet = true;
+        }
+    }
+
     /// <summary>
     /// Raised, on the main thread, with the animation and transition events that happened since the last frame, in order. The animations themselves can be
     /// looked at and controlled through <c>Document.GetAnimations()</c>.
@@ -644,6 +662,8 @@ public sealed class HtmlView : UIScrollView, IHtmlViewHost, IUIKeyInput, IUIGest
     Uri? IHtmlViewHost.DocumentBaseUri => _documentBaseUri;
 
     bool IHtmlViewHost.AnimationsEnabled => AnimationsEnabled;
+
+    PeachBrackets.Media.IMediaProvider? IHtmlViewHost.MediaProvider => MediaProvider;
 
     bool IHtmlViewHost.SystemAllowsMotion => !UIAccessibility.IsReduceMotionEnabled;
 

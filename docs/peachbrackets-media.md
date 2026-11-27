@@ -102,6 +102,30 @@ H.264, HEVC, AAC, MP3 and WAV on a stock Windows, and WebM, VP9, AV1 and Ogg whe
   small H.264 clip are a little off a browser's.
 * **The WinUI view** sets it by default (`HtmlView.MediaProvider`).
 
+## The Android provider
+
+`PeachBrackets.Media.Android` (`AndroidMediaProvider`, API 24+) plays through the platform `MediaPlayer`, so it plays what the device has decoders for; `CanPlayType`
+answers from `MediaCodecList` (decoders only).
+
+* **Playing by the player's clock.** The player renders into an `ImageReader` (YUV, because a decoder's surface refuses an RGBA reader); the newest image is the
+  picture, converted to RGBA with Rec. 601 below 577 lines and Rec. 709 above and turned by the stream's rotation (the player leaves it to the viewer).
+  The reader holds only the images it was made for, so each is **closed** after it is read: disposing the binding does not close it.
+* **Deterministic.** There is no player: the position is the document's, and a picture is what `MediaMetadataRetriever.GetFrameAtTime(position, Closest)` returns.
+* **Not zero-copy.** A picture is copied into pixels the backend uploads; handing the `HardwareBuffer` to Skia as a texture is not done.
+* **The Android view** sets it by default (`HtmlView.MediaProvider`). Verified on an emulator by `src/examples/PeachBrackets.Media.Android.Example`, a bare app that plays
+  two clips in both modes and logs `OK`/`FAIL` lines under the tag `PEACH_MEDIA`.
+
+## The Apple provider
+
+`PeachBrackets.Media.Apple` (`AppleMediaProvider`, macOS 11+ and iOS 15+) plays through AVFoundation. **Not yet run on a Mac or an iPhone**: it was type-checked against the
+iOS reference assemblies from a Windows machine and nothing more.
+
+* **Playing by the player's clock.** An `AVPlayer` with an `AVPlayerItemVideoOutput` (BGRA); `AcquireFrame` copies the buffer for the time now, if the output has a new one.
+* **Deterministic.** There is no player; a picture is what an `AVAssetImageGenerator` renders at exactly the position (zero tolerance, the track's transform applied), drawn
+  into an sRGB bitmap so the system does the color management.
+* **`CanPlayType`** asks `AVUrlAsset.AudiovisualMimeTypes` for the container and accepts the codecs every Apple platform has (H.264, HEVC, AAC, MP3, FLAC, ALAC, AC-3, E-AC-3).
+* **The AppKit and UIKit views** set it by default (`HtmlView.MediaProvider`).
+
 ## One provider for the platform
 
 `PeachBrackets.Media.Platform` has one call, `PlatformMediaProvider.Create(options)`, that returns the provider for the operating system the program runs

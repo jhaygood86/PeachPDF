@@ -40,6 +40,7 @@
 		<ProjectReference Include="..\..\engine\PeachBrackets\PeachBrackets.csproj" />
 		<ProjectReference Include="..\..\drawing\PeachDrawing.Core\PeachDrawing.Core.csproj" />
 		<ProjectReference Include="..\..\drawing\PeachDrawing.CoreGraphics\PeachDrawing.CoreGraphics.csproj" />
+		<ProjectReference Include="..\..\engine\PeachBrackets.Media.Apple\PeachBrackets.Media.Apple.csproj" />
 	</ItemGroup>
 	<ItemGroup>
 		<None Include="..\..\..\LICENSE" Pack="true" PackagePath="\" />

@@ -31,6 +31,9 @@ internal interface IHtmlViewHost
     /// <summary>Whether the host asked for the document to play its animations.</summary>
     bool AnimationsEnabled { get; }
 
+    /// <summary>What plays the document's audio and video, or null for none.</summary>
+    PeachBrackets.Media.IMediaProvider? MediaProvider { get; }
+
     /// <summary>Whether the system lets things move: false when it asks for reduced motion.</summary>
     bool SystemAllowsMotion { get; }
 
@@ -340,6 +343,7 @@ internal sealed partial class HtmlViewEngine(IHtmlViewHost host) : IDisposable
             DevicePixelRatio = ImageScale.DevicePixelRatio(host.BackingScale),
         };
         ApplyAnimationOptions(options);
+        options.MediaProvider = host.MediaProvider;
         return options;
     }
 

@@ -1,0 +1,47 @@
+<Project Sdk="Microsoft.NET.Sdk">
+	<Import Project="..\..\Version.props" />
+	<Import Project="..\..\ApiReference.props" />
+	<PropertyGroup>
+		<!-- Apple-only: macOS and iOS. -->
+		<TargetFrameworks>net10.0-macos;net10.0-ios;net11.0-macos;net11.0-ios</TargetFrameworks>
+		<SupportedOSPlatformVersion Condition="$(TargetFramework.Contains('-ios'))">15.0</SupportedOSPlatformVersion>
+		<SupportedOSPlatformVersion Condition="$(TargetFramework.Contains('-macos'))">11.0</SupportedOSPlatformVersion>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<AssemblyName>PeachBrackets.Media.Apple</AssemblyName>
+		<RootNamespace>PeachBrackets.Media.Apple</RootNamespace>
+		<PackageId>PeachBrackets.Media.Apple</PackageId>
+		<Description>An Apple media provider for PeachBrackets: the audio and video of an HTML document play through AVFoundation on macOS and iOS, with a video's pictures read from an AVPlayerItemVideoOutput (playing) or an AVAssetImageGenerator (by the document's clock), for the AppKit and UIKit HtmlView and any other Apple host.</Description>
+		<PackageTags>html;video;audio;media;macos;ios;avfoundation</PackageTags>
+		<PackageIcon>peach.png</PackageIcon>
+		<PackageReadmeFile>README.md</PackageReadmeFile>
+		<PackageProjectUrl>https://peachpdf.net/</PackageProjectUrl>
+		<RepositoryUrl>https://github.com/jhaygood86/PeachPDF.git</RepositoryUrl>
+		<PackageLicenseExpression>BSD-3-Clause</PackageLicenseExpression>
+		<IncludeSymbols>true</IncludeSymbols>
+		<GenerateDocumentationFile>true</GenerateDocumentationFile>
+		<WarningsAsErrors>$(WarningsAsErrors);CS1591</WarningsAsErrors>
+		<GeneratePackageOnBuild>True</GeneratePackageOnBuild>
+		<GenerateAssemblyConfigurationAttribute>false</GenerateAssemblyConfigurationAttribute>
+		<GenerateAssemblyCompanyAttribute>false</GenerateAssemblyCompanyAttribute>
+		<GenerateAssemblyProductAttribute>false</GenerateAssemblyProductAttribute>
+		<GenerateAssemblyInformationalVersionAttribute>false</GenerateAssemblyInformationalVersionAttribute>
+		<GenerateAssemblyFileVersionAttribute>false</GenerateAssemblyFileVersionAttribute>
+		<GenerateAssemblyTitleVersionAttribute>false</GenerateAssemblyTitleVersionAttribute>
+		<GenerateAssemblyTitleAttribute>false</GenerateAssemblyTitleAttribute>
+		<GenerateAssemblyVersionAttribute>false</GenerateAssemblyVersionAttribute>
+		<RunCodeAnalysis>false</RunCodeAnalysis>
+		
+	</PropertyGroup>
+	<ItemGroup>
+		<ProjectReference Include="..\PeachBrackets\PeachBrackets.csproj" />
+		<ProjectReference Include="..\..\drawing\PeachDrawing.Core\PeachDrawing.Core.csproj" />
+	</ItemGroup>
+	<ItemGroup>
+		<InternalsVisibleTo Include="PeachBrackets.Media.Apple.Tests" />
+	</ItemGroup>
+	<ItemGroup>
+		<None Include="..\..\..\LICENSE" Pack="true" PackagePath="\" />
+		<None Include="..\..\..\docs\assets\img\peach.png" Pack="true" PackagePath="\" />
+		<None Include="README.md" Pack="true" PackagePath="\" />
+	</ItemGroup>
+</Project>

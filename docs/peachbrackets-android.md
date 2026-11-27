@@ -35,6 +35,7 @@ fits the system windows (`SetFitsSystemWindows(true)`) or apply the insets yours
 | Member | |
 |---|---|
 | `Html` | What to show. |
+| `MediaProvider` | What plays the document's `audio` and `video`: [`AndroidMediaProvider`](peachbrackets-media.md#the-android-provider) by default (the platform `MediaPlayer`). Assign another provider, or `null` for no media. It applies to documents loaded afterwards. |
 | `PageBackground`, `AllowNetworkAccess`, `AnimationsEnabled` | The color behind the page; whether `http`/`https` resources may be loaded (off by default); whether CSS animations, transitions and animated images play (off by default; see [Animations](#animations)). The constructor `HtmlView(context, useGpu: false)` draws on the CPU instead of an OpenGL surface. |
 | `FocusedNode`, `FocusChanged`, `AnimationEvents` | The part of the page with the keyboard focus, and when it changes; the animation events of each frame. |
 | `Input` | The pointing devices the `hover` / `pointer` media queries report. By default the view asks the system which are attached (a touch screen is coarse and cannot hover; a mouse, trackpad or stylus is fine and can). |
