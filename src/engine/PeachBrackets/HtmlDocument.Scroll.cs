@@ -164,6 +164,9 @@ public sealed partial class HtmlDocument
             return null;
 
         var box = PeachBrackets.Html.Utils.DomUtils.ResolveGeometryBox(found);
+        if (_container.HideCrossOriginImages && _container.Root is { } documentRoot)
+            await RenderSameOriginFramesAsync(documentRoot, found, makeSurface);
+
         _container.ProbeRenderRoot = found;
 
         // What is above the element is not in its picture: it keeps no background, border or shadow of its own while the picture is drawn.
@@ -213,6 +216,76 @@ public sealed partial class HtmlDocument
         }
 
         return (surface.CreateSnapshot(), width, height);
+    }
+
+    // A browsing context is not embedded in a page, but a picture of an element shows an iframe that is of the document's own origin (and is not sandboxed away from it) as the frame's
+    // page drawn at the frame's size: what is inside is then as readable to the script as the element it is in.
+    private async System.Threading.Tasks.ValueTask RenderSameOriginFramesAsync(CssBox box, CssBox within, Func<int, int, PeachDrawing.Core.OffscreenSurface?> makeSurface)
+    {
+        if (box is CssBoxFrame { HtmlTag: { } tag } frame && IsInside(frame, within)
+            && tag.TryGetAttribute("src") is { Length: > 0 } src && !tag.HasAttribute("sandbox")
+            && PeachBrackets.Html.Utils.CommonUtils.ResolveAgainstDocumentBase(_container, src) is { IsAbsoluteUri: true } address
+            && _container.RenderContext.BaseUri is { IsAbsoluteUri: true } documentAddress
+            && address.Scheme is "http" or "https" && string.Equals(address.Scheme, documentAddress.Scheme, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(address.Host, documentAddress.Host, StringComparison.OrdinalIgnoreCase) && address.Port == documentAddress.Port)
+        {
+            try
+            {
+                var response = await _container.RenderContext.GetResourceStream(address);
+                var sandboxed = response?.ResponseHeaders is { } headers && headers.Any(h => h.Key.Equals("Content-Security-Policy", StringComparison.OrdinalIgnoreCase) && h.Value.Any(v => v.Contains("sandbox", StringComparison.OrdinalIgnoreCase)));
+                if (response?.ResourceStream is { } stream && !sandboxed)
+                {
+                    string html;
+                    using (var reader = new System.IO.StreamReader(stream))
+                        html = await reader.ReadToEndAsync();
+
+                    var rect = frame.Bounds;
+                    var (width, height) = (rect.Width / _unitsPerPoint / 0.75, rect.Height / _unitsPerPoint / 0.75);
+                    if (width >= 1 && height >= 1 && _options is { } options)
+                    {
+                        var frameOptions = options.CloneWithoutScripts();
+                        frameOptions.PageWidthPoints = width * 0.75;
+                        frameOptions.ViewportHeightPoints = height * 0.75;
+                        frameOptions.HideCrossOriginImages = true;
+                        using var inner = await LoadAsync("<base href=\"" + System.Net.WebUtility.HtmlEncode(address.AbsoluteUri) + "\"><style>html { min-height: 100vh }</style>" + html, _container.RenderContext, frameOptions);
+                        using var measuring = makeSurface(1, 1);
+                        if (measuring is not null)
+                        {
+                            await inner.LayoutAsync(measuring.Canvas);
+                            using var surface = makeSurface(Math.Max(1, (int)Math.Ceiling(width)), Math.Max(1, (int)Math.Ceiling(height)));
+                            if (surface is not null)
+                            {
+                                surface.Canvas.PushTransform(System.Numerics.Matrix3x2.CreateScale(1f / 0.75f));
+                                // The page's own background (what the body's propagates to) is part of what the frame shows, so the page is painted whole, clipped to the frame.
+                                surface.Canvas.PushClip(new Rect(0, 0, width * 0.75, height * 0.75));
+                                await inner.PaintPageAsync(0, surface.Canvas);
+                                surface.Canvas.PopClip();
+                                surface.Canvas.PopTransform();
+                                frame.ImageWord.Image = surface.CreateSnapshot();
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception ex) when (ex is not OutOfMemoryException and not PeachBrackets.Html.Utils.SynchronousOnlyViolationException)
+            {
+                // A frame that cannot be read is a frame that is not drawn.
+            }
+        }
+
+        foreach (var child in box.Boxes)
+            await RenderSameOriginFramesAsync(child, within, makeSurface);
+    }
+
+    private static bool IsInside(CssBox box, CssBox ancestor)
+    {
+        for (var current = box; current is not null; current = current.ParentBox)
+        {
+            if (ReferenceEquals(current, ancestor))
+                return true;
+        }
+
+        return false;
     }
 
     // The text runs that lie in the element that is the ordinal-th of the source, in the order they are in the document.

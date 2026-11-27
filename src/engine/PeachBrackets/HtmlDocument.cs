@@ -135,6 +135,7 @@ public sealed partial class HtmlDocument : IDisposable
             container.MeasuringCanvasFactory = options.MeasuringCanvasFactory;
             container.CanvasSurfaces = options.CanvasSurfaces;
             container.LayoutCanvasSubtrees = options.LayoutCanvasSubtrees;
+            container.HideCrossOriginImages = options.HideCrossOriginImages;
             container.MaxLayoutPasses = options.MaxLayoutPasses;
             if (options.ScriptHost is not null && options.MeasuringCanvasFactory is { } canvasFactory)
             {
@@ -143,6 +144,15 @@ public sealed partial class HtmlDocument : IDisposable
                 container.ScriptProbe = async markup =>
                 {
                     var probe = await LoadAsync(markup, renderContext, probeOptions);
+                    using var canvas = canvasFactory();
+                    await probe.LayoutAsync(canvas);
+                    return probe;
+                };
+                var renderOptions = probeOptions.CloneWithoutScripts();
+                renderOptions.HideCrossOriginImages = true;
+                container.ScriptRenderProbe = async markup =>
+                {
+                    var probe = await LoadAsync(markup, renderContext, renderOptions);
                     using var canvas = canvasFactory();
                     await probe.LayoutAsync(canvas);
                     return probe;

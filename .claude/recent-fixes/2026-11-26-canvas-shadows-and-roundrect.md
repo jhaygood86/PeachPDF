@@ -236,3 +236,16 @@
 - Tried and reverted: not spacing format controls (bidi overrides) by `letter-spacing`. The reference spaces them, and the DOM gives the control a 1.33 px box where the canvas gives none; that is the DOM engine's, and it is what the remaining
   directional-override subtests (12 per file) are about. Also open: `variationSelectors` (needs the color emoji font's VS16 width) and `complex-shaping` centering.
 - html-canvas 5327/6210; text/ 694 of 765.
+
+## Privacy: what a picture of an element may show
+- A picture of an element drawn for a script (`drawElementImage`, `captureElementImage`) must not show what the script could not read, which is every image of another origin than the document's. `ScriptDocument` has a second probe for drawing
+  (`RenderProbeFactory`, `RenderProbe()`; the first stays for layout reads, so a cross-origin image's size still counts in `getBoundingClientRect`), loaded with `HtmlDocumentOptions.HideCrossOriginImages`. In `ImageLoadHandler`,
+  the one place images of the engine are loaded (img, backgrounds, borders, masks, content: url(), picture, object/embed), a cross-origin address is still loaded and decoded, so layout knows its size, and then replaced by a transparent image
+  of the same size (`BlankPng`); an SVG source is replaced by a raster blank of its intrinsic size. Not loading it at all was tried first and was wrong: `::before { content: url(cross-origin) }` is no box at all without the image.
+- A same-origin, unsandboxed iframe is drawn: `RenderSameOriginFramesAsync` loads its document (a `<base>` and `min-height: 100vh` put in front, for the page's background), paints the whole page onto a surface of the frame's size
+  (scaled pt to px: a 0.75 where 1/0.75 belongs left the picture a quarter of the size) and gives it to the frame box as its image. A frame whose response has `Content-Security-Policy: sandbox`, or that has the `sandbox` attribute, is not drawn,
+  nor is a cross-origin one. The engine otherwise never draws an iframe's content.
+- Left: CORS-approved cross-origin images (`crossorigin` on the element is not known where the image loads), the filter-with-`feImage` family (CSS `filter: url()` on HTML elements, and `feImage` in SVG, are not drawn at all, same-origin included),
+  inline-SVG `<image>` elements (not drawn in a picture, same-origin included), `:visited` (it never matches here, so the unvisited-colors tests see the right colors but several fail for other reasons), nested tainted canvases, `::marker` images,
+  scrollbar thumbs, `shape-outside` images, and the `::before` iframe pages.
+- html-canvas 5349/6210; the privacy directory 52 of 95.

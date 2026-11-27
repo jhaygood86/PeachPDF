@@ -296,6 +296,9 @@ public sealed class HtmlDocumentOptions
     /// </summary>
     internal bool LayoutCanvasSubtrees { get; set; }
 
+    /// <summary>Whether images from another origin than the document's are left out (a picture of an element for a script).</summary>
+    internal bool HideCrossOriginImages { get; set; }
+
     internal HtmlDocumentOptions CloneWithoutScripts()
     {
         var copy = (HtmlDocumentOptions)MemberwiseClone();

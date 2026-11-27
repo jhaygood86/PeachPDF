@@ -1591,6 +1591,12 @@ namespace PeachBrackets.Html
         /// <summary>Loads and lays out a copy of the document as it is, for the layout a script reads; null when the host gave no way to measure.</summary>
         internal Func<string, ValueTask<HtmlDocument>>? ScriptProbe { get; set; }
 
+        /// <summary>The probe a picture of an element is drawn from (see <see cref="HideCrossOriginImages"/>).</summary>
+        internal Func<string, ValueTask<HtmlDocument>>? ScriptRenderProbe { get; set; }
+
+        /// <summary>Whether images of another origin than the document's are not loaded: a picture of an element drawn for a script must not show what the script could not read.</summary>
+        internal bool HideCrossOriginImages { get; set; }
+
         /// <summary>The host that runs the document's scripts, or null when scripting is off.</summary>
         internal IScriptHost? ScriptHost { get; set; }
 
@@ -1674,6 +1680,7 @@ namespace PeachBrackets.Html
             var root = HtmlParser.ParseDocument(htmlSource, out var mode, document: true, scripting: true);
             var document = new ScriptDocument(this, root, DocumentModeOverride ?? mode);
             document.Probe = ScriptProbe;
+            document.RenderProbeFactory = ScriptRenderProbe;
             document.Apis = ScriptApis;
 
             EndScriptSession();

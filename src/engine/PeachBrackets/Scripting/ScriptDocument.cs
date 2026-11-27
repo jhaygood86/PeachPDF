@@ -118,6 +118,12 @@ public sealed class ScriptDocument
 
     internal Func<string, ValueTask<HtmlDocument>>? Probe { get; set; }
 
+    internal Func<string, ValueTask<HtmlDocument>>? RenderProbeFactory { get; set; }
+
+    private HtmlDocument? _renderProbe;
+    private int _renderProbeVersion = -1;
+    private readonly List<(string Markup, HtmlDocument Document)> _renderProbes = [];
+
     private HtmlDocument? _probe;
     private int _probeVersion = -1;
 
@@ -169,6 +175,49 @@ public sealed class ScriptDocument
         return _probe;
     }
 
+    // The document as it is now, laid out for drawing from: what a picture of an element may show is less than what a script may measure (it leaves out images from other origins).
+    private HtmlDocument? RenderProbe()
+    {
+        if (RenderProbeFactory is null)
+            return null;
+
+        if (_renderProbe is null || _renderProbeVersion != Version)
+        {
+            var markup = Serialize();
+            var cached = _renderProbes.FindIndex(p => string.Equals(p.Markup, markup, StringComparison.Ordinal));
+            if (cached >= 0)
+            {
+                _renderProbe = _renderProbes[cached].Document;
+                var entry = _renderProbes[cached];
+                _renderProbes.RemoveAt(cached);
+                _renderProbes.Add(entry);
+            }
+            else
+            {
+                _renderProbe = null;
+                try
+                {
+                    // The scripts run inside a load that is already asynchronous; the probe's own load is of an in-memory string.
+                    _renderProbe = RenderProbeFactory(markup).AsTask().GetAwaiter().GetResult();
+                    _renderProbes.Add((markup, _renderProbe));
+                    while (_renderProbes.Count > MaxProbes)
+                    {
+                        _renderProbes[0].Document.Dispose();
+                        _renderProbes.RemoveAt(0);
+                    }
+                }
+                catch (HtmlRenderException)
+                {
+                    _renderProbe = null;
+                }
+            }
+
+            _renderProbeVersion = Version;
+        }
+
+        return _renderProbe;
+    }
+
     /// <summary>Whether the host gave a way to lay the document out, so <see cref="GetLayoutBox"/> and <see cref="GetComputedValue"/> can answer.</summary>
     public bool CanMeasure => Probe is not null;
 
@@ -211,7 +260,7 @@ public sealed class ScriptDocument
     {
         ArgumentNullException.ThrowIfNull(element);
         var ordinal = OrdinalOf(element);
-        if (ordinal < 0 || CurrentProbe() is not { } probe || !_container.CanvasSurfaces && _container.MeasuringCanvasFactory is null)
+        if (ordinal < 0 || RenderProbe() is not { } probe || !_container.CanvasSurfaces && _container.MeasuringCanvasFactory is null)
             return null;
 
         if (_picturesVersion != Version)
@@ -287,6 +336,11 @@ public sealed class ScriptDocument
 
     internal void ReleaseProbe()
     {
+        foreach (var (_, document) in _renderProbes)
+            document.Dispose();
+
+        _renderProbes.Clear();
+        _renderProbe = null;
         foreach (var (_, document) in _probes)
             document.Dispose();
 

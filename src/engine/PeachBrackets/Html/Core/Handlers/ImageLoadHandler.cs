@@ -305,6 +305,14 @@ namespace PeachBrackets.Html.Handlers
                 {
                     await LoadImageFromStream(_imageStream, _srcHintsSvg || contentTypeHintsSvg, source);
 
+                    // A picture drawn for a script may not show what the script could not read: an image of another origin keeps its size and shows nothing.
+                    if ((Image is not null || SvgDocument is not null) && _htmlContainer.HideCrossOriginImages && IsCrossOrigin(source))
+                    {
+                        var (blankWidth, blankHeight) = Image is not null ? ((int)Image.Width, (int)Image.Height) : ((int)(SvgDocument?.Width ?? SvgDocument?.ViewBox?.Width ?? 150), (int)(SvgDocument?.Height ?? SvgDocument?.ViewBox?.Height ?? 150));
+                        SvgDocument = null;
+                        Image = _htmlContainer.RenderContext.ImageFromStream(new MemoryStream(BlankPng.Create(blankWidth, blankHeight)));
+                    }
+
                     if (Image is not null || SvgDocument is not null)
                     {
                         _htmlContainer.CacheResolvedImageResource(cacheKey, Image, SvgDocument);
@@ -313,6 +321,17 @@ namespace PeachBrackets.Html.Handlers
             }
 
             ImageLoadComplete();
+        }
+
+        // Whether an address is of another origin than the document's (scheme, host and port). data:, blob: and file: addresses are not.
+        private bool IsCrossOrigin(Uri source)
+        {
+            if (source.Scheme is not ("http" or "https") || _htmlContainer.RenderContext.BaseUri is not { IsAbsoluteUri: true } document || document.Scheme is not ("http" or "https"))
+                return false;
+
+            return !string.Equals(source.Scheme, document.Scheme, StringComparison.OrdinalIgnoreCase)
+                || !string.Equals(source.Host, document.Host, StringComparison.OrdinalIgnoreCase)
+                || source.Port != document.Port;
         }
 
         /// <summary>
