@@ -55,7 +55,7 @@ internal sealed partial class ScriptRuntime
         {
             // Requests the scripts have sent are answered before the clock moves on: they take no virtual time, and are delivered as a zero-delay timer.
             await DeliverRequestsAsync();
-            var workersMoved = await PumpWorkersAsync(NowMs);
+            var workersMoved = DeliverPortMessages() | await PumpWorkersAsync(NowMs);
             if (workersMoved)
                 continue;
 

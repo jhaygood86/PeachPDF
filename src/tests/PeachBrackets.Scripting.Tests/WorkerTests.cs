@@ -93,4 +93,24 @@ public class WorkerTests
 
         Assert.Equal(["IndexSizeError", "InvalidStateError", "ok 4"], log);
     }
+
+    [Fact]
+    public async Task APortTransferredToAWorker_StaysEntangledWithItsPeerInThePage_AndAcrossTwoWorkers()
+    {
+        var log = await LogAsync("""
+            var code = "var other; onmessage = function (e) { if (e.data.port) { other = e.data.port; other.onmessage = function (m) { postMessage('relay ' + m.data + ' ' + (m.ports.length)); }; other.postMessage('hello from ' + e.data.name); } };";
+            var url = 'data:text/javascript,' + encodeURIComponent(code);
+            var a = new Worker(url), b = new Worker(url);
+            var channel = new MessageChannel();
+            channel.port2.onmessage = function (m) { Log.info('page got ' + m.data); };
+            a.postMessage({ port: channel.port1, name: 'a' }, [channel.port1]);
+            var pair = new MessageChannel();
+            a.onmessage = function (e) { Log.info('a says ' + e.data); };
+            pair.port1.onmessage = function (m) { Log.info('pair ' + m.data); };
+            b.postMessage({ port: pair.port2, name: 'b' }, [pair.port2]);
+            """);
+
+        Assert.Contains("page got hello from a", log);
+        Assert.Contains("pair hello from b", log);
+    }
 }

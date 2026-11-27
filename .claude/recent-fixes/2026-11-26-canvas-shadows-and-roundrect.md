@@ -204,3 +204,10 @@
 - Not done, and why: `getContext('webgl')` (no WebGL; the worker tests that need one cannot pass), placeholder canvases keeping their size against `setAttribute('width')` (the layout probe sees attributes only), `MessagePort` transfer into a worker
   (ports are script objects of one engine; a port pair across engines needs a remote end), video and animated-image invalidation of a drawable canvas, JPEG/WebP encoding in `convertToBlob` (PeachImage).
 - html-canvas 5235/6210; floor 5225.
+
+## Phase 8, MessagePort across engines
+- A port end a message carries gets an id both engines hold (`net.portCreate`/`portAttach`/`portSend`, a static table of the two runtimes). The sender's record keeps its `peer` and gets `remote = id`, so it is a proxy: a message its
+  peer posts is encoded (`encodeTree`, the text of an already cloned value) and handed to the other engine, and what the other engine sends arrives at `portReceive` and is queued on the proxy's peer. The receiver makes a user port and a
+  proxy of its own the same way. Delivery is generic: a target that is itself remote is relayed on, so the two ports of one channel can each be in a different worker. What a port already held is sent ahead of what comes later; `close()` sends a marker.
+- Each engine's `_portInbox` is emptied by `DeliverPortMessages` in the page's loop (and in a worker's step), so it runs on the same virtual clock; `event.ports` of a worker message are the ports it carried.
+- Do not chase `webappapis` `atomics-wait-async` ("timeout in a EventTarget"): `Atomics.waitAsync` with a 10 ms timeout resolves on Jint's real clock, so it passes alone and fails under load; the module count flaps between 960 and 961.

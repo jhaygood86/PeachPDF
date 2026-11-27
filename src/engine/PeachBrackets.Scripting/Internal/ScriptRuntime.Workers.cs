@@ -114,6 +114,32 @@ internal sealed partial class ScriptRuntime
             return JsValue.Undefined;
         });
 
+        // Port ends in two engines: an end a message carries is one id both engines hold, and what one sends the other is given, in its next turn.
+        Js.Method(Engine, net, "portCreate", 0, (_, _) =>
+        {
+            var id = System.Threading.Interlocked.Increment(ref s_portCounter);
+            s_ports[id] = (this, null);
+            return Js.Num(id);
+        });
+        Js.Method(Engine, net, "portAttach", 1, (_, args) =>
+        {
+            var id = (long)TypeConverter.ToNumber(Js.Arg(args, 0));
+            if (s_ports.TryGetValue(id, out var ends))
+                s_ports[id] = (ends.First, this);
+
+            return JsValue.Undefined;
+        });
+        Js.Method(Engine, net, "portSend", 2, (_, args) =>
+        {
+            if (s_ports.TryGetValue((long)TypeConverter.ToNumber(Js.Arg(args, 0)), out var ends))
+            {
+                var other = ReferenceEquals(ends.First, this) ? ends.Second : ends.First;
+                other?._portInbox.Enqueue(((long)TypeConverter.ToNumber(Js.Arg(args, 0)), Js.AsText(Js.Arg(args, 1))));
+            }
+
+            return JsValue.Undefined;
+        });
+
         // What a message may carry that is not data: a picture (shared, as it cannot change) or the size of an OffscreenCanvas.
         Js.Method(Engine, net, "isHandleable", 1, (_, args) => Js.Bool(Js.Arg(args, 0) is BitmapObject or ElementImageObject || IsOffscreenCanvas(Js.Arg(args, 0))));
         Js.Method(Engine, net, "putHandle", 1, (_, args) =>
@@ -207,6 +233,24 @@ internal sealed partial class ScriptRuntime
             node.SetAttribute("height", "0");
             return OffscreenOf(fresh);
         });
+    }
+
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<long, (ScriptRuntime? First, ScriptRuntime? Second)> s_ports = new();
+    private static long s_portCounter;
+    private readonly Queue<(long Id, string Text)> _portInbox = new();
+
+    // Hands the messages other engines sent to the port ends this engine stands for; true when there were any.
+    private bool DeliverPortMessages()
+    {
+        var any = false;
+        while (_portInbox.Count > 0 && _workerCodec is not null)
+        {
+            var (id, text) = _portInbox.Dequeue();
+            Call(_workerCodec.Get("portReceive"), _workerCodec, Js.Num(id), Js.Str(text));
+            any = true;
+        }
+
+        return any;
     }
 
     private sealed record BitmapHandle(PeachDrawing.Core.Image Image, bool OriginClean);
@@ -319,7 +363,7 @@ internal sealed partial class ScriptRuntime
             {
                 for (var round = 0; round < 10_000 && !handle.Closed && !handle.Terminated; round++)
                 {
-                    var step = false;
+                    var step = child.DeliverPortMessages();
                     await child.DeliverRequestsAsync();
                     step |= await child.PumpWorkersAsync(until);
                     step |= child.RunDueTimers(until);

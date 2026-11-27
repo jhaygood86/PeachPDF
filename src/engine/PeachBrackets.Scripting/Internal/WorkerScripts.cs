@@ -13,7 +13,11 @@ internal static class WorkerScripts
             var workerById = new Map(), workerIds = new WeakMap();
             function encodeMessage(message, transferArg) {
                 var list = transferListOf(transferArg);
-                var cloned = serializeWithTransfer(message, list);
+                return encodeTree(serializeWithTransfer(message, list).value);
+            }
+            // The text of a value already cloned (what a port end in another engine is sent).
+            function encodeTree(clonedValue) {
+                var cloned = { value: clonedValue };
                 var ids = new Map(), next = 0;
                 function pairs(object) { return Object.keys(object).map(function (k) { return [k, enc(object[k])]; }); }
                 function enc(v) {
@@ -36,13 +40,25 @@ internal static class WorkerScripts
                     if (v instanceof DOMException) return { t: "de", id: id, n: v.name, m: v.message };
                     if (v instanceof Error) return { t: "er", id: id, n: v.name, m: Object.prototype.hasOwnProperty.call(v, "message") ? String(v.message) : null, st: typeof v.stack === "string" ? v.stack : null, c: Object.prototype.hasOwnProperty.call(v, "cause") ? enc(v.cause) : { t: "u" } };
                     if (Array.isArray(v)) return { t: "a", id: id, n: v.length, p: pairs(v) };
+                    if (portState.has(v)) {
+                        var port = portRecord(v);
+                        if (port.remote === undefined) {
+                            // The end moves to the other engine: what it already holds goes ahead of what comes later, and this one stands for it from now on.
+                            port.remote = net.portCreate();
+                            portRemote.set(port.remote, port);
+                            var waiting = port.queue; port.queue = [];
+                            waiting.forEach(function (item) { net.portSend(port.remote, encodeTree(item.data)); });
+                        }
+                        return { t: "p", id: id, pid: port.remote };
+                    }
                     if (net.isHandleable(v)) return { t: "h", id: id, h: net.putHandle(v) };
                     if (Object.prototype.toString.call(v) === "[object Object]") return { t: "o", id: id, p: pairs(v) };
                     throw dataCloneError("An object could not be cloned");
                 }
                 return JSON.stringify(enc(cloned.value));
             }
-            function decodeMessage(text) {
+            var portRemote = new Map();
+            function decodeMessage(text, ports) {
                 var memory = new Map();
                 function dec(n) {
                     if (n === null || typeof n !== "object") return n;
@@ -78,6 +94,16 @@ internal static class WorkerScripts
                         case "a": result = new Array(n.n); memory.set(n.id, result); n.p.forEach(function (p) { result[p[0]] = dec(p[1]); }); return result;
                         case "o": result = {}; memory.set(n.id, result); n.p.forEach(function (p) { result[p[0]] = dec(p[1]); }); return result;
                         case "h": result = net.takeHandle(n.h); break;
+                        case "p": {
+                            // A port end of another engine: this one is entangled with a proxy that sends what it is given there.
+                            net.portAttach(n.pid);
+                            var here = newPortRecord(), proxy = newPortRecord();
+                            here.peer = proxy; proxy.peer = here; proxy.remote = n.pid;
+                            portRemote.set(n.pid, proxy);
+                            result = wrapPort(here);
+                            if (ports) ports.push(result);
+                            break;
+                        }
                         default: throw new DOMException("A message could not be deserialized", "DataCloneError");
                     }
                     memory.set(n.id, result);
@@ -143,12 +169,26 @@ internal static class WorkerScripts
                 toWorkerObject: function (id, kind, text, a, b, c) {
                     var worker = workerById.get(id);
                     if (!worker) return;
-                    if (kind === "message") worker.dispatchEvent(new MessageEvent("message", { data: decodeMessage(text), origin: "", lastEventId: "", source: null, ports: [] }));
+                    if (kind === "message") { var ports = []; var data = decodeMessage(text, ports); worker.dispatchEvent(new MessageEvent("message", { data: data, origin: "", lastEventId: "", source: null, ports: Object.freeze(ports) })); }
                     else if (kind === "messageerror") worker.dispatchEvent(new MessageEvent("messageerror", { data: null, origin: "", lastEventId: "", source: null, ports: [] }));
                     else worker.dispatchEvent(new ErrorEvent("error", { message: text, filename: a, lineno: b, colno: c, error: null, cancelable: true }));
                 },
                 toWorkerGlobal: function (text) {
-                    global.dispatchEvent(new MessageEvent("message", { data: decodeMessage(text), origin: "", lastEventId: "", source: null, ports: [] }));
+                    var ports = [], data = decodeMessage(text, ports);
+                    global.dispatchEvent(new MessageEvent("message", { data: data, origin: "", lastEventId: "", source: null, ports: Object.freeze(ports) }));
+                },
+                // A message for a port end this engine stands for: it goes to the end entangled with it, or on to the next engine.
+                portReceive: function (pid, text) {
+                    var proxy = portRemote.get(pid);
+                    if (!proxy) return;
+                    var target = proxy.peer;
+                    if (!target) return;
+                    if (target.remote !== undefined) { net.portSend(target.remote, text); return; }
+                    if (text === "\u0000close") { target.peer = null; return; }
+                    if (target.closed) return;
+                    var ports = [], data = decodeMessage(text, ports);
+                    target.queue.push({ data: data, ports: Object.freeze(ports) });
+                    schedulePort(target);
                 },
                 setup: function (name) {
                     function WorkerGlobalScope() { throw new TypeError("Illegal constructor"); }

@@ -190,8 +190,8 @@ Text is shaped with the font's own metrics: `font` is the CSS shorthand (read an
 Messages are structured clones: values, collections, buffers, `Blob`/`File`, `ImageData`, errors, and, in the transfer list, an `ArrayBuffer`, an `ImageBitmap`, an `OffscreenCanvas`
 (one that has no context) or an `ElementImage`; an OffscreenCanvas made by `transferControlToOffscreen` keeps working on the canvas element's children from the worker, whose geometry
 changes reach the page as an `elementgeometryupdate` event. A worker is played on the page's own virtual clock, so a run is deterministic and uses no threads, and it ends with the page
-(`terminate()` and `close()` stop one sooner). A script error in a worker reaches the page as an `error` event on the `Worker`. Module workers, shared workers, service workers and
-`MessagePort` transfer into a worker are not provided.
+(`terminate()` and `close()` stop one sooner). A script error in a worker reaches the page as an `error` event on the `Worker`. A `MessagePort` can be transferred into a worker (or between workers) and stays entangled with its peer wherever that is, so a channel can join the page and any number of workers.
+Module workers, shared workers and service workers are not provided.
 
 ## Limits
 
