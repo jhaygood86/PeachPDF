@@ -449,4 +449,27 @@ public class HtmlInCanvasTests
 
         Assert.Equal(["0,0,255,255 0,0,0,0"], log);
     }
+
+    [Fact]
+    public async Task ATransferredOffscreenCanvas_ChangesGeometryInATask_AndTellsTheCanvasWhichElements()
+    {
+        var log = await LogAsync("", Setup.Replace("kg = k.getContext('2d');", "kg = null;") + """
+            paint().then(function () {
+                var offscreen = k.transferControlToOffscreen();
+                var og = offscreen.getContext('2d');
+                var image = k.captureElementImage(kid);
+                var standalone = name(function () { new OffscreenCanvas(10, 10).getContext('2d').drawElementImage(kid, 0, 0); });
+                k.addEventListener('elementgeometryupdate', function (event) {
+                    var t = k.getElementTransform(kid);
+                    Log.info([standalone, event instanceof ElementGeometryUpdateEvent, Object.isFrozen(event.elements), event.elements.length, event.elements[0] === kid, t.e, t.f].join(' '));
+                }, { once: true });
+                og.drawElementImage(image, 3, 4);
+                offscreen.updateElementGeometry(image, { canvasTransform: new DOMMatrix().translate(7, 8) });
+                var before = k.getElementTransform(kid).e;
+                Log.info('before ' + before);
+            });
+            """);
+
+        Assert.Equal(["before 0", "InvalidStateError true true 1 true 7 8"], log);
+    }
 }

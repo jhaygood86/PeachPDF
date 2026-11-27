@@ -434,24 +434,23 @@ internal sealed partial class ScriptRuntime
     }
 
     // updateElementGeometry(element or ElementImage, {canvasTransform, preserveHitTestOrder}).
-    private void ApplyGeometry(ScriptNode canvas, JsValue source, JsValue options)
+    private void ApplyGeometry(ScriptNode canvas, JsValue source, JsValue options, bool queued = false)
     {
         var (state, element) = RequireDrawableChild(canvas, source, needsPaint: false);
         var preserveOrder = options is ObjectInstance order && order.Get("preserveHitTestOrder") is { } keep && !keep.IsUndefined() && TypeConverter.ToBoolean(keep);
-        if (!state.Transforms.ContainsKey(element))
-            state.Transforms[element] = (Identity16, true);
 
-        Touch(state, element, preserveOrder);
+        (double[] Values, bool Is2D)? transform = null;
         if (options is ObjectInstance init && init.Get("canvasTransform") is ObjectInstance matrix)
         {
             var values = Engine.Evaluate("(function (m) { return Array.from(m.toFloat64Array()); })").Call(JsValue.Undefined, [matrix]);
             var list = (ObjectInstance)values;
             var numbers = Enumerable.Range(0, (int)TypeConverter.ToNumber(list.Get("length"))).Select(i => TypeConverter.ToNumber(list.Get(i.ToString(CultureInfo.InvariantCulture)))).ToArray();
             if (numbers.Length == 16)
-                state.Transforms[element] = (numbers, TypeConverter.ToBoolean(matrix.Get("is2D")));
+                transform = (numbers, TypeConverter.ToBoolean(matrix.Get("is2D")));
         }
 
         // canvasClip is a rectangle (negative sides taken as the other corner); left out it keeps the clip the element has.
+        (double X, double Y, double Width, double Height)? clipRect = null;
         if (options is ObjectInstance clipInit && clipInit.Get("canvasClip") is ObjectInstance clip)
         {
             double Side(string name) => clip.Get(name) is { } value && !value.IsUndefined() ? TypeConverter.ToNumber(value) : 0;
@@ -459,9 +458,80 @@ internal sealed partial class ScriptRuntime
             (cx, cw) = cw < 0 ? (cx + cw, -cw) : (cx, cw);
             (cy, ch) = ch < 0 ? (cy + ch, -ch) : (cy, ch);
             if (double.IsFinite(cx + cy + cw + ch))
-                state.Clips[element] = (cx, cy, cw, ch);
+                clipRect = (cx, cy, cw, ch);
         }
+
+        CommitGeometry(canvas, element, queued, () =>
+        {
+            if (!state.Transforms.ContainsKey(element))
+                state.Transforms[element] = (Identity16, true);
+
+            Touch(state, element, preserveOrder);
+            if (transform is { } given)
+                state.Transforms[element] = given;
+
+            if (clipRect is { } rect)
+                state.Clips[element] = rect;
+        });
     }
+
+    private void ClearGeometry(ScriptNode canvas, JsValue source, bool queued)
+    {
+        var (state, element) = RequireDrawableChild(canvas, source, needsPaint: false);
+        CommitGeometry(canvas, element, queued, () =>
+        {
+            state.Transforms.Remove(element);
+            state.Clips.Remove(element);
+            state.HitOrder.Remove(element);
+        });
+    }
+
+    // The geometry of an element changes at once when its canvas is asked on the page; an OffscreenCanvas made of the canvas asks from another thread, so its changes are
+    // taken in order in a task of their own, which then tells the canvas which elements they were of (elementgeometryupdate).
+    private void CommitGeometry(ScriptNode canvas, ScriptNode element, bool queued, Action apply)
+    {
+        if (!queued)
+        {
+            apply();
+            return;
+        }
+
+        if (!_geometryQueue.TryGetValue(canvas, out var pending))
+        {
+            _geometryQueue[canvas] = pending = [];
+            AddTimer(Js.Function(Engine, "elementGeometryUpdate", 0, (_, _) =>
+            {
+                var batch = _geometryQueue[canvas];
+                _geometryQueue.Remove(canvas);
+                var elements = new List<ScriptNode>();
+                foreach (var (touched, change) in batch)
+                {
+                    change();
+                    if (!elements.Contains(touched))
+                        elements.Add(touched);
+                }
+
+                var ev = CreateEvent("elementgeometryupdate", bubbles: false, cancelable: false);
+                ev.Prototype = ElementGeometryUpdateEventPrototype;
+                var array = Js.Array(Engine, elements.Select(n => (JsValue)Wrap(n)).ToArray());
+                Engine.Evaluate("Object.freeze").Call(JsValue.Undefined, [array]);
+                ev.FastSetProperty("elements", new PropertyDescriptor(array, PropertyFlag.Configurable | PropertyFlag.Enumerable));
+                DispatchEvent(Wrap(canvas), ev);
+                return JsValue.Undefined;
+            }), 0, [], repeat: false, frame: false);
+        }
+
+        pending.Add((element, apply));
+    }
+
+    private readonly Dictionary<ScriptNode, List<(ScriptNode Element, Action Apply)>> _geometryQueue = [];
+    private ObjectInstance ElementGeometryUpdateEventPrototype = null!;
+
+    // The canvas element an OffscreenCanvas was made of by transferControlToOffscreen; InvalidStateError for one that was not.
+    private ScriptNode PlaceholderOfOffscreen(ScriptNode offscreen) =>
+        _offscreenPlaceholders.TryGetValue(offscreen, out var placeholder) ? placeholder : throw DomError("InvalidStateError", "The OffscreenCanvas was not made from a canvas element.");
+
+    private readonly Dictionary<ScriptNode, ScriptNode> _offscreenPlaceholders = [];
 
     private void InstallHtmlInCanvas()
     {
@@ -473,6 +543,10 @@ internal sealed partial class ScriptRuntime
             (self as ElementImageObject ?? throw TypeError("Illegal invocation")).Closed = true;
             return JsValue.Undefined;
         });
+
+        ElementGeometryUpdateEventPrototype = new JsObject(Engine) { Prototype = EventPrototype };
+        Tag(ElementGeometryUpdateEventPrototype, "ElementGeometryUpdateEvent");
+        Define(Engine.Global, "ElementGeometryUpdateEvent", Js.Constructor(Engine, "ElementGeometryUpdateEvent", ElementGeometryUpdateEventPrototype, 1, (_, _, _) => throw TypeError("Illegal constructor")));
 
         CanvasPaintEventPrototype = new JsObject(Engine) { Prototype = EventPrototype };
         Tag(CanvasPaintEventPrototype, "CanvasPaintEvent");
@@ -534,36 +608,29 @@ internal sealed partial class ScriptRuntime
         });
         Js.StrictMethod(Engine, canvasElement, "clearElementGeometry", 1, (self, args) =>
         {
-            var (state, element) = RequireDrawableChild(Sn(self), Js.Arg(args, 0), needsPaint: false);
-            state.Transforms.Remove(element);
-            state.Clips.Remove(element);
-            state.HitOrder.Remove(element);
+            ClearGeometry(Sn(self), Js.Arg(args, 0), queued: false);
             return JsValue.Undefined;
         });
 
         // An OffscreenCanvas works with the ElementImage of a canvas of the page: its size, and the geometry (and so the place in the hit testing order) of the element it came from.
-        Js.StrictMethod(Engine, OffscreenPrototype, "getElementImageDefaultSize", 1, (_, args) =>
+        Js.StrictMethod(Engine, OffscreenPrototype, "getElementImageDefaultSize", 1, (self, args) =>
         {
+            var placeholder = PlaceholderOfOffscreen(Sn(self));
             var image = Js.Arg(args, 0) as ElementImageObject ?? throw DomError("InvalidStateError", "An OffscreenCanvas answers for an ElementImage only.");
-            ElementOf(image, out ElementImageObject? unused);
+            RequireDrawableChild(placeholder, image, needsPaint: false);
             var size = Js.NewObject(Engine);
             size.FastSetProperty("width", new PropertyDescriptor(Js.Num(image.Width), PropertyFlag.ConfigurableEnumerableWritable));
             size.FastSetProperty("height", new PropertyDescriptor(Js.Num(image.Height), PropertyFlag.ConfigurableEnumerableWritable));
             return size;
         });
-        Js.StrictMethod(Engine, OffscreenPrototype, "updateElementGeometry", 1, (_, args) =>
+        Js.StrictMethod(Engine, OffscreenPrototype, "updateElementGeometry", 1, (self, args) =>
         {
-            var image = Js.Arg(args, 0) as ElementImageObject ?? throw DomError("InvalidStateError", "An OffscreenCanvas updates the geometry of an ElementImage only.");
-            ApplyGeometry(image.Canvas, image, Js.Arg(args, 1));
+            ApplyGeometry(PlaceholderOfOffscreen(Sn(self)), Js.Arg(args, 0), Js.Arg(args, 1), queued: true);
             return JsValue.Undefined;
         });
-        Js.StrictMethod(Engine, OffscreenPrototype, "clearElementGeometry", 1, (_, args) =>
+        Js.StrictMethod(Engine, OffscreenPrototype, "clearElementGeometry", 1, (self, args) =>
         {
-            var image = Js.Arg(args, 0) as ElementImageObject ?? throw DomError("InvalidStateError", "An OffscreenCanvas clears the geometry of an ElementImage only.");
-            var (state, element) = RequireDrawableChild(image.Canvas, image, needsPaint: false);
-            state.Transforms.Remove(element);
-            state.Clips.Remove(element);
-            state.HitOrder.Remove(element);
+            ClearGeometry(PlaceholderOfOffscreen(Sn(self)), Js.Arg(args, 0), queued: true);
             return JsValue.Undefined;
         });
 
@@ -573,14 +640,10 @@ internal sealed partial class ScriptRuntime
             var context = Cx(self);
             var canvas = context.Canvas;
 
-            // An OffscreenCanvas draws the ElementImage of a canvas of the page (an element is only for the canvas it is a child of).
-            if (ReferenceEquals(context.Prototype, OffscreenContextPrototype))
-            {
-                if (Js.Arg(args, 0) is not ElementImageObject)
-                    throw DomError("InvalidStateError", "An OffscreenCanvas draws only an ElementImage.");
-
-                canvas = ((ElementImageObject)Js.Arg(args, 0)).Canvas;
-            }
+            // An OffscreenCanvas made of a canvas draws that canvas's children; the changes to their geometry are taken in a task of their own.
+            var queued = ReferenceEquals(context.Prototype, OffscreenContextPrototype);
+            if (queued)
+                canvas = PlaceholderOfOffscreen(canvas);
 
             var (state, element) = RequireDrawableChild(canvas, Js.Arg(args, 0), needsPaint: true);
             var painted = Js.Arg(args, 0) is ElementImageObject captured ? (captured.Width, captured.Height) : state.Painted[element];
@@ -617,18 +680,27 @@ internal sealed partial class ScriptRuntime
 
             var scaleX = dw / sw;
             var scaleY = dh / sh;
-            Touch(state, element, preserveOrder: false);
+            if (!queued)
+                Touch(state, element, preserveOrder: false);
+
             if (!preserve)
             {
-                // What was drawn is the source rectangle of the element, so that is what a pointer can find.
-                if (numbers.Length >= 6)
-                    state.Clips[element] = (sx, sy, sw, sh);
-                else
-                    state.Clips.Remove(element);
-
                 // The element's own space to the canvas: placed where it was drawn, then carried by the context's transform.
                 var drawn = new Affine2D(scaleX, 0, 0, scaleY, dx - sx * scaleX, dy - sy * scaleY) * context.Bitmap.State.Transform;
-                state.Transforms[element] = ([drawn.A, drawn.B, 0, 0, drawn.C, drawn.D, 0, 0, 0, 0, 1, 0, drawn.E, drawn.F, 0, 1], true);
+                var (source, clipped) = (new Rect(sx, sy, sw, sh), numbers.Length >= 6);
+                CommitGeometry(canvas, element, queued, () =>
+                {
+                    if (queued)
+                        Touch(state, element, preserveOrder: false);
+
+                    // What was drawn is the source rectangle of the element, so that is what a pointer can find.
+                    if (clipped)
+                        state.Clips[element] = (source.X, source.Y, source.Width, source.Height);
+                    else
+                        state.Clips.Remove(element);
+
+                    state.Transforms[element] = ([drawn.A, drawn.B, 0, 0, drawn.C, drawn.D, 0, 0, 0, 0, 1, 0, drawn.E, drawn.F, 0, 1], true);
+                });
             }
 
 
@@ -640,6 +712,7 @@ internal sealed partial class ScriptRuntime
             context.Bitmap.DrawImage(picture.Image, new Rect(sx, sy, sw, sh), new Rect(dx, dy, dw, dh));
             return JsValue.Undefined;
         });
+        OffscreenContextPrototype.FastSetProperty("drawElementImage", ContextPrototype.GetOwnProperty("drawElementImage"));
     }
 
     private static readonly double[] Identity16 = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];

@@ -18,7 +18,7 @@ internal sealed partial class ScriptRuntime
         "keydown", "keyup", "keypress", "input", "change", "submit", "reset", "focus", "blur", "focusin", "focusout", "select",
         "load", "error", "abort", "scroll", "resize", "pointerdown", "pointerup", "pointermove", "touchstart", "touchend", "touchmove",
         "transitionend", "transitionstart", "transitionrun", "transitioncancel", "animationstart", "animationend", "animationiteration", "animationcancel",
-        "readystatechange", "complete", "paint", "visibilitychange", "hashchange", "popstate", "pageshow", "pagehide", "unload", "beforeunload", "message", "toggle",
+        "readystatechange", "complete", "paint", "elementgeometryupdate", "visibilitychange", "hashchange", "popstate", "pageshow", "pagehide", "unload", "beforeunload", "message", "toggle",
     ];
 
     // Events that go to the window when written as attributes of the body.

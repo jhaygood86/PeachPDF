@@ -173,3 +173,10 @@
 - Paint events of one frame run in one callback in reverse document order; a paint is due when requested, when a drawable child changed, or when a painted drawable is gone (an add and remove between paints is no change).
 - html-canvas 3988/5028; floor 3978. Left: CSS `zoom` in the clip, object-fit hit tests, `transferControlToOffscreen` with element geometry (`elementgeometryupdate`), iframes, animated images invalidating a canvas, the pixel grid size,
   privacy, workers, `showModal`.
+
+## Phase 8, transferControlToOffscreen and element geometry
+- An OffscreenCanvas from `transferControlToOffscreen` is tied to its placeholder canvas (`_offscreenPlaceholders`); its `drawElementImage`, `updateElementGeometry`, `clearElementGeometry` and `getElementImageDefaultSize` work on that canvas's
+  children (an Element or an ElementImage of it), and are InvalidStateError for a standalone OffscreenCanvas. They are validated at once, but the geometry change is queued (`CommitGeometry`) and taken in order in a task of its own,
+  which then fires `elementgeometryupdate` (`ElementGeometryUpdateEvent`, frozen de-duplicated `elements` in order of first appearance) on the placeholder. `preserveElementGeometry: true` queues nothing and fires nothing.
+- A trap: `InstallOffscreenContext` copies the 2D context's members when it runs, so `drawElementImage` (defined later) has to be copied to the offscreen prototype where it is defined.
+- Workers are still not there, so the three `-worker` tests of the offscreen tree are open. html-canvas 4010/5028; floor raised.
