@@ -86,6 +86,17 @@ jobs:
       if: runner.os == 'Linux'
       run: sudo apt-get update && sudo apt-get install -y fontconfig fonts-liberation fonts-dejavu-core
 
+    # The media provider tests play small clips through the platform's decoder: GStreamer on Linux (its command-line tools make the clips), Media Foundation on Windows (a
+    # server image has it as an optional feature; the install is best effort and a machine without it skips those tests). macOS has no provider under test here.
+    - name: Install GStreamer (Linux)
+      if: runner.os == 'Linux' && matrix.suite == 'small'
+      run: sudo apt-get install -y gstreamer1.0-tools gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-libav libgstreamer1.0-0 libgstreamer-plugins-base1.0-0
+
+    - name: Install Media Foundation (Windows)
+      if: runner.os == 'Windows' && matrix.suite == 'small'
+      continue-on-error: true
+      run: Install-WindowsFeature Server-Media-Foundation
+
     # ---- main -------------------------------------------------------------------------------
 
     - name: Build
@@ -159,7 +170,7 @@ jobs:
     - name: Build small test projects
       if: matrix.suite == 'small'
       run: |
-        foreach ($p in 'PeachPDF.Cli.Tests', 'PeachDrawing.Core.Tests', 'PeachDrawing.Tests', 'PeachDrawing.PDF.Tests', 'PeachDrawing.Svg.Tests', 'PeachDrawing.Skia.Tests', 'PeachBrackets.Avalonia.Tests', 'PeachBrackets.Tests', 'PeachBrackets.Scripting.Tests', 'PeachBrackets.WptRunner.Tests', 'PeachPDF.SourceGenerators.Tests', 'PeachDrawing.Text.Brotli.Tests', 'PeachReader.Core.Tests') {
+        foreach ($p in 'PeachPDF.Cli.Tests', 'PeachDrawing.Core.Tests', 'PeachDrawing.Tests', 'PeachDrawing.PDF.Tests', 'PeachDrawing.Svg.Tests', 'PeachDrawing.Skia.Tests', 'PeachBrackets.Avalonia.Tests', 'PeachBrackets.Tests', 'PeachBrackets.Scripting.Tests', 'PeachBrackets.Media.GStreamer.Tests', 'PeachBrackets.Media.MediaFoundation.Tests', 'PeachBrackets.Media.Platform.Tests', 'PeachBrackets.WptRunner.Tests', 'PeachPDF.SourceGenerators.Tests', 'PeachDrawing.Text.Brotli.Tests', 'PeachReader.Core.Tests') {
           dotnet build "src/tests/$p/$p.csproj" --configuration Release
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         }
@@ -203,6 +214,15 @@ jobs:
       if: matrix.suite == 'small' && runner.os == 'Windows'
       run: dotnet test --project ${{ github.workspace }}/src/tests/PeachDrawing.Win2D.Tests/PeachDrawing.Win2D.Tests.csproj --no-build --configuration Release --report-trx --report-trx-filename win2d-test-results.trx --coverlet --coverlet-output-format cobertura --coverlet-exclude-by-file "**/PeachPdfProductInfo.g.cs" --coverlet-exclude-by-file "**/PeachPDF.Cli/Program.cs" --coverlet-file-prefix win2d-test-results --results-directory coverage
 
+    # The Windows (WinRT, Win2D) provider is a Windows component: built and tested on the Windows leg, on the software device (a picture of more than 576 lines needs a hardware device and its test skips).
+    - name: Build Windows media provider tests
+      if: matrix.suite == 'small' && runner.os == 'Windows'
+      run: dotnet build src/tests/PeachBrackets.Media.Windows.Tests/PeachBrackets.Media.Windows.Tests.csproj --configuration Release
+
+    - name: Test media provider (Windows)
+      if: matrix.suite == 'small' && runner.os == 'Windows'
+      run: dotnet test --project ${{ github.workspace }}/src/tests/PeachBrackets.Media.Windows.Tests/PeachBrackets.Media.Windows.Tests.csproj --no-build --configuration Release --report-trx --report-trx-filename media-windows-test-results.trx --coverlet --coverlet-output-format cobertura --coverlet-exclude-by-file "**/PeachPdfProductInfo.g.cs" --coverlet-exclude-by-file "**/PeachPDF.Cli/Program.cs" --coverlet-file-prefix media-windows-test-results --results-directory coverage
+
     # The WinUI control is a Windows component too: its logic is tested on the Windows leg (the control itself needs a desktop session).
     - name: Build WinUI control tests
       if: matrix.suite == 'small' && runner.os == 'Windows'
@@ -237,6 +257,19 @@ jobs:
     - name: Test scripting (PeachBrackets.Scripting)
       if: matrix.suite == 'small'
       run: dotnet test --project ${{ github.workspace }}/src/tests/PeachBrackets.Scripting.Tests/PeachBrackets.Scripting.Tests.csproj --no-build --configuration Release --report-trx --report-trx-filename scripting-test-results.trx --coverlet --coverlet-output-format cobertura --coverlet-exclude-by-file "**/PeachPdfProductInfo.g.cs" --coverlet-exclude-by-file "**/PeachPDF.Cli/Program.cs" --coverlet-file-prefix scripting-test-results --results-directory coverage
+
+    # The media providers. GStreamer's tests skip where it is not installed (macOS), Media Foundation's where Windows has none; the platform provider's per-OS dispatch runs on every leg.
+    - name: Test media provider (GStreamer)
+      if: matrix.suite == 'small'
+      run: dotnet test --project ${{ github.workspace }}/src/tests/PeachBrackets.Media.GStreamer.Tests/PeachBrackets.Media.GStreamer.Tests.csproj --no-build --configuration Release --report-trx --report-trx-filename gstreamer-test-results.trx --coverlet --coverlet-output-format cobertura --coverlet-exclude-by-file "**/PeachPdfProductInfo.g.cs" --coverlet-exclude-by-file "**/PeachPDF.Cli/Program.cs" --coverlet-file-prefix gstreamer-test-results --results-directory coverage
+
+    - name: Test media provider (Media Foundation)
+      if: matrix.suite == 'small'
+      run: dotnet test --project ${{ github.workspace }}/src/tests/PeachBrackets.Media.MediaFoundation.Tests/PeachBrackets.Media.MediaFoundation.Tests.csproj --no-build --configuration Release --report-trx --report-trx-filename mediafoundation-test-results.trx --coverlet --coverlet-output-format cobertura --coverlet-exclude-by-file "**/PeachPdfProductInfo.g.cs" --coverlet-exclude-by-file "**/PeachPDF.Cli/Program.cs" --coverlet-file-prefix mediafoundation-test-results --results-directory coverage
+
+    - name: Test media provider selection (PeachBrackets.Media.Platform)
+      if: matrix.suite == 'small'
+      run: dotnet test --project ${{ github.workspace }}/src/tests/PeachBrackets.Media.Platform.Tests/PeachBrackets.Media.Platform.Tests.csproj --no-build --configuration Release --report-trx --report-trx-filename media-platform-test-results.trx --coverlet --coverlet-output-format cobertura --coverlet-exclude-by-file "**/PeachPdfProductInfo.g.cs" --coverlet-exclude-by-file "**/PeachPDF.Cli/Program.cs" --coverlet-file-prefix media-platform-test-results --results-directory coverage
 
     - name: Test WPT reftest runner (PeachBrackets.WptRunner)
       if: matrix.suite == 'small'

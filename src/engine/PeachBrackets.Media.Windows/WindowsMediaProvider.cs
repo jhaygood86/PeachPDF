@@ -24,7 +24,17 @@ public sealed class WindowsMediaProvider : IMediaProvider
     }
 
     /// <summary>Whether the machine can play media through the Windows player (it has the Windows 10 media stack; every supported Windows does).</summary>
-    public static bool IsAvailable => OperatingSystem.IsWindowsVersionAtLeast(10, 0, 17763);
+    public static bool IsAvailable => OperatingSystem.IsWindowsVersionAtLeast(10, 0, 17763) && IsMediaFoundationInstalled();
+
+    // A server image has Media Foundation as an optional feature; without it the player cannot be made.
+    private static bool IsMediaFoundationInstalled()
+    {
+        if (!System.Runtime.InteropServices.NativeLibrary.TryLoad("mfplat.dll", out var handle))
+            return false;
+
+        System.Runtime.InteropServices.NativeLibrary.Free(handle);
+        return true;
+    }
 
     /// <inheritdoc />
     public string CanPlayType(string mimeType)

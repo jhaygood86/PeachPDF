@@ -246,6 +246,27 @@ public class MediaFoundationProviderTests
     }
 
     [Fact]
+    public async Task ASessionPlayedFaster_MovesItsPositionFaster_AndKeepsItsSound()
+    {
+        RequireWindows();
+        using var session = (MfSession?)await new MediaFoundationMediaProvider().OpenAsync(Request("moving.mp4", muted: false), TestContext.Current.CancellationToken);
+        Assert.NotNull(session);
+
+        session.Volume = 0.01;
+        session.Play();
+        await Task.Delay(300, TestContext.Current.CancellationToken);
+        session.PlaybackRate = 2;
+        var before = session.Position;
+        await Task.Delay(800, TestContext.Current.CancellationToken);
+        var moved = (session.Position - before).TotalSeconds;
+
+        Assert.SkipWhen(!session.HasSound && Environment.GetEnvironmentVariable("CI") is not null, "This machine has no audio output device.");
+        Assert.InRange(moved, 1.2, 2.1);
+        Assert.True(session.HasSound, "the sound should still be rendered after the rate changed");
+        Assert.True(session.IsPlaying);
+    }
+
+    [Fact]
     public async Task OpenAsync_ReturnsNull_ForDataItCannotPlay_AndForNothing()
     {
         RequireWindows();

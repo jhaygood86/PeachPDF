@@ -10,6 +10,8 @@ on:
     paths:
       - 'src/views/PeachBrackets.Apple/**'
       - 'src/examples/PeachBrackets.Apple.*/**'
+      - 'src/engine/PeachBrackets.Media.Apple/**'
+      - 'src/examples/PeachBrackets.Media.Apple.Example/**'
       - 'src/tests/PeachBrackets.Apple.Tests/**'
       - 'src/tests/PeachBrackets.Apple.AppTests/**'
       - 'src/engine/PeachBrackets/**'
@@ -64,6 +66,13 @@ jobs:
         cat "$RUNNER_TEMP/macos-smoke.txt"
         head -1 "$RUNNER_TEMP/macos-smoke.txt" | grep -qx OK
 
+    # The media provider on a real AVFoundation: both modes, a clip with sound and a picture, five checks.
+    - name: Check the media provider on macOS
+      run: |
+        src/examples/PeachBrackets.Media.Apple.Example/run.sh --report "$RUNNER_TEMP/media-smoke.txt" || true
+        cat "$RUNNER_TEMP/media-smoke.txt"
+        head -1 "$RUNNER_TEMP/media-smoke.txt" | grep -qx OK
+
     - name: Smoke-test the iOS example on a simulator
       run: .github/scripts/ios-smoke.sh
 
@@ -75,3 +84,4 @@ jobs:
         path: |
           ${{ runner.temp }}/macos-shot.png
           ${{ runner.temp }}/macos-smoke.txt
+          ${{ runner.temp }}/media-smoke.txt

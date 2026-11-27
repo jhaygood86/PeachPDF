@@ -62,10 +62,6 @@ internal sealed unsafe class AudioOutput : IDisposable
     {
         Mf.Ensure();
         IMFSourceReader* reader = null;
-        IMMDeviceEnumerator* enumerator = null;
-        IMMDevice* device = null;
-        IAudioClient* client = null;
-        IAudioRenderClient* render = null;
         try
         {
             fixed (char* url = file)
@@ -75,55 +71,85 @@ internal sealed unsafe class AudioOutput : IDisposable
             reader->SetStreamSelection(s_audioStream, true);
             SetOutputType(reader);
 
+            if (!OpenClient(rate, out var client, out var render, out var frames))
+                return null;
+
+            var output = new AudioOutput(reader, client, render, frames, volume) { _rate = rate };
+            reader = null;
+            return output;
+        }
+        catch (COMException)
+        {
+            // No audio stream: the video plays without sound.
+            return null;
+        }
+        finally
+        {
+            if (reader is not null)
+                reader->Release();
+        }
+    }
+
+    // A shared-mode client on the default output for the sound at a rate. The sound is decoded at 48 kHz and the client is told it is a stream of 48 kHz times the rate, so
+    // the system's own sample-rate converter plays it faster or slower (the pitch follows, as it does on tape). False when there is no device or it refuses the format.
+    private static bool OpenClient(double rate, out IAudioClient* client, out IAudioRenderClient* render, out uint frames)
+    {
+        IMMDeviceEnumerator* enumerator = null;
+        IMMDevice* device = null;
+        IAudioClient* newClient = null;
+        IAudioRenderClient* newRender = null;
+        client = null;
+        render = null;
+        frames = 0;
+        try
+        {
             var clsid = typeof(MMDeviceEnumerator).GUID;
             var iid = IMMDeviceEnumerator.IID_Guid;
             PInvoke.CoCreateInstance(&clsid, null, CLSCTX.CLSCTX_ALL, &iid, (void**)&enumerator).ThrowOnFailure();
             enumerator->GetDefaultAudioEndpoint(EDataFlow.eRender, ERole.eConsole, &device);
             var clientIid = IAudioClient.IID_Guid;
-            device->Activate(&clientIid, CLSCTX.CLSCTX_ALL, null, (void**)&client);
+            device->Activate(&clientIid, CLSCTX.CLSCTX_ALL, null, (void**)&newClient);
 
+            var perSecond = (uint)Math.Clamp(Math.Round(SampleRate * rate), 8000, 384000);
             var format = new WAVEFORMATEX
             {
                 wFormatTag = (ushort)PInvoke.WAVE_FORMAT_IEEE_FLOAT,
                 nChannels = Channels,
-                nSamplesPerSec = SampleRate,
+                nSamplesPerSec = perSecond,
                 wBitsPerSample = 32,
                 nBlockAlign = BytesPerFrame,
-                nAvgBytesPerSec = SampleRate * BytesPerFrame,
+                nAvgBytesPerSec = perSecond * BytesPerFrame,
             };
-            client->Initialize(AUDCLNT_SHAREMODE.AUDCLNT_SHAREMODE_SHARED, PInvoke.AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM | PInvoke.AUDCLNT_STREAMFLAGS_SRC_DEFAULT_QUALITY, BufferDuration, 0, &format, null);
-            uint frames;
-            client->GetBufferSize(&frames);
+            newClient->Initialize(AUDCLNT_SHAREMODE.AUDCLNT_SHAREMODE_SHARED, PInvoke.AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM | PInvoke.AUDCLNT_STREAMFLAGS_SRC_DEFAULT_QUALITY, BufferDuration, 0, &format, null);
+            uint size;
+            newClient->GetBufferSize(&size);
             var renderIid = IAudioRenderClient.IID_Guid;
-            client->GetService(&renderIid, (void**)&render);
+            newClient->GetService(&renderIid, (void**)&newRender);
 
-            var output = new AudioOutput(reader, client, render, frames, volume) { _rate = rate };
-            reader = null;
-            client = null;
-            render = null;
-            return output;
+            client = newClient;
+            render = newRender;
+            frames = size;
+            newClient = null;
+            newRender = null;
+            return true;
         }
         catch (COMException)
         {
-            // No audio stream, no device, or a device that will not take the format: the video plays without sound.
-            return null;
+            return false;
         }
         finally
         {
-            if (render is not null)
-                render->Release();
+            if (newRender is not null)
+                newRender->Release();
 
-            if (client is not null)
-                client->Release();
+            if (newClient is not null)
+                newClient->Release();
 
             if (device is not null)
                 device->Release();
 
             if (enumerator is not null)
                 enumerator->Release();
-
-            if (reader is not null)
-                reader->Release();
         }
     }
 
@@ -216,8 +242,36 @@ internal sealed unsafe class AudioOutput : IDisposable
         }
     }
 
-    /// <summary>Sound plays at its own speed only: at another rate the video moves and the sound is left silent.</summary>
-    public void SetRate(double rate) => _rate = rate;
+    /// <summary>
+    /// Moves the sound to another rate by opening a new client at it. The sound is stopped: the session starts it again at its position.
+    /// </summary>
+    public void SetRate(double rate)
+    {
+        if (_disposed || rate == _rate)
+            return;
+
+        lock (_gate)
+        {
+            _playing = false;
+            if (!OpenClient(rate, out var client, out var render, out var frames))
+                return;
+
+            try
+            {
+                _client->Stop();
+            }
+            catch (COMException)
+            {
+            }
+
+            _render->Release();
+            _client->Release();
+            _client = client;
+            _render = render;
+            _bufferFrames = frames;
+            _rate = rate;
+        }
+    }
 
     public void SetVolume(double volume) => _volume = volume;
 
@@ -273,7 +327,7 @@ internal sealed unsafe class AudioOutput : IDisposable
 
         byte* target;
         _render->GetBuffer((uint)frames, &target);
-        var gain = _rate == 1 ? (float)_volume : 0f;
+        var gain = (float)_volume;
         var count = frames * Channels;
         fixed (byte* source = &_pending[_pendingOffset])
         {

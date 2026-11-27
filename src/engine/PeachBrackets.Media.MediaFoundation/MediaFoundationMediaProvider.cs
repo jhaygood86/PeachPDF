@@ -19,8 +19,8 @@ public sealed class MediaFoundationMediaProvider : IMediaProvider
         _options = options ?? new MediaProviderOptions();
     }
 
-    /// <summary>Whether the program runs on Windows 10 or later, where this provider plays.</summary>
-    public static bool IsAvailable => OperatingSystem.IsWindowsVersionAtLeast(10, 0, 17763);
+    /// <summary>Whether the program runs on Windows 10 or later with Media Foundation installed, where this provider plays.</summary>
+    public static bool IsAvailable => OperatingSystem.IsWindowsVersionAtLeast(10, 0, 17763) && Mf.IsInstalled;
 
     /// <inheritdoc />
     public string CanPlayType(string mimeType)

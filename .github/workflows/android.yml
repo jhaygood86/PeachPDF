@@ -9,6 +9,9 @@ on:
     branches: [ main ]
     paths:
       - 'src/views/PeachBrackets.Android/**'
+      - 'src/engine/PeachBrackets.Media.Android/**'
+      - 'src/examples/PeachBrackets.Media.Android.Example/**'
+      - '.github/scripts/android-media-smoke.sh'
       - 'src/examples/PeachBrackets.Android.Example/**'
       - 'src/tests/PeachBrackets.Android.Tests/**'
       - 'src/engine/PeachBrackets/**'
@@ -43,6 +46,7 @@ jobs:
       run: |
         dotnet build src/views/PeachBrackets.Android/PeachBrackets.Android.csproj --configuration Release
         dotnet build src/examples/PeachBrackets.Android.Example/PeachBrackets.Android.Example.csproj --configuration Release
+        dotnet build src/examples/PeachBrackets.Media.Android.Example/PeachBrackets.Media.Android.Example.csproj --configuration Release
 
     # Reads the built assembly's metadata; skipped locally when the project has not been built.
     - name: Test the view's logic and public surface
@@ -60,6 +64,11 @@ jobs:
       shell: bash
       run: echo "path=$(find src/examples/PeachBrackets.Android.Example/bin/Release -name '*-Signed.apk' | head -1)" >> "$GITHUB_OUTPUT"
 
+    - name: Find the media example's APK
+      id: mediaapk
+      shell: bash
+      run: echo "path=$(find src/examples/PeachBrackets.Media.Android.Example/bin/Release -name '*-Signed.apk' | head -1)" >> "$GITHUB_OUTPUT"
+
     - name: Run the example on an emulator
       uses: reactivecircus/android-emulator-runner@v2
       with:
@@ -68,4 +77,6 @@ jobs:
         target: google_apis
         profile: pixel_6
         disable-animations: true
-        script: bash .github/scripts/android-smoke.sh ${{ steps.apk.outputs.path }}
+        script: |
+          bash .github/scripts/android-smoke.sh ${{ steps.apk.outputs.path }}
+          bash .github/scripts/android-media-smoke.sh ${{ steps.mediaapk.outputs.path }}

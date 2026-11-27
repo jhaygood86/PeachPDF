@@ -195,6 +195,44 @@ public class MediaElementTests
     }
 
     [Fact]
+    public async Task ASourceThatFailsToOpen_FiresErrorAtItself_AndTheNextOneIsTried()
+    {
+        var (log, document) = await RunAsync("""
+            var v = document.createElement('video'); var seen = [];
+            v.addEventListener('error', function () { seen.push('video-error'); });
+            ['a.bad', 'b.bad', 'c.webm'].forEach(function (name) {
+                var s = document.createElement('source'); s.src = 'https://media.test/' + name;
+                s.addEventListener('error', function () { seen.push('error@' + name); });
+                v.appendChild(s);
+            });
+            setTimeout(function () { Log.info(seen.join(',') + ' | ' + v.currentSrc + ' ' + v.readyState + ' ' + v.networkState); }, 300);
+            """, new FakeProvider());
+        using var _ = document;
+
+        // Each failing source reports at itself, the element reports nothing, and the one that opens is the one it plays.
+        Assert.Equal(["error@a.bad,error@b.bad | https://media.test/c.webm 4 1"], log);
+    }
+
+    [Fact]
+    public async Task WhenEverySourceFails_TheElementHasNoSource_WithoutAnErrorOfItsOwn_AndPlayRejects()
+    {
+        var (log, document) = await RunAsync("""
+            var v = document.createElement('video'); var seen = [];
+            v.addEventListener('error', function () { seen.push('video-error'); });
+            ['a.bad', 'b.bad'].forEach(function (name) {
+                var s = document.createElement('source'); s.src = 'https://media.test/' + name;
+                s.addEventListener('error', function () { seen.push('error@' + name); });
+                v.appendChild(s);
+            });
+            v.play().catch(function (e) { seen.push('play:' + e.name); });
+            setTimeout(function () { Log.info(seen.join(',') + ' | ' + v.networkState + ' ' + (v.error === null)); }, 300);
+            """, new FakeProvider());
+        using var _ = document;
+
+        Assert.Equal(["error@a.bad,error@b.bad,play:NotSupportedError | 3 true"], log);
+    }
+
+    [Fact]
     public async Task TheMediaEventHandlerAttributes_AreCalledLikeListeners()
     {
         var (log, document) = await RunAsync("""

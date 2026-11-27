@@ -30,6 +30,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <None Include="Assets\*.mp4" CopyToOutputDirectory="PreserveNewest" LinkBase="Assets" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Using Include="Xunit" />
   </ItemGroup>
 

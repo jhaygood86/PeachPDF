@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    A bare macOS program that plays a small clip through PeachBrackets.Media.Apple in both modes and reports what it saw: one "OK name" or "FAIL name: why" line per check
+    and DONE at the end, on the standard output and in the file given with --report (whose first line is OK or FAILED). Built as the app bundle the macOS SDK makes of
+    it; run it with run.sh. CI runs it (.github/workflows/apple.yml); it is the check of the provider on a real AVFoundation, as the Android example is on an emulator.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFrameworks>net10.0-macos</TargetFrameworks>
+    <ApplicationId>net.peachpdf.brackets.media.apple.example</ApplicationId>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\engine\PeachBrackets.Media.Apple\PeachBrackets.Media.Apple.csproj" />
+    <ProjectReference Include="..\..\drawing\PeachDrawing\PeachDrawing.csproj" />
+    <EmbeddedResource Include="Assets\moving.mp4" LogicalName="moving.mp4" />
+  </ItemGroup>
+
+</Project>

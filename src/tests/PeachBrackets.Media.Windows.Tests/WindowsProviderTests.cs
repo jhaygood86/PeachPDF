@@ -8,6 +8,8 @@ namespace PeachBrackets.Media.Windows.Tests;
 /// <summary>The provider against the real Windows media stack: small H.264 clips played into Win2D bitmaps.</summary>
 public class WindowsProviderTests
 {
+    private static void RequireWindows() => Assert.SkipUnless(WindowsMediaProvider.IsAvailable, "Media Foundation is not installed.");
+
     private static string Clip(string name) => Path.Combine(AppContext.BaseDirectory, "Assets", name);
 
     private static MediaRequest Request(Win2dRenderContext context, string clip, MediaKind kind = MediaKind.Video, bool muted = true) =>
@@ -23,6 +25,7 @@ public class WindowsProviderTests
     [Fact]
     public void CanPlayType_SaysWhatThisWindowsCanPlay()
     {
+        RequireWindows();
         var provider = new WindowsMediaProvider();
 
         Assert.Equal("maybe", provider.CanPlayType("video/mp4"));
@@ -35,6 +38,7 @@ public class WindowsProviderTests
     [Fact]
     public async Task OpenAsync_LearnsTheDurationAndThePictureSize_AndHasTheFirstPicture()
     {
+        RequireWindows();
         using var context = Win2dRenderContext.CreateSoftware();
         using var session = await Deterministic().OpenAsync(Request(context, "moving.mp4"), TestContext.Current.CancellationToken);
 
@@ -53,6 +57,7 @@ public class WindowsProviderTests
     [Fact]
     public async Task APicture_IsTheColorOfTheVideo()
     {
+        RequireWindows();
         using var context = Win2dRenderContext.CreateSoftware();
         using var session = await Deterministic().OpenAsync(Request(context, "red.mp4"), TestContext.Current.CancellationToken);
         Assert.NotNull(session);
@@ -72,6 +77,7 @@ public class WindowsProviderTests
     [Fact]
     public async Task AnHdPicture_IsDecodedWithTheRec709Matrix_OnAHardwareDevice()
     {
+        RequireWindows();
         // The player's frame server needs a hardware device for a picture this large; on a machine that has none (a hosted runner) the frame never comes.
         using var context = new Win2dRenderContext();
         using var session = await Deterministic().OpenAsync(Request(context, "red720.mp4"), TestContext.Current.CancellationToken);
@@ -90,6 +96,7 @@ public class WindowsProviderTests
     [Fact]
     public async Task ADeterministicSession_MovesOnlyWithTheDocumentClock_AndShowsThePictureAtThePosition()
     {
+        RequireWindows();
         using var context = Win2dRenderContext.CreateSoftware();
         using var session = await Deterministic().OpenAsync(Request(context, "moving.mp4"), TestContext.Current.CancellationToken);
         Assert.NotNull(session);
@@ -115,6 +122,7 @@ public class WindowsProviderTests
     [Fact]
     public async Task ADeterministicSession_ShowsTheSamePicture_HoweverItGotToThePosition()
     {
+        RequireWindows();
         using var context = Win2dRenderContext.CreateSoftware();
         using var played = await Deterministic().OpenAsync(Request(context, "moving.mp4"), TestContext.Current.CancellationToken);
         using var sought = await Deterministic().OpenAsync(Request(context, "moving.mp4"), TestContext.Current.CancellationToken);
@@ -136,6 +144,7 @@ public class WindowsProviderTests
     [Fact]
     public async Task ADeterministicSession_EndsAtTheEnd_AndTellsTheDocument()
     {
+        RequireWindows();
         using var context = Win2dRenderContext.CreateSoftware();
         using var session = await Deterministic().OpenAsync(Request(context, "red.mp4"), TestContext.Current.CancellationToken);
         Assert.NotNull(session);
@@ -155,6 +164,7 @@ public class WindowsProviderTests
     [Fact]
     public async Task AFrameStaysUsable_AfterItsSessionIsDisposed()
     {
+        RequireWindows();
         using var context = Win2dRenderContext.CreateSoftware();
         var session = await Deterministic().OpenAsync(Request(context, "red.mp4"), TestContext.Current.CancellationToken);
         Assert.NotNull(session);
@@ -171,6 +181,7 @@ public class WindowsProviderTests
     [Fact]
     public async Task AnAudioSession_HasNoPicture_ButHasADuration()
     {
+        RequireWindows();
         using var context = Win2dRenderContext.CreateSoftware();
         using var session = await Deterministic().OpenAsync(Request(context, "moving.mp4", MediaKind.Audio), TestContext.Current.CancellationToken);
 
@@ -183,6 +194,7 @@ public class WindowsProviderTests
     [Fact]
     public async Task ARealTimeSession_PlaysByItsOwnClock_AndEnds()
     {
+        RequireWindows();
         using var context = Win2dRenderContext.CreateSoftware();
         using var session = await new WindowsMediaProvider().OpenAsync(Request(context, "red.mp4"), TestContext.Current.CancellationToken);
         Assert.NotNull(session);
@@ -200,6 +212,7 @@ public class WindowsProviderTests
     [Fact]
     public async Task OnWindows_ThePlatformProviderPlaysADocumentDrawnWithWin2D_ThroughMediaFoundation()
     {
+        RequireWindows();
         var provider = PlatformMediaProvider.Create(new MediaProviderOptions { DeterministicClock = true });
         Assert.NotNull(provider);
         Assert.Equal("probably", provider.CanPlayType("video/mp4; codecs=\"avc1.42E01E\""));
@@ -216,6 +229,7 @@ public class WindowsProviderTests
     [Fact]
     public async Task OnWindows_ADocumentDrawnAnyOtherWay_GetsItsPicturesAsPixels()
     {
+        RequireWindows();
         var provider = PlatformMediaProvider.Create(new MediaProviderOptions { DeterministicClock = true });
         Assert.NotNull(provider);
 
@@ -237,6 +251,7 @@ public class WindowsProviderTests
     [Fact]
     public async Task OpenAsync_ReturnsNull_ForDataItCannotPlay()
     {
+        RequireWindows();
         using var context = Win2dRenderContext.CreateSoftware();
         var request = new MediaRequest(new Uri("https://media.test/junk.mp4"), MediaKind.Video, context,
             _ => new ValueTask<RNetworkResponse?>(new RNetworkResponse(new MemoryStream(Enumerable.Range(0, 4096).Select(i => (byte)(i * 31)).ToArray()), null)));
@@ -247,6 +262,7 @@ public class WindowsProviderTests
     [Fact]
     public async Task OpenAsync_ReturnsNull_WhenTheLoaderHasNothing()
     {
+        RequireWindows();
         using var context = Win2dRenderContext.CreateSoftware();
         var request = new MediaRequest(new Uri("https://media.test/none.mp4"), MediaKind.Video, context, _ => new ValueTask<RNetworkResponse?>((RNetworkResponse?)null));
 

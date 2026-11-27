@@ -189,7 +189,7 @@ internal sealed class GstSession : IMediaSession
 
         // A video leaves the player through an appsink after a videoconvert, which gives straight RGBA and applies the stream's YUV matrix and range.
         var videoSink = video
-            ? (srgbFrom is { Length: > 0 } ? "capssetter join=true replace=false caps=video/x-raw,colorimetry=" + srgbFrom + " ! " : "") + "videoconvert name=convert" + (srgbFrom is not null ? " primaries-mode=fast gamma-mode=remap" : "") + " ! appsink name=sink caps=video/x-raw,format=RGBA" + (srgbFrom is not null ? ",colorimetry=sRGB" : "") + " sync=" + (deterministic ? "false" : "true")
+            ? (srgbFrom is { Length: > 0 } ? "capssetter join=true replace=false caps=video/x-raw,colorimetry=" + srgbFrom + " ! " : "") + "videoflip method=automatic ! videoconvert name=convert" + (srgbFrom is not null ? " primaries-mode=fast gamma-mode=remap" : "") + " ! appsink name=sink caps=video/x-raw,format=RGBA" + (srgbFrom is not null ? ",colorimetry=sRGB" : "") + " sync=" + (deterministic ? "false" : "true")
                 + " wait-on-eos=false max-buffers=1 drop=" + (deterministic ? "false" : "true")
             : "fakesink";
         var description = "playbin uri=\"" + new Uri(file).AbsoluteUri + "\" audio-sink=\"" + audioSink + "\" video-sink=\"" + videoSink + "\"";

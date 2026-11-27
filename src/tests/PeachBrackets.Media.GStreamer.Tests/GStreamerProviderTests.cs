@@ -271,6 +271,25 @@ public class GStreamerProviderTests : IDisposable
     }
 
     [Fact]
+    public async Task AVideoWithARotation_IsShownTurned_AndItsSizeIsTheShownSize()
+    {
+        RequireGStreamer();
+        var clip = Path.Combine(AppContext.BaseDirectory, "Assets", "halves-rotated.mp4");
+
+        // A 64 x 48 picture, red above blue, stored with a display rotation of a quarter turn counterclockwise: shown 48 x 64 with the red on the left and the blue on the right.
+        using var session = await Deterministic().OpenAsync(Request(clip), TestContext.Current.CancellationToken);
+        Assert.NotNull(session);
+        Assert.Equal((48, 64), (session.VideoWidth, session.VideoHeight));
+
+        using var frame = session.AcquireFrame();
+        var pixels = Bytes(frame!);
+        int Px(int x, int y, int channel) => pixels[(((y * 48) + x) * 4) + channel];
+        Assert.Equal((48, 64), (frame!.Image.Width, frame.Image.Height));
+        Assert.True(Px(6, 32, 0) > Px(6, 32, 2) + 100, "the left of the picture should be red");
+        Assert.True(Px(42, 32, 2) > Px(42, 32, 0) + 100, "the right of the picture should be blue");
+    }
+
+    [Fact]
     public async Task AnAudioSession_HasNoPicture_ButHasADuration()
     {
         RequireGStreamer();

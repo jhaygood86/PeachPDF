@@ -81,8 +81,8 @@ without it, or without the plugin for a codec, `CanPlayType` answers `""` for wh
   color-managed into sRGB the way a browser shows it (a pure red becomes (247, 37, 0)), by tagging it for GStreamer's primaries conversion; such a stream
   is opened twice, once to read what it says about its colors. A picture in Rec. 2020 or Display P3 keeps its gamut and says so in
   `MediaFrame.ColorSpace`; any other is passed through as the decoder gives it.
-* **Not done.** Rotation tags are not applied; a stream that only starts to play after more data arrives is not a case, since the file is complete before
-  playback; `PlaybackRate` in real time seeks (no pitch correction).
+* **Rotation.** A stream's rotation tag is applied (`videoflip method=automatic`), and `VideoWidth`/`VideoHeight` are the shown size.
+* **Not done.** `Changed` is raised only when the document polls, not from GStreamer's own thread; `PlaybackRate` in real time seeks (no pitch correction).
 
 ## The Windows provider
 
@@ -117,7 +117,7 @@ COM, no marshalling, AOT-safe) instead of WinRT, so nothing but the system DLLs 
   red shows as (247, 37, 0); Rec. 2020 and DCI-P3 streams keep their gamut and say so in `MediaFrame.ColorSpace`. Media Foundation does not pass the color tags of an H.264 stream
   in an MP4 file on to the media type (those of a VP9 stream in WebM it does), so an H.264 picture is converted by the assumption above.
 * **Sound.** A second source reader decodes the audio to 32-bit float stereo at 48 kHz and a thread feeds it to a shared-mode WASAPI client (200 ms buffer). The session's own
-  stopwatch is the clock the pictures follow; the sound only has to start where it starts and keep up. At a rate other than 1 the sound is left silent. No output device means no
+  stopwatch is the clock the pictures follow; the sound only has to start where it starts and keep up. At another rate the sound is opened as a stream faster or slower than it was decoded, so the system's converter plays it and the pitch follows (as on tape). No output device means no
   sound and a playing video.
 * **Deterministic.** With `MediaProviderOptions.DeterministicClock` the position moves only in `Update` and no sound is made; the same position always gives the same picture
   whether it was reached by playing or by seeking.
@@ -185,8 +185,10 @@ can play, chosen by its `type` through `CanPlayType`) opens a session, and the e
   `crossorigin` attribute, taints the canvas, so reading it back throws `SecurityError`; the server's CORS answer is not checked (as for images).
 * A script's session lives until its scripts are done; the document is then parsed again from what they left, and the video a viewer sees opens its own
   session. Playing state does not carry across.
-* Not supported: `srcObject` (always null), `captureStream`, text tracks, `webkitAudioDecodedByteCount`-style extensions, `<source>` fallback to a later source
-  when the first chosen one fails to open (the element fails).
+* A `<source>` whose resource the provider cannot open fires `error` at itself and the next candidate is tried; when none is left the element has no source (`networkState` 3,
+  `play()` rejects `NotSupportedError`) and fires no error of its own, which the standard keeps for a failing `src`.
+* `drawElementImage` of an element that contains a video shows the video's poster: the picture of an element is made from a copy of its markup that has no media provider.
+* Not supported: `srcObject` (always null), `captureStream`, text tracks, `webkitAudioDecodedByteCount`-style extensions.
 
 ## Limits
 

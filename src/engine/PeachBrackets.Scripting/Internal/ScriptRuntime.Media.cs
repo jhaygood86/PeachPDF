@@ -27,6 +27,12 @@ internal sealed partial class ScriptRuntime
     {
         public IMediaSession? Session { get; set; }
 
+        /// <summary>Where among the element's source children the next candidate begins.</summary>
+        public int NextSource { get; set; }
+
+        /// <summary>The source element whose resource is being opened, when the element has source children and no src.</summary>
+        public ScriptNode? CurrentSourceNode { get; set; }
+
         public int Token { get; set; }
 
         /// <summary>0: empty, 1: idle, 2: loading, 3: no source.</summary>
@@ -162,15 +168,17 @@ internal sealed partial class ScriptRuntime
         return state;
     }
 
-    // The element's own resource: its src, else the first source child the provider can play.
-    private (string? Src, string? Type) SelectMediaSource(ScriptNode media)
+    // The element's own resource: its src, else the first source child (from a position among them) whose type the provider can play. Next is where the one after it begins.
+    private (string? Src, string? Type, ScriptNode? Source, int Next) SelectMediaSource(ScriptNode media, int from = 0)
     {
         var src = media.GetAttribute("src");
         if (src is not null)
-            return string.IsNullOrWhiteSpace(src) ? (null, null) : (src, null);
+            return string.IsNullOrWhiteSpace(src) ? (null, null, null, 0) : (src, null, null, int.MaxValue);
 
-        foreach (var child in media.ChildElements.Where(IsSource))
+        var sources = media.ChildElements.Where(IsSource).ToList();
+        for (var i = from; i < sources.Count; i++)
         {
+            var child = sources[i];
             var childSrc = child.GetAttribute("src");
             if (string.IsNullOrWhiteSpace(childSrc))
                 continue;
@@ -179,10 +187,10 @@ internal sealed partial class ScriptRuntime
             if (!string.IsNullOrWhiteSpace(type) && Document.CanPlayMediaType(type).Length == 0)
                 continue;
 
-            return (childSrc, string.IsNullOrWhiteSpace(type) ? null : type);
+            return (childSrc, string.IsNullOrWhiteSpace(type) ? null : type, child, i + 1);
         }
 
-        return (null, null);
+        return (null, null, null, sources.Count);
     }
 
     // The media elements the page began with start selecting their resource.
@@ -282,7 +290,7 @@ internal sealed partial class ScriptRuntime
         if (hadSession)
             QueueMediaEvent(media, token, "emptied");
 
-        var (src, type) = SelectMediaSource(media);
+        var (src, type, firstSource, next) = SelectMediaSource(media);
         if (src is null)
         {
             state.NetworkState = 0;
@@ -295,6 +303,14 @@ internal sealed partial class ScriptRuntime
             return;
         }
 
+        state.NextSource = next;
+        state.CurrentSourceNode = firstSource;
+        OpenMediaCandidate(media, state, token, src, type);
+    }
+
+    // Asks the provider for one candidate resource of an element.
+    private void OpenMediaCandidate(ScriptNode media, MediaState state, int token, string src, string? type)
+    {
         state.NetworkState = 2;
         state.CurrentSrc = ResolveAddress(media, src);
         QueueMediaEvent(media, token, "loadstart");
@@ -318,6 +334,16 @@ internal sealed partial class ScriptRuntime
             return JsValue.Undefined;
         }), 0, [], repeat: false, frame: false);
     }
+
+    // An error event at a source element whose resource could not be opened, queued as a task: it fires unless the media element started over since.
+    private void QueueSourceError(ScriptNode source, ScriptNode media, int token) =>
+        AddTimer(Js.Function(Engine, "mediaSourceError", 0, (_, _) =>
+        {
+            if (_media.TryGetValue(media, out var current) && current.Token == token)
+                FireEvent(Wrap(source), "error", bubbles: false, cancelable: false);
+
+            return JsValue.Undefined;
+        }), 0, [], repeat: false, frame: false);
 
     // An event of the element's, queued as a task: it fires unless the element started over since.
     private void QueueMediaEvent(ScriptNode media, int token, string type) =>
@@ -363,7 +389,38 @@ internal sealed partial class ScriptRuntime
 
         if (session is null)
         {
-            FailMedia(media, state, token, media.GetAttribute("src") ?? SelectMediaSource(media).Src ?? string.Empty);
+            // An element with source children goes on to the next one that fails to open: each failure is an error event on its source, and only when none is left does
+            // the element give up (without an error of its own, which the standard keeps for a src that fails).
+            if (media.GetAttribute("src") is null)
+            {
+                var failed = state.CurrentSourceNode;
+                if (failed is not null)
+                    QueueSourceError(failed, media, token);
+
+                var (src, type, source, next) = SelectMediaSource(media, state.NextSource);
+                if (src is not null)
+                {
+                    state.NextSource = next;
+                    state.CurrentSourceNode = source;
+                    OpenMediaCandidate(media, state, token, src, type);
+                    return;
+                }
+
+                state.CurrentSourceNode = null;
+                state.NetworkState = 3;
+
+                // After the last source's error event, as a task of its own.
+                AddTimer(Js.Function(Engine, "mediaNoSource", 0, (_, _) =>
+                {
+                    if (_media.TryGetValue(media, out var current) && current.Token == token)
+                        RejectPlayWaiters(current, "NotSupportedError", "The element has no supported sources.");
+
+                    return JsValue.Undefined;
+                }), 0, [], repeat: false, frame: false);
+                return;
+            }
+
+            FailMedia(media, state, token, media.GetAttribute("src") ?? string.Empty);
             return;
         }
 

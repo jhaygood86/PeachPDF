@@ -101,7 +101,12 @@ internal sealed class MfSession : IMediaSession
 
             Tick();
                 _rate = value;
-            _audio?.SetRate(value);
+            if (_audio is { } audio)
+            {
+                audio.SetRate(value);
+                if (_playing)
+                    audio.Start(_position);
+            }
         }
     }
 
