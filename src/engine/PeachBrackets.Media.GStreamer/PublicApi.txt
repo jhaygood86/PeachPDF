@@ -1,0 +1,5 @@
+PeachBrackets.Media.GStreamer.GStreamerMediaProvider : sealed class
+  ctor(MediaProviderOptions options = null)
+  method virtual String CanPlayType(String mimeType)
+  method virtual ValueTask<IMediaSession> OpenAsync(MediaRequest request, CancellationToken cancellationToken = null)
+  property static Boolean IsAvailable { get; }

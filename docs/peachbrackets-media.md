@@ -58,6 +58,28 @@ The sound is the provider's: the document never sees audio samples.
 only as the time passed to `IMediaSession.Update` does, and each picture is the one at that position, found by seeking. A document that plays media
 then behaves the same on a slow machine as on a fast one, which is what the test runners need.
 
+## The GStreamer provider
+
+`PeachBrackets.Media.GStreamer` (`GStreamerMediaProvider`) plays through the GStreamer installed on the machine: `libgstreamer-1.0` on Linux, the GStreamer
+runtime on Windows (found through `GSTREAMER_1_0_ROOT_MSVC_X86_64` and its siblings) and macOS (the framework or Homebrew). Nothing is bundled, and the
+bindings are source-generated `LibraryImport`, so it is trim and ahead-of-time safe. `GStreamerMediaProvider.IsAvailable` says whether GStreamer starts;
+without it, or without the plugin for a codec, `CanPlayType` answers `""` for what needs it and media elements fail as they do with no provider.
+
+* **How it plays.** The resource is read through the document's loader into a temporary file (deleted when the session is disposed), and a `playbin`
+  plays it; a video's pictures come from an `appsink` after `videoconvert` as RGBA, which applies the stream's YUV matrix and range. The `colorimetry` of
+  the stream sets `MediaFrame.ColorSpace` (a Rec. 2020 stream is `Rec2020`). Frames are copied pixels (a `PeachDrawing.Core.Image` every backend draws by
+  uploading it once); zero-copy GPU frames come with the platform providers.
+* **Real time.** The pipeline plays by its own clock and the sound goes to the default output (a muted element uses no output). The end of the media and
+  errors are read from the pipeline's bus whenever the document calls `Update` or asks for a picture.
+* **Deterministic.** With `MediaProviderOptions.DeterministicClock` the pipeline stays paused. The position is the document's: `Update(documentTime)`
+  advances it, and a picture is the one an accurate flushing seek to that position leaves as the preroll sample. A picture is reused while the position is
+  inside the span it covers, so playing at the frame rate seeks once per frame, not once per step.
+* **What it needs.** For `canPlayType`, the demuxer of a container (`matroskademux`, `qtdemux`, `oggdemux`, `wavparse`...) and the decoder of each named
+  codec (`vp8dec`/`vp9dec`, `avdec_h264`, `avdec_h265`, `opusdec`, `vorbisdec`, `avdec_aac`...) must be installed. On Debian and Ubuntu:
+  `gstreamer1.0-plugins-base`, `-good`, `-bad` and `gstreamer1.0-libav`.
+* **Not done.** Rotation tags are not applied; a stream that only starts to play after more data arrives is not a case, since the file is complete before
+  playback; `PlaybackRate` in real time seeks (no pitch correction).
+
 ## Script media elements
 
 With `PeachBrackets.Scripting`, a script's `audio` and `video` elements are driven by the same provider. A `src` (or `load()`, or a `source` child the provider
