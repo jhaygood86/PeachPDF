@@ -174,6 +174,27 @@ public class MediaElementTests
     private const string Events = "var events = []; ['loadstart','durationchange','loadedmetadata','resize','loadeddata','canplay','canplaythrough','play','playing','pause','ended','seeking','seeked','error','emptied','waiting','volumechange','ratechange'].forEach(function (t) { v.addEventListener(t, function () { events.push(t); }); });";
 
     [Fact]
+    public async Task AVideoInTheMarkup_StillLoads_WhenAScriptReadSomethingOfItFirst()
+    {
+        var logger = new CollectingLogger();
+        var host = new JintScriptHost(new JintScriptOptions { Logger = logger });
+        var context = await TestDocument.NewContextAsync();
+        var options = new HtmlDocumentOptions { MediaType = MediaType.Screen, PageWidthPoints = 200, ScriptHost = host, MeasuringCanvasFactory = () => context.CreateCanvas(1, 1), MediaProvider = new FakeProvider() };
+        options.SetMargins(0);
+        using var document = await HtmlDocument.LoadAsync(TestDocument.Wrap("""
+            <video id="v" src="https://media.test/a.webm"></video>
+            <script>
+            var before = v.readyState;
+            v.oncanplay = function () { Log.info('canplay after readyState ' + before + ', now ' + v.readyState); };
+            setTimeout(function () {}, 500);
+            </script>
+            """), context, options);
+
+        Assert.Empty(logger.Errors);
+        Assert.Equal(["canplay after readyState 0, now 3"], logger.Texts);
+    }
+
+    [Fact]
     public async Task TheMediaEventHandlerAttributes_AreCalledLikeListeners()
     {
         var (log, document) = await RunAsync("""

@@ -151,7 +151,7 @@ internal sealed partial class ScriptRuntime
     /// <summary>Whether the video is from another origin than the document and was not asked for with a crossorigin attribute.</summary>
     private bool VideoTainted(ScriptNode video) =>
         video.GetAttribute("crossorigin") is null && _media.TryGetValue(video, out var state) && state.Session is not null
-        && OriginOf(Uri.TryCreate(state.CurrentSrc, UriKind.Absolute, out var resource) ? resource : null) is { } resourceOrigin
+        && OriginOf(Uri.TryCreate(Document.GetMediaFinalAddress(state.Session) ?? state.CurrentSrc, UriKind.Absolute, out var resource) ? resource : null) is { } resourceOrigin
         && !string.Equals(resourceOrigin, OriginOf(video.OwnerDocument.BaseUri), StringComparison.Ordinal);
 
     private MediaState MediaStateOf(ScriptNode node)
@@ -194,7 +194,9 @@ internal sealed partial class ScriptRuntime
         _initialMediaStarted = true;
         foreach (var media in Document.GetElementsByTagName("video").Concat(Document.GetElementsByTagName("audio")))
         {
-            if (!_media.ContainsKey(media) && SelectMediaSource(media).Src is not null)
+            // A script that read a property of the element first (readyState) has made its state already, and the element still loads: it is a token, not the
+            // state, that says a load was started.
+            if ((!_media.TryGetValue(media, out var state) || state.Token == 0) && SelectMediaSource(media).Src is not null)
                 StartMediaLoad(media);
         }
     }

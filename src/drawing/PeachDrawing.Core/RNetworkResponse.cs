@@ -11,5 +11,12 @@ namespace PeachDrawing.Core
     /// HTTP-style response headers for the resource, if any. For stylesheet resources, a host may inspect this
     /// for a <c>Content-Type</c> header and only accepts the body as CSS when it is <c>text/css</c>.
     /// </param>
-    public record RNetworkResponse(Stream? ResourceStream, Dictionary<string, string[]>? ResponseHeaders);
+    public record RNetworkResponse(Stream? ResourceStream, Dictionary<string, string[]>? ResponseHeaders)
+    {
+        /// <summary>
+        /// The address the body was finally read from when the request was redirected (the last of the hops), or <c>null</c> when the loader does not say or
+        /// there was no redirect. A document asks it whether a resource that was requested from its own origin ended up on another one.
+        /// </summary>
+        public System.Uri? FinalAddress { get; init; }
+    }
 }

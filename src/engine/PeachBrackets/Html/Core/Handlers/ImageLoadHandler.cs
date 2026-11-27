@@ -86,6 +86,9 @@ namespace PeachBrackets.Html.Handlers
         /// <summary>
         /// the image instance of the loaded image
         /// </summary>
+        /// <summary>The address the image was finally read from when its request was redirected, as the resource loader reported it.</summary>
+        public Uri? FinalAddress { get; private set; }
+
         public Image? Image { get; private set; }
 
         /// <summary>
@@ -306,6 +309,7 @@ namespace PeachBrackets.Html.Handlers
                 if (Image is null && SvgDocument is null) ReleaseObjects();
 
                 _imageStream = networkResponse.ResourceStream;
+                FinalAddress = networkResponse.FinalAddress;
 
                 var contentTypeHintsSvg = networkResponse.ResponseHeaders?.TryGetValue("Content-Type", out var contentTypeValues) == true
                     && contentTypeValues.Select(ContentType.Parse).Any(ct => ct.IsMimeType("image", "svg+xml"));

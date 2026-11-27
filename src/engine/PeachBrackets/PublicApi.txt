@@ -978,6 +978,7 @@ PeachBrackets.ScriptHosting.ScriptDocument : sealed class
   method Single[] ConvertMediaPixelsToDisplayP3(Byte[] straightRgba, Int32 widthPixels, Int32 heightPixels, MediaColorSpace from)
   method String CanPlayMediaType(String mimeType)
   method String GetComputedValue(ScriptNode element, String property)
+  method String GetMediaFinalAddress(IMediaSession session)
   method ValueTask LoadFontFacesAsync()
   method ValueTask<Boolean> LoadFontFaceAsync(String family, String source, Byte[] data, String weight, String style, String stretch, String unicodeRange)
   method ValueTask<IMediaSession> OpenMediaAsync(String address, MediaKind kind, String contentType, String crossOrigin, Boolean muted, Boolean loop, MediaPreload preload)
@@ -1020,9 +1021,9 @@ PeachBrackets.ScriptHosting.ScriptElementPicture : sealed class
   property Double Width { get; init; }
   property Image Image { get; init; }
 PeachBrackets.ScriptHosting.ScriptImageInfo : sealed class
-  ctor(Double Width, Double Height, String Address)
+  ctor(Double Width, Double Height, String Address, String ResponseAddress = null)
   method ScriptImageInfo <Clone>$()
-  method Void Deconstruct(out Double Width, out Double Height, out String Address)
+  method Void Deconstruct(out Double Width, out Double Height, out String Address, out String ResponseAddress)
   method virtual Boolean Equals(Object obj)
   method virtual Boolean Equals(ScriptImageInfo other)
   method virtual Int32 GetHashCode()
@@ -1030,6 +1031,7 @@ PeachBrackets.ScriptHosting.ScriptImageInfo : sealed class
   property Double Height { get; init; }
   property Double Width { get; init; }
   property String Address { get; init; }
+  property String ResponseAddress { get; init; }
 PeachBrackets.ScriptHosting.ScriptLayout : sealed class
   method IReadOnlyList<BoxReport> GetBoxes(ScriptNode element)
   property IReadOnlyList<BoxReport> Pages { get; }

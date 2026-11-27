@@ -42,6 +42,9 @@ internal sealed partial class ScriptRuntime
 
         public string CurrentSource { get; set; } = string.Empty;
 
+        /// <summary>Where the image was finally read from, when its request was redirected.</summary>
+        public string? FinalSource { get; set; }
+
         public int Token { get; set; }
 
         public List<(JsValue Resolve, JsValue Reject)> Waiters { get; } = [];
@@ -204,7 +207,7 @@ internal sealed partial class ScriptRuntime
                 if (image.GetAttribute("crossorigin") is not null || !_images.TryGetValue(image, out var state) || state.Status != 2)
                     return false;
 
-                return OriginOf(Uri.TryCreate(state.CurrentSource, UriKind.Absolute, out var resource) ? resource : null) is { } resourceOrigin
+                return OriginOf(Uri.TryCreate(state.FinalSource ?? state.CurrentSource, UriKind.Absolute, out var resource) ? resource : null) is { } resourceOrigin
                     && !string.Equals(resourceOrigin, OriginOf(image.OwnerDocument.BaseUri), StringComparison.Ordinal);
             case NodeObject { Node: { Kind: ScriptNodeKind.Element } video } when IsVideo(video):
                 return VideoTainted(video);
@@ -352,6 +355,7 @@ internal sealed partial class ScriptRuntime
                 state.Width = info?.Width ?? 0;
                 state.Height = info?.Height ?? 0;
                 state.CurrentSource = info?.Address ?? ResolveAddress(node, source);
+                state.FinalSource = info?.ResponseAddress;
                 var waiters = state.Waiters.ToArray();
                 state.Waiters.Clear();
                 foreach (var (resolve, reject) in waiters)

@@ -167,7 +167,7 @@ internal sealed partial class WptServer(string root)
             var responseHeaders = response.Headers
                 .GroupBy(h => h.Key, StringComparer.OrdinalIgnoreCase)
                 .ToDictionary(g => g.Key, g => g.Select(h => h.Value).ToArray(), StringComparer.OrdinalIgnoreCase);
-            return ValueTask.FromResult<RNetworkResponse?>(new RNetworkResponse(new MemoryStream(response.Body), responseHeaders));
+            return ValueTask.FromResult<RNetworkResponse?>(new RNetworkResponse(new MemoryStream(response.Body), responseHeaders) { FinalAddress = uri });
         }
 
         return ValueTask.FromResult<RNetworkResponse?>(null);

@@ -1015,6 +1015,17 @@ public sealed class ScriptDocument
         }
     }
 
+    private readonly System.Runtime.CompilerServices.ConditionalWeakTable<PeachBrackets.Media.IMediaSession, string> _mediaFinalAddresses = new();
+
+    /// <summary>The address a session's resource was finally read from when its request was redirected, or null.</summary>
+    /// <param name="session">a session <see cref="OpenMediaAsync"/> returned</param>
+    /// <returns>the address of the last hop, or null when the loader did not say or there was no redirect</returns>
+    public string? GetMediaFinalAddress(PeachBrackets.Media.IMediaSession session)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+        return _mediaFinalAddresses.TryGetValue(session, out var address) ? address : null;
+    }
+
     /// <summary>Opens a media resource with the document's media provider.</summary>
     /// <param name="address">the address as written, absolute or relative to the document</param>
     /// <param name="kind">whether an <c>audio</c> or a <c>video</c> element asks</param>
@@ -1034,7 +1045,13 @@ public sealed class ScriptDocument
         if (uri is not { IsAbsoluteUri: true })
             return null;
 
-        var request = new PeachBrackets.Media.MediaRequest(uri, kind, _container.RenderContext, _ => _container.RenderContext.GetResourceStream(uri))
+        string? finalAddress = null;
+        var request = new PeachBrackets.Media.MediaRequest(uri, kind, _container.RenderContext, async _ =>
+        {
+            var response = await _container.RenderContext.GetResourceStream(uri);
+            finalAddress = response?.FinalAddress?.AbsoluteUri;
+            return response;
+        })
         {
             ContentType = contentType,
             CrossOrigin = crossOrigin,
@@ -1045,7 +1062,11 @@ public sealed class ScriptDocument
 
         try
         {
-            return await provider.OpenAsync(request);
+            var session = await provider.OpenAsync(request);
+            if (session is not null && finalAddress is not null)
+                _mediaFinalAddresses.AddOrUpdate(session, finalAddress);
+
+            return session;
         }
         catch (Exception ex) when (ex is not OutOfMemoryException and not OperationCanceledException)
         {
@@ -1110,7 +1131,7 @@ public sealed class ScriptDocument
             {
                 var image = ImageColorSources.Upright(_container.RenderContext, loaded);
                 _loadedImages[address] = image;
-                return new ScriptImageInfo(image.Width, image.Height, url);
+                return new ScriptImageInfo(image.Width, image.Height, url, handler.FinalAddress?.AbsoluteUri);
             }
 
             if (handler.SvgDocument is { } svg)
@@ -1118,7 +1139,7 @@ public sealed class ScriptDocument
                 _loadedSvgs[address] = svg;
                 var width = svg.Width ?? svg.ViewBox?.Width ?? 300;
                 var height = svg.Height ?? svg.ViewBox?.Height ?? 150;
-                return new ScriptImageInfo(width, height, url);
+                return new ScriptImageInfo(width, height, url, handler.FinalAddress?.AbsoluteUri);
             }
 
             return null;
