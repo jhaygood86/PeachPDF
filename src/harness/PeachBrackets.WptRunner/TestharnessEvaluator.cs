@@ -113,6 +113,7 @@ internal sealed partial class TestharnessEvaluator(string wptRoot) : IWptEvaluat
             }),
             MeasuringCanvasFactory = () => context.CreateCanvas(1, 1),
             ScriptNetwork = new ServerNetwork(server),
+            MediaProvider = WptRenderer.CreateMediaProvider(),
         };
         options.SetMargins(0);
 

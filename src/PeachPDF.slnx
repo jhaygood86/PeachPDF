@@ -43,6 +43,8 @@
   <Project Path="engine/PeachBrackets.Scripting/PeachBrackets.Scripting.csproj" />
   <Project Path="engine/PeachBrackets.Media.GStreamer/PeachBrackets.Media.GStreamer.csproj" />
   <Project Path="tests/PeachBrackets.Media.GStreamer.Tests/PeachBrackets.Media.GStreamer.Tests.csproj" />
+  <Project Path="engine/PeachBrackets.Media.Platform/PeachBrackets.Media.Platform.csproj" />
+  <Project Path="tests/PeachBrackets.Media.Platform.Tests/PeachBrackets.Media.Platform.Tests.csproj" />
   <Project Path="tests/PeachBrackets.Scripting.Tests/PeachBrackets.Scripting.Tests.csproj" />
   <Project Path="tests/PeachBrackets.Tests/PeachBrackets.Tests.csproj" />
   <Project Path="tests/PeachBrackets.WptRunner.Tests/PeachBrackets.WptRunner.Tests.csproj" />

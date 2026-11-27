@@ -31,6 +31,31 @@ internal sealed partial class WptRenderer(string wptRoot) : IReftestRenderer
     /// to the bundled Liberation faces (so the floors do not depend on the fonts of the runner image: they differed between Windows and Linux by dozens of reftests), and the
     /// WPT harness's own Ahem (every glyph an em square, metrics known exactly), which a test that sets <c>font-family: Ahem</c> without an @font-face rule relies on.
     /// </summary>
+    private static readonly object s_mediaGate = new();
+    private static bool s_mediaReported;
+
+    /// <summary>
+    /// The decoder the pages' audio and video play through: the platform's (GStreamer here), on the document's clock so that a page behaves the same on
+    /// a slow machine as on a fast one. Null, with one line saying so, when the machine has none: the media tests then fail as they do with no provider.
+    /// </summary>
+    internal static PeachBrackets.Media.IMediaProvider? CreateMediaProvider()
+    {
+        // PEACHBRACKETS_WPT_NO_MEDIA=1 runs without a decoder, to measure what the media tests gain from one.
+        var provider = Environment.GetEnvironmentVariable("PEACHBRACKETS_WPT_NO_MEDIA") == "1" ? null : PeachBrackets.Media.Platform.PlatformMediaProvider.Create(new PeachBrackets.Media.MediaProviderOptions { DeterministicClock = true });
+        lock (s_mediaGate)
+        {
+            if (!s_mediaReported)
+            {
+                s_mediaReported = true;
+                Console.Error.WriteLine(provider is null
+                    ? "No media decoder is installed (GStreamer): the audio and video tests will fail."
+                    : "Media decoder: " + provider.GetType().Name + " (webm: '" + provider.CanPlayType("video/webm; codecs=\"vp9, opus\"") + "', mp4: '" + provider.CanPlayType("video/mp4; codecs=\"avc1.42E01E\"") + "').");
+            }
+        }
+
+        return provider;
+    }
+
     internal static async Task InstallFontsAsync(RasterRenderContext context, string wptRoot)
     {
         var fontSet = new FontSet();
@@ -129,6 +154,7 @@ internal sealed partial class WptRenderer(string wptRoot) : IReftestRenderer
             });
             options.MeasuringCanvasFactory = () => context.CreateCanvas(1, 1);
             options.ScriptNetwork = new ServerNetwork(server);
+            options.MediaProvider = CreateMediaProvider();
         }
 
         using var document = await HtmlDocument.LoadAsync(source, context, options);

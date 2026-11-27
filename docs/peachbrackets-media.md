@@ -80,6 +80,13 @@ without it, or without the plugin for a codec, `CanPlayType` answers `""` for wh
 * **Not done.** Rotation tags are not applied; a stream that only starts to play after more data arrives is not a case, since the file is complete before
   playback; `PlaybackRate` in real time seeks (no pitch correction).
 
+## One provider for the platform
+
+`PeachBrackets.Media.Platform` has one call, `PlatformMediaProvider.Create(options)`, that returns the provider for the operating system the program runs
+on (null when it has no decoder, so a document shows its posters). Today every platform is served by the GStreamer provider; the Media Foundation,
+AVFoundation and Android providers take over their platforms as their packages land. The WPT runner uses it with `DeterministicClock`, so the
+audio and video tests run on a real decoder on a developer's machine and on the CI image alike.
+
 ## Script media elements
 
 With `PeachBrackets.Scripting`, a script's `audio` and `video` elements are driven by the same provider. A `src` (or `load()`, or a `source` child the provider

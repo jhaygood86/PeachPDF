@@ -174,6 +174,23 @@ public class MediaElementTests
     private const string Events = "var events = []; ['loadstart','durationchange','loadedmetadata','resize','loadeddata','canplay','canplaythrough','play','playing','pause','ended','seeking','seeked','error','emptied','waiting','volumechange','ratechange'].forEach(function (t) { v.addEventListener(t, function () { events.push(t); }); });";
 
     [Fact]
+    public async Task TheMediaEventHandlerAttributes_AreCalledLikeListeners()
+    {
+        var (log, document) = await RunAsync("""
+            var v = document.createElement('video'); var seen = [];
+            ['loadstart', 'loadedmetadata', 'loadeddata', 'canplay', 'canplaythrough', 'play', 'playing', 'pause', 'ended', 'seeked', 'timeupdate'].forEach(function (t) {
+                v['on' + t] = function () { seen.push(t); };
+            });
+            v.src = 'https://media.test/a.webm';
+            setTimeout(function () { v.play(); }, 100);
+            setTimeout(function () { v.pause(); Log.info(seen.filter(function (t, i) { return seen.indexOf(t) === i; }).join(',')); }, 700);
+            """, new FakeProvider());
+        using var _ = document;
+
+        Assert.Equal(["loadstart,loadedmetadata,loadeddata,canplay,canplaythrough,play,playing,timeupdate"], log);
+    }
+
+    [Fact]
     public async Task ALoadedVideo_FiresItsEventsInTheStandardOrder_AndReportsWhatTheSessionHas()
     {
         var (log, document) = await RunAsync($$"""

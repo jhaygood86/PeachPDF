@@ -11,6 +11,7 @@
     <!-- Public API only, the way a package consumer uses the engine (the WPT checkout is fetched, never vendored). -->
     <ProjectReference Include="..\..\engine\PeachBrackets\PeachBrackets.csproj" />
     <ProjectReference Include="..\..\engine\PeachBrackets.Scripting\PeachBrackets.Scripting.csproj" />
+    <ProjectReference Include="..\..\engine\PeachBrackets.Media.Platform\PeachBrackets.Media.Platform.csproj" />
     <ProjectReference Include="..\..\drawing\PeachDrawing\PeachDrawing.csproj" />
   </ItemGroup>
 

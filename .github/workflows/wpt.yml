@@ -11,6 +11,7 @@ on:
     branches: [ main ]
     paths:
       - 'src/engine/PeachBrackets/**'
+      - 'src/engine/PeachBrackets.Media.*/**'
       - 'src/drawing/**'
       - 'src/harness/PeachBrackets.WptRunner/**'
       - '.github/workflows/wpt.yml'
@@ -18,6 +19,7 @@ on:
     branches: [ main ]
     paths:
       - 'src/engine/PeachBrackets/**'
+      - 'src/engine/PeachBrackets.Media.*/**'
       - 'src/drawing/**'
       - 'src/harness/PeachBrackets.WptRunner/**'
       - '.github/workflows/wpt.yml'
@@ -67,6 +69,16 @@ jobs:
         '@ | Set-Content "$HOME/.config/fontconfig/fonts.conf"
         fc-cache -f
         fc-match serif; fc-match sans-serif; fc-match monospace
+
+    # The audio and video tests play through GStreamer (PeachBrackets.Media.Platform picks it on Linux). plugins-good has the Matroska/WebM and
+    # MP4 demuxers and the libvpx VP8/VP9 decoders, libav the H.264/H.265/AAC decoders, plugins-base videoconvert, appsink and Opus. The check
+    # fails the job when an element is missing, so a codec the runner image dropped is a loud failure and never ~100 silently failing subtests.
+    - name: Install GStreamer
+      run: |
+        sudo apt-get install -y gstreamer1.0-tools gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-libav libgstreamer1.0-0 libgstreamer-plugins-base1.0-0
+        gst-inspect-1.0 --version
+        $missing = @('matroskademux', 'qtdemux', 'vp9dec', 'opusdec', 'avdec_h264', 'avdec_h265', 'videoconvert', 'appsink') | Where-Object { gst-inspect-1.0 $_ *> $null; $LASTEXITCODE -ne 0 }
+        if ($missing) { throw "GStreamer elements missing: $($missing -join ', ')" }
 
     - name: Cache the WPT checkout
       id: wpt-cache

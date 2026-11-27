@@ -357,6 +357,48 @@ public class GStreamerProviderTests : IDisposable
         Assert.Equal(["64x48 true"], logger.Texts);
     }
 
+    [Fact]
+    public async Task CreateImageBitmap_OfALoadedVideo_RejectsABadCrop_AndMakesABitmapOtherwise()
+    {
+        RequireGStreamer();
+        var clip = RedClip();
+        var (logger, document) = await LoadScriptAsync(clip, """
+            var v = document.createElement('video'); v.setAttribute('crossorigin', 'anonymous'); v.preload = 'auto';
+            v.oncanplaythrough = function () { Log.info('cpt');
+                createImageBitmap(v, 0, 0, 0, 10).then(function () { Log.info('resolved'); }, function (e) { Log.info('rejected ' + e.name);
+                    createImageBitmap(v).then(function (b) { Log.info('bitmap ' + b.width + 'x' + b.height); }, function (e2) { Log.info('failed ' + e2.name); });
+                });
+            };
+            v.src = 'https://media.test/red.webm';
+            setTimeout(function () { Log.info('end'); }, 3000);
+            """);
+        using var _ = document;
+
+        Assert.Empty(logger.Errors);
+        Assert.Equal(["cpt", "rejected RangeError", "bitmap 64x48", "end"], logger.Texts);
+    }
+
+    private async Task<(LogCollector Logger, HtmlDocument Document)> LoadScriptAsync(string clip, string script)
+    {
+        var logger = new LogCollector();
+        var host = new PeachBrackets.Scripting.JintScriptHost(new PeachBrackets.Scripting.JintScriptOptions { Logger = logger });
+        var context = new RasterRenderContext
+        {
+            ResourceLoader = uri => uri.Host == "media.test" ? new ValueTask<RNetworkResponse?>(new RNetworkResponse(File.OpenRead(clip), null)) : default,
+        };
+        var options = new HtmlDocumentOptions
+        {
+            MediaType = MediaType.Screen,
+            PageWidthPoints = 200,
+            ScriptHost = host,
+            MeasuringCanvasFactory = () => context.CreateCanvas(1, 1),
+            MediaProvider = Deterministic(),
+        };
+        options.SetMargins(0);
+        var document = await HtmlDocument.LoadAsync("<!DOCTYPE html><html><body><script>" + script + "</script></body></html>", context, options);
+        return (logger, document);
+    }
+
     private sealed class LogCollector : Microsoft.Extensions.Logging.ILogger
     {
         public List<string> Texts { get; } = [];

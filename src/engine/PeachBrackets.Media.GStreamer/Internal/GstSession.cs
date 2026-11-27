@@ -28,6 +28,7 @@ internal sealed class GstSession : IMediaSession
     private readonly nint _bus;
 
     private bool _disposed;
+    private bool _keepFile;
     private int _width;
     private int _height;
     private TimeSpan _frameDuration = TimeSpan.FromMilliseconds(40);
@@ -160,6 +161,15 @@ internal sealed class GstSession : IMediaSession
             return null;
         }
 
+        var session = await StartAsync(file, request, options, cancellationToken).ConfigureAwait(false);
+        if (session is null)
+            TryDelete(file);
+
+        return session;
+    }
+
+    private static async ValueTask<GstSession?> StartAsync(string file, MediaRequest request, MediaProviderOptions options, CancellationToken cancellationToken)
+    {
         var video = request.Kind == MediaKind.Video;
         var deterministic = options.DeterministicClock;
         var audioSink = deterministic || request.Muted ? "fakesink" : "autoaudiosink";
@@ -173,10 +183,7 @@ internal sealed class GstSession : IMediaSession
 
         var pipeline = gst_parse_launch(description, out _);
         if (pipeline == 0)
-        {
-            TryDelete(file);
             return null;
-        }
 
         gst_element_set_state(pipeline, StatePaused);
         var result = await Task.Run(() => gst_element_get_state(pipeline, out _, out _, 15UL * (ulong)Second), cancellationToken).ConfigureAwait(false);
@@ -187,6 +194,7 @@ internal sealed class GstSession : IMediaSession
         var session = new GstSession(request.Kind, deterministic, file, pipeline, sink, convert, request.Muted, request.Loop);
         if (result == ChangeFailure || gst_bus_pop_filtered(session._bus, MessageError) is var failure && failure != 0)
         {
+            session._keepFile = true;
             session.Dispose();
             return null;
         }
@@ -346,7 +354,8 @@ internal sealed class GstSession : IMediaSession
             gst_object_unref(_convert);
 
         gst_object_unref(_pipeline);
-        TryDelete(_file);
+        if (!_keepFile)
+            TryDelete(_file);
     }
 
     /// <summary>Reads what the prerolled pipeline knows: the duration, and for a video the picture size, its rate and its colorimetry.</summary>
