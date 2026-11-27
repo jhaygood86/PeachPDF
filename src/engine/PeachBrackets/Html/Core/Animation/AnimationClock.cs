@@ -44,6 +44,9 @@ namespace PeachBrackets.Html.Animation
         private readonly Dictionary<(int Ordinal, string Name, int Index), (AnimationApplier.LiveTrack Track, CssBox Box)> _carried = [];
         private readonly Dictionary<(int Ordinal, string Property), TransitionRun> _transitions = [];
         private readonly List<Image> _images = [];
+
+        // The video boxes that have a media session: each step takes the session's current picture.
+        private readonly List<CssBoxVideo> _videos = [];
         private readonly Dictionary<Image, double> _imageElapsed = [];
         private CssBox? _root;
         private int _generation = -1;
@@ -851,6 +854,7 @@ namespace PeachBrackets.Html.Animation
             if (_changed.Count > 0 || overlayBefore?.Count > 0 || overlayNow?.Count > 0) overlayChanged = AddDirtyRegions(dirty, overlayBefore, overlayNow);
 
             running |= AdvanceImages(dt, fragmentainers, dirty);
+            running |= AdvanceVideos(nowSeconds, fragmentainers, dirty);
 
             IsRunning = running;
 
@@ -1289,6 +1293,7 @@ namespace PeachBrackets.Html.Animation
                 _byBox.Clear();
                 _root = root;
                 _images.Clear();
+                _videos.Clear();
                 CollectBoxes(root, rebuilt: true);
 
                 // What the new tree no longer names was taken away by whatever caused the load.
@@ -1695,9 +1700,11 @@ namespace PeachBrackets.Html.Animation
         {
             _imageGeneration = _container.ImageGeneration;
             _images.Clear();
+            _videos.Clear();
             void Walk(CssBox box)
             {
                 if (box is CssBoxImage { Image: { FrameCount: > 1 } image } && !_images.Contains(image)) _images.Add(image);
+                if (box is CssBoxVideo { Session: not null } video) _videos.Add(video);
                 foreach (var child in box.Boxes) Walk(child);
             }
 
@@ -1749,6 +1756,29 @@ namespace PeachBrackets.Html.Animation
             foreach (var box in boxes)
                 dirty.AddRange(StyleUpdater.DirtyRegionsOf(_container, box, fragmentainers));
 
+            return running;
+        }
+
+        // Takes each playing video's current picture; only the boxes whose picture changed are painted again.
+        private bool AdvanceVideos(double nowSeconds, IReadOnlyList<FragmentainerFragment> fragmentainers, List<DirtyRegion> dirty)
+        {
+            if (_videos.Count == 0) return false;
+
+            var running = false;
+            var moved = false;
+            var time = TimeSpan.FromSeconds(nowSeconds);
+            foreach (var video in _videos)
+            {
+                if (video.Advance(time, out var playing))
+                {
+                    moved = true;
+                    dirty.AddRange(StyleUpdater.DirtyRegionsOf(_container, video, fragmentainers));
+                }
+
+                running |= playing;
+            }
+
+            if (moved) _contentGeneration++;
             return running;
         }
 

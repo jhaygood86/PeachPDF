@@ -130,6 +130,7 @@ public sealed partial class HtmlDocument : IDisposable
             container.DocumentModeOverride = options.DocumentMode;
             container.DocumentSyntax = options.Syntax;
             container.ScriptHost = options.ScriptHost;
+            container.MediaProvider = options.MediaProvider;
             container.ScriptApis = [.. options.ScriptApis];
             container.ScriptNetwork = options.ScriptNetwork;
             container.MeasuringCanvasFactory = options.MeasuringCanvasFactory;

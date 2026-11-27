@@ -253,6 +253,13 @@ public sealed class HtmlDocumentOptions
     public PeachBrackets.ScriptHosting.IScriptHost? ScriptHost { get; set; }
 
     /// <summary>
+    /// What plays the document's <c>audio</c> and <c>video</c> elements, or null (the default): PeachBrackets decodes no media itself. With none, a
+    /// <c>video</c> shows its <c>poster</c> and a script's media elements cannot play. With one, a <c>video</c> shows a picture of its media (the
+    /// first, or the one at a <c>#t=</c> fragment, for a paged document; the playing one for a document that <see cref="AnimationsEnabled"/> steps).
+    /// </summary>
+    public PeachBrackets.Media.IMediaProvider? MediaProvider { get; set; }
+
+    /// <summary>
     /// Makes a canvas to measure text on, for the layout a script asks for while it runs (<c>getBoundingClientRect</c>, <c>offsetWidth</c>,
     /// <c>getComputedStyle</c>). Called each time the script needs the document laid out again after it changed. Null (the default) means scripts
     /// get no layout: sizes read as zero and computed styles as what the element's own <c>style</c> attribute says. Only read when
@@ -306,6 +313,7 @@ public sealed class HtmlDocumentOptions
         copy.ScriptHost = PeachBrackets.ScriptHosting.IdleScriptHost.Instance;
         copy.MeasuringCanvasFactory = null;
         copy.ScriptApis = [];
+        copy.MediaProvider = null;
 
         // The probe answers where text is (the rectangles of a range, the character at a point), which the text runs have.
         copy.RecordTextRuns = true;

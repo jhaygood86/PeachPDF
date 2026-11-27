@@ -698,6 +698,7 @@ PeachBrackets.HtmlDocumentOptions : sealed class
   property Double? ViewportHeightPoints { get; set; }
   property Func<Canvas> MeasuringCanvasFactory { get; set; }
   property IList<ScriptApi> ScriptApis { get; }
+  property IMediaProvider MediaProvider { get; set; }
   property IScriptHost ScriptHost { get; set; }
   property IScriptNetwork ScriptNetwork { get; set; }
   property ImageSelectionOptions ImageSelection { get; set; }
@@ -754,6 +755,80 @@ PeachBrackets.InputCapabilities : sealed class
   property static InputCapabilities Mouse { get; }
   property static InputCapabilities None { get; }
   property static InputCapabilities Touch { get; }
+PeachBrackets.Media.IMediaProvider : interface
+  method abstract String CanPlayType(String mimeType)
+  method abstract ValueTask<IMediaSession> OpenAsync(MediaRequest request, CancellationToken cancellationToken = null)
+PeachBrackets.Media.IMediaSession : interface
+  method abstract MediaFrame AcquireFrame()
+  method abstract ValueTask<MediaFrame> AcquireFrameAtAsync(TimeSpan position, CancellationToken cancellationToken = null)
+  method abstract Void Pause()
+  method abstract Void Play()
+  method abstract Void Seek(TimeSpan position)
+  method abstract Void Update(TimeSpan documentTime)
+  property Boolean Ended { get; }
+  property Boolean HasVideo { get; }
+  property Boolean IsPlaying { get; }
+  property Boolean Loop { get; set; }
+  property Boolean Muted { get; set; }
+  property Double PlaybackRate { get; set; }
+  property Double Volume { get; set; }
+  property Int32 VideoHeight { get; }
+  property Int32 VideoWidth { get; }
+  property MediaErrorCode Error { get; }
+  property MediaKind Kind { get; }
+  property MediaReadyState ReadyState { get; }
+  property TimeSpan Position { get; }
+  property TimeSpan? Duration { get; }
+PeachBrackets.Media.MediaChange : enum Int32
+  Data = 2
+  Ended = 32
+  Error = 64
+  Frame = 16
+  Metadata = 1
+  None = 0
+  Position = 8
+  State = 4
+PeachBrackets.Media.MediaChangedEventArgs : sealed class
+  ctor(MediaChange changes)
+  property MediaChange Changes { get; }
+PeachBrackets.Media.MediaErrorCode : enum Int32
+  Aborted = 1
+  Decode = 3
+  Network = 2
+  None = 0
+  SourceNotSupported = 4
+PeachBrackets.Media.MediaFrame : sealed class
+  ctor(Image image, TimeSpan time, Action release = null)
+  method virtual Void Dispose()
+  property Image Image { get; }
+  property TimeSpan Time { get; }
+PeachBrackets.Media.MediaKind : enum Int32
+  Audio = 0
+  Video = 1
+PeachBrackets.Media.MediaPreload : enum Int32
+  Auto = 2
+  Metadata = 1
+  None = 0
+PeachBrackets.Media.MediaProviderOptions : sealed class
+  ctor()
+  property Boolean DeterministicClock { get; init; }
+PeachBrackets.Media.MediaReadyState : enum Int32
+  CurrentData = 2
+  EnoughData = 4
+  FutureData = 3
+  Metadata = 1
+  Nothing = 0
+PeachBrackets.Media.MediaRequest : sealed class
+  ctor(Uri address, MediaKind kind, RenderContext renderContext, Func<CancellationToken, ValueTask<RNetworkResponse>> load)
+  method ValueTask<RNetworkResponse> LoadAsync(CancellationToken cancellationToken = null)
+  property Boolean Loop { get; init; }
+  property Boolean Muted { get; init; }
+  property MediaKind Kind { get; }
+  property MediaPreload Preload { get; init; }
+  property RenderContext RenderContext { get; }
+  property String ContentType { get; init; }
+  property String CrossOrigin { get; init; }
+  property Uri Address { get; }
 PeachBrackets.MediaType : enum Int32
   Print = 0
   Screen = 1

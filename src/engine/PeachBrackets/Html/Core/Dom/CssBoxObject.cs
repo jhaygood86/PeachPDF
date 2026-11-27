@@ -93,6 +93,16 @@ namespace PeachBrackets.Html.Dom
                 return;
             _resolved = true;
 
+            // A video that has a picture of its media shows that, whatever its poster is.
+            if (await ResolveLiveImageAsync() is { } live)
+            {
+                _isReplaced = true;
+                _imageWord = new CssRectImage(this) { Image = live };
+                Words.Add(_imageWord);
+                Boxes.Clear();
+                return;
+            }
+
             var source = ResolveReplacedSource();
             if (string.IsNullOrEmpty(source))
             {
@@ -119,6 +129,11 @@ namespace PeachBrackets.Html.Dom
             // for why clearing here, rather than never creating them, is the correct timing).
             Boxes.Clear();
         }
+
+        /// <summary>
+        /// The picture a host's media provider supplies for this element (a video's current frame), or null to use the resource <see cref="ResolveReplacedSource"/> names.
+        /// </summary>
+        protected virtual ValueTask<Image?> ResolveLiveImageAsync() => default;
 
         /// <summary>
         /// Returns the URL of the resource to render as replaced content, or <c>null</c> to fall back to

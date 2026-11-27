@@ -99,6 +99,13 @@ namespace PeachPDF
         public PeachBrackets.ScriptHosting.IScriptHost? ScriptHost { get; set; }
 
         /// <summary>
+        /// What plays the document's <c>audio</c> and <c>video</c> elements, or <see langword="null"/> (the default): PeachPDF decodes no media itself, so
+        /// a <c>video</c> then shows its <c>poster</c>. With a provider (see <c>PeachBrackets.Media.IMediaProvider</c>) a <c>video</c> is drawn as its first
+        /// picture, or the one at a <c>#t=</c> media fragment of its address, and the PDF holds that picture as an image.
+        /// </summary>
+        public PeachBrackets.Media.IMediaProvider? MediaProvider { get; set; }
+
+        /// <summary>
         /// How many times a script host may change the laid-out document and have it laid out again (a script that registers a function to run after
         /// layout and then changes the document). When the limit is reached the last change is not laid out. The default is 16; 0 means no limit, which
         /// lets a script that changes the document on every pass run forever. Only meaningful with a <see cref="ScriptHost"/>.

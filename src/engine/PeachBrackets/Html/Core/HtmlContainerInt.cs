@@ -1600,6 +1600,9 @@ namespace PeachBrackets.Html
         /// <summary>The host that runs the document's scripts, or null when scripting is off.</summary>
         internal IScriptHost? ScriptHost { get; set; }
 
+        /// <summary>What plays the document's media elements, or null (<see cref="HtmlDocumentOptions.MediaProvider"/>).</summary>
+        internal PeachBrackets.Media.IMediaProvider? MediaProvider { get; set; }
+
         // The markup the scripts left, once they have run: SetHtml recognizes it and does not run them again.
         private string? _scriptedSource;
 
