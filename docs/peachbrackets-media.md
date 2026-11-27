@@ -57,6 +57,25 @@ The sound is the provider's: the document never sees audio samples.
 only as the time passed to `IMediaSession.Update` does, and each picture is the one at that position, found by seeking. A document that plays media
 then behaves the same on a slow machine as on a fast one, which is what the test runners need.
 
+## Script media elements
+
+With `PeachBrackets.Scripting`, a script's `audio` and `video` elements are driven by the same provider. A `src` (or `load()`, or a `source` child the provider
+can play, chosen by its `type` through `CanPlayType`) opens a session, and the element behaves as in a browser, on the script's virtual clock:
+
+* The event sequence: `loadstart`, `durationchange`, `loadedmetadata`, `resize` (video), `loadeddata`, `canplay`, `canplaythrough`; `play`, `playing`, `pause`,
+  `seeking`, `seeked`, `timeupdate`, `ended`, `emptied`, `error`, `waiting`, `volumechange`, `ratechange`. `autoplay` plays at `canplaythrough`.
+* `play()` returns a promise that settles when playback has started (or rejects `NotSupportedError` for a source that cannot be played, `AbortError` when
+  paused or reloaded first); `pause()`, `load()`, `currentTime` (setting it seeks), `duration`, `paused`, `ended`, `seeking`, `readyState`, `networkState`,
+  `currentSrc`, `error` (a `MediaError`), `volume` (validated), `muted`, `playbackRate`, `defaultPlaybackRate`, `loop`, `seekable`, `buffered`, `played`
+  (`TimeRanges`), `canPlayType`, and on a video `videoWidth`, `videoHeight`, `requestVideoFrameCallback`/`cancelVideoFrameCallback` and `getVideoPlaybackQuality`.
+* A provider's state is read on the virtual clock, not when the provider changes it: while anything is playing or loading a timer, every 20 ms of script time,
+  tells each session the time and turns what changed into events. Use `MediaProviderOptions.DeterministicClock` for sessions that play by that clock, so the
+  position a script reads is the same on every machine.
+* A script's session lives until its scripts are done; the document is then parsed again from what they left, and the video a viewer sees opens its own
+  session. Playing state does not carry across.
+* Not supported: `srcObject` (always null), `captureStream`, text tracks, `webkitAudioDecodedByteCount`-style extensions, `<source>` fallback to a later source
+  when the first chosen one fails to open (the element fails).
+
 ## Limits
 
 * One picture per step; no `audio` output beyond what a provider does itself.

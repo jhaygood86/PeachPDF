@@ -981,6 +981,63 @@ public sealed class ScriptDocument
         return ImageColorSources.Unoriented(image);
     }
 
+    /// <summary>Whether the document has a media provider, so that its <c>audio</c> and <c>video</c> elements can play.</summary>
+    public bool HasMediaProvider => _container.MediaProvider is not null;
+
+    /// <summary>What the document's media provider says of a media type, in the words of <c>HTMLMediaElement.canPlayType</c>; an empty string with no provider.</summary>
+    /// <param name="mimeType">a media type, with <c>codecs</c> if the caller names them</param>
+    public string CanPlayMediaType(string mimeType)
+    {
+        ArgumentNullException.ThrowIfNull(mimeType);
+        try
+        {
+            return _container.MediaProvider?.CanPlayType(mimeType) ?? string.Empty;
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            // A provider is the host's code: one that cannot answer plays nothing.
+            return string.Empty;
+        }
+    }
+
+    /// <summary>Opens a media resource with the document's media provider.</summary>
+    /// <param name="address">the address as written, absolute or relative to the document</param>
+    /// <param name="kind">whether an <c>audio</c> or a <c>video</c> element asks</param>
+    /// <param name="contentType">the <c>type</c> of the <c>source</c> element that named the address, or null</param>
+    /// <param name="crossOrigin">the element's <c>crossorigin</c> attribute, or null</param>
+    /// <param name="muted">whether the element is muted</param>
+    /// <param name="loop">whether the element loops</param>
+    /// <param name="preload">the element's <c>preload</c></param>
+    /// <returns>the session, or null when there is no provider or the resource cannot be played</returns>
+    public async ValueTask<PeachBrackets.Media.IMediaSession?> OpenMediaAsync(string address, PeachBrackets.Media.MediaKind kind, string? contentType, string? crossOrigin, bool muted, bool loop, PeachBrackets.Media.MediaPreload preload)
+    {
+        ArgumentNullException.ThrowIfNull(address);
+        if (_container.MediaProvider is not { } provider)
+            return null;
+
+        var uri = CommonUtils.ResolveAgainstDocumentBase(_container, address.Trim());
+        if (uri is not { IsAbsoluteUri: true })
+            return null;
+
+        var request = new PeachBrackets.Media.MediaRequest(uri, kind, _container.RenderContext, _ => _container.RenderContext.GetResourceStream(uri))
+        {
+            ContentType = contentType,
+            CrossOrigin = crossOrigin,
+            Muted = muted,
+            Loop = loop,
+            Preload = preload,
+        };
+
+        try
+        {
+            return await provider.OpenAsync(request);
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException and not OperationCanceledException)
+        {
+            return null;
+        }
+    }
+
     /// <summary>Whether the image was decoded from a file that declares a color space other than sRGB, so that <see cref="ConvertImageToColorSpace"/> has something to convert from.</summary>
     /// <param name="image">an image this document decoded</param>
     public bool DeclaresColorSpace(PeachDrawing.Core.Image image)

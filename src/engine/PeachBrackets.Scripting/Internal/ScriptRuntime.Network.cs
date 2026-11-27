@@ -282,13 +282,14 @@ internal sealed partial class ScriptRuntime
     private async ValueTask DeliverRequestsAsync()
     {
         StartInitialImages();
-        while (_pendingRequests.Count > 0 || _pendingImages.Count > 0 || _pendingFonts.Count > 0)
+        while (_pendingRequests.Count > 0 || _pendingImages.Count > 0 || _pendingFonts.Count > 0 || _pendingMedia.Count > 0)
         {
             // Fonts a script asked to load after the page loaded are waited for as images and requests are.
             if (_pendingFonts.Count > 0)
                 await RunFontLoadsAsync();
 
             await DeliverImagesAsync();
+            await DeliverMediaAsync();
             if (_pendingRequests.Count == 0)
                 continue;
 

@@ -970,9 +970,11 @@ PeachBrackets.ScriptHosting.ScriptDocument : sealed class
   method ScriptNode GetElementById(String id)
   method ScriptNode QuerySelector(String selector)
   method ScriptSvgFilter GetSvgFilter(String id)
+  method String CanPlayMediaType(String mimeType)
   method String GetComputedValue(ScriptNode element, String property)
   method ValueTask LoadFontFacesAsync()
   method ValueTask<Boolean> LoadFontFaceAsync(String family, String source, Byte[] data, String weight, String style, String stretch, String unicodeRange)
+  method ValueTask<IMediaSession> OpenMediaAsync(String address, MediaKind kind, String contentType, String crossOrigin, Boolean muted, Boolean loop, MediaPreload preload)
   method ValueTask<ScriptImageInfo> LoadImageAsync(String address)
   method ValueTask<ScriptNetworkResponse> SendAsync(ScriptNetworkRequest request, CancellationToken cancellationToken = null)
   method ValueTask<String> LoadTextAsync(String address)
@@ -983,6 +985,7 @@ PeachBrackets.ScriptHosting.ScriptDocument : sealed class
   method static Boolean TryParseNonNegativeInteger(String text, out UInt32 value)
   property Boolean CanMeasure { get; }
   property Boolean FontFacesLoaded { get; }
+  property Boolean HasMediaProvider { get; }
   property Boolean IsHtml { get; }
   property Boolean KeepAlive { get; set; }
   property IReadOnlyList<ScriptApi> Apis { get; }

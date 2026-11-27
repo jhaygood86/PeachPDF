@@ -69,7 +69,8 @@ public interface IMediaSession : IDisposable
     /// <summary>
     /// Tells the session what time the document is at. A session made with <see cref="MediaProviderOptions.DeterministicClock"/> moves its position by
     /// the difference from the time it was last told; one that plays by its player's clock ignores it. Called before the pictures are asked for in each
-    /// step the document takes.
+    /// step the document takes, and before each <see cref="Play"/>, <see cref="Pause"/>, <see cref="Seek"/> and change of <see cref="PlaybackRate"/> a script
+    /// asks for, so that the time since the last call is played at the old setting.
     /// </summary>
     /// <param name="documentTime">the time on the document's clock</param>
     void Update(TimeSpan documentTime);

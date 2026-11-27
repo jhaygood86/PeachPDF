@@ -203,6 +203,7 @@ internal sealed partial class ScriptRuntime
 
         // The canvases that make their children drawable paint once the page has loaded.
         StartInitialCanvasPaints();
+        StartInitialMedia();
         await PlayTimersAsync();
         ReportPendingWork();
     }

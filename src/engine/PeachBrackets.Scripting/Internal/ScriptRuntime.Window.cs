@@ -116,6 +116,8 @@ internal sealed partial class ScriptRuntime
             parts.Add($"{_pendingRequests.Count} requests unanswered ({string.Join(", ", _pendingRequests.Take(3).Select(r => r.Url.AbsoluteUri))})");
         if (_pendingImages.Count > 0)
             parts.Add($"{_pendingImages.Count} images not loaded");
+        if (_pendingMedia.Count > 0)
+            parts.Add($"{_pendingMedia.Count} media not opened");
 
         var recent = _recentEvents.Count == 0 ? "no events" : string.Join(", ", _recentEvents);
         var text = (parts.Count == 0 ? "nothing scheduled" : string.Join("; ", parts)) + "; last events: " + recent;
