@@ -241,10 +241,11 @@ public sealed partial class HtmlDocument
     private static double XAt(TextRun run, int index)
     {
         var boundaries = run.CharacterBoundaries;
-        for (var k = 0; k < boundaries.Count && k < run.CharacterOffsets.Count; k++)
+        // The offsets are by UTF-16 index, the boundaries a list of the indices that are positions (fewer, where a surrogate pair or a cluster is).
+        for (var k = 0; k < boundaries.Count; k++)
         {
-            if (boundaries[k] >= index)
-                return run.CharacterOffsets[k];
+            if (boundaries[k] >= index && boundaries[k] < run.CharacterOffsets.Count)
+                return run.CharacterOffsets[boundaries[k]];
         }
 
         return run.CharacterOffsets[^1];

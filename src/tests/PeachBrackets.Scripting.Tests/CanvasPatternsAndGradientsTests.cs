@@ -472,4 +472,20 @@ public class HtmlInCanvasTests
 
         Assert.Equal(["before 0", "InvalidStateError true true 1 true 7 8"], log);
     }
+
+    [Fact]
+    public async Task ARangeOverEachOfThreeSurrogatePairsIsAWholeCharacterFurtherAlong()
+    {
+        var log = await LogAsync("", """
+            var el = document.createElement('div'); el.textContent = '🏁🎶🏁'; el.style.font = '30px sans-serif'; document.body.appendChild(el);
+            var xs = [0, 2, 4].map(function (i) {
+                var r = document.createRange(); r.setStart(el.childNodes[0], i); r.setEnd(el.childNodes[0], i + 2);
+                var rect = r.getClientRects()[0];
+                return [rect.x, rect.width];
+            });
+            Log.info((xs[1][0] > xs[0][0] && xs[2][0] > xs[1][0] && Math.abs(xs[1][0] - xs[0][0] - xs[0][1]) < 0.5 && Math.abs(xs[2][0] - xs[1][0] - xs[1][1]) < 0.5).toString());
+            """);
+
+        Assert.Equal(["true"], log);
+    }
 }

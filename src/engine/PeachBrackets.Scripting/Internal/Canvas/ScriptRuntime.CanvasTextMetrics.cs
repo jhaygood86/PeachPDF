@@ -243,6 +243,28 @@ internal sealed partial class ScriptRuntime
         return ((int)start, (int)end);
     }
 
+    // Where a caret is when it follows a character: at that character's trailing edge, which is the right edge of a left-to-right one and the left edge of a right-to-left one. Where
+    // two runs of different direction meet the same index is two places, and this is the one a selection ending there is drawn at (a caret at the start is the first place).
+    private static double TrailingCaretX(PeachDrawing.Core.TextRunLayout run, int index)
+    {
+        if (index <= 0)
+            return run.CaretX(0);
+
+        var previous = 0;
+        foreach (var boundary in run.Boundaries)
+        {
+            if (boundary < index)
+                previous = boundary;
+        }
+
+        var boxes = run.SelectionBoxes(previous, index);
+        var found = run.Runs.Where(r => r.Start <= previous && index <= r.End).Cast<PeachDrawing.Core.TextRunSegment?>().FirstOrDefault();
+        if (boxes.Count != 1 || found is not { } segment)
+            return run.CaretX(index);
+
+        return segment.IsRightToLeft ? boxes[0].X : boxes[0].X + boxes[0].Width;
+    }
+
     private void InstallRangeMethods(ObjectInstance prototype, bool shaped)
     {
         MeasuredTextObject This(JsValue self) => self as MeasuredTextObject ?? throw TypeError("Illegal invocation");
@@ -264,7 +286,7 @@ internal sealed partial class ScriptRuntime
             if (layout.Run is { } collapsedRun && start >= end)
             {
                 // An empty stretch (or one the wrong way round, which is the empty one at its end) is a box with no width where the caret is.
-                rects.Add(Rect(collapsedRun.CaretX(end) - layout.Anchor, -(layout.Metrics.FontAscent - layout.LineOffset) - layout.Metrics.FontLineGap / 2, 0, layout.Metrics.FontAscent + layout.Metrics.FontDescent + layout.Metrics.FontLineGap));
+                rects.Add(Rect(TrailingCaretX(collapsedRun, end) - layout.Anchor, -(layout.Metrics.FontAscent - layout.LineOffset) - layout.Metrics.FontLineGap / 2, 0, layout.Metrics.FontAscent + layout.Metrics.FontDescent + layout.Metrics.FontLineGap));
             }
             else if (layout.Run is { } run)
             {

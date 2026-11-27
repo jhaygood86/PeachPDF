@@ -114,4 +114,29 @@ public class TextRunLayoutTests
         Assert.Equal([true, false, true], small);
         Assert.Equal([("A", 0, true), ("B", 1, false), ("C", 2, true)], SyntheticCaps.Split(text, small));
     }
+
+    [Fact]
+    public void ARightToLeftLineStartsAtTheLeftEdgeWithExactPositions()
+    {
+        var layout = TextRunLayout.Create(Font, "(.)", rightToLeft: true);
+
+        // Laid out in a width of 1e9 it sat at 1e9 minus its width, where single precision is 64 apart.
+        Assert.Equal(layout.Width, layout.CaretX(0), 3);
+        Assert.Equal(0, layout.CaretX(3), 3);
+        var box = Assert.Single(layout.SelectionBoxes(1, 2));
+        Assert.True(box.X > 0 && box.X + box.Width < layout.Width);
+        Assert.True(box.Width > 0 && box.Width < layout.Width / 2);
+    }
+
+    [Fact]
+    public void APointInARunIsForThatRunsCharacters_WhereTwoRunsMeetAtOnePlace()
+    {
+        var rtl = TextRunLayout.Create(Font, "))a((", rightToLeft: true);
+        var run = rtl.Runs.Single(r => !r.IsRightToLeft);
+        var inside = run.X + run.Width * 0.25;
+
+        // A point in the left-to-right run's left half is before its character, whichever way the neighbours' boundaries are drawn.
+        Assert.Equal(run.Start, rtl.IndexFromOffset(inside));
+        Assert.Equal(run.End, rtl.IndexFromOffset(run.X + run.Width * 0.75));
+    }
 }

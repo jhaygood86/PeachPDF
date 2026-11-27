@@ -78,7 +78,14 @@ namespace PeachDrawing.Core
             var builder = new ParagraphBuilder(style);
             builder.SetStyle(new ParagraphStyle { Direction = rightToLeft ? BaseDirection.Rtl : BaseDirection.Ltr, NoWrap = true });
             builder.AddText(text);
-            var layout = builder.Build().Layout(1e9);
+            var paragraph = builder.Build();
+            var layout = paragraph.Layout(1e9);
+
+            // A right-to-left line sits against the right edge of what it is laid out in, and the single-precision positions of a width of 1e9 are 64 apart: lay it out again in
+            // the width it has, where it starts at the left.
+            if (rightToLeft && layout.Lines.Count > 0 && layout.Lines[0].Width > 0)
+                layout = paragraph.Layout(Math.Ceiling(layout.Lines[0].Width));
+
             return new TextRunLayout(text, layout, typeface.Metrics.NormalLineAscent * scale, typeface.Metrics.NormalLineDescent * scale, rightToLeft);
         }
 
@@ -124,7 +131,11 @@ namespace PeachDrawing.Core
             var best = 0;
             var bestDistance = double.PositiveInfinity;
             var bestPosition = 0.0;
-            foreach (var run in _line.Runs)
+
+            // A point inside a run is for that run's characters: where two runs meet, the place both end at is two boundaries (one in each), and the nearer of the two is not the one
+            // of the character the point is on. Only a point outside every run (past the ends of the line) is for the nearest of all.
+            var containing = _line.Runs.FirstOrDefault(r => !r.IsGenerated && r.Range.Length > 0 && x >= r.X - _line.Left - 1e-9 && x <= r.X - _line.Left + r.Width + 1e-9);
+            foreach (var run in containing is null ? _line.Runs : [containing])
             {
                 if (run.IsGenerated)
                     continue;
@@ -178,7 +189,7 @@ namespace PeachDrawing.Core
 
                     // The glyph's characters are named from the start of the run's text.
                     var index = run.Range.Start + glyph.ClusterStart;
-                    var inRange = index >= start && index < end;
+                    var inRange = index >= start && index < end && !(index < Text.Length && char.IsWhiteSpace(Text[index]));
                     if (inRange && !glyph.IsHiddenIgnorable && typeface.TryGetOutline((ushort)glyph.GlyphIndex, out var outline) && outline is not null && !outline.IsEmpty)
                     {
                         var originX = run.X - _line.Left + pen + glyph.XOffset * scale;

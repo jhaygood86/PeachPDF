@@ -222,3 +222,17 @@
   `PaintStatisticsTests.APaint_ReportsHowMuchOfThePageItEnteredAndHowLongItTook`: `PaintStatistics` kept its counters in process-wide statics and `Report` zeroed them with `Interlocked.Exchange`, so a paint on another test's thread
   reported first and this paint's line said `pageFragments=0`. The counters are `[ThreadStatic]` now (a page is painted by one thread from `Start` to `Report`) and `Start` zeroes them. Eight runs of the Engine suite, three of Scripting
   and two of PeachPDF.Tests were clean after it (one in five failed before).
+
+## Text range APIs against the DOM (selection rects, index from offset)
+- The canvas's `getSelectionRects`/`getIndexFromOffset` (and `ShapedText`'s) are tested against the DOM's own `Range.getClientRects` and `caretPositionFromPoint`, so both sides had to be right. Four defects, none in the place first suspected:
+  1. **`XAt` (the DOM's range rectangles) paired `CharacterOffsets[k]` with the k-th boundary.** The offsets are one per UTF-16 index, the boundaries only the cluster boundaries, so any text with a surrogate pair put every later
+     rectangle one character back. It is `CharacterOffsets[boundaries[k]]`.
+  2. **A right-to-left `TextRunLayout` was laid out in a width of 1e9.** The line sits against the right edge, where single-precision positions are 64 apart (widths of exactly 64, 128, 256 were the tell). It is laid out again in
+     the width it has.
+  3. **`ParagraphLayout.SelectionBoxes` joined runs that did not touch**, so a selection that leaves out the last (leftmost) letter of an RTL run in LTR text was one box over the gap instead of two. Boxes are split where the next run starts past the end of the current one.
+  4. **A point is for the run it is over.** Where two runs meet, the same visual place is two boundaries (one in each run), and the nearest-boundary search took the first run's; now a point inside a run chooses among that run's own
+     boundaries (`TextRunLayout.IndexFromOffset`, and `TextRunQueries.HitTest` for the DOM, whose single x per index cannot say it). A collapsed range's rectangle is at the trailing edge of the character before it, as the DOM puts it.
+- Ink bounds skip characters that are white space (`U+3000` had a glyph with ink in the fallback font).
+- Tried and reverted: not spacing format controls (bidi overrides) by `letter-spacing`. The reference spaces them, and the DOM gives the control a 1.33 px box where the canvas gives none; that is the DOM engine's, and it is what the remaining
+  directional-override subtests (12 per file) are about. Also open: `variationSelectors` (needs the color emoji font's VS16 width) and `complex-shaping` centering.
+- html-canvas 5327/6210; text/ 694 of 765.

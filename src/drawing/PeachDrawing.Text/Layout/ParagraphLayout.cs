@@ -421,6 +421,13 @@ namespace PeachDrawing.Text.Layout
                         left = from;
                         right = to;
                     }
+                    else if (from > right + 0.01f)
+                    {
+                        // A run that is selected but does not meet what came before it (a character between them is not): a box of its own, as a selection is drawn.
+                        boxes.Add(new RectangleF(left.Value, (float)line.Top, right - left.Value, (float)line.Height));
+                        left = from;
+                        right = to;
+                    }
                     else
                     {
                         right = Math.Max(right, to);
