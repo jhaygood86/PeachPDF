@@ -180,3 +180,16 @@
   which then fires `elementgeometryupdate` (`ElementGeometryUpdateEvent`, frozen de-duplicated `elements` in order of first appearance) on the placeholder. `preserveElementGeometry: true` queues nothing and fires nothing.
 - A trap: `InstallOffscreenContext` copies the 2D context's members when it runs, so `drawElementImage` (defined later) has to be copied to the offscreen prototype where it is defined.
 - Workers are still not there, so the three `-worker` tests of the offscreen tree are open. html-canvas 4010/5028; floor raised.
+
+## Phase 8, dedicated workers
+- A worker is a second `ScriptRuntime` over an empty document of the same container (`ScriptRuntime.Workers.cs`), driven from the page's `PlayTimersAsync` through `PumpWorkersAsync`: the page's loop starts a worker (loads its script, or takes a
+  `blob:`/`data:` source the `Worker` shim resolved in script), delivers its inbox, runs its due timers and its network, and queues what it sent as zero-delay page timers. When the page has nothing left but a worker has a timer, the clock moves to it.
+  No threads, one virtual clock. `BecomeWorker` removes the window-only globals (a regex over the global's names), moves `document.fonts` to `self.fonts`, makes `location` the script's, and has `WorkerScripts` put in
+  `self`, `postMessage`, `close`, `importScripts`, `WorkerGlobalScope`/`DedicatedWorkerGlobalScope` (the global's prototype is changed to the latter). Without `await Document.LoadFontFacesAsync()` before the script, `fonts.ready` never settles.
+- Messages cross as text: `encodeMessage` (structured clone in the sender's engine, then a tagged JSON tree with ids for cycles) and `decodeMessage`. Pictures and sizes that are not data go through a static handle table (`putHandle`/`takeHandle`):
+  an `ImageBitmap` shares its (immutable) image, an `OffscreenCanvas` is its size (a transferable one has no context; the sender is emptied and `getContext` throws), an `ElementImage` is the same object over the page's runtime
+  (`ElementImageObject.Owner`), so a worker's `drawElementImage` renders and queues geometry on the page's runtime. A transferred `OffscreenCanvas` of `transferControlToOffscreen` keeps its link to the placeholder (`_offscreenPlaceholders` holds owner and canvas).
+- Do not name a worker's error `ScriptFailed`: a page logs those as failures; workers log `WorkerFailed` (information), the page hears of it as an `error` event on the `Worker`.
+- The runner serves `x.worker.html` (a page that runs `x.worker.js` through `fetch_tests_from_worker`) and counts `.worker.js` files as tests. **That changed the html-canvas denominator**: 2,447 files / 5,028 subtests became 3,491 / 6,210, and
+  `xhr`, `fetch-api`, `fileapi`, `webappapis`, `dom-events`, `webmessaging` and `html-infrastructure` gained worker files too. html-canvas 5210/6210; floors raised. Left: pixel-scale-aware `drawElementImage` transforms from a worker, `getContext('webgl')`
+  on an OffscreenCanvas, drawable-element invalidation by animated images and video, a placeholder canvas showing what a worker drew, module workers, shared and service workers.

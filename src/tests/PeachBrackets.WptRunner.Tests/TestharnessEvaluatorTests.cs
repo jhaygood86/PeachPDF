@@ -122,8 +122,21 @@ public sealed class TestharnessEvaluatorTests : IDisposable
         Assert.Equal(Outcome.Pass, (await RunAsync("dom/driver.html")).Outcome);
     }
 
+    [Fact]
+    public void AWorkerJsFile_HasAGeneratedPageThatStartsItAsADedicatedWorker()
+    {
+        Write("dom/w.worker.js", "test(function () {}, 'in a worker');");
+
+        var server = new Server.WptServer(_root);
+        var page = server.Handle(new Server.ServerRequest("GET", new Uri(server.PageOrigin + "/dom/w.worker.html")));
+
+        Assert.Equal(200, page.Status);
+        Assert.Contains("fetch_tests_from_worker(new Worker(\"w.worker.js\"))", page.Text, StringComparison.Ordinal);
+        Assert.True(TestharnessEvaluator.IsTest("dom/w.worker.js", () => string.Empty));
+        Assert.Null(TestharnessEvaluator.SkipReason("dom/w.worker.js"));
+    }
+
     [Theory]
-    [InlineData("dom/a.worker.js", "worker global")]
     [InlineData("dom/a.serviceworker.js", "worker global")]
     public async Task WhatNeedsAServerOrAWorker_IsSkippedWithItsReason(string path, string reason)
     {

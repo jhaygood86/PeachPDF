@@ -26,6 +26,7 @@ internal sealed partial class ScriptRuntime
     {
         Document = document;
         _options = options;
+        _cancellation = cancellationToken;
 
         Engine = new Engine(engine =>
         {
@@ -105,7 +106,9 @@ internal sealed partial class ScriptRuntime
             _ => error.GetType().Name + ": " + error.Message,
         };
 
-        WriteLog(LogLevel.Error, ScriptLogEvents.ScriptFailed, text);
+        // A worker's error is the page's to hear of as an error event on the Worker object; the log gets it as information.
+        WriteLog(IsWorker ? LogLevel.Information : LogLevel.Error, IsWorker ? ScriptLogEvents.WorkerFailed : ScriptLogEvents.ScriptFailed, text);
+        ForwardErrorToParent(text, error is JavaScriptException thrownError ? thrownError.Error : JsValue.Undefined);
         if (_reporting)
             return;
 

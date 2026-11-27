@@ -24,6 +24,9 @@ public static class ScriptLogEvents
     /// images not answered, and the last events delivered. Information when work is left, debug otherwise.
     /// </summary>
     public static EventId PendingWork { get; } = new(11, "ScriptPendingWork");
+
+    /// <summary>A script of a worker threw. The page hears of it as an error event on the <c>Worker</c> object, so this is information, not a failure of the page.</summary>
+    public static EventId WorkerFailed { get; } = new(12, "WorkerFailed");
 }
 
 /// <summary>

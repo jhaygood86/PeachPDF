@@ -55,8 +55,22 @@ internal sealed partial class ScriptRuntime
         {
             // Requests the scripts have sent are answered before the clock moves on: they take no virtual time, and are delivered as a zero-delay timer.
             await DeliverRequestsAsync();
+            var workersMoved = await PumpWorkersAsync(NowMs);
             if (_timers.Count == 0 || _callbacks >= _options.MaxCallbacks)
+            {
+                if (workersMoved)
+                    continue;
+
+                // A worker with a timer of its own is waited for, the clock moving to it.
+                if (NextWorkerWake() is { } wake && wake <= limit && wake > NowMs)
+                {
+                    NowMs = wake;
+                    if (await PumpWorkersAsync(NowMs))
+                        continue;
+                }
+
                 break;
+            }
 
             var next = _timers.OrderBy(t => t.Due).ThenBy(t => t.Order).First();
             if (next.Due > limit)

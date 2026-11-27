@@ -50,7 +50,8 @@ internal sealed partial class TestharnessEvaluator(string wptRoot) : IWptEvaluat
     public static string? SkipReason(string wptPath)
     {
         var name = wptPath[(wptPath.LastIndexOf('/') + 1)..];
-        if (name.Contains(".worker.", StringComparison.Ordinal) || name.Contains(".serviceworker.", StringComparison.Ordinal) || name.Contains(".sharedworker.", StringComparison.Ordinal))
+        // A .worker.js file runs in a dedicated worker the generated page starts; the other worker kinds have no model here.
+        if (name.Contains(".serviceworker.", StringComparison.Ordinal) || name.Contains(".sharedworker.", StringComparison.Ordinal))
             return "worker global";
         return null;
     }
@@ -58,7 +59,7 @@ internal sealed partial class TestharnessEvaluator(string wptRoot) : IWptEvaluat
     /// <summary>Whether <paramref name="wptPath"/> is a test this evaluator runs: a page that loads testharness.js, or a <c>.any.js</c>/<c>.window.js</c> file.</summary>
     public static bool IsTest(string wptPath, Func<string> read)
     {
-        if (wptPath.EndsWith(".any.js", StringComparison.Ordinal) || wptPath.EndsWith(".window.js", StringComparison.Ordinal))
+        if (wptPath.EndsWith(".any.js", StringComparison.Ordinal) || wptPath.EndsWith(".window.js", StringComparison.Ordinal) || wptPath.EndsWith(".worker.js", StringComparison.Ordinal))
             return true;
         return Path.GetExtension(wptPath).ToLowerInvariant() is ".html" or ".htm" or ".xht" or ".xhtml" or ".svg"
             && read().Contains("testharness.js", StringComparison.Ordinal);

@@ -33,6 +33,9 @@ internal sealed class ElementImageObject : ObjectInstance
 
     public double Height { get; }
 
+    /// <summary>The runtime of the page the element is in, which is the one that lays it out and keeps its geometry (an ElementImage a worker holds is still the page's).</summary>
+    public ScriptRuntime? Owner { get; init; }
+
     /// <summary>Whether <c>close()</c> was called: a closed image can no longer be drawn or asked its size.</summary>
     public bool Closed { get; set; }
 }
@@ -528,16 +531,22 @@ internal sealed partial class ScriptRuntime
     private ObjectInstance ElementGeometryUpdateEventPrototype = null!;
 
     // The canvas element an OffscreenCanvas was made of by transferControlToOffscreen; InvalidStateError for one that was not.
-    private ScriptNode PlaceholderOfOffscreen(ScriptNode offscreen) =>
-        _offscreenPlaceholders.TryGetValue(offscreen, out var placeholder) ? placeholder : throw DomError("InvalidStateError", "The OffscreenCanvas was not made from a canvas element.");
+    private ScriptNode PlaceholderOfOffscreen(ScriptNode offscreen) => LinkOfOffscreen(offscreen).Placeholder;
 
-    private readonly Dictionary<ScriptNode, ScriptNode> _offscreenPlaceholders = [];
+    // ... and the runtime of the page it is in: the one that keeps the geometry of its children (an OffscreenCanvas in a worker is of a canvas of the page).
+    private (ScriptRuntime Owner, ScriptNode Placeholder) LinkOfOffscreen(ScriptNode offscreen) =>
+        _offscreenPlaceholders.TryGetValue(offscreen, out var link) ? link : throw DomError("InvalidStateError", "The OffscreenCanvas was not made from a canvas element.");
+
+    private readonly Dictionary<ScriptNode, (ScriptRuntime Owner, ScriptNode Placeholder)> _offscreenPlaceholders = [];
 
     private void InstallHtmlInCanvas()
     {
         ElementImagePrototype = new JsObject(Engine) { Prototype = Engine.Intrinsics.Object.PrototypeObject };
         Tag(ElementImagePrototype, "ElementImage");
         Define(Engine.Global, "ElementImage", Js.Constructor(Engine, "ElementImage", ElementImagePrototype, 0, (_, _, _) => throw TypeError("Illegal constructor")));
+        // structuredClone of an ElementImage: another one of the same element; null for one that is closed.
+        Define(Engine.Global, "__cloneElementImage", Js.Function(Engine, "__cloneElementImage", 1, (_, args) =>
+            Js.Arg(args, 0) is ElementImageObject { Closed: false } image ? new ElementImageObject(Engine, ElementImagePrototype, image.Canvas, image.Element, image.Width, image.Height) { Owner = image.Owner } : JsValue.Null));
         Js.StrictMethod(Engine, ElementImagePrototype, "close", 0, (self, _) =>
         {
             (self as ElementImageObject ?? throw TypeError("Illegal invocation")).Closed = true;
@@ -583,7 +592,7 @@ internal sealed partial class ScriptRuntime
             var canvas = Sn(self);
             var (state, element) = RequireDrawableChild(canvas, Js.Arg(args, 0), needsPaint: true);
             var (width, height) = state.Painted[element];
-            return new ElementImageObject(Engine, ElementImagePrototype, canvas, element, width, height);
+            return new ElementImageObject(Engine, ElementImagePrototype, canvas, element, width, height) { Owner = this };
         });
         Js.StrictMethod(Engine, canvasElement, "getElementImageDefaultSize", 1, (self, args) =>
         {
@@ -615,9 +624,9 @@ internal sealed partial class ScriptRuntime
         // An OffscreenCanvas works with the ElementImage of a canvas of the page: its size, and the geometry (and so the place in the hit testing order) of the element it came from.
         Js.StrictMethod(Engine, OffscreenPrototype, "getElementImageDefaultSize", 1, (self, args) =>
         {
-            var placeholder = PlaceholderOfOffscreen(Sn(self));
+            var (owner, placeholder) = LinkOfOffscreen(Sn(self));
             var image = Js.Arg(args, 0) as ElementImageObject ?? throw DomError("InvalidStateError", "An OffscreenCanvas answers for an ElementImage only.");
-            RequireDrawableChild(placeholder, image, needsPaint: false);
+            owner.RequireDrawableChild(placeholder, image, needsPaint: false);
             var size = Js.NewObject(Engine);
             size.FastSetProperty("width", new PropertyDescriptor(Js.Num(image.Width), PropertyFlag.ConfigurableEnumerableWritable));
             size.FastSetProperty("height", new PropertyDescriptor(Js.Num(image.Height), PropertyFlag.ConfigurableEnumerableWritable));
@@ -625,12 +634,14 @@ internal sealed partial class ScriptRuntime
         });
         Js.StrictMethod(Engine, OffscreenPrototype, "updateElementGeometry", 1, (self, args) =>
         {
-            ApplyGeometry(PlaceholderOfOffscreen(Sn(self)), Js.Arg(args, 0), Js.Arg(args, 1), queued: true);
+            var (owner, placeholder) = LinkOfOffscreen(Sn(self));
+            owner.ApplyGeometry(placeholder, Js.Arg(args, 0), Js.Arg(args, 1), queued: true);
             return JsValue.Undefined;
         });
         Js.StrictMethod(Engine, OffscreenPrototype, "clearElementGeometry", 1, (self, args) =>
         {
-            ClearGeometry(PlaceholderOfOffscreen(Sn(self)), Js.Arg(args, 0), queued: true);
+            var (owner, placeholder) = LinkOfOffscreen(Sn(self));
+            owner.ClearGeometry(placeholder, Js.Arg(args, 0), queued: true);
             return JsValue.Undefined;
         });
 
@@ -642,10 +653,11 @@ internal sealed partial class ScriptRuntime
 
             // An OffscreenCanvas made of a canvas draws that canvas's children; the changes to their geometry are taken in a task of their own.
             var queued = ReferenceEquals(context.Prototype, OffscreenContextPrototype);
+            var owner = this;
             if (queued)
-                canvas = PlaceholderOfOffscreen(canvas);
+                (owner, canvas) = LinkOfOffscreen(canvas);
 
-            var (state, element) = RequireDrawableChild(canvas, Js.Arg(args, 0), needsPaint: true);
+            var (state, element) = owner.RequireDrawableChild(canvas, Js.Arg(args, 0), needsPaint: true);
             var painted = Js.Arg(args, 0) is ElementImageObject captured ? (captured.Width, captured.Height) : state.Painted[element];
             // A trailing dictionary {preserveElementGeometry} says whether the element keeps the transform it has instead of getting the one this draw makes.
             var preserve = false;
@@ -688,7 +700,7 @@ internal sealed partial class ScriptRuntime
                 // The element's own space to the canvas: placed where it was drawn, then carried by the context's transform.
                 var drawn = new Affine2D(scaleX, 0, 0, scaleY, dx - sx * scaleX, dy - sy * scaleY) * context.Bitmap.State.Transform;
                 var (source, clipped) = (new Rect(sx, sy, sw, sh), numbers.Length >= 6);
-                CommitGeometry(canvas, element, queued, () =>
+                owner.CommitGeometry(canvas, element, queued, () =>
                 {
                     if (queued)
                         Touch(state, element, preserveOrder: false);
@@ -708,7 +720,7 @@ internal sealed partial class ScriptRuntime
             if (!(painted.Item1 > 0) || !(painted.Item2 > 0))
                 return JsValue.Undefined;
 
-            var picture = Document.RenderElement(element) ?? throw DomError("InvalidStateError", "The element could not be drawn.");
+            var picture = owner.Document.RenderElement(element) ?? throw DomError("InvalidStateError", "The element could not be drawn.");
             context.Bitmap.DrawImage(picture.Image, new Rect(sx, sy, sw, sh), new Rect(dx, dy, dw, dh));
             return JsValue.Undefined;
         });

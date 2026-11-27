@@ -470,7 +470,7 @@ internal sealed partial class ScriptRuntime
             node.SetAttribute("height", height.ToString("0", CultureInfo.InvariantCulture));
             _transferred.Add(placeholder);
             var offscreen = OffscreenOf(node);
-            _offscreenPlaceholders[node] = placeholder;
+            _offscreenPlaceholders[node] = (this, placeholder);
             return offscreen;
         });
     }

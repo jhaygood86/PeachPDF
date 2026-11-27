@@ -410,6 +410,17 @@ internal sealed partial class WptServer(string root)
     // `x.any.html` and `x.window.html` stand for the page of `x.any.js` / `x.window.js`; null for any other path.
     private string? GeneratedPage(string path)
     {
+        // `x.worker.html` is the page that runs `x.worker.js` as a dedicated worker and takes its results.
+        var worker = Regex.Match(path, @"^(.*\.worker)\.html$", RegexOptions.CultureInvariant);
+        if (worker.Success)
+        {
+            if (ReadFile(worker.Groups[1].Value + ".js") is null)
+                return null;
+
+            var file = path[(path.LastIndexOf('/') + 1)..^5] + ".js";
+            return "<!doctype html>\n<meta charset=utf-8>\n<title>" + System.Net.WebUtility.HtmlEncode(file) + "</title>\n<script src=\"/resources/testharness.js\"></script>\n<script src=\"/resources/testharnessreport.js\"></script>\n<div id=log></div>\n<script>fetch_tests_from_worker(new Worker(\"" + file + "\"));</script>\n";
+        }
+
         var match = Regex.Match(path, @"^(.*\.(?:any|window))\.html$", RegexOptions.CultureInvariant);
         if (!match.Success)
             return null;

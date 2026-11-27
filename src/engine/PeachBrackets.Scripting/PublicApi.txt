@@ -38,6 +38,7 @@ PeachBrackets.Scripting.ScriptLogEvents : static class
   property static EventId PendingWork { get; }
   property static EventId ScriptFailed { get; }
   property static EventId ScriptLoadFailed { get; }
+  property static EventId WorkerFailed { get; }
 PeachBrackets.Scripting.UserScript : sealed class
   ctor(String Name, String Code)
   method UserScript <Clone>$()
