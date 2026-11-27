@@ -41,6 +41,7 @@
 	<ItemGroup>
 		<ProjectReference Include="..\PeachBrackets\PeachBrackets.csproj" />
 		<ProjectReference Include="..\PeachBrackets.Media.GStreamer\PeachBrackets.Media.GStreamer.csproj" />
+		<ProjectReference Include="..\PeachBrackets.Media.MediaFoundation\PeachBrackets.Media.MediaFoundation.csproj" />
 	</ItemGroup>
 	<ItemGroup Condition="$(TargetFramework.Contains('-android'))">
 		<ProjectReference Include="..\PeachBrackets.Media.Android\PeachBrackets.Media.Android.csproj" />

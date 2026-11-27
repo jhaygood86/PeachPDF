@@ -38,6 +38,19 @@ public class MediaProviderTests
     }
 
     [Fact]
+    public async Task OnWindows_TheDefaultProviderIsMediaFoundation_WhateverTheAppsTargetFramework()
+    {
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "Media Foundation is Windows only.");
+        await HeadlessSession.Run(async () =>
+        {
+            var (window, view) = await HeadlessSession.ShowAsync(Page, 300, 200);
+
+            Assert.IsType<PeachBrackets.Media.MediaFoundation.MediaFoundationMediaProvider>(view.MediaProvider);
+            window.Close();
+        });
+    }
+
+    [Fact]
     public async Task ANullProviderMeansNoMedia_AndStaysNull()
     {
         await HeadlessSession.Run(async () =>

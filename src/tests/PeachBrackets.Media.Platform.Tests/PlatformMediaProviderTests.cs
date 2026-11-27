@@ -1,4 +1,5 @@
 using PeachBrackets.Media.GStreamer;
+using PeachBrackets.Media.MediaFoundation;
 
 namespace PeachBrackets.Media.Platform.Tests;
 
@@ -15,11 +16,10 @@ public class PlatformMediaProviderTests
     }
 
     [Theory]
-    [InlineData(0)]
     [InlineData(1)]
     [InlineData(2)]
     [InlineData(3)]
-    public void EveryPlatform_IsServedByGStreamer_UntilItsOwnProviderExists(int kind)
+    public void AnyPlatformWithoutItsOwnProvider_IsServedByGStreamer(int kind)
     {
         var provider = PlatformMediaProvider.CreateFor((PlatformMediaProvider.PlatformKind)kind, null);
 
@@ -27,6 +27,30 @@ public class PlatformMediaProviderTests
             Assert.IsType<GStreamerMediaProvider>(provider);
         else
             Assert.Null(provider);
+    }
+
+    [Fact]
+    public void Windows_IsServedByMediaFoundation_ThenGStreamer()
+    {
+        var provider = PlatformMediaProvider.CreateFor(PlatformMediaProvider.PlatformKind.Windows, null);
+
+        if (MediaFoundationMediaProvider.IsAvailable)
+        {
+#if WINDOWS
+            // A program that targets Windows gets the router (WinRT for a Win2D document, Media Foundation for the rest).
+            Assert.NotNull(provider);
+#else
+            Assert.IsType<MediaFoundationMediaProvider>(provider);
+#endif
+        }
+        else if (GStreamerMediaProvider.IsAvailable)
+        {
+            Assert.IsType<GStreamerMediaProvider>(provider);
+        }
+        else
+        {
+            Assert.Null(provider);
+        }
     }
 
     [Fact]

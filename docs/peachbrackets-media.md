@@ -102,6 +102,22 @@ H.264, HEVC, AAC, MP3 and WAV on a stock Windows, and WebM, VP9, AV1 and Ogg whe
   small H.264 clip are a little off a browser's.
 * **The WinUI view** sets it by default (`HtmlView.MediaProvider`).
 
+## The Media Foundation provider (any target framework)
+
+`PeachBrackets.Media.MediaFoundation` (`MediaFoundationMediaProvider`) plays through Windows Media Foundation from **any .NET program on Windows, including a plain `net10.0` one**, which
+the WinRT-based provider above cannot (a plain target framework cannot reference a Windows-targeted assembly). It uses generated Win32 bindings (CsWin32, function-pointer
+COM, no marshalling, AOT-safe) instead of WinRT, so nothing but the system DLLs is needed at run time.
+
+* **Pictures.** A source reader over a copy of the file, asked for RGB output so the system's video processor does the YUV conversion, decodes forward and goes back to a key frame
+  only for a position behind it or more than two seconds ahead; the picture at a position is the last one that starts at or before it. Pictures are pixels any canvas draws (there
+  is no GPU path: use the WinRT provider for a Win2D document).
+* **Sound.** A second source reader decodes the audio to 32-bit float stereo at 48 kHz and a thread feeds it to a shared-mode WASAPI client (200 ms buffer). The session's own
+  stopwatch is the clock the pictures follow; the sound only has to start where it starts and keep up. At a rate other than 1 the sound is left silent. No output device means no
+  sound and a playing video.
+* **Deterministic.** With `MediaProviderOptions.DeterministicClock` the position moves only in `Update` and no sound is made; the same position always gives the same picture
+  whether it was reached by playing or by seeking.
+* **Defaults.** `PlatformMediaProvider.Create` returns it on Windows for a program that does not target Windows, and `PeachBrackets.Avalonia`'s `HtmlView` uses that.
+
 ## The Android provider
 
 `PeachBrackets.Media.Android` (`AndroidMediaProvider`, API 24+) plays through the platform `MediaPlayer`, so it plays what the device has decoders for; `CanPlayType`
@@ -134,13 +150,13 @@ one assembly per target framework:
 
 | The program targets | `Create` returns |
 |---|---|
-| `net10.0-windows10.0.19041.0` (or net11) | the Windows provider, else GStreamer when installed |
+| `net10.0-windows10.0.19041.0` (or net11) | for a Win2D document the WinRT provider (pictures stay on the GPU), for any other the Media Foundation provider; GStreamer if Windows has neither |
 | `net10.0-android` (package built with `-p:PeachIncludeAndroid=true`) | the Android provider |
-| plain `net10.0` / `net11.0`, on any OS | GStreamer when installed (the Apple provider is not wired in yet) |
+| plain `net10.0` / `net11.0` on Windows | the Media Foundation provider, else GStreamer when installed |
+| plain `net10.0` / `net11.0` elsewhere | GStreamer when installed (the Apple provider is not wired in yet) |
 
-So an Avalonia desktop app that targets `net10.0-windows` gets Media Foundation, and one that targets plain `net10.0` gets GStreamer if it is installed; either can set
-`HtmlView.MediaProvider` itself. The WPT runner (plain `net10.0`) uses GStreamer with `DeterministicClock`, so the audio and video tests run on a real decoder on a
-developer's machine and on the CI image alike.
+So an Avalonia app gets Media Foundation on Windows whichever target framework it uses. The WPT runner (plain `net10.0`) gets Media Foundation on Windows and GStreamer on Linux, both with
+`DeterministicClock`, so the audio and video tests run on a real decoder on a developer's machine and on the CI image alike.
 
 ## Script media elements
 

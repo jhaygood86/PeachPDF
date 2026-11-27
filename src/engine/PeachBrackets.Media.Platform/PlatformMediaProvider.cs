@@ -1,5 +1,8 @@
 using PeachBrackets.Media.GStreamer;
+using PeachBrackets.Media.MediaFoundation;
 using System;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace PeachBrackets.Media.Platform;
 
@@ -40,9 +43,11 @@ public static class PlatformMediaProvider
         {
 #if WINDOWS
             case PlatformKind.Windows:
-                return Windows.WindowsMediaProvider.IsAvailable ? new Windows.WindowsMediaProvider(options) : GStreamerMediaProvider.IsAvailable ? new GStreamerMediaProvider(options) : null;
+                return WindowsRouted.Create(options);
 #else
             case PlatformKind.Windows:
+                // A program that does not target Windows cannot see the WinRT provider; the Media Foundation one has no such limit.
+                return MediaFoundationMediaProvider.IsAvailable ? new MediaFoundationMediaProvider(options) : GStreamerMediaProvider.IsAvailable ? new GStreamerMediaProvider(options) : null;
 #endif
             case PlatformKind.Apple:
 #if ANDROID
@@ -57,3 +62,34 @@ public static class PlatformMediaProvider
         }
     }
 }
+
+#if WINDOWS
+/// <summary>
+/// For a program that targets Windows: the WinRT provider for a document drawn with Win2D (its pictures stay on the GPU), and the Media Foundation provider for a
+/// document drawn any other way (which needs pixels, and gets them without the WinRT provider's read back). GStreamer when Windows has neither.
+/// </summary>
+internal sealed class WindowsRouted : IMediaProvider
+{
+    private readonly IMediaProvider _gpu;
+    private readonly IMediaProvider _pixels;
+
+    private WindowsRouted(IMediaProvider gpu, IMediaProvider pixels)
+    {
+        _gpu = gpu;
+        _pixels = pixels;
+    }
+
+    public static IMediaProvider? Create(MediaProviderOptions? options)
+    {
+        if (!Windows.WindowsMediaProvider.IsAvailable || !MediaFoundationMediaProvider.IsAvailable)
+            return GStreamerMediaProvider.IsAvailable ? new GStreamerMediaProvider(options) : null;
+
+        return new WindowsRouted(new Windows.WindowsMediaProvider(options), new MediaFoundationMediaProvider(options));
+    }
+
+    public string CanPlayType(string mimeType) => _pixels.CanPlayType(mimeType);
+
+    public ValueTask<IMediaSession?> OpenAsync(MediaRequest request, CancellationToken cancellationToken = default) =>
+        (request.RenderContext is PeachDrawing.Win2D.Win2dRenderContext ? _gpu : _pixels).OpenAsync(request, cancellationToken);
+}
+#endif

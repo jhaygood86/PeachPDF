@@ -47,6 +47,8 @@
   <Project Path="tests/PeachBrackets.Media.Platform.Tests/PeachBrackets.Media.Platform.Tests.csproj" />
   <Project Path="engine/PeachBrackets.Media.Windows/PeachBrackets.Media.Windows.csproj" />
   <Project Path="tests/PeachBrackets.Media.Windows.Tests/PeachBrackets.Media.Windows.Tests.csproj" />
+  <Project Path="engine/PeachBrackets.Media.MediaFoundation/PeachBrackets.Media.MediaFoundation.csproj" />
+  <Project Path="tests/PeachBrackets.Media.MediaFoundation.Tests/PeachBrackets.Media.MediaFoundation.Tests.csproj" />
   <Project Path="tests/PeachBrackets.Scripting.Tests/PeachBrackets.Scripting.Tests.csproj" />
   <Project Path="tests/PeachBrackets.Tests/PeachBrackets.Tests.csproj" />
   <Project Path="tests/PeachBrackets.WptRunner.Tests/PeachBrackets.WptRunner.Tests.csproj" />
