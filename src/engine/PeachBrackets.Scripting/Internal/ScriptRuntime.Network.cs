@@ -168,6 +168,11 @@ internal sealed partial class ScriptRuntime
             return Result(response, url);
         });
 
+        Js.Method(Engine, net, "registerBlobReader", 1, (_, args) =>
+        {
+            _blobReader = Js.Arg(args, 0) as ObjectInstance;
+            return JsValue.Undefined;
+        });
         InstallWorkerNet(net);
         return net;
     }

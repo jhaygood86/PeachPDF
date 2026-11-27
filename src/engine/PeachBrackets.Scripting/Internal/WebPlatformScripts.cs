@@ -1308,6 +1308,8 @@ internal static class WebPlatformScripts
                 return [200, "OK", [["content-type", blobOf(blob).type], ["content-length", String(bytes.length)]], bytesToBinary(bytes), url, false];
             }
 
+            net.registerBlobReader(blobAnswer);
+
             function abortReason(signal) { return signal.reason !== undefined ? signal.reason : new DOMException("The operation was aborted.", "AbortError"); }
 
             // The address a Referer is made from: the page's for "about:client", none for "", else the URL the script gave.

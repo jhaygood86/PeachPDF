@@ -599,7 +599,9 @@ internal sealed partial class ScriptRuntime
             var canvas = Sn(self);
             var source = Js.Arg(args, 0);
             var (state, element) = RequireDrawableChild(canvas, source, needsPaint: source is not ElementImageObject);
-            var (width, height) = source is ElementImageObject image ? (image.Width, image.Height) : state.Painted[element];
+            var (cssWidth, cssHeight) = source is ElementImageObject image ? (image.Width, image.Height) : state.Painted[element];
+            var grid = GridScaleOf(canvas);
+            var (width, height) = (cssWidth * grid.X, cssHeight * grid.Y);
             var size = Js.NewObject(Engine);
             size.FastSetProperty("width", new PropertyDescriptor(Js.Num(width), PropertyFlag.ConfigurableEnumerableWritable));
             size.FastSetProperty("height", new PropertyDescriptor(Js.Num(height), PropertyFlag.ConfigurableEnumerableWritable));
@@ -627,9 +629,10 @@ internal sealed partial class ScriptRuntime
             var (owner, placeholder) = LinkOfOffscreen(Sn(self));
             var image = Js.Arg(args, 0) as ElementImageObject ?? throw DomError("InvalidStateError", "An OffscreenCanvas answers for an ElementImage only.");
             owner.RequireDrawableChild(placeholder, image, needsPaint: false);
+            var offscreenGrid = owner.GridScaleOf(placeholder, Sn(self));
             var size = Js.NewObject(Engine);
-            size.FastSetProperty("width", new PropertyDescriptor(Js.Num(image.Width), PropertyFlag.ConfigurableEnumerableWritable));
-            size.FastSetProperty("height", new PropertyDescriptor(Js.Num(image.Height), PropertyFlag.ConfigurableEnumerableWritable));
+            size.FastSetProperty("width", new PropertyDescriptor(Js.Num(image.Width * offscreenGrid.X), PropertyFlag.ConfigurableEnumerableWritable));
+            size.FastSetProperty("height", new PropertyDescriptor(Js.Num(image.Height * offscreenGrid.Y), PropertyFlag.ConfigurableEnumerableWritable));
             return size;
         });
         Js.StrictMethod(Engine, OffscreenPrototype, "updateElementGeometry", 1, (self, args) =>
@@ -658,7 +661,11 @@ internal sealed partial class ScriptRuntime
                 (owner, canvas) = LinkOfOffscreen(canvas);
 
             var (state, element) = owner.RequireDrawableChild(canvas, Js.Arg(args, 0), needsPaint: true);
-            var painted = Js.Arg(args, 0) is ElementImageObject captured ? (captured.Width, captured.Height) : state.Painted[element];
+            var cssPainted = Js.Arg(args, 0) is ElementImageObject captured ? (captured.Width, captured.Height) : state.Painted[element];
+
+            // The source and destination rectangles are in the pixel grid of the canvas; the element is laid out in CSS pixels, a grid scale away.
+            var grid = owner.GridScaleOf(canvas, queued ? context.Canvas : null);
+            var painted = (cssPainted.Item1 * grid.X, cssPainted.Item2 * grid.Y);
             // A trailing dictionary {preserveElementGeometry} says whether the element keeps the transform it has instead of getting the one this draw makes.
             var preserve = false;
             if (args.Length > 3 && args[^1] is ObjectInstance options && args[^1] is not NodeObject)
@@ -698,7 +705,7 @@ internal sealed partial class ScriptRuntime
             if (!preserve)
             {
                 // The element's own space to the canvas: placed where it was drawn, then carried by the context's transform.
-                var drawn = new Affine2D(scaleX, 0, 0, scaleY, dx - sx * scaleX, dy - sy * scaleY) * context.Bitmap.State.Transform;
+                var drawn = Affine2D.CreateScale(grid.X, grid.Y) * new Affine2D(scaleX, 0, 0, scaleY, dx - sx * scaleX, dy - sy * scaleY) * context.Bitmap.State.Transform * Affine2D.CreateScale(1 / grid.X, 1 / grid.Y);
                 var (source, clipped) = (new Rect(sx, sy, sw, sh), numbers.Length >= 6);
                 owner.CommitGeometry(canvas, element, queued, () =>
                 {
@@ -720,11 +727,20 @@ internal sealed partial class ScriptRuntime
             if (!(painted.Item1 > 0) || !(painted.Item2 > 0))
                 return JsValue.Undefined;
 
+
             var picture = owner.Document.RenderElement(element) ?? throw DomError("InvalidStateError", "The element could not be drawn.");
-            context.Bitmap.DrawImage(picture.Image, new Rect(sx, sy, sw, sh), new Rect(dx, dy, dw, dh));
+            context.Bitmap.DrawImage(picture.Image, new Rect(sx / grid.X, sy / grid.Y, sw / grid.X, sh / grid.Y), new Rect(dx, dy, dw, dh));
             return JsValue.Undefined;
         });
         OffscreenContextPrototype.FastSetProperty("drawElementImage", ContextPrototype.GetOwnProperty("drawElementImage"));
+    }
+
+    // How many pixels of the canvas's bitmap (its pixel grid) are in a CSS pixel of the box it has on the page; an element is laid out in CSS pixels and drawn in the grid.
+    private (double X, double Y) GridScaleOf(ScriptNode canvas, ScriptNode? bitmapOf = null)
+    {
+        // An OffscreenCanvas of the canvas has its own size, whatever the placeholder was made.
+        var (width, height) = CanvasSize(bitmapOf ?? canvas);
+        return Document.GetLayoutBox(canvas) is { Width: > 0, Height: > 0 } box ? (width / box.Width, height / box.Height) : (1, 1);
     }
 
     private static readonly double[] Identity16 = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];

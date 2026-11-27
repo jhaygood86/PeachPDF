@@ -57,4 +57,40 @@ public class WorkerTests
 
         Assert.Equal(["7 5 9 0,255,0,255 0 0"], log);
     }
+
+    [Fact]
+    public async Task ABlobAWorkerMakesWithConvertToBlob_ArrivesWithItsBytesAndType()
+    {
+        var log = await LogAsync("""
+            var code = "var c = new OffscreenCanvas(4, 4); var g = c.getContext('2d'); g.fillRect(0, 0, 4, 4); c.convertToBlob().then(function (b) { postMessage({ b: b, size: b.size }); });";
+            var worker = new Worker('data:text/javascript,' + encodeURIComponent(code));
+            worker.onmessage = function (e) {
+                var img = new Image();
+                img.onload = function () { Log.info([e.data.b.type, e.data.b.size === e.data.size, e.data.size > 0, img.width].join(' ')); worker.terminate(); };
+                img.onerror = function () { Log.info('image error ' + e.data.b.type + ' ' + e.data.b.size); worker.terminate(); };
+                img.src = URL.createObjectURL(e.data.b);
+            };
+            """);
+
+        Assert.Equal(["image/png true true 4"], log);
+    }
+
+    [Fact]
+    public async Task AnImageLoadsFromABlobUrlAScriptMade_AndConvertToBlobRejectsAnEmptyOrDetachedCanvas()
+    {
+        var log = await LogAsync("""
+            var c = new OffscreenCanvas(4, 4); var g = c.getContext('2d'); g.fillRect(0, 0, 4, 4);
+            new OffscreenCanvas(0, 0).convertToBlob().catch(function (e) { Log.info(e.name); });
+            var gone = new OffscreenCanvas(3, 3); structuredClone(gone, { transfer: [gone] });
+            gone.convertToBlob().catch(function (e) { Log.info(e.name); });
+            c.convertToBlob().then(function (b) {
+                var img = new Image();
+                img.onload = function () { Log.info('ok ' + img.width); };
+                img.onerror = function () { Log.info('image error ' + b.type + ' ' + b.size); };
+                img.src = URL.createObjectURL(b);
+            });
+            """);
+
+        Assert.Equal(["IndexSizeError", "InvalidStateError", "ok 4"], log);
+    }
 }

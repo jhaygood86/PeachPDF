@@ -429,6 +429,13 @@ internal sealed partial class ScriptRuntime
             string url;
             try
             {
+                // A canvas that was transferred away is detached, and one with no area has nothing to encode.
+                if (_transferred.Contains(Sn(self)))
+                    throw DomError("InvalidStateError", "The OffscreenCanvas is detached.");
+
+                if (CanvasSize(Sn(self)) is var (width, height) && (width == 0 || height == 0))
+                    throw DomError("IndexSizeError", "The OffscreenCanvas has no area to encode.");
+
                 url = DataUrlOf(Sn(self));
             }
             catch (JavaScriptException error)

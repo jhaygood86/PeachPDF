@@ -15,6 +15,23 @@ namespace PeachBrackets.Scripting.Internal;
 // request (before the virtual clock moves on), with load and error events and the properties that report the result.
 internal sealed partial class ScriptRuntime
 {
+    private ObjectInstance? _blobReader;
+
+    // A blob: address a script made (URL.createObjectURL) is not the network's: its bytes are in the script bundle, and an image is loaded from them as from a data: address.
+    private string ResolveBlobAddress(string address)
+    {
+        if (_blobReader is null || !address.StartsWith("blob:", StringComparison.OrdinalIgnoreCase))
+            return address;
+
+        var absolute = Document.BaseUri is { } baseUri && Uri.TryCreate(baseUri, address, out var made) ? made.OriginalString : address;
+        if (_blobReader.Call(JsValue.Undefined, [Js.Str(absolute)]) is not ObjectInstance answer || !answer.Get("0").IsNumber() || answer.Get("0").AsNumber() != 200)
+            return address;
+
+        var type = answer.Get("2") is ObjectInstance headers && headers.Get("0") is ObjectInstance first && first.Get("1").IsString() ? first.Get("1").AsString() : string.Empty;
+        var bytes = System.Text.Encoding.Latin1.GetBytes(Js.AsText(answer.Get("3")));
+        return "data:" + type + ";base64," + Convert.ToBase64String(bytes);
+    }
+
     private sealed class ImageState
     {
         /// <summary>0: nothing to load, 1: loading, 2: loaded, 3: broken.</summary>
@@ -223,7 +240,7 @@ internal sealed partial class ScriptRuntime
         state.Status = 1;
         state.Width = state.Height = 0;
         state.CurrentSource = ResolveAddress(image, ImageAddressOf(image)!);
-        _pendingImages.Add((image.OwnerDocument.LoadImageAsync(ImageAddressOf(image)!).AsTask(), image, state.Token));
+        _pendingImages.Add((image.OwnerDocument.LoadImageAsync(ResolveBlobAddress(ImageAddressOf(image)!)).AsTask(), image, state.Token));
     }
 
     private readonly HashSet<ScriptNode> _updateQueue = [];
@@ -290,7 +307,7 @@ internal sealed partial class ScriptRuntime
 
         state.Status = 1;
         state.CurrentSource = ResolveAddress(image, source);
-        _pendingImages.Add((image.OwnerDocument.LoadImageAsync(source).AsTask(), image, state.Token));
+        _pendingImages.Add((image.OwnerDocument.LoadImageAsync(ResolveBlobAddress(source)).AsTask(), image, state.Token));
     }
 
     private void StartInitialImages()

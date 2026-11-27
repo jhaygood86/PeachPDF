@@ -193,3 +193,14 @@
 - The runner serves `x.worker.html` (a page that runs `x.worker.js` through `fetch_tests_from_worker`) and counts `.worker.js` files as tests. **That changed the html-canvas denominator**: 2,447 files / 5,028 subtests became 3,491 / 6,210, and
   `xhr`, `fetch-api`, `fileapi`, `webappapis`, `dom-events`, `webmessaging` and `html-infrastructure` gained worker files too. html-canvas 5210/6210; floors raised. Left: pixel-scale-aware `drawElementImage` transforms from a worker, `getContext('webgl')`
   on an OffscreenCanvas, drawable-element invalidation by animated images and video, a placeholder canvas showing what a worker drew, module workers, shared and service workers.
+
+## Phase 8, worker leftovers
+- `img.src = blobUrl` never loaded: the blob URL table is in the script bundle, not the network's. `ResolveBlobAddress` asks the bundle (`net.registerBlobReader(blobAnswer)`) and loads the image from a `data:` address of its bytes. That was
+  what timed out every worker `convertToBlob` test (the bytes arrived fine; the image of them could not load).
+- `convertToBlob` rejects a detached OffscreenCanvas (`InvalidStateError`) and one with no area (`IndexSizeError`). It still always encodes PNG.
+- `drawElementImage` and `getElementImageDefaultSize` are in the canvas's pixel grid: the element is laid out in CSS pixels, and `GridScaleOf` (bitmap size over the canvas's layout box) is the factor. The element transform is
+  `S * place * CTM * S^-1`, and the picture is drawn from the grid rectangle divided by `S`. A worker's OffscreenCanvas uses its own bitmap size, not the placeholder's.
+- The page's timer loop takes a worker's timer first when it is due before the page's next one: a testharness timeout timer far ahead hid a worker's `step_timeout(500)` and timed the test out.
+- Not done, and why: `getContext('webgl')` (no WebGL; the worker tests that need one cannot pass), placeholder canvases keeping their size against `setAttribute('width')` (the layout probe sees attributes only), `MessagePort` transfer into a worker
+  (ports are script objects of one engine; a port pair across engines needs a remote end), video and animated-image invalidation of a drawable canvas, JPEG/WebP encoding in `convertToBlob` (PeachImage).
+- html-canvas 5235/6210; floor 5225.

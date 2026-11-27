@@ -11,7 +11,7 @@
     "encoding": 10943,
     "fetch-api": 1720,
     "fileapi": 462,
-    "html-canvas": 5200,
+    "html-canvas": 5225,
     "html-dom": 63000,
     "html-forms": 2719,
     "html-grouping": 47,
@@ -20,14 +20,14 @@
     "html-interactive": 53,
     "html-metadata": 21,
     "html-scripting": 851,
-    "html-semantics-other": 4123,
+    "html-semantics-other": 4134,
     "html-tabular": 17,
     "html-text-level": 23,
     "streams": 1190,
     "url": 8516,
-    "webappapis": 941,
+    "webappapis": 961,
     "webmessaging": 132,
-    "xhr": 739
+    "xhr": 745
   },
   "margins": {
     "dom-nodes": 100,
