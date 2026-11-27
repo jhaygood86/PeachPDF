@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+	<!--
+	  A bare Android app that plays two small clips through PeachBrackets.Media.Android in both modes and logs (tag PEACH_MEDIA) what it saw, one
+	  "OK name" or "FAIL name: why" line each and "DONE" at the end, so the provider can be exercised on an emulator from adb:
+	    adb install -r <apk>; adb shell am start -n net.peachpdf.brackets.media.example/crc64....MainActivity; adb logcat -s PEACH_MEDIA
+	-->
+	<PropertyGroup>
+		<TargetFramework>net10.0-android</TargetFramework>
+		<TargetFrameworks />
+		<SupportedOSPlatformVersion>24</SupportedOSPlatformVersion>
+		<OutputType>Exe</OutputType>
+		<Nullable>enable</Nullable>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<ApplicationId>net.peachpdf.brackets.media.example</ApplicationId>
+		<ApplicationTitle>PeachBrackets media</ApplicationTitle>
+		<ApplicationVersion>1</ApplicationVersion>
+		<IsPackable>false</IsPackable>
+		<EmbedAssembliesIntoApk>true</EmbedAssembliesIntoApk>
+		<AndroidPackageFormat>apk</AndroidPackageFormat>
+		<RuntimeIdentifiers>android-x64;android-arm64</RuntimeIdentifiers>
+		<RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == ''">android-x64</RuntimeIdentifier>
+	</PropertyGroup>
+	<ItemGroup>
+		<ProjectReference Include="..\..\engine\PeachBrackets.Media.Android\PeachBrackets.Media.Android.csproj" />
+		<ProjectReference Include="..\..\drawing\PeachDrawing\PeachDrawing.csproj" />
+	</ItemGroup>
+</Project>

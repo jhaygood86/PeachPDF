@@ -1,0 +1,5 @@
+PeachBrackets.Media.Android.AndroidMediaProvider : sealed class
+  ctor(MediaProviderOptions options)
+  method virtual String CanPlayType(String mimeType)
+  method virtual ValueTask<IMediaSession> OpenAsync(MediaRequest request, CancellationToken cancellationToken)
+  property static Boolean IsAvailable { get; }

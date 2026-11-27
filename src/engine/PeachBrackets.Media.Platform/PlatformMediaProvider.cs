@@ -47,7 +47,12 @@ public static class PlatformMediaProvider
             case PlatformKind.Windows:
 #endif
             case PlatformKind.Apple:
+#if ANDROID
             case PlatformKind.Android:
+                return PeachBrackets.Media.Android.AndroidMediaProvider.IsAvailable ? new PeachBrackets.Media.Android.AndroidMediaProvider(options) : null;
+#else
+            case PlatformKind.Android:
+#endif
             case PlatformKind.Other:
             default:
                 return GStreamerMediaProvider.IsAvailable ? new GStreamerMediaProvider(options) : null;

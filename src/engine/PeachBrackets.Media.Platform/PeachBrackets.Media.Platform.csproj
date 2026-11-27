@@ -6,6 +6,8 @@
 		     gets the Windows assembly of this package at run time whatever the library that references it was built for. -->
 		<TargetFrameworks>net10.0;net11.0</TargetFrameworks>
 		<TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('Windows'))">$(TargetFrameworks);net10.0-windows10.0.19041.0;net11.0-windows10.0.19041.0</TargetFrameworks>
+		<!-- The Android legs need the android workload, which a build of the solution does not assume; the release build passes PeachIncludeAndroid=true. -->
+		<TargetFrameworks Condition="'$(PeachIncludeAndroid)' == 'true'">$(TargetFrameworks);net10.0-android;net11.0-android</TargetFrameworks>
 		<AssemblyName>PeachBrackets.Media.Platform</AssemblyName>
 		<RootNamespace>PeachBrackets.Media.Platform</RootNamespace>
 		<PackageId>PeachBrackets.Media.Platform</PackageId>
@@ -39,6 +41,9 @@
 	<ItemGroup>
 		<ProjectReference Include="..\PeachBrackets\PeachBrackets.csproj" />
 		<ProjectReference Include="..\PeachBrackets.Media.GStreamer\PeachBrackets.Media.GStreamer.csproj" />
+	</ItemGroup>
+	<ItemGroup Condition="$(TargetFramework.Contains('-android'))">
+		<ProjectReference Include="..\PeachBrackets.Media.Android\PeachBrackets.Media.Android.csproj" />
 	</ItemGroup>
 	<ItemGroup Condition="$(TargetFramework.Contains('-windows'))">
 		<ProjectReference Include="..\PeachBrackets.Media.Windows\PeachBrackets.Media.Windows.csproj" />
