@@ -247,9 +247,10 @@ public class GStreamerProviderTests : IDisposable
 
         using var frame = session.AcquireFrame();
         var pixels = Bytes(frame!);
-        Assert.InRange(pixels[0], 225, 255);
-        Assert.InRange(pixels[1], 0, 30);
-        Assert.InRange(pixels[2], 0, 30);
+        // Rec. 601 red color-managed into sRGB, as a browser shows it: a pure red is (247, 37, 0), not (255, 0, 0).
+        Assert.InRange(pixels[0], 235, 255);
+        Assert.InRange(pixels[1], 25, 50);
+        Assert.InRange(pixels[2], 0, 12);
         Assert.Equal(255, pixels[3]);
     }
 

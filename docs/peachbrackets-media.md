@@ -77,6 +77,10 @@ without it, or without the plugin for a codec, `CanPlayType` answers `""` for wh
 * **What it needs.** For `canPlayType`, the demuxer of a container (`matroskademux`, `qtdemux`, `oggdemux`, `wavparse`...) and the decoder of each named
   codec (`vp8dec`/`vp9dec`, `avdec_h264`, `avdec_h265`, `opusdec`, `vorbisdec`, `avdec_aac`...) must be installed. On Debian and Ubuntu:
   `gstreamer1.0-plugins-base`, `-good`, `-bad` and `gstreamer1.0-libav`.
+* **Color.** `videoconvert` applies the stream's YUV matrix and range. A small picture with no colorimetry (or one tagged Rec. 601) is taken as Rec. 601 and
+  color-managed into sRGB the way a browser shows it (a pure red becomes (247, 37, 0)), by tagging it for GStreamer's primaries conversion; such a stream
+  is opened twice, once to read what it says about its colors. A picture in Rec. 2020 or Display P3 keeps its gamut and says so in
+  `MediaFrame.ColorSpace`; any other is passed through as the decoder gives it.
 * **Not done.** Rotation tags are not applied; a stream that only starts to play after more data arrives is not a case, since the file is complete before
   playback; `PlaybackRate` in real time seeks (no pitch correction).
 

@@ -29,6 +29,8 @@ internal sealed class GstSession : IMediaSession
 
     private bool _disposed;
     private bool _keepFile;
+    private bool _convertToSrgb;
+    private string? _assumedColorimetry;
     private int _width;
     private int _height;
     private TimeSpan _frameDuration = TimeSpan.FromMilliseconds(40);
@@ -161,14 +163,25 @@ internal sealed class GstSession : IMediaSession
             return null;
         }
 
-        var session = await StartAsync(file, request, options, cancellationToken).ConfigureAwait(false);
+        var session = await StartAsync(file, request, options, null, cancellationToken).ConfigureAwait(false);
+
+        // A browser color-manages a picture into sRGB: the primaries and the transfer function of Rec. 601 (what a small stream with no colorimetry is taken as)
+        // and Rec. 709 are converted, which moves a pure red to (247, 37, 0). The first open only learns what the stream says about its colors; a stream in a
+        // wide gamut keeps it (the canvas converts from MediaFrame.ColorSpace), every other one is opened again, converted, from the same file.
+        if (session is { _convertToSrgb: true })
+        {
+            var tag = session._assumedColorimetry;
+            session._keepFile = true;
+            session.Dispose();
+            session = await StartAsync(file, request, options, tag ?? "", cancellationToken).ConfigureAwait(false);
+        }
         if (session is null)
             TryDelete(file);
 
         return session;
     }
 
-    private static async ValueTask<GstSession?> StartAsync(string file, MediaRequest request, MediaProviderOptions options, CancellationToken cancellationToken)
+    private static async ValueTask<GstSession?> StartAsync(string file, MediaRequest request, MediaProviderOptions options, string? srgbFrom, CancellationToken cancellationToken)
     {
         var video = request.Kind == MediaKind.Video;
         var deterministic = options.DeterministicClock;
@@ -176,7 +189,7 @@ internal sealed class GstSession : IMediaSession
 
         // A video leaves the player through an appsink after a videoconvert, which gives straight RGBA and applies the stream's YUV matrix and range.
         var videoSink = video
-            ? "videoconvert name=convert ! appsink name=sink caps=video/x-raw,format=RGBA sync=" + (deterministic ? "false" : "true")
+            ? (srgbFrom is { Length: > 0 } ? "capssetter join=true replace=false caps=video/x-raw,colorimetry=" + srgbFrom + " ! " : "") + "videoconvert name=convert" + (srgbFrom is not null ? " primaries-mode=fast gamma-mode=remap" : "") + " ! appsink name=sink caps=video/x-raw,format=RGBA" + (srgbFrom is not null ? ",colorimetry=sRGB" : "") + " sync=" + (deterministic ? "false" : "true")
                 + " wait-on-eos=false max-buffers=1 drop=" + (deterministic ? "false" : "true")
             : "fakesink";
         var description = "playbin uri=\"" + new Uri(file).AbsoluteUri + "\" audio-sink=\"" + audioSink + "\" video-sink=\"" + videoSink + "\"";
@@ -199,7 +212,7 @@ internal sealed class GstSession : IMediaSession
             return null;
         }
 
-        session.Learn();
+        session.Learn(srgbFrom is not null);
         if (request.Muted)
             SetBoolean(pipeline, "mute", true);
 
@@ -359,7 +372,7 @@ internal sealed class GstSession : IMediaSession
     }
 
     /// <summary>Reads what the prerolled pipeline knows: the duration, and for a video the picture size, its rate and its colorimetry.</summary>
-    private void Learn()
+    private void Learn(bool converted)
     {
         if (gst_element_query_duration(_pipeline, FormatTime, out var duration) != 0 && duration > 0)
             _duration = FromNanoseconds(duration);
@@ -378,6 +391,12 @@ internal sealed class GstSession : IMediaSession
             {
                 var structure = gst_caps_get_structure(caps, 0);
                 var colorimetry = structure == 0 ? null : GetString(structure, "colorimetry");
+                // No colorimetry on a small picture: GStreamer takes it as Rec. 601, and so does a browser, which color-manages it into sRGB (a pure red
+                // shows as (247, 37, 0)). The transfer is set as a plain gamma 2.0, not Rec. 601's own, because a browser leaves the dark values where they
+                // are (a black of 8 stays near 5; gamma 2.2 sinks it to 2, gamma 1.8 raises it to 6, the piecewise curve lifts it to 19). A picture tagged Rec. 601 by its stream is the same case. One tagged otherwise, or an HD one (whose
+                // Rec. 709 primaries are sRGB's), is left as the decoder gives it, and a wide-gamut one keeps its gamut for the canvas to convert.
+                _convertToSrgb = !converted && (colorimetry is null ? _height <= 576 : colorimetry.Contains("601", StringComparison.Ordinal) || colorimetry.Contains("170", StringComparison.Ordinal));
+                _assumedColorimetry = "2:4:3:4";
                 _colorSpace = colorimetry is not null && colorimetry.Contains("2020", StringComparison.Ordinal) ? MediaColorSpace.Rec2020
                     : colorimetry is not null && colorimetry.Contains("432", StringComparison.Ordinal) ? MediaColorSpace.DisplayP3
                     : MediaColorSpace.Srgb;
