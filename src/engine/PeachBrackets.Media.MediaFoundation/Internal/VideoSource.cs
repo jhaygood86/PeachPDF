@@ -22,7 +22,7 @@ internal sealed unsafe class VideoSource : IDisposable
     private static readonly uint s_mediaSource = unchecked((uint)MF_SOURCE_READER_CONSTANTS.MF_SOURCE_READER_MEDIASOURCE);
 
     private IMFSourceReader* _reader;
-    private int _stride;
+    private Colorimetry _colorimetry;
     private VideoPicture? _current;
     private VideoPicture? _pending;
 
@@ -33,6 +33,12 @@ internal sealed unsafe class VideoSource : IDisposable
 
     /// <summary>Whether the file has a picture.</summary>
     public bool HasVideo { get; private set; }
+
+    /// <summary>The RGB space the pictures are in.</summary>
+    public MediaColorSpace ColorSpace => _colorimetry.Space;
+
+    /// <summary>What the stream says about its YUV (for tests).</summary>
+    internal Colorimetry Colorimetry => _colorimetry;
 
     public int Width { get; private set; }
 
@@ -111,7 +117,7 @@ internal sealed unsafe class VideoSource : IDisposable
             var major = PInvoke.MF_MT_MAJOR_TYPE;
             var video = PInvoke.MFMediaType_Video;
             var subtype = PInvoke.MF_MT_SUBTYPE;
-            var rgb = PInvoke.MFVideoFormat_RGB32;
+            var rgb = PInvoke.MFVideoFormat_NV12;
             requested->SetGUID(&major, &video);
             requested->SetGUID(&subtype, &rgb);
             reader->SetCurrentMediaType(s_videoStream, null, requested);
@@ -122,18 +128,6 @@ internal sealed unsafe class VideoSource : IDisposable
             current->GetUINT64(&sizeKey, &size);
             Width = (int)(size >> 32);
             Height = (int)(size & 0xFFFFFFFF);
-
-            var strideKey = PInvoke.MF_MT_DEFAULT_STRIDE;
-            uint stride;
-            try
-            {
-                current->GetUINT32(&strideKey, &stride);
-                _stride = (int)stride;
-            }
-            catch (COMException)
-            {
-                _stride = Width * 4;
-            }
 
             try
             {
@@ -149,6 +143,7 @@ internal sealed unsafe class VideoSource : IDisposable
             {
             }
 
+            _colorimetry = ReadColorimetry(current, reader);
             HasVideo = Width > 0 && Height > 0;
         }
         catch (COMException)
@@ -165,6 +160,67 @@ internal sealed unsafe class VideoSource : IDisposable
         }
 
         return HasVideo || Duration is not null;
+    }
+
+    // What the stream says about its YUV: the matrix, the range and the primaries, on the type the decoder gives out or else on the one the file has. A stream that
+    // says nothing is taken as a browser takes it.
+    private Colorimetry ReadColorimetry(IMFMediaType* current, IMFSourceReader* reader)
+    {
+        IMFMediaType* native = null;
+        try
+        {
+            try
+            {
+                reader->GetNativeMediaType(s_videoStream, 0, &native);
+            }
+            catch (COMException)
+            {
+            }
+
+            var currentHandle = (nint)current;
+            var nativeHandle = (nint)native;
+
+            uint Read(Guid key)
+            {
+                foreach (var type in new[] { currentHandle, nativeHandle })
+                {
+                    if (type == 0)
+                        continue;
+
+                    try
+                    {
+                        uint value;
+                        ((IMFMediaType*)type)->GetUINT32(&key, &value);
+                        if (value != 0)
+                            return value;
+                    }
+                    catch (COMException)
+                    {
+                    }
+                }
+
+                return 0;
+            }
+
+            var matrix = Read(PInvoke.MF_MT_YUV_MATRIX);
+            var full = Read(PInvoke.MF_MT_VIDEO_NOMINAL_RANGE) == 1;
+            var primaries = Read(PInvoke.MF_MT_VIDEO_PRIMARIES);
+
+            // MFVideoTransferMatrix: 1 BT.709, 2 BT.601, 3 SMPTE 240M, 4 and 5 BT.2020. MFVideoPrimaries: 4 BT.470-2 B/G, 5 SMPTE 170M, 8 SMPTE C, 9 BT.2020, 11 DCI-P3.
+            return matrix switch
+            {
+                1 => primaries == 11 ? Colorimetry.Rec709(full) with { Space = MediaColorSpace.DisplayP3 } : Colorimetry.Rec709(full),
+                2 => Colorimetry.Rec601(full, manage: primaries is 0 or 4 or 5 or 8),
+                3 => Colorimetry.Smpte240M(full),
+                4 or 5 => Colorimetry.Rec2020(full),
+                _ => primaries == 9 ? Colorimetry.Rec2020(full) : Colorimetry.Assumed(Height) with { FullRange = full },
+            };
+        }
+        finally
+        {
+            if (native is not null)
+                native->Release();
+        }
     }
 
     /// <summary>The picture that shows at a position: the last one that starts at or before it (the first one, when none does).</summary>
@@ -250,7 +306,8 @@ internal sealed unsafe class VideoSource : IDisposable
             buffer->Lock(&data, &maximum, &used);
             try
             {
-                return new VideoPicture(TimeSpan.FromTicks(time), TimeSpan.FromTicks(length), Width, Height, ToRgba(data, (int)used));
+                var rgba = YuvConverter.Nv12ToRgba(data, (int)used, Width, Height, _colorimetry);
+                return rgba is null ? null : new VideoPicture(TimeSpan.FromTicks(time), TimeSpan.FromTicks(length), Width, Height, rgba);
             }
             finally
             {
@@ -269,34 +326,6 @@ internal sealed unsafe class VideoSource : IDisposable
             if (sample is not null)
                 sample->Release();
         }
-    }
-
-    // The decoder gives X8R8G8B8 rows: bytes B, G, R, X in memory. A negative default stride means the rows run from the bottom of the picture up.
-    private byte[] ToRgba(byte* data, int used)
-    {
-        var rowBytes = Math.Abs(_stride);
-        var bottomUp = _stride < 0;
-        var rgba = new byte[Width * Height * 4];
-        for (var y = 0; y < Height; y++)
-        {
-            var sourceRow = bottomUp ? Height - 1 - y : y;
-            if ((sourceRow + 1) * rowBytes > used && sourceRow * rowBytes + (Width * 4) > used)
-                break;
-
-            var source = data + (sourceRow * rowBytes);
-            var target = y * Width * 4;
-            for (var x = 0; x < Width; x++)
-            {
-                var s = x * 4;
-                var t = target + s;
-                rgba[t] = source[s + 2];
-                rgba[t + 1] = source[s + 1];
-                rgba[t + 2] = source[s];
-                rgba[t + 3] = 255;
-            }
-        }
-
-        return rgba;
     }
 
     public void Dispose()

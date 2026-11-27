@@ -108,9 +108,14 @@ H.264, HEVC, AAC, MP3 and WAV on a stock Windows, and WebM, VP9, AV1 and Ogg whe
 the WinRT-based provider above cannot (a plain target framework cannot reference a Windows-targeted assembly). It uses generated Win32 bindings (CsWin32, function-pointer
 COM, no marshalling, AOT-safe) instead of WinRT, so nothing but the system DLLs is needed at run time.
 
-* **Pictures.** A source reader over a copy of the file, asked for RGB output so the system's video processor does the YUV conversion, decodes forward and goes back to a key frame
+* **Pictures.** A source reader over a copy of the file, asked for NV12 (the decoder's own output), decodes forward and goes back to a key frame
   only for a position behind it or more than two seconds ahead; the picture at a position is the last one that starts at or before it. Pictures are pixels any canvas draws (there
   is no GPU path: use the WinRT provider for a Win2D document).
+* **Color.** The YUV is converted here, by the matrix and range the stream says (read from the media type: Rec. 601, 709, 240M, 2020, limited or full range), because
+  Media Foundation's own conversion takes a picture of 576 lines or fewer as Rec. 601 whatever it is tagged. A stream that says nothing is taken as a browser takes it: Rec. 601
+  up to 576 lines, Rec. 709 above. A Rec. 601 picture is color-managed into sRGB the way a browser does (gamma 2.0, SMPTE 170M to Rec. 709 primaries, sRGB encode), so a pure
+  red shows as (247, 37, 0); Rec. 2020 and DCI-P3 streams keep their gamut and say so in `MediaFrame.ColorSpace`. Media Foundation does not pass the color tags of an H.264 stream
+  in an MP4 file on to the media type (those of a VP9 stream in WebM it does), so an H.264 picture is converted by the assumption above.
 * **Sound.** A second source reader decodes the audio to 32-bit float stereo at 48 kHz and a thread feeds it to a shared-mode WASAPI client (200 ms buffer). The session's own
   stopwatch is the clock the pictures follow; the sound only has to start where it starts and keep up. At a rate other than 1 the sound is left silent. No output device means no
   sound and a playing video.

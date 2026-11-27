@@ -261,7 +261,7 @@ internal sealed class MfSession : IMediaSession
             if (_image is null || _position < _imageTime || _position >= _imageEnd)
                 TakePicture(_position);
 
-            return _image is null ? null : new MediaFrame(_image, _imageTime) { ColorSpace = MediaColorSpace.Srgb };
+            return _image is null ? null : new MediaFrame(_image, _imageTime) { ColorSpace = _source.ColorSpace };
         }
     }
 
@@ -276,7 +276,7 @@ internal sealed class MfSession : IMediaSession
             lock (_gate)
             {
                 TakePicture(position);
-                return _image is null ? null : (MediaFrame?)new MediaFrame(_image, _imageTime) { ColorSpace = MediaColorSpace.Srgb };
+                return _image is null ? null : (MediaFrame?)new MediaFrame(_image, _imageTime) { ColorSpace = _source.ColorSpace };
             }
         }, cancellationToken));
     }

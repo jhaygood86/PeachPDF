@@ -73,6 +73,30 @@ public class MediaFoundationProviderTests
     }
 
     [Fact]
+    public async Task ARec709Picture_ThatTheDecoderPadsToABlockSize_IsDecodedByItsOwnMatrix()
+    {
+        RequireWindows();
+        using var session = await Deterministic().OpenAsync(Request("red709-1000x600.mp4"), TestContext.Current.CancellationToken);
+        Assert.NotNull(session);
+        Assert.Equal((1000, 600), (session.VideoWidth, session.VideoHeight));
+
+        using var frame = session.AcquireFrame();
+        var pixels = Bytes(frame!);
+        int Px(int x, int y, int channel) => pixels[(((y * 1000) + x) * 4) + channel];
+
+        // 0xFF0100 through Rec. 709. The decoder pads a 1000 x 600 picture to rows of 1008 bytes and 608 rows, which a layout taken from the media type would read as noise; a
+        // picture of more than 576 lines is taken as Rec. 709, where a small one is taken as Rec. 601 (Media Foundation does not pass an H.264 stream's color tags on).
+        foreach (var (x, y) in new[] { (5, 5), (500, 300), (994, 594) })
+        {
+            Assert.InRange(Px(x, y, 0), 250, 255);
+            Assert.InRange(Px(x, y, 1), 0, 8);
+            Assert.InRange(Px(x, y, 2), 0, 8);
+        }
+
+        Assert.Equal(MediaColorSpace.Srgb, frame!.ColorSpace);
+    }
+
+    [Fact]
     public async Task ADeterministicSession_MovesOnlyWithTheDocumentClock_AndShowsThePictureAtThePosition()
     {
         RequireWindows();
