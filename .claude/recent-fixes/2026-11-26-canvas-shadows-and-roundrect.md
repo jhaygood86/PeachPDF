@@ -211,3 +211,8 @@
   proxy of its own the same way. Delivery is generic: a target that is itself remote is relayed on, so the two ports of one channel can each be in a different worker. What a port already held is sent ahead of what comes later; `close()` sends a marker.
 - Each engine's `_portInbox` is emptied by `DeliverPortMessages` in the page's loop (and in a worker's step), so it runs on the same virtual clock; `event.ports` of a worker message are the ports it carried.
 - Do not chase `webappapis` `atomics-wait-async` ("timeout in a EventTarget"): `Atomics.waitAsync` with a 10 ms timeout resolves on Jint's real clock, so it passes alone and fails under load; the module count flaps between 960 and 961.
+
+## A flaky WPT subtest: Atomics.waitAsync
+- `webappapis` flapped between 960 and 961 because Jint's `Atomics.waitAsync` times out on the real clock: whether a 10 ms wait had resolved by the time the page's virtual timers ran depended on machine speed (alone it passed, in the module run under load it
+  sometimes did not). `AtomicsScripts` wraps it at startup: the engine is asked with no timeout, and the timeout is a virtual `setTimeout` that resolves `"timed-out"`. A timed-out waiter stays in the engine's waiter list (a later `Atomics.notify` count includes it).
+  Two full runs of every module are now identical. A floor is only trustworthy if the module count is deterministic; before adding a module or a test to a floor, run it twice.

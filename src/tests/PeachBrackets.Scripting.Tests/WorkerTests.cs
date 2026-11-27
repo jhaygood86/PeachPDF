@@ -113,4 +113,19 @@ public class WorkerTests
         Assert.Contains("page got hello from a", log);
         Assert.Contains("pair hello from b", log);
     }
+
+    [Fact]
+    public async Task AtomicsWaitAsync_TimesOutOnTheVirtualClock_WhateverTheMachineSpeed()
+    {
+        var log = await LogAsync("""
+            var ta = new Int32Array(new SharedArrayBuffer(16));
+            var started = performance.now();
+            var wait = Atomics.waitAsync(ta, 0, 0, 5000);
+            Atomics.waitAsync(ta, 1, 0).value.then(function () { Log.info('never'); });
+            wait.value.then(function (v) { Log.info(wait.async + ' ' + v + ' ' + (performance.now() - started >= 5000)); });
+            Log.info(Atomics.waitAsync(ta, 0, 1).async + ' ' + Atomics.waitAsync(ta, 0, 1).value + ' ' + Atomics.waitAsync.length);
+            """);
+
+        Assert.Equal(["false not-equal 4", "true timed-out true"], log);
+    }
 }

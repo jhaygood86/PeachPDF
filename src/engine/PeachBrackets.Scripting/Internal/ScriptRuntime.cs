@@ -41,6 +41,7 @@ internal sealed partial class ScriptRuntime
 
         // Extends the CSS object the window just defined, so it comes after it.
         Engine.Execute(ColorScripts.Source);
+        Engine.Execute(AtomicsScripts.Source);
         InstallHostApis();
     }
 
