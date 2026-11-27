@@ -230,7 +230,7 @@ internal sealed partial class TestharnessEvaluator(string wptRoot) : IWptEvaluat
 
     private static async ValueTask<RNetworkResponse?> LoadAsync(WptServer server, Uri uri)
     {
-        if (uri.IsAbsoluteUri && uri.Scheme == "data")
+        if (uri.IsAbsoluteUri && uri.Scheme is "data" or "blob")
             return await HostResourceLoader.LoadAsync(uri);
 
         return await server.LoadAsync(uri);

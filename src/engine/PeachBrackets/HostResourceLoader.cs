@@ -64,6 +64,9 @@ public static class HostResourceLoader
 
                 return new ValueTask<RNetworkResponse?>(new RNetworkResponse(new MemoryStream(bytes), new Dictionary<string, string[]> { ["Content-Type"] = [mimeType] }));
 
+            case "blob":
+                return BlobUrlStore.LoadAsync(uri);
+
             case "file" when allowLocalFiles:
                 try
                 {

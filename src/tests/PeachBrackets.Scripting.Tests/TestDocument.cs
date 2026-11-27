@@ -10,7 +10,7 @@ internal static class TestDocument
 
     public static async Task<RasterRenderContext> NewContextAsync()
     {
-        var context = new RasterRenderContext();
+        var context = new RasterRenderContext { ResourceLoader = uri => uri.IsAbsoluteUri && uri.Scheme is "data" or "blob" ? PeachBrackets.HostResourceLoader.LoadAsync(uri) : default };
         await using var font = File.OpenRead(Path.Combine(AppContext.BaseDirectory, "SourceSans3-Regular.ttf"));
         await context.AddFont(font, Family);
         return context;

@@ -2,7 +2,7 @@ read:0 px 221,34,34,255 127,34,128,255 34,34,221,128 0,0,0,0
 read:1 inPath true,true,false,false
 read:2 inStroke true,false
 read:3 sum 99214
-read:4 url 470
+read:4 url 226
 read:5 erased 0,0,0,0 127,34,128,255
 scene:arc-ellipse-curves E9120CF7E27A8CE43E550C0651FE11C4593E9CC142F76EB52522B5FF31C4BA59
 scene:blend-lighter 5C0F60D4BCD848304D06FFA0D76EC09523E09A973A08AC3FB6F5F6F69267C67B

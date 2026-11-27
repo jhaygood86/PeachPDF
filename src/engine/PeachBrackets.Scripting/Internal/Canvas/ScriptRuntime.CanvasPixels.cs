@@ -297,15 +297,15 @@ internal sealed partial class ScriptRuntime
         });
 
         var element = ElementPrototypeFor("canvas");
-        Js.StrictMethod(Engine, element, "toDataURL", 0, (self, _) => Js.Str(DataUrlOf(Sn(self))));
+        Js.StrictMethod(Engine, element, "toDataURL", 0, (self, args) => Js.Str(DataUrlOf(Sn(self), ImageTypeArg(args, 0), QualityArg(args, 1))));
         Js.StrictMethod(Engine, element, "toBlob", 1, (self, args) =>
         {
             if (!Js.IsCallable(Js.Arg(args, 0)))
                 throw TypeError("The callback is not a function.");
 
-            var url = DataUrlOf(Sn(self));
+            var url = DataUrlOf(Sn(self), ImageTypeArg(args, 1), QualityArg(args, 2));
             var callback = args[0];
-            var blobMaker = Engine.Evaluate("(function (url) { var s = atob(url.slice(url.indexOf(',') + 1)); var b = new Uint8Array(s.length); for (var i = 0; i < s.length; i++) b[i] = s.charCodeAt(i); return new Blob([b], { type: 'image/png' }); })");
+            var blobMaker = BlobMaker();
             AddTimer(Js.Function(Engine, "toBlob", 0, (_, _) =>
             {
                 Call(callback, JsValue.Undefined, blobMaker.Call(JsValue.Undefined, [Js.Str(url)]));
@@ -423,7 +423,7 @@ internal sealed partial class ScriptRuntime
             context.Bitmap.ClearDrawing();
             return made;
         });
-        Js.StrictMethod(Engine, OffscreenPrototype, "convertToBlob", 0, (self, _) =>
+        Js.StrictMethod(Engine, OffscreenPrototype, "convertToBlob", 0, (self, args) =>
         {
             // A promise-returning method does not throw: what would have been thrown is what the promise is rejected with.
             string url;
@@ -436,15 +436,17 @@ internal sealed partial class ScriptRuntime
                 if (CanvasSize(Sn(self)) is var (width, height) && (width == 0 || height == 0))
                     throw DomError("IndexSizeError", "The OffscreenCanvas has no area to encode.");
 
-                url = DataUrlOf(Sn(self));
+                var options = Js.Arg(args, 0) as ObjectInstance;
+                url = DataUrlOf(Sn(self), options?.Get("type") is { } typeValue && !typeValue.IsUndefined() ? Js.AsText(typeValue) : "image/png", options?.Get("quality") is { } qualityValue && qualityValue.IsNumber() ? qualityValue.AsNumber() : null);
             }
             catch (JavaScriptException error)
             {
                 return Engine.Evaluate("(function (reason) { return Promise.reject(reason); })").Call(JsValue.Undefined, [error.Error]);
             }
 
-            return Engine.Evaluate("(function (url) { return new Promise(function (resolve) { var s = atob(url.slice(url.indexOf(',') + 1)); var b = new Uint8Array(s.length); for (var i = 0; i < s.length; i++) b[i] = s.charCodeAt(i); resolve(new Blob([b], { type: 'image/png' })); }); })")
-                .Call(JsValue.Undefined, [Js.Str(url)]);
+            var makeBlob = BlobMaker();
+            return Engine.Evaluate("(function (make, url) { return new Promise(function (resolve) { resolve(make(url)); }); })")
+                .Call(JsValue.Undefined, [makeBlob, Js.Str(url)]);
         });
         Define(Engine.Global, "OffscreenCanvas", Js.Constructor(Engine, "OffscreenCanvas", OffscreenPrototype, 2, (_, args, _) =>
         {
@@ -736,7 +738,16 @@ internal sealed partial class ScriptRuntime
         return text is "rgba-unorm8" or "rgba-float16" ? text : throw TypeError($"The provided value '{text}' is not a valid enum value of type ImageDataPixelFormat.");
     }
 
-    private string DataUrlOf(ScriptNode element)
+    // The image type a toBlob/toDataURL call names (anything but a string is no type, and the default image/png is used).
+    private static string ImageTypeArg(JsValue[] args, int index) => Js.Arg(args, index) is { } value && value.IsString() ? value.AsString() : "image/png";
+
+    // The quality of a call: a number from 0 to 1, else the encoder's default.
+    private static double? QualityArg(JsValue[] args, int index) => Js.Arg(args, index) is { } value && value.IsNumber() ? value.AsNumber() : null;
+
+    // A function that makes a Blob of the file a data URL holds, of the type the URL says.
+    private JsValue BlobMaker() => Engine.Evaluate("(function (url) { var type = url.slice(5, url.indexOf(';')); var s = atob(url.slice(url.indexOf(',') + 1)); var b = new Uint8Array(s.length); for (var i = 0; i < s.length; i++) b[i] = s.charCodeAt(i); return new Blob([b], { type: type }); })");
+
+    private string DataUrlOf(ScriptNode element, string type = "image/png", double? quality = null)
     {
         if (_contexts.TryGetValue(element, out var tainted) && !tainted.Bitmap.OriginClean)
             throw DomError("SecurityError", "The canvas has been tainted by cross-origin data.");
@@ -744,7 +755,12 @@ internal sealed partial class ScriptRuntime
         if (!_contexts.TryGetValue(element, out var context))
         {
             var (w, h) = CanvasSize(element);
-            return w == 0 || h == 0 ? "data:," : "data:image/png;base64," + Convert.ToBase64String(PngWriter.Encode((int)w, (int)h, new byte[(int)w * (int)h * 4]));
+            if (w == 0 || h == 0)
+                return "data:,";
+
+            var blank = Document.EncodeImage((int)w, (int)h, new byte[(int)w * (int)h * 4], null, "srgb", type, quality, out var blankType)
+                ?? PngWriter.Encode((int)w, (int)h, new byte[(int)w * (int)h * 4]);
+            return $"data:{blankType};base64," + Convert.ToBase64String(blank);
         }
 
         var bitmap = context.Bitmap;
@@ -752,15 +768,36 @@ internal sealed partial class ScriptRuntime
             return "data:,";
 
         RequireNoOpenLayers(bitmap);
-        var pixels = bitmap.Pixels();
-        if (pixels.Length > 0 && bitmap.ColorSpace != "srgb")
+        var wide = bitmap.Wide;
+        var pixels = wide ? [] : bitmap.Pixels();
+        var floats = wide ? bitmap.WidePixels() : null;
+        if (wide ? floats!.Length == 0 : pixels.Length == 0)
+            return "data:,";
+
+        var encoded = Document.EncodeImage((int)bitmap.Width, (int)bitmap.Height, wide ? null : pixels, floats, bitmap.ColorSpace, type, quality, out var writtenType);
+        if (encoded is null)
         {
-            // A PNG with no color profile is read as sRGB.
-            pixels = (byte[])pixels.Clone();
-            CanvasColorSpaces.ConvertBytes(pixels, bitmap.ColorSpace, "srgb");
+            // Not something the encoders took: a PNG with no color profile, which is read as sRGB.
+            var bytes = wide ? SrgbBytesOfFloats(floats!, bitmap.ColorSpace) : (byte[])pixels.Clone();
+            if (!wide && bitmap.ColorSpace != "srgb")
+                CanvasColorSpaces.ConvertBytes(bytes, bitmap.ColorSpace, "srgb");
+
+            encoded = PngWriter.Encode((int)bitmap.Width, (int)bitmap.Height, bytes);
+            writtenType = "image/png";
         }
 
-        return pixels.Length == 0 ? "data:," : "data:image/png;base64," + Convert.ToBase64String(PngWriter.Encode((int)bitmap.Width, (int)bitmap.Height, pixels));
+        return $"data:{writtenType};base64," + Convert.ToBase64String(encoded);
+    }
+
+    private static byte[] SrgbBytesOfFloats(float[] floats, string space)
+    {
+        var copy = (float[])floats.Clone();
+        CanvasColorSpaces.ConvertFloats(copy, space, "srgb", clip: true);
+        var bytes = new byte[copy.Length];
+        for (var i = 0; i < bytes.Length; i++)
+            bytes[i] = (byte)Math.Round(Math.Clamp(copy[i], 0f, 1f) * 255f);
+
+        return bytes;
     }
 
     // ---- ImageBitmap and OffscreenCanvas
@@ -844,6 +881,9 @@ internal sealed partial class ScriptRuntime
 
         var (resizeWidth, resizeHeight) = (Size("resizeWidth"), Size("resizeHeight"));
 
+        // The orientation the file records is applied (from-image, flipY) or left alone (none).
+        image = orientation == "none" ? Document.UnorientedImage(image) : Document.UprightImage(image);
+
         double cx = 0, cy = 0, cw = image.Width, ch = image.Height;
         if (crop.Length >= 4)
         {
@@ -874,6 +914,13 @@ internal sealed partial class ScriptRuntime
         // The part of the crop that lies in the image is drawn where it falls in the result; what lies outside it stays transparent.
         var pictureSpace = CanvasColorSpaces.SpaceOf(image);
         var pieceIsWide = CanvasColorSpaces.FloatsOf(image) is not null;
+        if (pictureSpace == "srgb" && !pieceIsWide && Document.DeclaresColorSpace(image))
+        {
+            // The file's colors may lie outside the sRGB gamut: they are kept as floats in Display P3 (outside that too, when it comes to it) until they land on a canvas.
+            pictureSpace = "display-p3";
+            pieceIsWide = true;
+        }
+
         var piece = new CanvasBitmap(Document, outWidth, outHeight);
         piece.ConfigureColor(pictureSpace, pieceIsWide);
         piece.State.ImageSmoothing = quality != "pixelated";

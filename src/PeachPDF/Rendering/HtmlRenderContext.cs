@@ -136,6 +136,11 @@ namespace PeachPDF.Rendering
                 return await dataLoader.GetResourceStream(uri);
             }
 
+            if (uri.Scheme is "blob")
+            {
+                return await new BlobUriNetworkLoader().GetResourceStream(uri);
+            }
+
             if (uri.Scheme is "file")
             {
                 // Checked ahead of the configured loader, so a deny holds even when that loader is itself a

@@ -606,9 +606,10 @@ internal static class WebPlatformScripts
                 var origin = originOf(basicParse(net.documentUrl()) || newRecord("about"));
                 var id = "blob:" + (origin === "null" ? "null" : origin) + "/" + net.utf8Encode("") + Math.random().toString(16).slice(2) + Date.now().toString(16);
                 blobUrls[id] = blob;
+                net.blobUrlCreated(id);
                 return id;
             });
-            method(URL, "revokeObjectURL", function revokeObjectURL(url) { delete blobUrls[String(url)]; });
+            method(URL, "revokeObjectURL", function revokeObjectURL(url) { delete blobUrls[String(url)]; net.blobUrlRevoked(String(url)); });
             tag(URL, "URL");
 
             // ---------------------------------------------------------------- URLSearchParams

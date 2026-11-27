@@ -183,7 +183,7 @@ internal sealed partial class WptRenderer(string wptRoot) : IReftestRenderer
     // The server answers; a data: address carries its own content.
     private static async ValueTask<RNetworkResponse?> LoadAsync(WptServer server, Uri uri)
     {
-        if (uri.IsAbsoluteUri && uri.Scheme == "data")
+        if (uri.IsAbsoluteUri && uri.Scheme is "data" or "blob")
             return await HostResourceLoader.LoadAsync(uri);
 
         return await server.LoadAsync(uri);

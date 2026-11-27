@@ -178,7 +178,16 @@ namespace PeachBrackets.Html.Handlers
 
             try
             {
-                Image = _htmlContainer.RenderContext.ImageFromStream(stream);
+                if (stream is MemoryStream { Position: 0 } whole && whole.TryGetBuffer(out var buffer) && buffer.Offset == 0 && buffer.Count == buffer.Array!.Length)
+                {
+                    Image = ImageColorSources.Decode(_htmlContainer.RenderContext, buffer.Array);
+                }
+                else
+                {
+                    using var copy = new MemoryStream();
+                    await stream.CopyToAsync(copy);
+                    Image = ImageColorSources.Decode(_htmlContainer.RenderContext, copy.ToArray());
+                }
             }
             catch (InvalidOperationException)
             {

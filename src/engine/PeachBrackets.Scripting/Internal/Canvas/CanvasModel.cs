@@ -360,6 +360,9 @@ internal sealed class CanvasState
 
     public string ShadowColorText { get; set; } = "rgba(0, 0, 0, 0)";
 
+    /// <summary>Where the shadow color really is when its eight-bit sRGB reading lost it (a <c>color()</c> outside the sRGB gamut).</summary>
+    public (double R, double G, double B, double A)? ShadowExtended { get; set; }
+
     public double ShadowBlur { get; set; }
 
     public double ShadowOffsetX { get; set; }
@@ -406,7 +409,7 @@ internal sealed class CanvasState
     {
         Transform = Transform, FillStyle = FillStyle, StrokeStyle = StrokeStyle, LineWidth = LineWidth, LineCap = LineCap, LineJoin = LineJoin,
         MiterLimit = MiterLimit, LineDash = LineDash, LineDashOffset = LineDashOffset, GlobalAlpha = GlobalAlpha, Composite = Composite,
-        ShadowColor = ShadowColor, ShadowColorText = ShadowColorText, ShadowBlur = ShadowBlur, ShadowOffsetX = ShadowOffsetX, ShadowOffsetY = ShadowOffsetY,
+        ShadowColor = ShadowColor, ShadowColorText = ShadowColorText, ShadowExtended = ShadowExtended, ShadowBlur = ShadowBlur, ShadowOffsetX = ShadowOffsetX, ShadowOffsetY = ShadowOffsetY,
         Font = Font, LetterSpacing = LetterSpacing, WordSpacing = WordSpacing, FontKerning = FontKerning, FontStretch = FontStretch, FontVariantCaps = FontVariantCaps, TextRendering = TextRendering, Lang = Lang, TextAlign = TextAlign, TextBaseline = TextBaseline, Direction = Direction, ImageSmoothing = ImageSmoothing,
         ImageSmoothingQuality = ImageSmoothingQuality, Filter = Filter, FilterSteps = FilterSteps, FilterObject = FilterObject, Clips = [.. Clips],
     };
@@ -533,13 +536,34 @@ internal sealed class CanvasBitmap(ScriptDocument document, double width, double
     {
         var from = CanvasColorSpaces.SpaceOf(image);
         var floats = CanvasColorSpaces.FloatsOf(image);
-        if (from == ColorSpace && (floats is not null || !Wide))
-            return image;
-
         var key = ColorSpace + (Wide ? "/wide" : "");
         var versions = _converted.GetOrCreateValue(image);
         if (versions.TryGetValue(key, out var done))
             return done;
+
+        // A file that declares its own space (a Display-P3 PNG) is read again and converted from what it says it is, whatever space the canvas is in.
+        if (from == "srgb" && floats is null && Document.ConvertImageToColorSpace(image, ColorSpace, Wide) is { } declared)
+        {
+            Image? fromFile;
+            if (declared.Floats is { } declaredFloats)
+            {
+                fromFile = Document.CreateWideImage(declared.Width, declared.Height, declaredFloats);
+            }
+            else
+            {
+                fromFile = Document.DecodeImage(PngWriter.Encode(declared.Width, declared.Height, declared.Bytes!));
+            }
+
+            if (fromFile is not null)
+            {
+                CanvasColorSpaces.Tag(fromFile, ColorSpace, declared.Floats);
+                versions[key] = fromFile;
+                return fromFile;
+            }
+        }
+
+        if (from == ColorSpace && (floats is not null || !Wide))
+            return image;
 
         float[] straight;
         int width, height;
@@ -675,6 +699,7 @@ internal sealed class CanvasBitmap(ScriptDocument document, double width, double
         State.Composite = "source-over";
         State.ShadowColor = PaintColor.Transparent;
         State.ShadowColorText = "rgba(0, 0, 0, 0)";
+        State.ShadowExtended = null;
         State.ShadowBlur = 0;
         State.ShadowOffsetX = 0;
         State.ShadowOffsetY = 0;
@@ -951,7 +976,7 @@ internal sealed class CanvasBitmap(ScriptDocument document, double width, double
         // A shadow is the shape's own alpha, in the shadow color, moved by the offset (which no transform touches) and blurred, drawn first and with the same
         // alpha and compositing as the shape; then the shape is drawn.
         var hasShadow = state.ShadowColor.A > 0 && (state.ShadowBlur > 0 || state.ShadowOffsetX != 0 || state.ShadowOffsetY != 0);
-        var (shadowDx, shadowDy, sigma, shadowColor) = (state.ShadowOffsetX, state.ShadowOffsetY, state.ShadowBlur / 2, InSpace(state.ShadowColor));
+        var (shadowDx, shadowDy, sigma, shadowColor) = (state.ShadowOffsetX, state.ShadowOffsetY, state.ShadowBlur / 2, InSpace(new PaintSource.ColorSource(state.ShadowColor, state.ShadowColorText) { Extended = state.ShadowExtended }));
         var (width, height) = (Width, Height);
 
         // The filter acts on the shape alone: before the shadow (which is the filtered shape's) and before alpha and compositing.

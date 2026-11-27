@@ -921,13 +921,72 @@ public sealed class ScriptDocument
         ArgumentNullException.ThrowIfNull(bytes);
         try
         {
-            using var stream = new MemoryStream(bytes);
-            return _container.RenderContext.ImageFromStream(stream);
+            return ImageColorSources.Decode(_container.RenderContext, bytes);
         }
         catch (Exception ex) when (ex is InvalidOperationException or IOException or ArgumentException or InvalidDataException or NotSupportedException)
         {
             return null;
         }
+    }
+
+    /// <summary>
+    /// The colors an image means in a canvas's color space. A file that declares a space other than sRGB (a Display-P3 PNG) is decoded to its pixels as written; this reads the file again and converts from
+    /// the space it declares.
+    /// </summary>
+    /// <param name="image">an image this document decoded</param>
+    /// <param name="colorSpace">the canvas's space: <c>srgb</c>, <c>display-p3</c>, <c>srgb-linear</c> or <c>display-p3-linear</c></param>
+    /// <param name="wide">whether to give straight floats (a float canvas) rather than eight-bit straight RGBA</param>
+    /// <returns>the converted pixels, or null when the image's file declares no space other than sRGB</returns>
+    public (int Width, int Height, byte[]? Bytes, float[]? Floats)? ConvertImageToColorSpace(PeachDrawing.Core.Image image, string colorSpace, bool wide)
+    {
+        ArgumentNullException.ThrowIfNull(image);
+        ArgumentNullException.ThrowIfNull(colorSpace);
+        return ImageColorSources.Convert(image, colorSpace, wide);
+    }
+
+    /// <summary>
+    /// Encodes a canvas's pixels the way <c>toBlob</c>, <c>toDataURL</c> and <c>convertToBlob</c> do: as the image type asked for when the document can write it, else as PNG. PNG keeps the canvas's color space
+    /// (the file says which) and the precision a float canvas has; JPEG and WebP are written in the canvas's gamut with the sRGB transfer function, on opaque black.
+    /// </summary>
+    /// <param name="width">the width in pixels</param>
+    /// <param name="height">the height in pixels</param>
+    /// <param name="straightBytes">eight-bit straight RGBA, or null when <paramref name="straightFloats"/> is given</param>
+    /// <param name="straightFloats">straight RGBA as floats (a float canvas), or null</param>
+    /// <param name="colorSpace">the canvas's space: <c>srgb</c>, <c>display-p3</c>, <c>srgb-linear</c> or <c>display-p3-linear</c></param>
+    /// <param name="mimeType">the image type asked for</param>
+    /// <param name="quality">the quality from 0 to 1 for a type that has one, or null</param>
+    /// <param name="writtenType">the image type that was written</param>
+    /// <returns>the file's bytes, or null when the pixels cannot be encoded</returns>
+    public byte[]? EncodeImage(int width, int height, byte[]? straightBytes, float[]? straightFloats, string colorSpace, string mimeType, double? quality, out string writtenType)
+    {
+        ArgumentNullException.ThrowIfNull(colorSpace);
+        ArgumentNullException.ThrowIfNull(mimeType);
+        writtenType = "image/png";
+        return ImageColorSources.Encode(width, height, straightBytes, straightFloats, colorSpace, mimeType, quality, out writtenType);
+    }
+
+    /// <summary>The image turned upright by the orientation its file records (EXIF), or the image itself when the file records none.</summary>
+    /// <param name="image">an image this document decoded</param>
+    public PeachDrawing.Core.Image UprightImage(PeachDrawing.Core.Image image)
+    {
+        ArgumentNullException.ThrowIfNull(image);
+        return ImageColorSources.Upright(_container.RenderContext, image);
+    }
+
+    /// <summary>The image as its file stores it, before the orientation the file records is applied (or the image itself when none was).</summary>
+    /// <param name="image">an image this document decoded</param>
+    public PeachDrawing.Core.Image UnorientedImage(PeachDrawing.Core.Image image)
+    {
+        ArgumentNullException.ThrowIfNull(image);
+        return ImageColorSources.Unoriented(image);
+    }
+
+    /// <summary>Whether the image was decoded from a file that declares a color space other than sRGB, so that <see cref="ConvertImageToColorSpace"/> has something to convert from.</summary>
+    /// <param name="image">an image this document decoded</param>
+    public bool DeclaresColorSpace(PeachDrawing.Core.Image image)
+    {
+        ArgumentNullException.ThrowIfNull(image);
+        return ImageColorSources.Has(image);
     }
 
     /// <summary>The decoded image an earlier <see cref="LoadImageAsync"/> of this address made, or null.</summary>
@@ -966,8 +1025,7 @@ public sealed class ScriptDocument
             // A data: address carries its bytes; everything else goes through the document's resource loader.
             if (!address.StartsWith("data:image/svg", StringComparison.OrdinalIgnoreCase) && DataUriUtils.TryDecodeDataUri(address, out _, out var bytes))
             {
-                using var stream = new MemoryStream(bytes);
-                var decoded = _container.RenderContext.ImageFromStream(stream);
+                var decoded = ImageColorSources.Upright(_container.RenderContext, ImageColorSources.Decode(_container.RenderContext, bytes));
                 _loadedImages[address] = decoded;
                 return new ScriptImageInfo(decoded.Width, decoded.Height, address);
             }
@@ -976,8 +1034,9 @@ public sealed class ScriptDocument
             await handler.LoadImage(address);
             var resolved = CommonUtils.ResolveAgainstDocumentBase(_container, address);
             var url = resolved?.IsAbsoluteUri == true ? resolved.AbsoluteUri : address;
-            if (handler.Image is { } image)
+            if (handler.Image is { } loaded)
             {
+                var image = ImageColorSources.Upright(_container.RenderContext, loaded);
                 _loadedImages[address] = image;
                 return new ScriptImageInfo(image.Width, image.Height, url);
             }

@@ -345,6 +345,22 @@ PeachBrackets.Annotations.PagePosition : struct
   property Double Top { get; init; }
   property Int32 PageIndex { get; init; }
   property StructureNode? Target { get; init; }
+PeachBrackets.BlobContent : sealed class
+  ctor(Byte[] Bytes, String ContentType)
+  method BlobContent <Clone>$()
+  method Void Deconstruct(out Byte[] Bytes, out String ContentType)
+  method virtual Boolean Equals(BlobContent other)
+  method virtual Boolean Equals(Object obj)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property Byte[] Bytes { get; init; }
+  property String ContentType { get; init; }
+PeachBrackets.BlobUrlStore : static class
+  method static BlobContent TryRead(String url)
+  method static RNetworkResponse Load(Uri uri)
+  method static ValueTask<RNetworkResponse> LoadAsync(Uri uri)
+  method static Void Register(String url, Object owner, Func<Object, String, BlobContent> read)
+  method static Void Revoke(String url)
 PeachBrackets.Building.DeclarativePage : sealed class
   method Void AddMarginBox(String marginBox, String content)
   property DocumentNode Root { get; }
@@ -839,12 +855,14 @@ PeachBrackets.ScriptHosting.ScriptCanvasPainting : sealed class
   property Double Width { get; init; }
   property IDisposable Owner { get; init; }
 PeachBrackets.ScriptHosting.ScriptDocument : sealed class
+  method Boolean DeclaresColorSpace(Image image)
   method Boolean DrawSvgImage(Canvas canvas, String address, Rect viewport)
   method Boolean IsFontSource(String source)
   method Boolean IsSvgImage(String address)
   method Boolean TryParseColor(String css, ScriptNode element, out PaintColor color)
   method Boolean TryParseColor(String css, ScriptNode element, out PaintColor color, out String serialized)
   method Boolean TryParseColor(String css, out PaintColor color)
+  method Byte[] EncodeImage(Int32 width, Int32 height, Byte[] straightBytes, Single[] straightFloats, String colorSpace, String mimeType, Double? quality, out String writtenType)
   method Canvas CreateMeasuringCanvas()
   method Font GetFallbackFont(Rune rune, Double sizePixels, PaintFontStyle style, Double weight)
   method Font GetFont(String family, Double sizePixels, PaintFontStyle style, Double weight)
@@ -855,6 +873,8 @@ PeachBrackets.ScriptHosting.ScriptDocument : sealed class
   method Image CreateWideImage(Int32 widthPixels, Int32 heightPixels, ReadOnlySpan<Single> straightRgba)
   method Image DecodeImage(Byte[] bytes)
   method Image GetLoadedImage(String address)
+  method Image UnorientedImage(Image image)
+  method Image UprightImage(Image image)
   method Int32 OrdinalOf(ScriptNode element)
   method List<ValueTuple<Double, PaintColor>> InterpolateGradientStops(IReadOnlyList<ValueTuple<Double, PaintColor>> stops)
   method OffscreenSurface CreateCanvasSurface(Int32 widthPixels, Int32 heightPixels)
@@ -881,6 +901,7 @@ PeachBrackets.ScriptHosting.ScriptDocument : sealed class
   method ValueTask<ScriptImageInfo> LoadImageAsync(String address)
   method ValueTask<ScriptNetworkResponse> SendAsync(ScriptNetworkRequest request, CancellationToken cancellationToken = null)
   method ValueTask<String> LoadTextAsync(String address)
+  method ValueTuple<Int32, Int32, Byte[], Single[]>? ConvertImageToColorSpace(Image image, String colorSpace, Boolean wide)
   method ValueTuple<ScriptBox, ScriptBox>? GetBoundingBoxes(ScriptNode element)
   method ValueTuple<ScriptNode, Int32>? GetCaretAt(Double x, Double y)
   method Void SetCanvasPainting(ScriptNode canvas, ScriptCanvasPainting painting)

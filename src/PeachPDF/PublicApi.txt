@@ -373,6 +373,11 @@ PeachPDF.Layout.TextAlignment : enum Int32
   Left = 0
   Right = 2
   Start = 4
+PeachPDF.Network.BlobUriNetworkLoader : class
+  ctor()
+  method virtual Task<RNetworkResponse> GetResourceStream(Uri uri)
+  method virtual Task<String> GetPrimaryContents()
+  property Uri BaseUri { get; }
 PeachPDF.Network.DataUriNetworkLoader : class
   ctor()
   method virtual Task<RNetworkResponse> GetResourceStream(Uri uri)

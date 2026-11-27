@@ -561,8 +561,10 @@ internal sealed partial class ScriptRuntime
         });
         Js.Accessor(Engine, p, "shadowColor", self => Js.Str(S(self).ShadowColorText), (self, value) =>
         {
-            if (Document.TryParseColor(Js.AsText(value), Cx(self).Canvas, out var color, out var serialized))
+            var written = Js.AsText(value);
+            if (Document.TryParseColor(written, Cx(self).Canvas, out var color, out var serialized))
             {
+                S(self).ShadowExtended = CanvasColorSpaces.TryParseExtended(serialized ?? written, out var extended) ? extended : null;
                 S(self).ShadowColor = color;
                 S(self).ShadowColorText = serialized ?? CanvasBitmap.ColorText(color);
             }

@@ -173,6 +173,17 @@ internal sealed partial class ScriptRuntime
             _blobReader = Js.Arg(args, 0) as ObjectInstance;
             return JsValue.Undefined;
         });
+        Js.Method(Engine, net, "blobUrlCreated", 1, (_, args) =>
+        {
+            // The address resolves for every loader (an image, a style sheet, a font...), with the bytes read from the script's own Blob when something asks.
+            BlobUrlStore.Register(Js.AsText(Js.Arg(args, 0)), this, static (owner, url) => ((ScriptRuntime)owner).ReadBlob(url));
+            return JsValue.Undefined;
+        });
+        Js.Method(Engine, net, "blobUrlRevoked", 1, (_, args) =>
+        {
+            BlobUrlStore.Revoke(Js.AsText(Js.Arg(args, 0)));
+            return JsValue.Undefined;
+        });
         InstallWorkerNet(net);
         return net;
     }
