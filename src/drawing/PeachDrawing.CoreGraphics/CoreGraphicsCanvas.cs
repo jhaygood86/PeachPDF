@@ -294,7 +294,7 @@ public sealed partial class CoreGraphicsCanvas : Canvas
         PaintBlendMode.DestinationIn => CGBlendMode.DestinationIn,
         PaintBlendMode.DestinationOut => CGBlendMode.DestinationOut,
         PaintBlendMode.DestinationAtop => CGBlendMode.DestinationAtop,
-        PaintBlendMode.Xor => CGBlendMode.Xor,
+        PaintBlendMode.Xor => CGBlendMode.XOR,
         PaintBlendMode.Copy => CGBlendMode.Copy,
         PaintBlendMode.Clear => CGBlendMode.Clear,
         _ => CGBlendMode.Normal,

@@ -436,19 +436,28 @@ internal sealed class AndroidMediaSession : IMediaSession
 
     internal static PixelImage? FromBitmap(Bitmap bitmap)
     {
-        var width = bitmap.Width;
-        var height = bitmap.Height;
-        var stride = bitmap.RowBytes;
-        var buffer = ByteBuffer.Allocate(bitmap.ByteCount)!;
-        bitmap.CopyPixelsToBuffer(buffer);
+        // A hardware or 565 bitmap cannot be copied out as RGBA bytes; an ARGB_8888 copy always can.
+        using var copy = bitmap.Copy(Bitmap.Config.Argb8888!, false);
+        if (copy is null)
+            return null;
+
+        var width = copy.Width;
+        var height = copy.Height;
+        var buffer = ByteBuffer.Allocate(copy.ByteCount)!;
+        copy.CopyPixelsToBuffer(buffer);
         buffer.Rewind();
-        var raw = new byte[bitmap.ByteCount];
+        var raw = new byte[copy.ByteCount];
         buffer.Get(raw);
 
-        // An ARGB_8888 bitmap holds premultiplied R, G, B, A bytes in memory; a row may be padded.
-        var pixels = new byte[width * height * 4];
+        // The copy holds premultiplied R, G, B, A bytes; the stride is what the bytes say, not what RowBytes claims.
+        var rowBytes = width * 4;
+        var stride = height > 0 ? raw.Length / height : rowBytes;
+        if (stride < rowBytes)
+            return null;
+
+        var pixels = new byte[rowBytes * height];
         for (var y = 0; y < height; y++)
-            System.Buffer.BlockCopy(raw, y * stride, pixels, y * width * 4, width * 4);
+            System.Buffer.BlockCopy(raw, y * stride, pixels, y * rowBytes, rowBytes);
 
         return new PixelImage(width, height, pixels);
     }
