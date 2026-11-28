@@ -26,5 +26,5 @@ if [[ "$log" != *DONE* ]]; then echo "the media checks did not finish"; exit 1; 
 if [[ "$log" == *"FAIL "* ]]; then echo "a media check failed"; exit 1; fi
 
 passed=$(grep -c "PEACH_MEDIA: OK " <<<"$log" || true)
-if [[ "$passed" -lt 5 ]]; then echo "only $passed of 5 media checks passed"; exit 1; fi
+if [[ "$passed" -lt 6 ]]; then echo "only $passed of 6 media checks passed"; exit 1; fi
 echo "all $passed media checks passed"

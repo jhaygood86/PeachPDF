@@ -68,7 +68,7 @@ without it, or without the plugin for a codec, `CanPlayType` answers `""` for wh
 * **How it plays.** The resource is read through the document's loader into a temporary file (deleted when the session is disposed), and a `playbin`
   plays it; a video's pictures come from an `appsink` after `videoconvert` as RGBA, which applies the stream's YUV matrix and range. The `colorimetry` of
   the stream sets `MediaFrame.ColorSpace` (a Rec. 2020 stream is `Rec2020`). Frames are copied pixels (a `PeachDrawing.Core.Image` every backend draws by
-  uploading it once); zero-copy GPU frames come with the platform providers.
+  uploading it once); zero-copy GPU frames come with the platform providers (Android's is done, see below).
 * **Real time.** The pipeline plays by its own clock and the sound goes to the default output (a muted element uses no output). The end of the media and
   errors are read from the pipeline's bus whenever the document calls `Update` or asks for a picture.
 * **Deterministic.** With `MediaProviderOptions.DeterministicClock` the pipeline stays paused. The position is the document's: `Update(documentTime)`
@@ -129,10 +129,17 @@ COM, no marshalling, AOT-safe) instead of WinRT, so nothing but the system DLLs 
 answers from `MediaCodecList` (decoders only).
 
 * **Playing by the player's clock.** The player renders into an `ImageReader` (YUV, because a decoder's surface refuses an RGBA reader); the newest image is the
-  picture, converted to RGBA with Rec. 601 below 577 lines and Rec. 709 above and turned by the stream's rotation (the player leaves it to the viewer).
+  picture. On a host that draws with Skia the picture stays in the decoder's `HardwareBuffer` and is a texture (see Zero-copy below); otherwise it is converted to
+  RGBA on the CPU, with Rec. 601 below 577 lines and Rec. 709 above, and turned by the stream's rotation (the player leaves it to the viewer).
   The reader holds only the images it was made for, so each is **closed** after it is read: disposing the binding does not close it.
 * **Deterministic.** There is no player: the position is the document's, and a picture is what `MediaMetadataRetriever.GetFrameAtTime(position, Closest)` returns.
-* **Not zero-copy.** A picture is copied into pixels the backend uploads; handing the `HardwareBuffer` to Skia as a texture is not done.
+* **Zero-copy.** When the request's `RenderContext` is a `PeachDrawing.Skia` `SkiaRenderContext`, the stream is not rotated and the device is Android 10 or later, the reader
+  is made with GPU-sampled and CPU-readable buffer usage and each picture is an `Image` from `SkiaRenderContext.CreateGpuImage`: when a canvas draws it on the host's `GpuContext`
+  the decoder's `AHardwareBuffer` becomes an EGL image and a `GL_TEXTURE_EXTERNAL_OES` texture in that context (the GPU does the YUV conversion, with the platform's matrix
+  and range), and `GetPixels` and a canvas with no GPU read the same buffer's planes. The reader's image stays open until the session and every frame leased from it are
+  disposed. A buffer is usually larger than the picture (a decoder aligns its sizes), so the texture is made at the buffer's size and the picture is the part of it
+  that shows. OpenGL objects are freed on the thread that holds the context, and a release on another thread waits for the next import there. Rotated streams and
+  Android 9 and earlier take the copying path, and so does a document whose video opens before its view has a GPU context (the view sets `GpuContext` at first paint).
 * **The Android view** sets it by default (`HtmlView.MediaProvider`). Verified on an emulator by `src/examples/PeachBrackets.Media.Android.Example`, a bare app that plays
   two clips in both modes and logs `OK`/`FAIL` lines under the tag `PEACH_MEDIA`.
 

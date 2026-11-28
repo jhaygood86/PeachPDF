@@ -33,6 +33,7 @@ public sealed class MainActivity : Activity
             await CheckAsync("deterministic playback follows the clock", ClockAsync);
             await CheckAsync("real-time playback plays and ends", RealTimeAsync);
             await CheckAsync("audio session", AudioAsync);
+            await CheckAsync("zero-copy hardware frame", () => GpuCheck.RunAsync(name => Assets!.Open(name)));
         }
         catch (Exception ex)
         {

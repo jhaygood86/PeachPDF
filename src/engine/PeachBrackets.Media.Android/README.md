@@ -10,8 +10,9 @@ var options = new HtmlDocumentOptions
 };
 ```
 
-* While a video plays by the player's own clock it renders into an `ImageReader`; the newest image is the picture, converted from YUV and turned by the stream's
-  rotation.
+* While a video plays by the player's own clock it renders into an `ImageReader`; the newest image is the picture. For a document drawn with
+  `PeachDrawing.Skia` on Android 10 or later it stays in the decoder's hardware buffer and is sampled as a texture with no copy; otherwise it is converted from YUV
+  on the CPU and turned by the stream's rotation.
 * `MediaProviderOptions.DeterministicClock` plays by the document's clock: there is no player, and each picture is what `MediaMetadataRetriever` returns for the
   position the document has reached.
 * `CanPlayType` answers from the decoders `MediaCodecList` reports.

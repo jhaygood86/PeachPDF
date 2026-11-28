@@ -141,6 +141,7 @@ PeachDrawing.Skia.SkiaLinkOptions : sealed class
   property ISkiaLinkLauncher Launcher { get; init; }
 PeachDrawing.Skia.SkiaRenderContext : class
   ctor(SkiaTextEngine textEngine = PeachDrawing, SkiaImageCodec imageCodec = Auto, ISkiaTextShaper textShaper = null, FontSet fontSet = null)
+  method Image CreateGpuImage(Int32 width, Int32 height, Func<GRContext, SKImage> import, Func<PixelBuffer?> readPixels = null)
   method ValueTask AddFont(Stream stream, String fontFamilyName)
   method ValueTask AddFont(Stream stream, String fontFamilyName, FontFaceDescriptors descriptors, IReadOnlyList<RuneInterval> unicodeRanges = null)
   method Void SyncFonts()

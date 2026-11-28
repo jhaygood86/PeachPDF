@@ -3,6 +3,7 @@ using Android.Media;
 using Android.OS;
 using PeachDrawing.Core;
 using Java.Nio;
+using PeachDrawing.Skia;
 
 namespace PeachBrackets.Media.Android.Internal;
 
@@ -28,6 +29,10 @@ internal sealed class AndroidMediaSession : IMediaSession
     private int _height;
     private int _rotation;
     private bool _hasVideo;
+    // AHARDWAREBUFFER_USAGE_GPU_SAMPLED_IMAGE and CPU_READ_OFTEN: the buffers are sampled by the GPU and can also be read by the CPU.
+    private const long GpuSampledImage = 0x100;
+    private const long CpuReadOften = 0x3;
+
     private TimeSpan _frameDuration = TimeSpan.FromMilliseconds(40);
 
     private TimeSpan _position;
@@ -40,12 +45,15 @@ internal sealed class AndroidMediaSession : IMediaSession
     private bool _loop;
     private MediaErrorCode _error;
 
+    private SkiaRenderContext? _gpuContext;
+    private GpuPicture? _picture;
     private PixelImage? _image;
     private TimeSpan _imageStart;
     private TimeSpan _imageEnd;
 
-    private AndroidMediaSession(MediaKind kind, bool deterministic, string file, MediaMetadataRetriever retriever, bool muted, bool loop)
+    private AndroidMediaSession(MediaKind kind, bool deterministic, string file, MediaMetadataRetriever retriever, bool muted, bool loop, SkiaRenderContext? gpuContext)
     {
+        _gpuContext = gpuContext;
         _kind = kind;
         _deterministic = deterministic;
         _file = file;
@@ -180,12 +188,17 @@ internal sealed class AndroidMediaSession : IMediaSession
             return null;
         }
 
-        var session = new AndroidMediaSession(request.Kind, options.DeterministicClock, file, retriever, request.Muted, request.Loop);
+        var session = new AndroidMediaSession(request.Kind, options.DeterministicClock, file, retriever, request.Muted, request.Loop,
+            request.Kind == MediaKind.Video && !options.DeterministicClock && request.RenderContext is SkiaRenderContext skia && HardwareBufferImporter.IsSupported() ? skia : null);
         if (!session.Learn() || (request.Kind == MediaKind.Video && !session._hasVideo && !session.HasAudioTrack()))
         {
             session.Dispose();
             return null;
         }
+
+        // A stream stored rotated is turned on the CPU, so it takes the copying path.
+        if (session._rotation != 0)
+            session._gpuContext = null;
 
         if (!session._deterministic && !session.StartPlayer())
         {
@@ -297,6 +310,9 @@ internal sealed class AndroidMediaSession : IMediaSession
                 TakeNewestPicture();
             }
 
+            if (_picture is not null)
+                return new MediaFrame(_picture.Image, _imageStart, _picture.Lease()) { ColorSpace = MediaColorSpace.Srgb };
+
             return _image is null ? null : new MediaFrame(_image, _imageStart) { ColorSpace = MediaColorSpace.Srgb };
         }
     }
@@ -332,6 +348,8 @@ internal sealed class AndroidMediaSession : IMediaSession
             player.Dispose();
         }
 
+        _picture?.Release();
+        _picture = null;
         _reader?.Close();
         _reader?.Dispose();
         _retriever.Release();
@@ -383,7 +401,11 @@ internal sealed class AndroidMediaSession : IMediaSession
                 // The surface the player renders into is an image reader; a picture is its newest image. A decoder's surface takes YUV (an RGBA reader is refused),
                 // which is converted here, and frames arrive as the video is stored, unrotated.
                 var (storedWidth, storedHeight) = _rotation is 90 or 270 ? (_height, _width) : (_width, _height);
-                _reader = ImageReader.NewInstance(storedWidth, storedHeight, ImageFormatType.Yuv420888, 3);
+                // On a GPU host the pictures stay in the decoder's buffers and are sampled as textures, the GPU doing the YUV conversion; the same buffers
+                // can be read on the CPU (for a canvas with no GPU, or a readback), where they are converted here.
+                _reader = _gpuContext is not null && OperatingSystem.IsAndroidVersionAtLeast(29)
+                    ? ImageReader.NewInstance(storedWidth, storedHeight, ImageFormatType.Yuv420888, 6, GpuSampledImage | CpuReadOften)
+                    : ImageReader.NewInstance(storedWidth, storedHeight, ImageFormatType.Yuv420888, 3);
                 player.SetSurface(_reader.Surface);
             }
 
@@ -412,7 +434,7 @@ internal sealed class AndroidMediaSession : IMediaSession
         _imageEnd = at + _frameDuration;
     }
 
-    private static PixelImage? FromBitmap(Bitmap bitmap)
+    internal static PixelImage? FromBitmap(Bitmap bitmap)
     {
         var width = bitmap.Width;
         var height = bitmap.Height;
@@ -437,9 +459,28 @@ internal sealed class AndroidMediaSession : IMediaSession
         if (_reader is null)
             return;
 
-        var image = _reader.AcquireLatestImage();
+        global::Android.Media.Image? image;
+        try
+        {
+            image = _reader.AcquireLatestImage();
+        }
+        catch (Java.Lang.IllegalStateException)
+        {
+            // Every image the reader may hand out is still held by a frame; the picture shown stays.
+            return;
+        }
+
         if (image is null)
             return;
+
+        if (_gpuContext is not null && OperatingSystem.IsAndroidVersionAtLeast(29) && image.HardwareBuffer is { } buffer)
+        {
+            var previous = _picture;
+            _picture = new GpuPicture(_gpuContext, image, buffer);
+            _imageStart = Position;
+            previous?.Release();
+            return;
+        }
 
         byte[] pixels;
         int width, height;
@@ -464,7 +505,7 @@ internal sealed class AndroidMediaSession : IMediaSession
 
     // Limited-range YUV 4:2:0 to RGBA, with the Rec. 601 matrix for a picture of 576 lines or fewer and Rec. 709 above, as a browser chooses for a stream that does
     // not say. Each plane has its own row and pixel stride.
-    private static byte[] Yuv420ToRgba(global::Android.Media.Image.Plane yPlane, global::Android.Media.Image.Plane uPlane, global::Android.Media.Image.Plane vPlane, int width, int height)
+    internal static byte[] Yuv420ToRgba(global::Android.Media.Image.Plane yPlane, global::Android.Media.Image.Plane uPlane, global::Android.Media.Image.Plane vPlane, int width, int height)
     {
         var y = ReadPlane(yPlane);
         var u = ReadPlane(uPlane);

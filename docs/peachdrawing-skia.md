@@ -202,6 +202,15 @@ Native mode is a convenience for text that should look like the rest of the plat
 Either way the image is a drawable `Image` the canvas turns into an `SKImage` (a texture, once, when `GpuContext` is set); an `Image` made by
 another backend is converted from its pixels once per canvas.
 
+### Images made on the GPU
+
+`SkiaRenderContext.CreateGpuImage(width, height, import, readPixels)` makes an `Image` for a picture that already lives on the GPU, such as a video decoder's
+output left in a hardware buffer, without copying it. `import` is called when a canvas drawing on `GpuContext` first draws the image, on the thread that
+holds that context, and returns the texture as an `SKImage` the `Image` then owns; it may return `null`, and the image falls back to its pixels.
+`readPixels` (optional) makes premultiplied RGBA for a canvas with no GPU context and for `Image.GetPixels` (a readback or another backend's conversion); an
+image with neither has no pixels. The texture is released when the image is disposed, which should happen on the thread that holds the context (a GL object
+cannot be deleted from another). `PeachBrackets.Media.Android` uses it to hand a decoder's `AHardwareBuffer` to Skia as an external texture.
+
 ## Links
 
 A Skia canvas draws pixels, so a link is not part of the picture. The canvas records every `AddLink`, `AddDestinationLink` and
@@ -247,6 +256,7 @@ Every native Skia object the backend creates has one owner and is released deter
 | A retained layer (`CreateRetainedLayer`) | The `RetainedLayer` returned | `Dispose()`; it holds one image (a texture on the render context's `GpuContext` when it has one) and is only drawable on a canvas of that same context |
 | A layer (`BeginLayer`) | The `CanvasLayer` returned | Disposing it composites and releases; a canvas disposed first ends it as it stands |
 | Decoded image | The `Image` | `Dispose()`; the texture is made per GPU context on first draw and rebuilt for another |
+| GPU-made image (`CreateGpuImage`) | The `Image` | `Dispose()`, which releases the `SKImage` the `import` returned (on the context's thread) |
 | Native font faces and shapers | `SkiaRenderContext` | `Dispose()` |
 
 `SkiaCanvas.Dispose()` is idempotent: it pops everything still pushed in reverse order, restores the host canvas's save level, and from then
