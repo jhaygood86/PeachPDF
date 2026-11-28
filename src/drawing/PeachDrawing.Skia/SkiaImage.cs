@@ -24,6 +24,7 @@ internal sealed class SkiaImage : PeachDrawing.Core.Image
     private SKImage? _texture;
     private GRContext? _textureContext;
     private bool _disposed;
+    private GRContext? _importFailedOn;
 
     private SkiaImage(int width, int height, byte[]? premultipliedRgba, SKImage? raster, SkiaResourceCounts counts, int exifOrientation = 1,
         Func<GRContext, SKImage?>? import = null, Func<PixelBuffer?>? readPixels = null)
@@ -98,7 +99,7 @@ internal sealed class SkiaImage : PeachDrawing.Core.Image
         lock (_gate)
         {
             ObjectDisposedException.ThrowIf(_disposed, this);
-            if (_import is not null && gpu is not null && !gpu.IsAbandoned)
+            if (_import is not null && gpu is not null && !gpu.IsAbandoned && !ReferenceEquals(_importFailedOn, gpu))
             {
                 if (_texture is not null && ReferenceEquals(_textureContext, gpu))
                     return _texture;
@@ -111,12 +112,16 @@ internal sealed class SkiaImage : PeachDrawing.Core.Image
                     _counts.Surface(1);
                     return imported;
                 }
+
+                // It could not be made a texture on this context: the pixels are drawn, and the import is not tried again on every draw.
+                _importFailedOn = gpu;
             }
 
             if (_raster is null)
             {
+                // An image with no texture and no pixels draws as nothing rather than failing the paint it is in.
                 if (_premultipliedRgba is null && _import is not null && GetPixels() is null)
-                    throw new InvalidOperationException("The image has neither a texture nor pixels to draw.");
+                    _premultipliedRgba = new byte[checked((int)Width * (int)Height * 4)];
 
                 var info = new SKImageInfo((int)Width, (int)Height, SKColorType.Rgba8888, SKAlphaType.Premul);
                 _raster = SKImage.FromPixelCopy(info, _premultipliedRgba!, info.RowBytes)

@@ -167,6 +167,24 @@ public sealed partial class HtmlDocument
         if (_container.HideCrossOriginImages && _container.Root is { } documentRoot)
             await RenderSameOriginFramesAsync(documentRoot, found, makeSurface);
 
+        var rect = PeachBrackets.Html.Utils.CommonUtils.GetFirstValueOrDefault(box.Rectangles, box.Bounds);
+        var layoutPerPixel = _unitsPerPoint * 0.75;
+        var (width, height) = (rect.Width / layoutPerPixel, rect.Height / layoutPerPixel);
+        if (!(width > 0) || !(height > 0) || width > 16384 || height > 16384)
+            return null;
+
+        var (pixelsWide, pixelsHigh) = ((int)Math.Ceiling(width - 1e-6), (int)Math.Ceiling(height - 1e-6));
+
+        // A raster region nested in a surface is cut to that surface's own grid and takes no account of a transform pushed on it, so an element that is not at the page's corner is painted
+        // where it is, on a surface that reaches from the corner to it, and its part is cut out afterwards.
+        var (cornerX, cornerY) = (rect.X / layoutPerPixel, rect.Y / layoutPerPixel);
+        var wholeWidth = (int)Math.Ceiling(cornerX + width + 1);
+        var wholeHeight = (int)Math.Ceiling(cornerY + height + 1);
+        var cut = (cornerX >= 1 || cornerY >= 1) && wholeWidth <= 8192 && wholeHeight <= 8192;
+        using var surface = makeSurface(Math.Max(1, cut ? wholeWidth : pixelsWide), Math.Max(1, cut ? wholeHeight : pixelsHigh));
+        if (surface is null)
+            return null;
+
         _container.ProbeRenderRoot = found;
         var previousCulling = PeachBrackets.Html.Paint.FragmentPainter.UnboundedCulling.Value;
         PeachBrackets.Html.Paint.FragmentPainter.UnboundedCulling.Value = true;
@@ -185,24 +203,6 @@ public sealed partial class HtmlDocument
             foreach (var (key, painting) in canvasPaintings)
                 _container.CanvasPaintings[key] = painting;
         }
-
-        var rect = PeachBrackets.Html.Utils.CommonUtils.GetFirstValueOrDefault(box.Rectangles, box.Bounds);
-        var layoutPerPixel = _unitsPerPoint * 0.75;
-        var (width, height) = (rect.Width / layoutPerPixel, rect.Height / layoutPerPixel);
-        if (!(width > 0) || !(height > 0) || width > 16384 || height > 16384)
-            return null;
-
-        var (pixelsWide, pixelsHigh) = ((int)Math.Ceiling(width - 1e-6), (int)Math.Ceiling(height - 1e-6));
-
-        // A raster region nested in a surface is cut to that surface's own grid and takes no account of a transform pushed on it, so an element that is not at the page's corner is painted
-        // where it is, on a surface that reaches from the corner to it, and its part is cut out afterwards.
-        var (cornerX, cornerY) = (rect.X / layoutPerPixel, rect.Y / layoutPerPixel);
-        var wholeWidth = (int)Math.Ceiling(cornerX + width + 1);
-        var wholeHeight = (int)Math.Ceiling(cornerY + height + 1);
-        var cut = (cornerX >= 1 || cornerY >= 1) && wholeWidth <= 8192 && wholeHeight <= 8192;
-        using var surface = makeSurface(Math.Max(1, cut ? wholeWidth : pixelsWide), Math.Max(1, cut ? wholeHeight : pixelsHigh));
-        if (surface is null)
-            return null;
 
         // The page's layout units become pixels, and (when it is not cut out afterwards) the element's corner the picture's.
         var canvas = surface.Canvas;

@@ -259,7 +259,7 @@ internal static class ImageColorSources
         }
     }
 
-    // A CMYK image as Display P3 floats, by the ICC profile it carries (the generic one when it carries none), or null when that cannot be done.
+    // A CMYK image as Display P3 floats, by the ICC profile it carries, or null when it carries none or that cannot be done (the picture is then converted the way any other is).
     private static PeachImage.Image? CmykToDisplayP3(PeachImage.Image cmyk)
     {
         var profile = cmyk.Metadata.GetIccColorProfile();

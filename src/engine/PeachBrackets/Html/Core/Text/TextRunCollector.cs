@@ -407,7 +407,8 @@ namespace PeachBrackets.Html.TextGeometry
             for (var i = from; i < to && i < text.Length; i++)
             {
                 var rune = char.IsHighSurrogate(text[i]) && i + 1 < text.Length && char.IsLowSurrogate(text[i + 1]) ? char.ConvertToUtf32(text[i], text[i + 1]) : text[i];
-                if (!PeachDrawing.Text.Unicode.DefaultIgnorables.Contains(rune))
+                // Soft hyphen and the Hangul fillers are default ignorable but have an advance of their own in a font that maps them.
+                if (!PeachDrawing.Text.Unicode.DefaultIgnorables.Contains(rune) || rune is 0x00AD or 0x115F or 0x1160 or 0x3164 or 0xFFA0)
                     return false;
 
                 if (rune > 0xFFFF)

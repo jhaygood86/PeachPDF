@@ -198,8 +198,15 @@ internal static class ScriptSerializer
     {
         for (var current = box; current is not null; current = current.ParentBox)
         {
-            if (current.HtmlTag is { } tag && (string.Equals(tag.Name, "svg", StringComparison.OrdinalIgnoreCase) || string.Equals(tag.Name, "math", StringComparison.OrdinalIgnoreCase)))
+            if (current.HtmlTag is not { } tag)
+                continue;
+
+            if (string.Equals(tag.Name, "svg", StringComparison.OrdinalIgnoreCase) || string.Equals(tag.Name, "math", StringComparison.OrdinalIgnoreCase))
                 return true;
+
+            // What is inside foreignObject, desc, title (SVG) or annotation-xml (MathML) is HTML again, whose void elements have no end tag; the element itself is foreign.
+            if (!ReferenceEquals(current, box) && tag.Name is "foreignObject" or "desc" or "title" or "annotation-xml")
+                return false;
         }
 
         return false;

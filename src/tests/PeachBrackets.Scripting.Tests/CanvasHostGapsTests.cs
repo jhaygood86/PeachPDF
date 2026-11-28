@@ -62,4 +62,16 @@ public class CanvasHostGapsTests
 
         Assert.Equal(["RangeError 2x2 InvalidStateError"], log);
     }
+
+    [Fact]
+    public async Task Serializing_ClosesSvgElementsButNotTheVoidElementsOfHtmlInsideThem()
+    {
+        var log = await LogAsync("""
+            var host = document.createElement('div');
+            host.innerHTML = '<svg width="10" height="10"><rect width="5" height="5"/><circle r="2"/><foreignObject><div>a<br>b</div></foreignObject></svg>';
+            Log.info(host.innerHTML);
+            """);
+
+        Assert.Equal(["<svg width=\"10\" height=\"10\"><rect width=\"5\" height=\"5\"></rect><circle r=\"2\"></circle><foreignObject><div>a<br>b</div></foreignObject></svg>"], log);
+    }
 }

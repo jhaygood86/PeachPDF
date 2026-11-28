@@ -394,7 +394,7 @@ namespace PeachPDF
                     await htmlDocument.LayoutAsync(measure);
                 }
 
-                await RenderPagesCore(document, htmlDocument, config, scriptSettings: scriptSettings);
+                return (htmlDocument, measure!, pageScale, rescaled);
             }
             catch
             {
@@ -792,7 +792,7 @@ namespace PeachPDF
         /// document-building path that builds a <c>Html.Dom.CssBox</c> tree directly instead
         /// of parsing HTML. The caller owns its own measure context and disposes it after this returns.
         /// </summary>
-        private async Task RenderPagesCore(PeachPdfDocument document, HtmlDocument htmlDocument, PdfGenerateConfig config, FileLayerPlan? fileLayers = null, PdfScriptSettings? scriptSettings = null)
+        private async Task RenderPagesCore(PeachPdfDocument document, HtmlDocument htmlDocument, PdfGenerateConfig config, FileLayerPlan? fileLayers = null, PdfScriptSettings? scriptSettings = null, double? pageScale = null)
         {
             // The scripts have all run and the layout is final: a script that asked for the conversion to fail ends it before anything is written,
             // and the files a script asked to attach are read now, while this call can still wait for them.
