@@ -338,7 +338,9 @@ namespace PeachDrawing.Text.Internal.Text
                 // A variation selector never contributes an independent glyph advance, even when a font
                 // maps it in its ordinary cmap. Other default ignorables are hidden when unmapped; a real
                 // mapped glyph remains available to GSUB (notably for ZWJ-driven emoji composition).
+                // A bidi control is hidden whatever the font maps it to: it takes no part in substitution and a font's glyph for it is blank, but would take its advance and letter spacing.
                 var hiddenIgnorable = UnicodeDefaultIgnorables.IsVariationSelector(rune.Value)
+                    || UnicodeDefaultIgnorables.IsBidiControl(rune.Value)
                     || glyphIndex == 0 && UnicodeDefaultIgnorables.IsDefaultIgnorable(rune.Value);
 
                 // Any other variation selector after a base the font gives a dedicated glyph for (a

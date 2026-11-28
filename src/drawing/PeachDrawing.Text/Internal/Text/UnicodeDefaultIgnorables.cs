@@ -47,6 +47,13 @@ namespace PeachDrawing.Text.Internal.Text
         };
 
         /// <summary>
+        /// Whether <paramref name="codepoint"/> has the <c>Bidi_Control</c> property: the Arabic letter mark, LRM and RLM, the embedding and override controls and the isolates.
+        /// Such a character is never drawn and takes part in no substitution.
+        /// </summary>
+        public static bool IsBidiControl(int codepoint) =>
+            codepoint is 0x061C or 0x200E or 0x200F or >= 0x202A and <= 0x202E or >= 0x2066 and <= 0x2069;
+
+        /// <summary>
         /// Whether <paramref name="codepoint"/> is a Unicode variation selector. A selector never has an
         /// independent advance: it modifies the preceding character through cmap format 14 or shaping,
         /// or is hidden when the font does not consume it.

@@ -138,4 +138,25 @@ public class CanvasTextTests
 
         Assert.Equal(["true true true true"], log);
     }
+
+    [Fact]
+    public async Task ABidiControl_TakesNoRoomAndNoLetterSpacing_InTheCanvasAndInTheDocument()
+    {
+        var log = await LogAsync("""
+            g.font = '20px TestSans'; g.letterSpacing = '10px';
+            var text = '‭AB‬';
+            var tm = g.measureText(text);
+            var canvasRects = [tm.getSelectionRects(0, 1)[0].width, tm.getSelectionRects(3, 4)[0].width, tm.getSelectionRects(1, 2)[0].width > 10];
+
+            var el = document.createElement('div'); el.innerHTML = text; el.style.font = '20px TestSans'; el.style.letterSpacing = '10px';
+            document.body.appendChild(el);
+            var range = document.createRange(); range.setStart(el.childNodes[0], 0); range.setEnd(el.childNodes[0], 1);
+            var first = range.getClientRects()[0].width;
+            range.setStart(el.childNodes[0], 3); range.setEnd(el.childNodes[0], 4);
+            var last = range.getClientRects()[0].width;
+            Log.info([canvasRects.join(','), first, last].join(' '));
+            """);
+
+        Assert.Equal(["0,0,true 0 0"], log);
+    }
 }
