@@ -355,18 +355,32 @@ public class GStreamerProviderTests : IDisposable
     public async Task DisposingASession_DeletesTheCopyOfTheResource()
     {
         RequireGStreamer();
-        // A session an earlier test left undisposed deletes its copy when it is finalized; let that happen first, or it lands between the counts.
-        GC.Collect();
-        GC.WaitForPendingFinalizers();
-        var before = Directory.GetFiles(Path.GetTempPath(), "peachbrackets-media-*").Length;
-        var session = await Deterministic().OpenAsync(Request(BallClip()), TestContext.Current.CancellationToken);
-        Assert.NotNull(session);
-        Assert.Equal(before + 1, Directory.GetFiles(Path.GetTempPath(), "peachbrackets-media-*").Length);
+        // The copy goes to the temporary folder; a folder of its own for this test keeps the count to this session's copies (other sessions come and go on other threads).
+        var folder = Path.Combine(Path.GetTempPath(), "peachbrackets-test-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(folder);
+        var names = new[] { "TMPDIR", "TMP", "TEMP" };
+        var saved = names.Select(Environment.GetEnvironmentVariable).ToArray();
+        try
+        {
+            foreach (var name in names)
+                Environment.SetEnvironmentVariable(name, folder);
 
-        session.Dispose();
-        session.Dispose();
+            var session = await Deterministic().OpenAsync(Request(BallClip()), TestContext.Current.CancellationToken);
+            Assert.NotNull(session);
+            Assert.Single(Directory.GetFiles(folder, "peachbrackets-media-*"));
 
-        Assert.Equal(before, Directory.GetFiles(Path.GetTempPath(), "peachbrackets-media-*").Length);
+            session.Dispose();
+            session.Dispose();
+
+            Assert.Empty(Directory.GetFiles(folder, "peachbrackets-media-*"));
+        }
+        finally
+        {
+            for (var i = 0; i < names.Length; i++)
+                Environment.SetEnvironmentVariable(names[i], saved[i]);
+
+            Directory.Delete(folder, recursive: true);
+        }
     }
 
     [Fact]
