@@ -120,6 +120,23 @@ public sealed class ScriptDocument
 
     internal Func<string, ValueTask<HtmlDocument>>? RenderProbeFactory { get; set; }
 
+    /// <summary>Where a media element's live player is, which the copy of the document a picture of an element is made from starts its own player at (set by the script host).</summary>
+    internal Func<CssBox, TimeSpan?>? MediaPositionOf { get; set; }
+
+    /// <summary>
+    /// Set by a script host that plays the document's media elements: where the live player of an element is, or null when it has none. A picture of an element
+    /// (the copy of the document drawn from) starts its own player there.
+    /// </summary>
+    public Func<ScriptNode, TimeSpan?>? LiveMediaPosition
+    {
+        get;
+        set
+        {
+            field = value;
+            MediaPositionOf = value is null ? null : box => value(Wrap(box));
+        }
+    }
+
     private HtmlDocument? _renderProbe;
     private int _renderProbeVersion = -1;
     private readonly List<(string Markup, HtmlDocument Document)> _renderProbes = [];
@@ -183,7 +200,7 @@ public sealed class ScriptDocument
 
         if (_renderProbe is null || _renderProbeVersion != Version)
         {
-            var markup = Serialize();
+            var markup = MediaPositionOf is { } positionOf ? ScriptSerializer.SerializeChildren(RootBox, positionOf) : Serialize();
             var cached = _renderProbes.FindIndex(p => string.Equals(p.Markup, markup, StringComparison.Ordinal));
             if (cached >= 0)
             {

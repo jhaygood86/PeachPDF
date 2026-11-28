@@ -225,6 +225,40 @@ internal static class ImageColorSources
         }
     }
 
+    /// <summary>
+    /// Straight RGBA bytes in a space other than sRGB, converted into sRGB with the colors it cannot show clipped to its gamut, for a picture painted on a
+    /// page or screen, which are in sRGB.
+    /// </summary>
+    public static byte[]? ToSrgb(byte[] straightRgba, int width, int height, PeachBrackets.Media.MediaColorSpace from)
+    {
+        if (width < 1 || height < 1 || straightRgba.Length < width * height * 4)
+            return null;
+
+        try
+        {
+            using var source = PeachImage.Image.Create(width, height, PeachImage.PixelFormat.Rgba32);
+            straightRgba.AsSpan(0, width * height * 4).CopyTo(source.PixelMemory.Span);
+            var named = from switch
+            {
+                PeachBrackets.Media.MediaColorSpace.DisplayP3 => PeachImage.NamedColorSpace.DisplayP3,
+                PeachBrackets.Media.MediaColorSpace.Rec2020 => PeachImage.NamedColorSpace.Rec2020,
+                _ => PeachImage.NamedColorSpace.Srgb,
+            };
+
+            using var converted = source.ConvertColorSpace(PeachImage.NamedColorSpace.Srgb, new PeachImage.ColorConversionOptions
+            {
+                SourceColorSpace = named,
+                TargetPixelFormat = PeachImage.PixelFormat.Rgba32,
+            });
+
+            return converted.PixelMemory.Span.ToArray();
+        }
+        catch (Exception ex) when (ex is NotSupportedException or InvalidOperationException or ArgumentException or PeachImage.IccProfileException)
+        {
+            return null;
+        }
+    }
+
     /// <summary>Whether the image came from a file that declares a space other than sRGB.</summary>
     public static bool Has(PeachDrawing.Core.Image image) => Sources.TryGetValue(image, out var source) && source.OtherSpace;
 

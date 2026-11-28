@@ -74,7 +74,7 @@ namespace PeachBrackets.Html.Dom
                 session.Changed += OnSessionChanged;
                 _session = session;
                 _shown = frame;
-                return frame.Image;
+                return Painted(frame);
             }
             catch (Exception ex) when (ex is not OutOfMemoryException and not OperationCanceledException)
             {
@@ -141,6 +141,39 @@ namespace PeachBrackets.Html.Dom
             return double.IsFinite(seconds) && seconds < TimeSpan.MaxValue.TotalSeconds ? TimeSpan.FromSeconds(seconds) : TimeSpan.Zero;
         }
 
+        // A page and a screen are sRGB: a picture in another space is converted, once per picture; one in sRGB is painted as it is (a texture stays one).
+        private static Image Painted(MediaFrame frame)
+        {
+            if (frame.ColorSpace == MediaColorSpace.Srgb || frame.Image.GetPixels() is not { } pixels)
+                return frame.Image;
+
+            var rgba = pixels.PremultipliedRgba.ToArray();
+            var opaque = true;
+            for (var i = 3; i < rgba.Length && opaque; i += 4)
+                opaque = rgba[i] == 255;
+
+            // A video is opaque, so its premultiplied and straight bytes are the same; anything else is left as it is rather than converted wrongly.
+            if (!opaque || ImageColorSources.ToSrgb(rgba, pixels.Width, pixels.Height, frame.ColorSpace) is not { } srgb)
+                return frame.Image;
+
+            return new ConvertedFrameImage(pixels.Width, pixels.Height, srgb);
+        }
+
+        private sealed class ConvertedFrameImage(int width, int height, byte[] premultipliedRgba) : Image
+        {
+            public override double Width => width;
+
+            public override double Height => height;
+
+            public override bool Interpolate { get; set; } = true;
+
+            public override void Dispose()
+            {
+            }
+
+            public override PixelBuffer? GetPixels() => new PixelBuffer(width, height, premultipliedRgba);
+        }
+
         // May be raised from the provider's thread: only asks the clock to run again, which a host that stopped its frame loop has to be told.
         private void OnSessionChanged(object? sender, MediaChangedEventArgs e) => HtmlContainer?.AnimationClock?.Wake();
 
@@ -172,7 +205,7 @@ namespace PeachBrackets.Html.Dom
             _previous?.Dispose();
             _previous = _shown;
             _shown = frame;
-            word.Image = frame.Image;
+            word.Image = Painted(frame);
             return true;
         }
 

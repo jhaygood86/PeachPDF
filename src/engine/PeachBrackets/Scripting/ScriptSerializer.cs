@@ -29,6 +29,42 @@ internal static class ScriptSerializer
         return text.ToString();
     }
 
+    /// <summary>
+    /// The children of <paramref name="box"/> as markup in which a media element that is playing somewhere is told where: its <c>src</c> (and that of its
+    /// <c>source</c> children) gets a media fragment (<c>#t=seconds</c>) for the position <paramref name="positionOf"/> reports, so a copy of the document
+    /// that has its own player shows the picture the live element shows.
+    /// </summary>
+    public static string SerializeChildren(CssBox box, Func<CssBox, TimeSpan?> positionOf)
+    {
+        var previous = s_positionOf;
+        s_positionOf = positionOf;
+        try
+        {
+            return SerializeChildren(box);
+        }
+        finally
+        {
+            s_positionOf = previous;
+        }
+    }
+
+    [ThreadStatic]
+    private static Func<CssBox, TimeSpan?>? s_positionOf;
+
+    // The fragment a media resource of this element is given, or null.
+    private static string? MediaFragment(CssBox box, CssBox? parent, string name, string attribute)
+    {
+        if (s_positionOf is not { } positionOf || !string.Equals(attribute, "src", StringComparison.OrdinalIgnoreCase))
+            return null;
+
+        var media = string.Equals(name, "video", StringComparison.OrdinalIgnoreCase) ? box
+            : string.Equals(name, "source", StringComparison.OrdinalIgnoreCase) && parent?.HtmlTag is { } owner && string.Equals(owner.Name, "video", StringComparison.OrdinalIgnoreCase) ? parent
+            : null;
+        return media is not null && positionOf(media) is { } position
+            ? "#t=" + position.TotalSeconds.ToString("0.######", System.Globalization.CultureInfo.InvariantCulture)
+            : null;
+    }
+
     public static string SerializeNode(CssBox box)
     {
         var text = new StringBuilder();
@@ -86,7 +122,17 @@ internal static class ScriptSerializer
             foreach (var (name, value) in attributes)
             {
                 text.Append(' ').Append(name).Append("=\"");
-                Escape(value, text, attribute: true);
+                if (MediaFragment(box, parent, tag.Name, name) is { } fragment)
+                {
+                    var hash = value.IndexOf('#', StringComparison.Ordinal);
+                    Escape(hash >= 0 ? value[..hash] : value, text, attribute: true);
+                    text.Append(fragment);
+                }
+                else
+                {
+                    Escape(value, text, attribute: true);
+                }
+
                 text.Append('"');
             }
         }

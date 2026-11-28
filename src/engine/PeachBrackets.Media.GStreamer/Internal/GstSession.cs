@@ -10,7 +10,8 @@ namespace PeachBrackets.Media.GStreamer.Internal;
 
 /// <summary>
 /// One <c>playbin</c> pipeline over a copy of the resource in a temporary file. A video's pictures come from an <c>appsink</c> after <c>videoconvert</c>,
-/// as straight RGBA, and are polled (no native callbacks). Two ways to play:
+/// as straight RGBA, and are polled by the document; while the player plays by its own clock, the appsink's new-sample callback and a thread reading the bus raise
+/// <see cref="Changed"/> from GStreamer's own threads, so a host that waits for it (an idle view) wakes for each picture, the end and an error. Two ways to play:
 /// by the player's own clock (the pipeline plays; sound goes to the default output), or, with <see cref="MediaProviderOptions.DeterministicClock"/>, by the
 /// document's clock: the pipeline stays paused, the position is kept here, advanced only by <see cref="Update"/>, and each picture is found by an accurate
 /// flushing seek to that position, so the same document shows the same pictures however fast the machine is.
@@ -27,8 +28,11 @@ internal sealed class GstSession : IMediaSession
     private readonly nint _convert;
     private readonly nint _bus;
 
-    private bool _disposed;
+    private volatile bool _disposed;
     private bool _keepFile;
+    private Thread? _watcher;
+    private nint _callbacks;
+    private GCHandle _self;
     private bool _convertToSrgb;
     private string? _assumedColorimetry;
     private int _width;
@@ -216,7 +220,43 @@ internal sealed class GstSession : IMediaSession
         if (request.Muted)
             SetBoolean(pipeline, "mute", true);
 
+        if (!deterministic)
+            session.StartWatching();
+
         return session;
+    }
+
+    // Wakes the host from GStreamer's threads: the new-sample callback (a picture) and the bus (end, error).
+    private unsafe void StartWatching()
+    {
+        _self = GCHandle.Alloc(this, GCHandleType.Normal);
+        if (_sink != 0)
+        {
+            // GstAppSinkCallbacks: eos, new_preroll, new_sample, then fields that vary by version; the rest zeroed, and room for more than any version has.
+            _callbacks = Marshal.AllocHGlobal(16 * IntPtr.Size);
+            new Span<byte>((void*)_callbacks, 16 * IntPtr.Size).Clear();
+            ((nint*)_callbacks)[2] = (nint)(delegate* unmanaged[Cdecl]<nint, nint, int>)&OnNewSample;
+            gst_app_sink_set_callbacks(_sink, _callbacks, GCHandle.ToIntPtr(_self), 0);
+        }
+
+        _watcher = new Thread(Watch) { IsBackground = true, Name = "PeachBrackets GStreamer bus" };
+        _watcher.Start();
+    }
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(System.Runtime.CompilerServices.CallConvCdecl)])]
+    private static int OnNewSample(nint sink, nint userData)
+    {
+        try
+        {
+            if (GCHandle.FromIntPtr(userData).Target is GstSession { _disposed: false, _playing: true } session)
+                session.Notify(MediaChange.Frame);
+        }
+        catch (Exception)
+        {
+            // A failure in a handler must not unwind into GStreamer's thread.
+        }
+
+        return 0;
     }
 
     public void Play()
@@ -357,6 +397,24 @@ internal sealed class GstSession : IMediaSession
         _disposed = true;
         _playing = false;
         gst_element_set_state(_pipeline, StateNull);
+        if (_sink != 0 && _callbacks != 0)
+        {
+            // An empty set of callbacks (null is refused), so none runs once the handle below is gone.
+            unsafe
+            {
+                new Span<byte>((void*)_callbacks, 16 * IntPtr.Size).Clear();
+            }
+
+            gst_app_sink_set_callbacks(_sink, _callbacks, 0, 0);
+        }
+
+        _watcher?.Join(1000);
+        if (_self.IsAllocated)
+            _self.Free();
+
+        if (_callbacks != 0)
+            Marshal.FreeHGlobal(_callbacks);
+
         if (_bus != 0)
             gst_object_unref(_bus);
 
@@ -497,11 +555,29 @@ internal sealed class GstSession : IMediaSession
     /// <summary>Reads what the player reported since last time.</summary>
     private void Pump()
     {
-        if (_disposed)
+        // The watcher thread reads the bus while the player plays by its own clock.
+        if (_disposed || _watcher is not null)
             return;
 
         // Messages that do not match the filter are discarded as the bus is read, so the error and the end are taken in one read and told apart by type.
         for (var message = gst_bus_pop_filtered(_bus, MessageError | MessageEos); message != 0; message = gst_bus_pop_filtered(_bus, MessageError | MessageEos))
+            Handle(message);
+    }
+
+    private void Watch()
+    {
+        while (!_disposed)
+        {
+            var message = gst_bus_timed_pop_filtered(_bus, 100UL * 1_000_000UL, MessageError | MessageEos);
+            if (message != 0 && !_disposed)
+                Handle(message);
+            else if (message != 0)
+                gst_mini_object_unref(message);
+        }
+    }
+
+    private void Handle(nint message)
+    {
         {
             // GstMessage: the 64-byte mini object (36 on a 32-bit process), then the type.
             var type = (uint)Marshal.ReadInt32(message, IntPtr.Size == 8 ? 64 : 36);

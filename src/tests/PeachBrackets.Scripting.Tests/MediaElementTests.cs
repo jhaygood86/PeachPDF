@@ -126,7 +126,14 @@ public class MediaElementTests
             return new MediaFrame(new SolidImage(width, height, Color(Position)), Position, () => FramesReleased++) { ColorSpace = Space };
         }
 
-        public ValueTask<MediaFrame?> AcquireFrameAtAsync(TimeSpan position, CancellationToken cancellationToken = default) => new((MediaFrame?)null);
+        public ValueTask<MediaFrame?> AcquireFrameAtAsync(TimeSpan position, CancellationToken cancellationToken = default)
+        {
+            LastRequestedPosition = position;
+            return new(new MediaFrame(new SolidImage(width, height, Color(position)), position) { ColorSpace = Space });
+        }
+
+        /// <summary>Where the last still of the media was asked for.</summary>
+        public TimeSpan? LastRequestedPosition { get; private set; }
 
         public void Dispose()
         {
@@ -192,6 +199,37 @@ public class MediaElementTests
 
         Assert.Empty(logger.Errors);
         Assert.Equal(["canplay after readyState 0, now 3"], logger.Texts);
+    }
+
+    [Fact]
+    public async Task APictureOfAnElement_ShowsAVideoInsideItAtTheLivePosition()
+    {
+        var logger = new CollectingLogger();
+        var host = new JintScriptHost(new JintScriptOptions { Logger = logger });
+        var context = await TestDocument.NewContextAsync();
+        var provider = new FakeProvider { Color = t => t >= TimeSpan.FromSeconds(3) ? ((byte)0, (byte)255, (byte)0) : ((byte)255, (byte)0, (byte)0) };
+        var options = new HtmlDocumentOptions { MediaType = MediaType.Screen, PageWidthPoints = 200, ScriptHost = host, MeasuringCanvasFactory = () => context.CreateCanvas(1, 1), MediaProvider = provider };
+        options.SetMargins(0);
+        using var document = await HtmlDocument.LoadAsync(TestDocument.Wrap("""
+            <canvas id="k" width="60" height="40" content="drawable"><div id="kid" drawable style="width:40px;height:20px"><video id="v" src="https://media.test/a.webm" style="width:40px;height:20px"></video></div></canvas>
+            <script>
+            var k = document.getElementById('k'), kg = k.getContext('2d');
+            v.oncanplay = function () { v.currentTime = 3; };
+            v.onseeked = function () {
+                k.addEventListener('paint', function () {
+                    kg.drawElementImage(kid, 0, 0);
+                    Log.info(Array.from(kg.getImageData(10, 10, 1, 1).data).join(','));
+                }, { once: true });
+                k.requestPaint();
+            };
+            setTimeout(function () {}, 500);
+            </script>
+            """), context, options);
+
+        Assert.Empty(logger.Errors);
+        // The copy of the document the picture is made from plays the video from where the live one is (3 s), so the picture shows that moment, not the poster or the start.
+        Assert.Equal(["0,255,0,255"], logger.Texts);
+        Assert.Contains(provider.Sessions, session => session.LastRequestedPosition == TimeSpan.FromSeconds(3));
     }
 
     [Fact]

@@ -325,6 +325,33 @@ public class GStreamerProviderTests : IDisposable
     }
 
     [Fact]
+    public async Task ARealTimeSession_RaisesChangedFromItsOwnThreads_WithoutTheDocumentPolling()
+    {
+        RequireGStreamer();
+        using var session = await new GStreamerMediaProvider().OpenAsync(Request(BallClip(10)));
+        Assert.NotNull(session);
+
+        // Nothing here asks the session anything: the pictures and the end must arrive on their own, on threads that are not the caller's.
+        session.Play();
+        var callers = Environment.CurrentManagedThreadId;
+        var changes = MediaChange.None;
+        var threads = new System.Collections.Concurrent.ConcurrentBag<int>();
+        session.Changed += (_, e) =>
+        {
+            changes |= e.Changes;
+            threads.Add(Environment.CurrentManagedThreadId);
+        };
+
+        var deadline = DateTime.UtcNow.AddSeconds(15);
+        while (!changes.HasFlag(MediaChange.Ended) && DateTime.UtcNow < deadline)
+            await Task.Delay(50);
+
+        Assert.True(changes.HasFlag(MediaChange.Frame));
+        Assert.True(changes.HasFlag(MediaChange.Ended));
+        Assert.DoesNotContain(callers, threads);
+    }
+
+    [Fact]
     public async Task DisposingASession_DeletesTheCopyOfTheResource()
     {
         RequireGStreamer();

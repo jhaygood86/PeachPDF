@@ -25,6 +25,7 @@ internal sealed partial class ScriptRuntime
     public ScriptRuntime(ScriptDocument document, JintScriptOptions options, CancellationToken cancellationToken)
     {
         Document = document;
+        document.LiveMediaPosition = LiveMediaPosition;
         _options = options;
         _cancellation = cancellationToken;
 

@@ -33,6 +33,8 @@ public class VideoMediaTests
     {
         public (byte R, byte G, byte B) Color { get; set; } = (255, 0, 0);
 
+        public MediaColorSpace Space { get; set; }
+
         public TimeSpan FrameTime { get; set; }
 
         public TimeSpan? RequestedStart { get; private set; }
@@ -86,7 +88,7 @@ public class VideoMediaTests
         public MediaFrame? AcquireFrame()
         {
             FramesLeased++;
-            return new MediaFrame(new SolidImage(width, height, Color.R, Color.G, Color.B), FrameTime, () => FramesReleased++);
+            return new MediaFrame(new SolidImage(width, height, Color.R, Color.G, Color.B), FrameTime, () => FramesReleased++) { ColorSpace = Space };
         }
 
         public ValueTask<MediaFrame?> AcquireFrameAtAsync(TimeSpan position, CancellationToken cancellationToken = default)
@@ -133,6 +135,28 @@ public class VideoMediaTests
         var inside = TestDocument.Pixel(canvas, (int)(bounds.X + 10), (int)(bounds.Y + 7));
         Assert.Equal((255, 0, 0), (inside.R, inside.G, inside.B));
         Assert.Equal(255, TestDocument.Pixel(canvas, (int)(bounds.X + 35), (int)(bounds.Y + 5)).G);
+    }
+
+    [Fact]
+    public async Task AVideoInAWideSpace_IsPaintedInSrgb_AndOneInSrgbIsPaintedAsItIs()
+    {
+        var wide = new ScriptedSession(40, 20) { Color = (200, 100, 50), Space = MediaColorSpace.DisplayP3 };
+        var (context, document) = await TestDocument.LoadAsync(TestDocument.Wrap("<video id=v src='https://media.test/clip.webm'></video>"), Options(new ScriptedProvider(wide)));
+        using var _ = document;
+        var bounds = document.GetElementBounds("v")!.Value;
+        using var canvas = await TestDocument.PaintAsync(context, document);
+        var p3 = TestDocument.Pixel(canvas, (int)(bounds.X + 10), (int)(bounds.Y + 7));
+
+        // Display P3 (200, 100, 50) is a more saturated orange than sRGB can show as those numbers: the same color in sRGB has more red and less green.
+        Assert.NotEqual((200, 100, 50), (p3.R, p3.G, p3.B));
+        Assert.True(p3.R > 205 && p3.G < 100 && p3.B < 50, $"({p3.R}, {p3.G}, {p3.B})");
+
+        var plain = new ScriptedSession(40, 20) { Color = (200, 100, 50) };
+        var (context2, document2) = await TestDocument.LoadAsync(TestDocument.Wrap("<video id=v src='https://media.test/clip.webm'></video>"), Options(new ScriptedProvider(plain)));
+        using var __ = document2;
+        using var canvas2 = await TestDocument.PaintAsync(context2, document2);
+        var srgb = TestDocument.Pixel(canvas2, (int)(bounds.X + 10), (int)(bounds.Y + 7));
+        Assert.Equal((200, 100, 50), (srgb.R, srgb.G, srgb.B));
     }
 
     [Fact]

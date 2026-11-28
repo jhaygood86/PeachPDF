@@ -995,6 +995,7 @@ PeachBrackets.ScriptHosting.ScriptDocument : sealed class
   property Boolean HasMediaProvider { get; }
   property Boolean IsHtml { get; }
   property Boolean KeepAlive { get; set; }
+  property Func<ScriptNode, TimeSpan?> LiveMediaPosition { get; set; }
   property IReadOnlyList<ScriptApi> Apis { get; }
   property IReadOnlyList<ScriptNode> Scripts { get; }
   property Int32 Version { get; }

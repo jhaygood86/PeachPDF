@@ -151,6 +151,10 @@ public sealed partial class HtmlDocument : IDisposable
                 };
                 var renderOptions = probeOptions.CloneWithoutScripts();
                 renderOptions.HideCrossOriginImages = true;
+
+                // A picture of an element shows its videos too: the copy plays them from where the live element is (the markup says where), paused.
+                renderOptions.MediaProvider = options.MediaProvider;
+                renderOptions.AnimationsEnabled = false;
                 container.ScriptRenderProbe = async markup =>
                 {
                     var probe = await LoadAsync(markup, renderContext, renderOptions);

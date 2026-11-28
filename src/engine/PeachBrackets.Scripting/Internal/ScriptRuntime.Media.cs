@@ -160,6 +160,10 @@ internal sealed partial class ScriptRuntime
         && OriginOf(Uri.TryCreate(Document.GetMediaFinalAddress(state.Session) ?? state.CurrentSrc, UriKind.Absolute, out var resource) ? resource : null) is { } resourceOrigin
         && !string.Equals(resourceOrigin, OriginOf(video.OwnerDocument.BaseUri), StringComparison.Ordinal);
 
+    // Where the live player of a video is, for the copy of the document a picture of an element is made from.
+    private TimeSpan? LiveMediaPosition(ScriptNode node) =>
+        _media.TryGetValue(node, out var state) && state.Session is { HasVideo: true } session ? session.Position : null;
+
     private MediaState MediaStateOf(ScriptNode node)
     {
         if (!_media.TryGetValue(node, out var state))

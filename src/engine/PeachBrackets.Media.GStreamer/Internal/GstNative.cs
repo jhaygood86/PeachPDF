@@ -237,6 +237,12 @@ internal static unsafe partial class GstNative
     [LibraryImport("gstreamer")]
     public static partial void gst_buffer_unmap(nint buffer, nint info);
 
+    [LibraryImport("gstreamer")]
+    public static partial nint gst_bus_timed_pop_filtered(nint bus, ulong timeout, uint types);
+
+    [LibraryImport("gstapp")]
+    public static partial void gst_app_sink_set_callbacks(nint sink, nint callbacks, nint userData, nint notify);
+
     [LibraryImport("gstapp")]
     public static partial nint gst_app_sink_try_pull_preroll(nint sink, ulong timeout);
 

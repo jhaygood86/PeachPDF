@@ -82,7 +82,9 @@ without it, or without the plugin for a codec, `CanPlayType` answers `""` for wh
   is opened twice, once to read what it says about its colors. A picture in Rec. 2020 or Display P3 keeps its gamut and says so in
   `MediaFrame.ColorSpace`; any other is passed through as the decoder gives it.
 * **Rotation.** A stream's rotation tag is applied (`videoflip method=automatic`), and `VideoWidth`/`VideoHeight` are the shown size.
-* **Not done.** `Changed` is raised only when the document polls, not from GStreamer's own thread; `PlaybackRate` in real time seeks (no pitch correction).
+* **Changed from GStreamer's own threads.** While the player plays by its own clock, the appsink's new-sample callback raises `Changed` with `Frame` for each picture and a thread reading the
+  bus raises `Ended` and `Error`, so a host waiting for a change (an idle view) wakes without polling. The deterministic clock has no such threads: its position is the document's.
+* **Not done.** `PlaybackRate` in real time seeks (no pitch correction).
 
 ## The Windows provider
 
@@ -194,7 +196,11 @@ can play, chosen by its `type` through `CanPlayType`) opens a session, and the e
   session. Playing state does not carry across.
 * A `<source>` whose resource the provider cannot open fires `error` at itself and the next candidate is tried; when none is left the element has no source (`networkState` 3,
   `play()` rejects `NotSupportedError`) and fires no error of its own, which the standard keeps for a failing `src`.
-* `drawElementImage` of an element that contains a video shows the video's poster: the picture of an element is made from a copy of its markup that has no media provider.
+* `drawElementImage` of an element that contains a video shows the video where the live element is: the picture of an element is made from a copy of the document's markup that has
+  its own player (paused), and the markup it is made from gives the video's `src` a media fragment for the live position (`#t=3.2`), so the copy opens the resource again and shows that moment.
+  This costs a second session per distinct position drawn, the most recent few of which are kept.
+* A video whose frames are in Display P3 or Rec. 2020 (`MediaFrame.ColorSpace`) is converted to sRGB (clipping what sRGB cannot show) when the page or screen paints it, once per picture,
+  on the CPU; a picture in sRGB, including a GPU texture, is painted as it is.
 * Not supported: `srcObject` (always null), `captureStream`, text tracks, `webkitAudioDecodedByteCount`-style extensions.
 
 ## Limits
