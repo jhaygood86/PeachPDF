@@ -91,4 +91,48 @@ public class CanvasCoverageTests
         ];
         Assert.Equal(expected, log[0].Split(" ; "));
     }
+
+    [Fact]
+    public async Task AWideCanvas_ReadsBackItsFloatingPointPixels_AfterShapesGradientsAndPictures()
+    {
+        var log = await LogAsync("""
+            var wide = document.createElement('canvas'); wide.width = 8; wide.height = 8;
+            var wg = wide.getContext('2d', { colorSpace: 'display-p3', colorType: 'float16' });
+            wg.fillStyle = 'color(display-p3 1 0 0)'; wg.fillRect(0, 0, 4, 8);
+            var gradient = wg.createLinearGradient(0, 0, 8, 0); gradient.addColorStop(0, 'color(display-p3 0 1 0)'); gradient.addColorStop(1, 'blue');
+            wg.fillStyle = gradient; wg.fillRect(4, 0, 4, 8);
+            wg.globalAlpha = 0.5; wg.fillStyle = 'white'; wg.fillRect(0, 0, 8, 2);
+            var data = wg.getImageData(0, 0, 8, 8, { pixelFormat: 'rgba-float16' }).data;
+            var plain = wg.getImageData(0, 0, 8, 8).data;
+            var copy = document.createElement('canvas'); copy.width = 8; copy.height = 8;
+            var cg = copy.getContext('2d', { colorSpace: 'display-p3', colorType: 'float16' }); cg.drawImage(wide, 0, 0);
+            var again = cg.getImageData(0, 7, 1, 1, { pixelFormat: 'rgba-float16' }).data;
+            Log.info([data.length, data[(7 * 8) * 4 + 3], plain[(7 * 8) * 4] > 200, again[0] > 0.9 && again[3] === 1, wide.toDataURL().length > 40].join(' '));
+            """);
+
+        Assert.Equal(["256 1 true true true"], log);
+    }
+
+    [Fact]
+    public async Task Text_IsPlacedByItsAlignmentBaselineAndDirection()
+    {
+        var log = await LogAsync("""
+            var k = document.createElement('canvas'); k.width = 120; k.height = 60; document.body.appendChild(k);
+            var kg = k.getContext('2d'); kg.font = '20px TestSans'; kg.fillStyle = 'black';
+            function ink() {
+              var d = kg.getImageData(0, 0, 120, 60).data, x0 = 999, x1 = -1, y0 = 999, y1 = -1;
+              for (var y = 0; y < 60; y++) for (var x = 0; x < 120; x++) if (d[(y * 120 + x) * 4 + 3] > 40) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); }
+              return { x0: x0, x1: x1, y0: y0, y1: y1 };
+            }
+            function place(settings) { kg.clearRect(0, 0, 120, 60); for (var key in settings) kg[key] = settings[key]; kg.fillText('Hi', 60, 30); return ink(); }
+            var left = place({ textAlign: 'left', textBaseline: 'alphabetic', direction: 'ltr' }), center = place({ textAlign: 'center' }), right = place({ textAlign: 'right' });
+            var start = place({ textAlign: 'start', direction: 'rtl' }), end = place({ textAlign: 'end', direction: 'rtl' });
+            kg.direction = 'ltr'; kg.textAlign = 'left';
+            var top = place({ textBaseline: 'top' }), hanging = place({ textBaseline: 'hanging' }), middle = place({ textBaseline: 'middle' }), ideographic = place({ textBaseline: 'ideographic' }), bottom = place({ textBaseline: 'bottom' }), alphabetic = place({ textBaseline: 'alphabetic' });
+            Log.info([left.x0 >= 59, center.x0 < left.x0 && center.x1 > 60, right.x1 <= 61, start.x0 >= 59 ? 'start-right' : 'start-left', end.x0 >= 59 ? 'end-right' : 'end-left',
+              top.y0 > middle.y0, middle.y0 > bottom.y0, hanging.y0 >= top.y0 - 8, hanging.y0 > middle.y0 && ideographic.y0 > alphabetic.y0, bottom.y1 < alphabetic.y1].join(' '));
+            """);
+
+        Assert.Equal(["true true true start-left end-right true true true true true"], log);
+    }
 }
