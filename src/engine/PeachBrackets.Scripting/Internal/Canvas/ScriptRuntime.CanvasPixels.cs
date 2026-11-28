@@ -571,66 +571,6 @@ internal sealed partial class ScriptRuntime
         return Array.IndexOf(ColorSpaces, text) >= 0 ? text : throw TypeError($"The provided value '{text}' is not a valid enum value of type PredefinedColorSpace.");
     }
 
-    private static double Decode(double v) => v <= 0.04045 ? v / 12.92 : Math.Pow((v + 0.055) / 1.055, 2.4);
-
-    private static double Encode(double v) => v <= 0.0031308 ? v * 12.92 : (1.055 * Math.Pow(v, 1 / 2.4)) - 0.055;
-
-    private static readonly double[] SrgbToP3 = [0.8224621, 0.1775380, 0.0000000, 0.0331941, 0.9668058, 0.0000000, 0.0170827, 0.0723974, 0.9105199];
-
-    private static readonly double[] P3ToSrgb = [1.2249401, -0.2249404, 0.0000000, -0.0420569, 1.0420571, 0.0000000, -0.0196376, -0.0786361, 1.0982735];
-
-    // One color between the predefined color spaces (the canvas keeps its pixels as sRGB); the result is clipped to the gamut when asked, else left where the math puts it.
-    private static void ConvertRgb(double[] rgb, string from, string to, bool clip)
-    {
-        var fromP3 = from.StartsWith("display-p3", StringComparison.Ordinal);
-        var toP3 = to.StartsWith("display-p3", StringComparison.Ordinal);
-        var fromLinear = from.EndsWith("-linear", StringComparison.Ordinal);
-        var toLinear = to.EndsWith("-linear", StringComparison.Ordinal);
-        if (from != to)
-        {
-            for (var c = 0; c < 3; c++)
-                rgb[c] = fromLinear ? rgb[c] : SignedDecode(rgb[c]);
-
-            if (fromP3 != toP3)
-            {
-                var m = fromP3 ? P3ToSrgb : SrgbToP3;
-                (rgb[0], rgb[1], rgb[2]) = ((m[0] * rgb[0]) + (m[1] * rgb[1]) + (m[2] * rgb[2]), (m[3] * rgb[0]) + (m[4] * rgb[1]) + (m[5] * rgb[2]), (m[6] * rgb[0]) + (m[7] * rgb[1]) + (m[8] * rgb[2]));
-            }
-
-            for (var c = 0; c < 3; c++)
-                rgb[c] = toLinear ? rgb[c] : SignedEncode(rgb[c]);
-        }
-
-        if (clip)
-        {
-            for (var c = 0; c < 3; c++)
-                rgb[c] = Math.Clamp(rgb[c], 0, 1);
-        }
-    }
-
-    // The transfer function continued as an odd function, so a color outside the gamut keeps its sign.
-    private static double SignedDecode(double v) => v < 0 ? -Decode(-v) : Decode(v);
-
-    private static double SignedEncode(double v) => v < 0 ? -Encode(-v) : Encode(v);
-
-    // Converts straight RGBA bytes between the predefined color spaces.
-    private static void ConvertColorSpace(byte[] pixels, string from, string to)
-    {
-        if (from == to)
-            return;
-
-        var rgb = new double[3];
-        for (var i = 0; i + 3 < pixels.Length; i += 4)
-        {
-            for (var c = 0; c < 3; c++)
-                rgb[c] = pixels[i + c] / 255.0;
-
-            ConvertRgb(rgb, from, to, clip: true);
-            for (var c = 0; c < 3; c++)
-                pixels[i + c] = (byte)Math.Round(rgb[c] * 255);
-        }
-    }
-
     // The straight sRGB bytes an ImageData stands for: its own bytes, or its floats clipped to the 8-bit gamut, converted from the color space it is in.
     // The bytes of an eight-bit ImageData as they are (it is in <paramref name="space"/>, which is where the caller wants them).
     private byte[] SrgbBytesOf(ObjectInstance data, int width, int height, string space)
@@ -641,38 +581,6 @@ internal sealed partial class ScriptRuntime
             bytes[i] = (byte)TypeConverter.ToInt32(array.Get(i.ToString(CultureInfo.InvariantCulture)));
 
         _ = space;
-        return bytes;
-    }
-
-    private byte[] SrgbBytesOf(ObjectInstance data, int width, int height)
-    {
-        var space = data.Get("colorSpace") is { } dataSpace && !dataSpace.IsUndefined() ? Js.AsText(dataSpace) : "srgb";
-        var floats = data.Get("pixelFormat") is { } format && !format.IsUndefined() && Js.AsText(format) == "rgba-float16";
-        var array = data.Get("data") as ObjectInstance ?? throw TypeError("The data is not an array.");
-        var bytes = new byte[PixelBytes(width, height)];
-        if (!floats)
-        {
-            for (var i = 0; i < bytes.Length; i++)
-                bytes[i] = (byte)TypeConverter.ToInt32(array.Get(i.ToString(CultureInfo.InvariantCulture)));
-
-            ConvertColorSpace(bytes, space, "srgb");
-            return bytes;
-        }
-
-        var rgb = new double[3];
-        for (var i = 0; i + 3 < bytes.Length; i += 4)
-        {
-            double Read(int k) => TypeConverter.ToNumber(array.Get((i + k).ToString(CultureInfo.InvariantCulture)));
-            for (var c = 0; c < 3; c++)
-                rgb[c] = Read(c);
-
-            var alpha = Read(3);
-            ConvertRgb(rgb, space, "srgb", clip: true);
-            for (var c = 0; c < 3; c++)
-                bytes[i + c] = (byte)Math.Round(double.IsNaN(rgb[c]) ? 0 : rgb[c] * 255);
-            bytes[i + 3] = (byte)Math.Round(double.IsNaN(alpha) ? 0 : Math.Clamp(alpha, 0, 1) * 255);
-        }
-
         return bytes;
     }
 
@@ -710,25 +618,6 @@ internal sealed partial class ScriptRuntime
         var values = new JsValue[straight.Length];
         for (var i = 0; i < values.Length; i++)
             values[i] = Js.Num(straight[i]);
-
-        return (ObjectInstance)Engine.Evaluate("(function (values) { return new Float16Array(values); })").Call(JsValue.Undefined, [Js.Array(Engine, values)]);
-    }
-
-    // A Float16Array of straight RGBA floats in a color space, from the sRGB bytes the canvas keeps.
-    private ObjectInstance FloatDataOf(byte[] pixels, string space)
-    {
-        var values = new JsValue[pixels.Length];
-        var rgb = new double[3];
-        for (var i = 0; i + 3 < pixels.Length; i += 4)
-        {
-            for (var c = 0; c < 3; c++)
-                rgb[c] = pixels[i + c] / 255.0;
-
-            ConvertRgb(rgb, "srgb", space, clip: false);
-            for (var c = 0; c < 3; c++)
-                values[i + c] = Js.Num(rgb[c]);
-            values[i + 3] = Js.Num(pixels[i + 3] / 255.0);
-        }
 
         return (ObjectInstance)Engine.Evaluate("(function (values) { return new Float16Array(values); })").Call(JsValue.Undefined, [Js.Array(Engine, values)]);
     }
