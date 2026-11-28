@@ -442,7 +442,7 @@ namespace PeachBrackets.Html
             var isBlank = container.IsReservedBlankSlot(pageIndex);
             var rule = PageRuleResolver.SelectPageRule(container.PageRules, ruleSelectionPageNumber, activeName, isBlank);
             var (mL, mT, mR, mB) = PageRuleResolver.ResolvePageMargins(
-                rule, baseLPt, baseTPt, baseRPt, baseBPt, container.PageLengthContext);
+                rule, baseLPt, baseTPt, baseRPt, baseBPt, container.PageLengthContext, container.PageScale);
 
             // Only resolve a per-slot sheet size when some rule in the document actually declares one -
             // the cheap, overwhelmingly common case (including every slot of a document that HAS a size
@@ -452,7 +452,7 @@ namespace PeachBrackets.Html
             if (HasSizeOverrides)
             {
                 var baseSizePt = new Size(baseSheetPxWidth / ppp, baseSheetPxHeight / ppp);
-                var resolved = PageRuleResolver.ResolvePageSize(rule, baseSizePt, container.PageLengthContext);
+                var resolved = PageRuleResolver.ResolvePageSize(rule, baseSizePt, container.PageLengthContext, container.PageScale);
                 sheetWidthPt = resolved.Width;
                 sheetHeightPt = resolved.Height;
                 sheetPxHeight = resolved.Height * ppp;
@@ -477,7 +477,7 @@ namespace PeachBrackets.Html
                 ? PageRuleResolver.ResolvePageBorderAndPadding(
                     PageRuleResolver.SelectApplicablePageStyle(container.PageRules, ruleSelectionPageNumber, activeName, isBlank),
                     sheetWidthPt, sheetHeightPt,
-                    container.PageLengthContext?.RemPt ?? DefaultFontResolver.FontSize)
+                    container.PageLengthContext?.RemPt ?? DefaultFontResolver.FontSize, container.PageScale)
                 : default;
 
             var (bL, bT, bR, bB) = (borderPadding.BorderLeftPt, borderPadding.BorderTopPt, borderPadding.BorderRightPt, borderPadding.BorderBottomPt);

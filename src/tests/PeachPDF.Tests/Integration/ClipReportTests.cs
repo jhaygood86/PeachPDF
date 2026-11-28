@@ -60,6 +60,63 @@ namespace PeachPDF.Tests.Integration
                 w => Assert.True(w.VisibleWidth > 0, $"'{w.Text}' was never drawn, so it is a full cull, not a clip"));
         }
 
+        private const string LongLine =
+            "NOWRAP-START aaaa bbbb cccc dddd eeee ffff gggg hhhh iiii jjjj kkkk llll mmmm nnnn oooo pppp qqqq rrrr ssss tttt uuuu vvvv wwww xxxx NOWRAP-END";
+
+        [Fact]
+        public async Task WordsWhollyPastTheRightEdgeOfThePageAreReportedAsNeverDrawn()
+        {
+            // A word the page was too narrow for is not in the content stream at all, so it is the one loss a reader of the file cannot see:
+            // it is reported with nothing visible. One that is only partly past the edge is still a partial clip.
+            var report = await RenderAsync($"<p style=\"white-space:nowrap\">{LongLine}</p>");
+
+            // The hyphen is a place the line may break, so the word is measured in two.
+            var end = Assert.Single(report.ClippedWords, w => w.Text == "END");
+            Assert.Equal(0, end.VisibleWidth);
+            Assert.Equal(0, end.KeptFraction);
+            Assert.True(end.DrawnWidth > 0);
+
+            Assert.Contains(report.ClippedWords, w => w.Text == "xxxx");
+            Assert.DoesNotContain(report.ClippedWords, w => w.Text == "START" || w.Text == "aaaa");
+        }
+
+        [Fact]
+        public async Task ACellWhollyPastTheRightEdgeIsReported()
+        {
+            var report = await RenderAsync(
+                "<table style=\"width:1200px;border-collapse:collapse\"><tr><td style=\"width:1100px\">LEFT-CELL</td><td>RIGHT-EDGE-CELL</td></tr></table>");
+
+            Assert.Contains(report.ClippedWords, w => w.Text == "CELL" && w.VisibleWidth == 0);
+            Assert.DoesNotContain(report.ClippedWords, w => w.Text == "LEFT-CELL");
+        }
+
+        [Fact]
+        public async Task ARightToLeftLineLosesItsWordsPastTheLeftEdge()
+        {
+            var report = await RenderAsync($"<div dir=\"rtl\" style=\"white-space:nowrap\">{LongLine}</div>");
+
+            Assert.Contains(report.ClippedWords, w => w.VisibleWidth == 0);
+        }
+
+        [Fact]
+        public async Task TextHiddenOffScreenOrBroughtOntoAnotherPageIsNotReported()
+        {
+            // Text positioned before the start of the page is the usual way to hide it, and a word moved to the next page by a break is not lost.
+            var report = await RenderAsync(
+                "<div style=\"position:absolute;left:-5000px\">hidden skip link</div>" +
+                "<p>first</p><p style=\"break-before:page\">second</p><p style=\"break-before:page\">third</p>");
+
+            Assert.Empty(report.ClippedWords);
+        }
+
+        [Fact]
+        public async Task VerticalTextIsNotReportedAsPastTheEndOfTheLine()
+        {
+            var report = await RenderAsync($"<div style=\"writing-mode:vertical-rl;height:100px;white-space:nowrap\">{LongLine}</div>");
+
+            Assert.DoesNotContain(report.ClippedWords, w => w.VisibleWidth == 0 && w.Text == "aaaa");
+        }
+
         [Fact]
         public async Task RepeatedAddPdfPagesCallsAccumulateTheReport()
         {

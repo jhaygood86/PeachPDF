@@ -47,23 +47,33 @@ namespace PeachPDF
 
         #endregion
 
-        /// <summary>
-        /// the amount of pixels per inch. We always render at 72 points per inch, so this is used to determine how many pixels a point is
-        /// </summary>
-        public double PixelsPerInch { get; set; } = 72d;
+        /// <summary>The number of CSS pixels to an inch of paper in CSS itself: <see cref="PixelsPerInch"/>'s default, at which content is drawn at its CSS size.</summary>
+        internal const double CssPixelsPerInch = 96d;
 
         /// <summary>
-        /// When set to true, this renders the page and automatically scales PixelsPerInch to fit the page contents
+        /// How many CSS pixels fit in an inch of the printed page, which sets how large content is drawn: 96 (the default) is CSS's own size, a pixel
+        /// 1/96 inch (0.75pt); 72 makes a pixel one point, so content is a third larger and less fits across the page; 144 makes a pixel half a point,
+        /// so content is a third smaller and half again as much fits across and down - the way a web browser's print scale makes more fit on a
+        /// page. The page size and margins do not change. Must be positive and finite.
+        /// </summary>
+        public double PixelsPerInch { get; set; } = CssPixelsPerInch;
+
+        /// <summary>
+        /// When set to true, this renders the page and scales the content (as <see cref="PixelsPerInch"/> does) so that it fits the page across,
+        /// shrinking it as much as it takes. Unlike <see cref="ShrinkToFit"/> it also follows <see cref="MinContentWidth"/> below the page's own width,
+        /// which draws narrower content larger to fill the page
         /// </summary>
         public bool ScaleToPageSize { get; set; }
 
         /// <summary>
-        /// When set to true, sets the PixelsPerInch to fit the page contents only if the page contents is larger than the window
+        /// When set to true, scales the content down (as <see cref="PixelsPerInch"/> does) only if it is wider than the page, by as much as it takes to
+        /// fit across, so nothing is cut off at the right edge
         /// </summary>
         public bool ShrinkToFit { get; set; }
 
         /// <summary>
-        /// When set to a positive number, sets the PixelsPerInch to fit the minimum content width
+        /// When set to a positive number, scales the content down (as <see cref="PixelsPerInch"/> does) so that the page lays out at least this many
+        /// points wide, as a browser would for a page of that width
         /// </summary>
         public double MinContentWidth { get; set; }
 

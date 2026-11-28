@@ -288,7 +288,7 @@ public sealed partial class PdfFormBuilder
         // Positions arrive measured from the page's top-left corner; a PDF rect counts from the bottom edge, and the appearance stream's own
         // space is y up too, so the y-down transform is mirrored across the x axis.
         var bounds = field.Bounds;
-        var rect = new PdfRectangle(new Rect(bounds.X, page.HeightPoints - (bounds.Y + bounds.Height), bounds.Width, bounds.Height));
+        var rect = new PdfRectangle(page.ToPageSpace(bounds));
         Matrix3x2? matrix = field.AppearanceTransform is { } m ? new Matrix3x2(m.M11, -m.M12, -m.M21, m.M22, 0, 0) : null;
 
         switch (field.Kind)

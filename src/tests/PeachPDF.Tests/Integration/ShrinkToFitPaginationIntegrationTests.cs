@@ -25,7 +25,7 @@ namespace PeachPDF.Tests.Integration
         public async Task ShrunkContent_IdenticalParagraphsOnSuccessivePages_PaintAtTheSamePageRelativePosition()
         {
             // The 700pt-wide box exceeds A4's 555pt content width, forcing ShrinkToFit to
-            // actually shrink (PixelsPerPoint ≈ 1.26); each section then starts a new page.
+            // actually shrink (a page scale of about 1.26); each section then starts a new page.
             const string html = @"<!DOCTYPE html>
 <html>
 <body style='margin: 0'>
@@ -48,15 +48,22 @@ namespace PeachPDF.Tests.Integration
             var doc = await generator.GeneratePdf(html, config);
             Assert.True(doc.Inspect().PageCount >= 4, $"Test setup expects 4+ pages, got {doc.Inspect().PageCount}");
 
-            using var ms = new MemoryStream();
-            doc.Save(ms);
-            var pdfText = Encoding.Latin1.GetString(ms.ToArray());
-
             // The first Td after each BT is absolute (later Tds within the same BT are
-            // relative glyph-run advances). Its y is a bottom-up baseline coordinate.
-            var baselines = Regex.Matches(pdfText, @"BT\s(?:(?!ET).)*?(-?[\d.]+) (-?[\d.]+) Td", RegexOptions.Singleline)
-                .Select(m => double.Parse(m.Groups[2].Value, System.Globalization.CultureInfo.InvariantCulture))
-                .ToList();
+            // relative glyph-run advances). Its y is a bottom-up baseline coordinate in the
+            // space the content is laid out in, which each page draws at 1 / scale through a
+            // leading cm, so it is read as it lands on the page.
+            var file = doc.Inspect();
+            var baselines = new List<double>();
+            foreach (var page in file.Pages)
+            {
+                var content = file.ContentText(page);
+                var scale = Regex.Match(content, @"([\d.]+) 0 0 [\d.]+ 0 0 cm") is { Success: true } cm
+                    ? double.Parse(cm.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture)
+                    : 1d;
+
+                baselines.AddRange(Regex.Matches(content, @"BT\s(?:(?!ET).)*?(-?[\d.]+) (-?[\d.]+) Td", RegexOptions.Singleline)
+                    .Select(m => double.Parse(m.Groups[2].Value, System.Globalization.CultureInfo.InvariantCulture) * scale));
+            }
 
             Assert.True(baselines.Count >= 4, $"Expected a text run per page, found {baselines.Count}");
 

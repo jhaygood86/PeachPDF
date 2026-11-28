@@ -206,7 +206,11 @@ public sealed class PdfCanvas : Canvas
         {
             var x = Math.Sqrt(_accumulated.M11 * _accumulated.M11 + _accumulated.M12 * _accumulated.M12);
             var y = Math.Sqrt(_accumulated.M21 * _accumulated.M21 + _accumulated.M22 * _accumulated.M22);
-            return (x > 1e-6 ? x : 1.0, y > 1e-6 ? y : 1.0);
+
+            // A page drawn at another scale (PdfComposerPage.SetContentScale) magnifies everything on it by that much, which is what a bitmap's resolution
+            // and the tolerances of a warped plane are measured against; the canvas's own transform does not carry it.
+            var page = Page?.ContentScale ?? 1.0;
+            return ((x > 1e-6 ? x : 1.0) * page, (y > 1e-6 ? y : 1.0) * page);
         }
     }
 

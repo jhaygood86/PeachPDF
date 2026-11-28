@@ -146,7 +146,7 @@ namespace PeachBrackets.Html.Dom
         /// </summary>
         internal static (double L, double T, double R, double B) ResolvePageMargins(
             PageRule? rule, double baseL, double baseT, double baseR, double baseB,
-            PageLengthContext? context = null)
+            PageLengthContext? context = null, double scale = 1)
         {
             if (rule == null) return (baseL, baseT, baseR, baseB);
             var s = rule.Style;
@@ -165,10 +165,11 @@ namespace PeachBrackets.Html.Dom
                 Resolve(s.MarginBottom, vertical: true) ?? baseB
             );
 
-            // css-page-3 §6: top/bottom percentages resolve against the page height (issue #1931).
-            double? Resolve(string value, bool vertical = false) => ctx is { } c
+            // css-page-3 §6: top/bottom percentages resolve against the page height (issue #1931). What the rule declares is scaled with the page
+            // (the base margins arrive scaled already).
+            double? Resolve(string value, bool vertical = false) => (ctx is { } c
                 ? DomParser.ParseLengthToPdfPoints(value, vertical ? c.ForVertical() : c)
-                : DomParser.ParseLengthToPdfPoints(value);
+                : DomParser.ParseLengthToPdfPoints(value)) * scale;
         }
 
         /// <summary>
@@ -182,7 +183,7 @@ namespace PeachBrackets.Html.Dom
         /// <see cref="ResolvePageMargins"/> already has with its own base-margin parameters, just for
         /// one property instead of four.
         /// </summary>
-        internal static Size ResolvePageSize(PageRule? rule, Size baseSizePt, PageLengthContext? context = null)
+        internal static Size ResolvePageSize(PageRule? rule, Size baseSizePt, PageLengthContext? context = null, double scale = 1)
         {
             if (rule?.Style.Size is not { Length: > 0 } sizeValue) return baseSizePt;
 
@@ -192,7 +193,11 @@ namespace PeachBrackets.Html.Dom
             if (context is { } c0 && rule.Style.FontSize.Length > 0)
                 ctx = c0 with { EmPt = MarginBoxRenderer.ResolveFontSizePt(rule.Style.FontSize) };
 
-            return ctx is { } c ? DomParser.ParsePageSizeToPdfPoints(sizeValue, c, baseSizePt) ?? baseSizePt : baseSizePt;
+            // A page scale multiplies what the rule declares; the base size arrives scaled, so an orientation keyword rotates it as it is.
+            if (ctx is not { } c) return baseSizePt;
+            if (scale == 1) return DomParser.ParsePageSizeToPdfPoints(sizeValue, c, baseSizePt) ?? baseSizePt;
+            var unscaledBase = new Size(baseSizePt.Width / scale, baseSizePt.Height / scale);
+            return DomParser.ParsePageSizeToPdfPoints(sizeValue, c, unscaledBase) is { } parsed ? new Size(parsed.Width * scale, parsed.Height * scale) : baseSizePt;
         }
 
         /// <summary>
@@ -219,9 +224,18 @@ namespace PeachBrackets.Html.Dom
         /// </para>
         /// </summary>
         internal static PageBorderPaddingPt ResolvePageBorderAndPadding(
-            StyleDeclaration? style, double sheetWidthPt, double sheetHeightPt, double remPt)
+            StyleDeclaration? style, double sheetWidthPt, double sheetHeightPt, double remPt, double scale = 1)
         {
             if (style is null) return default;
+
+            // The sheet arrives scaled (and so does the page box); what the rule declares is measured as for the unscaled page and scaled after.
+            if (scale != 1)
+            {
+                var unscaled = ResolvePageBorderAndPadding(style, sheetWidthPt / scale, sheetHeightPt / scale, remPt);
+                return new PageBorderPaddingPt(
+                    unscaled.BorderLeftPt * scale, unscaled.BorderTopPt * scale, unscaled.BorderRightPt * scale, unscaled.BorderBottomPt * scale,
+                    unscaled.PaddingLeftPt * scale, unscaled.PaddingTopPt * scale, unscaled.PaddingRightPt * scale, unscaled.PaddingBottomPt * scale);
+            }
 
             var (borderLeft, borderRight) = MarginBoxRenderer.BorderExtent(style, null, remPt, horizontal: true);
             var (borderTop, borderBottom) = MarginBoxRenderer.BorderExtent(style, null, remPt, horizontal: false);

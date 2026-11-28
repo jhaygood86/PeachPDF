@@ -933,6 +933,7 @@ PeachDrawing.Core.Rect : struct
 PeachDrawing.Core.RenderContext : abstract class
   method Boolean FamilyHasExplicitUnicodeRanges(String family)
   method Boolean IsFontExists(String font)
+  method Boolean IsRegisteredFontFamily(String family)
   method Brush GetConicGradientBrush(PaintPoint center, Double outerRadius, PaintColor[] colors, Double[] anglesRad)
   method Brush GetLinearGradientBrush(PaintPoint p1, PaintPoint p2, ValueTuple<PaintColor, Double>[] stops, Boolean isRepeating = False)
   method Brush GetLinearGradientBrush(Rect rect, PaintColor color1, PaintColor color2, Double angle)

@@ -45,9 +45,14 @@ namespace PeachBrackets.Html.Fragmentation
             // A leaf has nobody to pass a clip to, so it is not derived (it would only allocate a curve and basis).
             var forChildren = box.Boxes.Count > 0 && DomUtils.ClipsItsOverflow(box) ? ClipSource.Of(box) : clip;
 
+            // Floats and absolutely positioned boxes are children like any other: layout placed them, and the painter orders them
+            // (CSS 2.1 Appendix E) with this tree's root as the ordering scope. A page float has no page to float to here.
+            // An absolutely positioned box is clipped only by an overflow clipper on its containing-block chain, not by one
+            // that merely sits between it and its containing block (css-overflow-3 §3).
+            var ownClip = forChildren is not null && !ReferenceEquals(forChildren, clip);
             var children = box.Boxes
-                .Where(b => b.DerivedStyle.ActualDisplay != Keywords.None && !b.IsOutOfFlow && !b.IsRunningPositioned)
-                .Select(b => Build(b, forChildren))
+                .Where(b => b.DerivedStyle.ActualDisplay != Keywords.None && !b.IsPageFloated && !b.IsRunningPositioned)
+                .Select(b => Build(b, ownClip && b.IsAbsolutelyPositioned && !DomUtils.IsOnClippingChainOf(b, box) ? clip : forChildren))
                 .ToList();
 
             return new BoxFragment(
@@ -73,9 +78,8 @@ namespace PeachBrackets.Html.Fragmentation
         /// <summary>
         /// A clipping box's clip, in the shape a <see cref="BoxFragment"/> carries it. Derived by
         /// <see cref="RenderUtils.OverflowClipGeometryOf"/>, the same derivation <see cref="FragmentEmitter"/> uses, so
-        /// a footnote body or running element clips exactly as the same box in the page does. Its out-of-flow
-        /// descendants are left out of this tree (see <see cref="Build(CssBox)"/>), so the chain never needs to
-        /// jump to another containing block.
+        /// a footnote body or running element clips exactly as the same box in the page does. An absolutely
+        /// positioned descendant takes it only when the clipper is on its containing-block chain.
         /// </summary>
         private sealed record ClipSource(Rect Rect, OverflowClipCurve? Curve, OverflowClipBasis? Basis)
         {

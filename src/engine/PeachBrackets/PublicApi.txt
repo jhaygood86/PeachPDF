@@ -693,6 +693,7 @@ PeachBrackets.HtmlDocumentOptions : sealed class
   property Double MarginRightPoints { get; set; }
   property Double MarginTopPoints { get; set; }
   property Double PageHeightPoints { get; set; }
+  property Double PageScale { get; set; }
   property Double PageWidthPoints { get; set; }
   property Double? AnimationProgress { get; set; }
   property Double? ViewportHeightPoints { get; set; }

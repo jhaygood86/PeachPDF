@@ -213,8 +213,20 @@ namespace PeachBrackets.Html.Parse
 
             var cssValueParser = new CssValueParser(htmlContainer.RenderContext);
 
+            // The tree is not the container's Root yet; expose it so a <base href> is part of the document base the inline sheets' fonts resolve against.
+            htmlContainer.ParsingRoot = root;
+            Uri? documentBaseUri;
+            try
+            {
+                documentBaseUri = htmlContainer.DocumentBaseUri;
+            }
+            finally
+            {
+                htmlContainer.ParsingRoot = null;
+            }
+
             using (EngineTelemetry.Source.StartActivity("fonts"))
-                await CascadeApplyStyleFonts(cssData, htmlContainer.RenderContext, htmlContainer.SynchronousOnly);
+                await CascadeApplyStyleFonts(cssData, htmlContainer.RenderContext, htmlContainer.SynchronousOnly, documentBaseUri);
 
             // Screen media has no pages: @page (size, margins, borders, named pages, margin boxes) only describes a page box, which a
             // continuous surface does not have, and browsers ignore it there. The container keeps no page rules, so every page
@@ -655,8 +667,12 @@ namespace PeachBrackets.Html.Parse
         /// <see cref="HtmlContainerInt.SetDeclarativeRoot"/> to register fonts from a document-level stylesheet
         /// attached to a declarative document (<c>Layout.IDocumentBuilder.Stylesheet</c>).
         /// </summary>
-        internal static async ValueTask CascadeApplyStyleFonts(CssData cssData, RenderContext renderContext, bool synchronousOnly = false)
+        internal static async ValueTask CascadeApplyStyleFonts(CssData cssData, RenderContext renderContext, bool synchronousOnly = false, Uri? documentBaseUri = null)
         {
+            // A sheet fetched from an address resolves its own relative references against that address; an inline <style> has none, so it
+            // resolves against the document base (<base href>, else the host's base address), exactly as an <img src> does.
+            var fallbackBaseUri = documentBaseUri ?? renderContext.BaseUri;
+
             // A render context that can fetch side by side (and keep what it fetched) is told the first web font of each face up front: the registration
             // below awaits them one at a time, and a page can declare dozens.
             if (!synchronousOnly && renderContext is IResourcePrefetcher prefetcher)
@@ -672,7 +688,8 @@ namespace PeachBrackets.Html.Parse
                         try
                         {
                             // The same resolution registering the face does; one that is still relative is not loaded at all, so it is not fetched ahead either.
-                            var address = stylesheet.BaseUri is not null ? new Uri(stylesheet.BaseUri, url) : new Uri(url, UriKind.RelativeOrAbsolute);
+                            var sheetBase = stylesheet.BaseUri ?? fallbackBaseUri;
+                            var address = sheetBase is not null ? new Uri(sheetBase, url) : new Uri(url, UriKind.RelativeOrAbsolute);
                             if (address.IsAbsoluteUri)
                                 addresses.Add(address);
                         }
@@ -721,7 +738,7 @@ namespace PeachBrackets.Html.Parse
 
                         if (!isLoaded && fontFaceDefinition.Url is not null)
                         {
-                            isLoaded = await AsyncGuard.Require(renderContext.AddFontFamilyFromUrl(fontFamilyName, fontFaceDefinition.Url, fontFaceDefinition.Format, stylesheet.BaseUri, descriptors, unicodeRanges), synchronousOnly, "load the web font", fontFaceDefinition.Url);
+                            isLoaded = await AsyncGuard.Require(renderContext.AddFontFamilyFromUrl(fontFamilyName, fontFaceDefinition.Url, fontFaceDefinition.Format, stylesheet.BaseUri ?? fallbackBaseUri, descriptors, unicodeRanges), synchronousOnly, "load the web font", fontFaceDefinition.Url);
                         }
 
                         if (isLoaded) break;
@@ -945,11 +962,14 @@ namespace PeachBrackets.Html.Parse
                 ? rootFontPt ?? root.GetEmHeight()
                 : MarginBoxRenderer.ResolveFontSizePt(basePageFontSize);
 
+            // A page scale (HtmlDocumentOptions.PageScale) makes the sheet that many times larger; what an @page rule declares is multiplied by it
+            // (below), so a percentage is measured against the sheet as it would be unscaled and scaled with the rest.
+            var pageScale = htmlContainer.PageScale;
             var lengthContext = new PageLengthContext(
                 emPt,
                 rootFontPt ?? root.GetRemHeight(),
-                htmlContainer.PageSize.Width / pixelsPerPoint,
-                htmlContainer.PageSize.Height / pixelsPerPoint);
+                htmlContainer.PageSize.Width / pixelsPerPoint / pageScale,
+                htmlContainer.PageSize.Height / pixelsPerPoint / pageScale);
             htmlContainer.PageLengthContext = lengthContext;
 
             // Resolve through the same null-aware overload the per-page path uses (see
@@ -962,7 +982,7 @@ namespace PeachBrackets.Html.Parse
             double? ParseMarginLength(string value, bool vertical = false)
             {
                 var pt = ParseLengthToPdfPoints(value, vertical ? lengthContext.ForVertical() : lengthContext);
-                return pt.HasValue ? pt.Value * pixelsPerPoint : null;
+                return pt.HasValue ? pt.Value * pixelsPerPoint * pageScale : null;
             }
 
             // Descend into @layer/@media/@supports/@container so a base @page nested in a layer applies.
@@ -1001,7 +1021,10 @@ namespace PeachBrackets.Html.Parse
                     // caller-configured PdfGenerateConfig size, reconstructed the same way the retry
                     // check above does.
                     var baseSizePt = PeachBrackets.Utilities.Utils.ToPoints(htmlContainer.PageSize, pixelsPerPoint);
-                    htmlContainer.CssPageSize = ParsePageSizeToPdfPoints(pageRule.Style.Size, lengthContext, baseSizePt);
+                    var unscaledBase = new Size(baseSizePt.Width / pageScale, baseSizePt.Height / pageScale);
+                    htmlContainer.CssPageSize = ParsePageSizeToPdfPoints(pageRule.Style.Size, lengthContext, unscaledBase) is { } declared
+                        ? new Size(declared.Width * pageScale, declared.Height * pageScale)
+                        : null;
                 }
             }
         }

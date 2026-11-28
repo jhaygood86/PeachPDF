@@ -114,6 +114,47 @@ internal sealed partial class WptRenderer(string wptRoot) : IReftestRenderer
         context.AddFontFamilyMapping("ui-monospace", "Liberation Mono");
     }
 
+    private static readonly string[] LiberationFaces =
+    [
+        "LiberationSans-Regular", "LiberationSans-Bold", "LiberationSans-Italic", "LiberationSans-BoldItalic",
+        "LiberationSerif-Regular", "LiberationSerif-Bold", "LiberationSerif-Italic", "LiberationSerif-BoldItalic",
+        "LiberationMono-Regular", "LiberationMono-Bold", "LiberationMono-Italic", "LiberationMono-BoldItalic",
+    ];
+
+    private static async Task PinGenericFontsAsync(RasterRenderContext context)
+    {
+        var directory = Path.Combine(AppContext.BaseDirectory, "fonts");
+        foreach (var face in LiberationFaces)
+        {
+            var path = Path.Combine(directory, face + ".woff");
+            if (!File.Exists(path))
+                return;
+
+            var family = face.StartsWith("LiberationSans", StringComparison.Ordinal) ? "Liberation Sans"
+                : face.StartsWith("LiberationSerif", StringComparison.Ordinal) ? "Liberation Serif" : "Liberation Mono";
+            // The same faces again under the names of the fonts they are metric-compatible with. A font added under a name takes precedence over an
+            // installed family of that name, so a page that says Arial or Times New Roman is drawn with Liberation on every machine.
+            var aliases = family switch
+            {
+                "Liberation Sans" => new[] { family, "Arial", "Helvetica", "Helvetica Neue", "Segoe UI" },
+                "Liberation Serif" => new[] { family, "Times New Roman", "Times" },
+                _ => new[] { family, "Courier New", "Courier" },
+            };
+            foreach (var name in aliases)
+            {
+                await using var stream = File.OpenRead(path);
+                await context.AddFont(stream, name);
+            }
+        }
+
+        context.AddFontFamilyMapping("sans-serif", "Liberation Sans");
+        context.AddFontFamilyMapping("serif", "Liberation Serif");
+        context.AddFontFamilyMapping("monospace", "Liberation Mono");
+        context.AddFontFamilyMapping("ui-sans-serif", "Liberation Sans");
+        context.AddFontFamilyMapping("ui-serif", "Liberation Serif");
+        context.AddFontFamilyMapping("ui-monospace", "Liberation Mono");
+    }
+
     public string FullPath(string wptPath) => Path.Combine(wptRoot, wptPath.Replace('/', Path.DirectorySeparatorChar));
 
     public async Task<RgbaImage> RenderAsync(string wptPath)

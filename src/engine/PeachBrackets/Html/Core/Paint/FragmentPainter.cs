@@ -536,6 +536,11 @@ namespace PeachBrackets.Html.Paint
                 if (!visible && (_mapped || box.IsTransformed))
                     RecordHiddenSubtree(fragment);
 
+                // Its text is not drawn either, and it never reaches the word loop that reports a word the clip cuts, so a word lost past the edge of
+                // the page would go unreported.
+                if (!visible && !_textOnly)
+                    RecordWordsPastPageEnd(fragment);
+
                 if (visible && !paintedAsContext)
                 {
                     // A transform that is not affine once projected onto the element's plane (perspective, or a 3D transform under a
@@ -768,10 +773,19 @@ namespace PeachBrackets.Html.Paint
         private void PaintWithOpacity(Canvas g, BoxFragment fragment, FilterEffectResolver.Resolved filter)
         {
             var opacity = fragment.Box.ActualOpacity * filter.OpacityMultiplier;
+
+            // A fixed box paints with the clips suspended, leaving the canvas's initial clip, which a PDF canvas holds as unbounded. A layer
+            // sized to "the clip" would then be astronomically large (a /BBox of double.MaxValue that PDF/A rejects and nothing paints
+            // into), so it is sized to the box's own subtree instead.
+            Rect? bounds = null;
+            if (g.GetClip().Width > UnboundedClipThreshold && SubtreeExtent(fragment) is { } extent)
+                bounds = Inflate(extent, 2);
+
             var options = new LayerOptions(
                 opacity,
                 ToRBlendMode(fragment.Box.ActualMixBlendMode),
-                filter.HasColorMatrix ? filter.ColorMatrix : null);
+                filter.HasColorMatrix ? filter.ColorMatrix : null,
+                Bounds: bounds);
 
             using var layer = g.BeginLayer(options);
             if (layer is null)

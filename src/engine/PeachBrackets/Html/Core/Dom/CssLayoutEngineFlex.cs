@@ -730,7 +730,11 @@ namespace PeachBrackets.Html.Dom
                     // say): such a box is on the line as a box, not as words, so an item holding only one measured 0 here, and a nav item
                     // `<li><a class=btn>Connect With Us</a></li>` collapsed and let its button overlap the item before it. Those items are measured
                     // from their content, as a block child is below.
-                    if (DomUtils.ContainsInlinesOnly(box) && box.LineBoxes.Count > 0 && !box.Boxes.Any(IsAtomicInlineBox))
+                    // Nor are the words the whole of it when an inline box on the line carries horizontal margin, border or padding (css-sizing-3 §5.2,
+                    // CSS 2.1 §8.3): those sit on the line without being part of any word, so `<img style="margin-right: 8pt">Invoice request` measured
+                    // 8pt short of what it lays out and its last word wrapped. The intrinsic walk below counts them.
+                    if (DomUtils.ContainsInlinesOnly(box) && box.LineBoxes.Count > 0 && !box.Boxes.Any(IsAtomicInlineBox)
+                        && !HasInlineHorizontalDecoration(box))
                     {
                         // Trailing white space at the end of a line does not contribute to
                         // max-content (css-text-3 §4.1.2 -- it hangs). Counted, an item measures wider
@@ -3121,6 +3125,21 @@ namespace PeachBrackets.Html.Dom
         /// </summary>
         private static bool IsAtomicInlineBox(CssBox box) =>
             box.DerivedStyle.ActualDisplay is Keywords.InlineBlock or Keywords.InlineFlex or Keywords.InlineGrid or Keywords.InlineTable;
+
+        /// <summary>Whether any inline descendant of <paramref name="box"/> has a horizontal margin, border or padding, none of which is in a word's width.</summary>
+        private static bool HasInlineHorizontalDecoration(CssBox box)
+        {
+            foreach (var child in box.Boxes)
+            {
+                if (child.ActualMarginLeft != 0 || child.ActualMarginRight != 0
+                    || child.ActualPaddingLeft != 0 || child.ActualPaddingRight != 0
+                    || child.ActualBorderLeftWidth != 0 || child.ActualBorderRightWidth != 0
+                    || HasInlineHorizontalDecoration(child))
+                    return true;
+            }
+
+            return false;
+        }
 
         private static double LineContentWidth(CssLineBox line)
         {

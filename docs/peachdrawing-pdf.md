@@ -123,6 +123,16 @@ draws a bitmap with [PeachDrawing](peachdrawing.md)'s `RasterCanvas`.
   embedded in a subset of the font. Text stays selectable and searchable. Color fonts are drawn as vector artwork.
 - **Color.** An RGB color is written as `DeviceRGB` and a CMYK color as `DeviceCMYK`, each in the space it was made in.
 
+## Drawing a page smaller than it was laid out
+
+`PdfComposerPage.SetContentScale(scale)` draws everything on the page at `scale` times the size its coordinates say, from the top-left corner: a canvas that fills a 400 x 200 rectangle on a page given a scale of `0.5` fills a 200 x 100 one. Links, destinations, form fields, annotations and bookmarks are placed with the same scale, so everything lands where it would on a page `1 / scale` times the size. It is how content laid out on a larger sheet is shrunk onto a smaller one: add the page at the size it is to have, set the scale, and draw in the coordinates of the larger layout. Call it before drawing anything on the page, once.
+
+```csharp
+var page = composer.AddPage(200, 100);   // the sheet it is printed on
+page.SetContentScale(0.5);               // ... for content laid out on a 400 x 200 one
+page.Canvas.DrawRectangle(page.Canvas.GetSolidBrush(red), 0, 0, 400, 200);
+```
+
 ## Bleed and printer's marks
 
 `PdfComposerPage.SetPrintBoxes(bleedPoints, outsidePoints)` makes the sheet larger than the page for print production: the size you gave `AddPage` becomes the `/TrimBox`, the `/BleedBox` extends it by the bleed, and the `/MediaBox` extends it by the bleed plus the extra strip (room for crop and registration marks) on every side. Drawing keeps its origin at the page box's top-left corner, so anything drawn at a negative coordinate, or past the page's width or height, lands in the bleed and mark area. The boxes are written when the document is saved; `WidthPoints` and `HeightPoints` stay the page box's, and so do the coordinates links and bookmarks use.

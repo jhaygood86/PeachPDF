@@ -72,15 +72,22 @@ namespace PeachPDF.Tests.Raster
             Assert.NotEmpty(sizes);
             var (pixelsWide, pixelsHigh) = sizes[0];
 
-            // One inch of paper holds exactly `dpi` pixels of the bitmap.
-            Assert.Equal(pixelsWide * 72.0 / dpi, placed.WidthPt, 2);
-            Assert.Equal(pixelsHigh * 72.0 / dpi, placed.HeightPt, 2);
+            // The page is drawn at 96 / PixelsPerInch of the size its content says (a CSS pixel is 72 / PixelsPerInch points), and the
+            // placement is read from inside that scale, so the paper's own size is the placed size at that scale.
+            var scale = 96.0 / pixelsPerInch;
+            var widthOnPaper = placed.WidthPt * scale;
+            var heightOnPaper = placed.HeightPt * scale;
 
-            // The box is 100 x 60 CSS px (75 x 45 pt) plus three standard deviations of blur (3 x 2.25 pt) on
-            // every side; the bitmap is that, snapped outwards by less than one pixel per edge.
-            var margin = 3 * 3 * 0.75;
-            Assert.InRange(placed.WidthPt, 75 + 2 * margin, 75 + 2 * margin + 2 * 72.0 / dpi + 0.01);
-            Assert.InRange(placed.HeightPt, 45 + 2 * margin, 45 + 2 * margin + 2 * 72.0 / dpi + 0.01);
+            // One inch of paper holds exactly `dpi` pixels of the bitmap.
+            Assert.Equal(pixelsWide * 72.0 / dpi, widthOnPaper, 2);
+            Assert.Equal(pixelsHigh * 72.0 / dpi, heightOnPaper, 2);
+
+            // The box is 100 x 60 CSS px plus three standard deviations of blur (3 px) on every side; the bitmap is that,
+            // snapped outwards by less than one pixel per edge.
+            var pointsPerPixel = 72.0 / pixelsPerInch;
+            var margin = 3 * 3 * pointsPerPixel;
+            Assert.InRange(widthOnPaper, (100 * pointsPerPixel) + 2 * margin, (100 * pointsPerPixel) + 2 * margin + 2 * 72.0 / dpi + 0.01);
+            Assert.InRange(heightOnPaper, (60 * pointsPerPixel) + 2 * margin, (60 * pointsPerPixel) + 2 * margin + 2 * 72.0 / dpi + 0.01);
         }
 
         [Fact]

@@ -3,7 +3,8 @@ using System.Collections.Generic;
 namespace PeachPDF;
 
 /// <summary>
-/// One word that was DRAWN into the content stream and then truncated by a clip.
+/// One word that was DRAWN into the content stream and then truncated by a clip, or that was left out altogether because it lies wholly past
+/// the end of the page's content area (<see cref="VisibleWidth"/> is 0 and <see cref="KeptFraction"/> is 0).
 /// </summary>
 /// <remarks>
 /// <para>
@@ -20,6 +21,13 @@ namespace PeachPDF;
 /// reader answers "did the glyph land in the file"; an engine-side collector answers "did the
 /// painter intend to emit it", and the two catch different defects — a document declaring one image
 /// where the PDF contains zero is caught only by the former.
+/// </para>
+/// <para>
+/// A word that is not drawn at all because the page was too narrow for it - past the right edge of a left-to-right page, the left edge of a
+/// right-to-left one - is reported too, with a <see cref="VisibleWidth"/> of 0: it is not in the content stream, so reading the PDF back cannot
+/// tell it was lost. A word cut off by an <c>overflow</c> clip the document asked for, or one that is above or below the page, is not (the former
+/// is the author's own doing, the latter a page break's). <see cref="PdfGenerateConfig.ShrinkToFit"/> and <see cref="PdfGenerateConfig.PixelsPerInch"/>
+/// are how content wider than the page is made to fit.
 /// </para>
 /// <para>
 /// It UNDER-reports, and that is the safe direction but must not be mistaken for completeness.
