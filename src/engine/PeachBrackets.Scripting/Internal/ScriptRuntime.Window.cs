@@ -71,7 +71,14 @@ internal sealed partial class ScriptRuntime
             if (nextPage is null)
                 break;
 
-            var next = _timers.OrderBy(t => t.Due).ThenBy(t => t.Order).First();
+            // The earliest timer, found by one scan: a page can have thousands waiting, and sorting them for each callback is quadratic.
+            var next = _timers[0];
+            foreach (var candidate in _timers)
+            {
+                if (candidate.Due < next.Due || (candidate.Due == next.Due && candidate.Order < next.Order))
+                    next = candidate;
+            }
+
             if (next.Due > limit)
                 break;
 
