@@ -83,7 +83,7 @@ public class GStreamerProviderTests : IDisposable
     public async Task OpenAsync_LearnsTheDurationAndThePictureSize()
     {
         RequireGStreamer();
-        using var session = await Deterministic().OpenAsync(Request(BallClip()));
+        using var session = await Deterministic().OpenAsync(Request(BallClip()), TestContext.Current.CancellationToken);
 
         Assert.NotNull(session);
         Assert.True(session.HasVideo);
@@ -105,9 +105,9 @@ public class GStreamerProviderTests : IDisposable
     {
         RequireGStreamer();
         var path = Path.Combine(_directory, "junk.webm");
-        await File.WriteAllBytesAsync(path, Enumerable.Range(0, 4096).Select(i => (byte)(i * 31)).ToArray());
+        await File.WriteAllBytesAsync(path, Enumerable.Range(0, 4096).Select(i => (byte)(i * 31)).ToArray(), TestContext.Current.CancellationToken);
 
-        Assert.Null(await Deterministic().OpenAsync(Request(path)));
+        Assert.Null(await Deterministic().OpenAsync(Request(path), TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -116,14 +116,14 @@ public class GStreamerProviderTests : IDisposable
         RequireGStreamer();
         var request = new MediaRequest(new Uri("https://media.test/none.webm"), MediaKind.Video, new RasterRenderContext(), _ => new ValueTask<RNetworkResponse?>((RNetworkResponse?)null));
 
-        Assert.Null(await Deterministic().OpenAsync(request));
+        Assert.Null(await Deterministic().OpenAsync(request, TestContext.Current.CancellationToken));
     }
 
     [Fact]
     public async Task ADeterministicSession_MovesOnlyWithTheDocumentClock_AndShowsThePictureAtThePosition()
     {
         RequireGStreamer();
-        using var session = await Deterministic().OpenAsync(Request(BallClip()));
+        using var session = await Deterministic().OpenAsync(Request(BallClip()), TestContext.Current.CancellationToken);
         Assert.NotNull(session);
 
         session.Update(TimeSpan.FromSeconds(10));
@@ -150,8 +150,8 @@ public class GStreamerProviderTests : IDisposable
     {
         RequireGStreamer();
         var clip = BallClip();
-        using var played = await Deterministic().OpenAsync(Request(clip));
-        using var sought = await Deterministic().OpenAsync(Request(clip));
+        using var played = await Deterministic().OpenAsync(Request(clip), TestContext.Current.CancellationToken);
+        using var sought = await Deterministic().OpenAsync(Request(clip), TestContext.Current.CancellationToken);
         Assert.NotNull(played);
         Assert.NotNull(sought);
 
@@ -173,7 +173,7 @@ public class GStreamerProviderTests : IDisposable
     public async Task APictureHoldsUntilTheNextOneStarts_SoTheFrameTimeIsTheSameBetweenThem()
     {
         RequireGStreamer();
-        using var session = await Deterministic().OpenAsync(Request(BallClip()));
+        using var session = await Deterministic().OpenAsync(Request(BallClip()), TestContext.Current.CancellationToken);
         Assert.NotNull(session);
 
         session.Seek(TimeSpan.FromMilliseconds(510));
@@ -191,7 +191,7 @@ public class GStreamerProviderTests : IDisposable
     public async Task ADeterministicSession_EndsAtTheEnd_AndTellsTheDocument()
     {
         RequireGStreamer();
-        using var session = await Deterministic().OpenAsync(Request(BallClip(10)));
+        using var session = await Deterministic().OpenAsync(Request(BallClip(10)), TestContext.Current.CancellationToken);
         Assert.NotNull(session);
         var changes = MediaChange.None;
         session.Changed += (_, e) => changes |= e.Changes;
@@ -211,7 +211,7 @@ public class GStreamerProviderTests : IDisposable
     public async Task ALoopingSession_WrapsAround()
     {
         RequireGStreamer();
-        using var session = await Deterministic().OpenAsync(Request(BallClip(10), loop: true));
+        using var session = await Deterministic().OpenAsync(Request(BallClip(10), loop: true), TestContext.Current.CancellationToken);
         Assert.NotNull(session);
 
         session.Update(TimeSpan.Zero);
@@ -227,7 +227,7 @@ public class GStreamerProviderTests : IDisposable
     public async Task APlaybackRate_ScalesHowFarTheClockMovesThePosition()
     {
         RequireGStreamer();
-        using var session = await Deterministic().OpenAsync(Request(BallClip()));
+        using var session = await Deterministic().OpenAsync(Request(BallClip()), TestContext.Current.CancellationToken);
         Assert.NotNull(session);
 
         session.Update(TimeSpan.Zero);
@@ -242,7 +242,7 @@ public class GStreamerProviderTests : IDisposable
     public async Task APictureIsTheColorOfTheVideo_AsStraightRgbaPremultipliedForDrawing()
     {
         RequireGStreamer();
-        using var session = await Deterministic().OpenAsync(Request(RedClip()));
+        using var session = await Deterministic().OpenAsync(Request(RedClip()), TestContext.Current.CancellationToken);
         Assert.NotNull(session);
 
         using var frame = session.AcquireFrame();
@@ -258,11 +258,11 @@ public class GStreamerProviderTests : IDisposable
     public async Task AcquireFrameAtAsync_FindsThePictureAtAPosition_WithoutMovingThePlayer()
     {
         RequireGStreamer();
-        using var session = await Deterministic().OpenAsync(Request(BallClip()));
+        using var session = await Deterministic().OpenAsync(Request(BallClip()), TestContext.Current.CancellationToken);
         Assert.NotNull(session);
 
-        using var start = await session.AcquireFrameAtAsync(TimeSpan.Zero);
-        using var middle = await session.AcquireFrameAtAsync(TimeSpan.FromSeconds(1.5));
+        using var start = await session.AcquireFrameAtAsync(TimeSpan.Zero, TestContext.Current.CancellationToken);
+        using var middle = await session.AcquireFrameAtAsync(TimeSpan.FromSeconds(1.5), TestContext.Current.CancellationToken);
 
         Assert.NotNull(start);
         Assert.NotNull(middle);
@@ -294,7 +294,7 @@ public class GStreamerProviderTests : IDisposable
     {
         RequireGStreamer();
         var clip = MakeClip("tone.ogg", "audiotestsrc num-buffers=100 samplesperbuffer=4410 ! audio/x-raw,rate=44100 ! audioconvert ! vorbisenc ! oggmux");
-        using var session = await Deterministic().OpenAsync(Request(clip, MediaKind.Audio));
+        using var session = await Deterministic().OpenAsync(Request(clip, MediaKind.Audio), TestContext.Current.CancellationToken);
 
         Assert.NotNull(session);
         Assert.False(session.HasVideo);
@@ -306,7 +306,7 @@ public class GStreamerProviderTests : IDisposable
     public async Task ARealTimeSession_PlaysByItsOwnClock_AndEnds()
     {
         RequireGStreamer();
-        using var session = await new GStreamerMediaProvider().OpenAsync(Request(BallClip(10)));
+        using var session = await new GStreamerMediaProvider().OpenAsync(Request(BallClip(10)), TestContext.Current.CancellationToken);
         Assert.NotNull(session);
 
         session.Play();
@@ -314,7 +314,7 @@ public class GStreamerProviderTests : IDisposable
         while (!session.Ended && DateTime.UtcNow < deadline)
         {
             session.Update(TimeSpan.Zero);
-            await Task.Delay(50);
+            await Task.Delay(50, TestContext.Current.CancellationToken);
         }
 
         Assert.True(session.Ended);
@@ -328,7 +328,7 @@ public class GStreamerProviderTests : IDisposable
     public async Task ARealTimeSession_RaisesChangedFromItsOwnThreads_WithoutTheDocumentPolling()
     {
         RequireGStreamer();
-        using var session = await new GStreamerMediaProvider().OpenAsync(Request(BallClip(10)));
+        using var session = await new GStreamerMediaProvider().OpenAsync(Request(BallClip(10)), TestContext.Current.CancellationToken);
         Assert.NotNull(session);
 
         // Nothing here asks the session anything: the pictures and the end must arrive on their own, on threads that are not the caller's.
@@ -344,7 +344,7 @@ public class GStreamerProviderTests : IDisposable
 
         var deadline = DateTime.UtcNow.AddSeconds(15);
         while (!changes.HasFlag(MediaChange.Ended) && DateTime.UtcNow < deadline)
-            await Task.Delay(50);
+            await Task.Delay(50, TestContext.Current.CancellationToken);
 
         Assert.True(changes.HasFlag(MediaChange.Frame));
         Assert.True(changes.HasFlag(MediaChange.Ended));
@@ -356,7 +356,7 @@ public class GStreamerProviderTests : IDisposable
     {
         RequireGStreamer();
         var before = Directory.GetFiles(Path.GetTempPath(), "peachbrackets-media-*").Length;
-        var session = await Deterministic().OpenAsync(Request(BallClip()));
+        var session = await Deterministic().OpenAsync(Request(BallClip()), TestContext.Current.CancellationToken);
         Assert.NotNull(session);
         Assert.Equal(before + 1, Directory.GetFiles(Path.GetTempPath(), "peachbrackets-media-*").Length);
 
