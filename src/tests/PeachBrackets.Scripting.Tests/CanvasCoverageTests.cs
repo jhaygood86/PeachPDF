@@ -135,4 +135,51 @@ public class CanvasCoverageTests
 
         Assert.Equal(["true true true start-left end-right true true true true true"], log);
     }
+
+    [Fact]
+    public async Task AnImageElementOfAnInlineSvg_LoadsWhenItsAddressIsSetOrChanged()
+    {
+        var log = await LogAsync("""
+            var ns = 'http://www.w3.org/2000/svg';
+            var svg = document.createElementNS(ns, 'svg'); svg.setAttribute('width', '20'); svg.setAttribute('height', '20');
+            var picture = document.createElementNS(ns, 'image'); picture.setAttribute('width', '20'); picture.setAttribute('height', '20');
+            var events = [];
+            picture.addEventListener('load', function () { events.push('load'); });
+            picture.addEventListener('error', function () { events.push('error'); });
+            svg.appendChild(picture); document.body.appendChild(svg);
+            picture.setAttribute('href', 'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%224%22 height=%224%22%3E%3Crect width=%224%22 height=%224%22 fill=%22red%22/%3E%3C/svg%3E');
+            var other = document.createElementNS(ns, 'image'); other.setAttribute('href', 'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%222%22 height=%222%22%3E%3C/svg%3E'); svg.appendChild(other);
+            setTimeout(function () { Log.info(events.join(',')); }, 50);
+            """);
+
+        Assert.Equal(["load"], log);
+    }
+
+    [Fact]
+    public async Task ShapedText_GivesItsRunsAndClusters_AndTheContextDrawsThemWhereTheySay()
+    {
+        var log = await LogAsync("""
+            var k = document.createElement('canvas'); k.width = 160; k.height = 40; document.body.appendChild(k);
+            var kg = k.getContext('2d'); kg.font = '16px TestSans'; kg.textBaseline = 'alphabetic';
+            function inkColumns() { var d = kg.getImageData(0, 0, 160, 40).data, lo = 999, hi = -1; for (var y = 0; y < 40; y++) for (var x = 0; x < 160; x++) if (d[(y * 160 + x) * 4 + 3] > 40) { lo = Math.min(lo, x); hi = Math.max(hi, x); } return [lo, hi]; }
+            var shaped = kg.shapeText('Hello there');
+            var runs = shaped.glyphRuns(), clusters = shaped.glyphClusters(0, 5);
+            kg.fillGlyphRun(runs[0], 10, 30);
+            var drawn = inkColumns();
+            kg.clearRect(0, 0, 160, 40); kg.strokeGlyphRuns(runs, 10, 30); var stroked = inkColumns();
+            kg.clearRect(0, 0, 160, 40); kg.fillGlyphRuns(clusters, 10, 30); var viaClusters = inkColumns();
+            kg.clearRect(0, 0, 160, 40); kg.strokeGlyphRun(clusters[0], 10, 30);
+            var tm = kg.measureText('Hello'), cl = tm.getTextClusters({ align: 'center', baseline: 'top' });
+            kg.clearRect(0, 0, 160, 40); kg.fillTextCluster(cl[0], 80, 20, { x: 5, y: 2, align: 'left', baseline: 'middle' }); var single = inkColumns();
+            kg.strokeTextCluster(cl[1], 80, 20);
+            var back = shaped.positionToAdvance(5), index = shaped.advanceToPosition(back + 1);
+            var box = shaped.actualBoundingBox(0, 5), rects = shaped.selectionRects(0, 5);
+            function name(f) { try { f(); return 'none'; } catch (e) { return e.name; } }
+            Log.info([runs.length, clusters.length, clusters[1].start, drawn[0] >= 10, drawn[1] < 160, stroked[0] >= 8, viaClusters[1] > viaClusters[0], single[0] >= 84, back > 30, index === 5, box.width > 20, rects.length >= 1,
+              name(function () { shaped.positionToAdvance(99); }), name(function () { kg.fillGlyphRun({}, 0, 0); }), name(function () { kg.fillGlyphRuns({}, 0, 0); }), name(function () { kg.fillGlyphRuns([1], 0, 0); }),
+              name(function () { kg.fillTextCluster(1, 0, 0); }), name(function () { kg.fillTextCluster(cl[0], 0, 0, { align: 'sideways' }); })].join(' '));
+            """);
+
+        Assert.Equal(["1 5 1 true true true true true true true true true IndexSizeError TypeError TypeError TypeError TypeError TypeError"], log);
+    }
 }
