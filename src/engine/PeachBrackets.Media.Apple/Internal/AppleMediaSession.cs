@@ -380,8 +380,9 @@ internal sealed class AppleMediaSession : IMediaSession
         _endObserver = NSNotificationCenter.DefaultCenter.AddObserver(AVPlayerItem.DidPlayToEndTimeNotification, OnEnded, _item);
 
         var deadline = DateTime.UtcNow + s_openTimeout;
+        // AVFoundation reports the status through the run loop of the thread that created the item, so the wait runs that loop, on whatever thread this is.
         while (_item.Status == AVPlayerItemStatus.Unknown && DateTime.UtcNow < deadline)
-            Thread.Sleep(20);
+            NSRunLoop.Current.RunUntil(NSDate.Now.AddSeconds(0.02));
 
         return _item.Status == AVPlayerItemStatus.ReadyToPlay;
     }
