@@ -55,11 +55,12 @@ public class RedirectTaintTests
     }
 
     [Fact]
-    public async Task AnImageAskedOfAnotherOrigin_ButRedirectedToTheOwn_DoesNotTaintIt()
+    public async Task AnImageAskedOfAnotherOrigin_EvenRedirectedToTheOwn_TaintsIt()
     {
+        // Fetch: a no-cors request to another origin has an opaque response, and a redirect back does not make it readable (the WPT origin-clean test pins this).
         var log = await RunAsync("https://other.test/a.png", "https://page.test/a.png", Script("https://other.test/a.png"));
 
-        Assert.Equal(["none"], log);
+        Assert.Equal(["SecurityError"], log);
     }
 
     [Fact]
