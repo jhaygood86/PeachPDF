@@ -1459,7 +1459,9 @@ internal sealed class CanvasBitmap(ScriptDocument document, double width, double
             return;
 
         var (scaleX, scaleY) = (destination.Width / source.Width, destination.Height / source.Height);
-        var viewport = new Rect(destination.X - source.X * scaleX, destination.Y - source.Y * scaleY, imageWidth * scaleX, imageHeight * scaleY);
+        // The SVG is laid out at its natural size (where its preserveAspectRatio and viewBox act) and then scaled, not laid out at the size drawn: a non-uniform scale stretches the picture.
+        var viewport = new Rect(0, 0, imageWidth, imageHeight);
+        var placement = Matrix3x2.CreateScale((float)scaleX, (float)scaleY) * Matrix3x2.CreateTranslation((float)(destination.X - source.X * scaleX), (float)(destination.Y - source.Y * scaleY));
         var document = Document;
         var space = ColorSpace;
         Record(canvas =>
@@ -1472,7 +1474,16 @@ internal sealed class CanvasBitmap(ScriptDocument document, double width, double
                 {
                     using (scope)
                     {
-                        document.DrawSvgImage(scope.Graphics, address, viewport);
+                        scope.Graphics.PushTransform(placement);
+                        try
+                        {
+                            document.DrawSvgImage(scope.Graphics, address, viewport);
+                        }
+                        finally
+                        {
+                            scope.Graphics.PopTransform();
+                        }
+
                         CanvasColorSpaces.ConvertPremultipliedBytes(scope.Surface.Pixels, "srgb", space);
                         if (scope.Surface.IsWide)
                             scope.Surface.SyncWideFromBytes(new IntRect(0, 0, scope.Surface.Width, scope.Surface.Height));
@@ -1482,7 +1493,15 @@ internal sealed class CanvasBitmap(ScriptDocument document, double width, double
                 }
                 else
                 {
-                    document.DrawSvgImage(canvas, address, viewport);
+                    canvas.PushTransform(placement);
+                    try
+                    {
+                        document.DrawSvgImage(canvas, address, viewport);
+                    }
+                    finally
+                    {
+                        canvas.PopTransform();
+                    }
                 }
             }
             finally

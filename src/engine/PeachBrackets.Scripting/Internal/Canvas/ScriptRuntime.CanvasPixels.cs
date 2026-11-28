@@ -362,6 +362,7 @@ internal sealed partial class ScriptRuntime
 
         InstallBitmaps();
         InstallOffscreenCanvas();
+        InstallFocusRing();
 
         foreach (var named in Document.QuerySelectorAll("[id]"))
             NameElement(named);
@@ -478,6 +479,10 @@ internal sealed partial class ScriptRuntime
             node.SetAttribute("width", width.ToString("0", CultureInfo.InvariantCulture));
             node.SetAttribute("height", height.ToString("0", CultureInfo.InvariantCulture));
             _transferred.Add(placeholder);
+
+            // The placeholder keeps the size its bitmap had: it is a picture of that size (nothing drawn yet) whatever its width and height attributes come to say.
+            Document.SetCanvasPainting(placeholder, new ScriptCanvasPainting(width, height, _ => { }));
+            Document.SetPlaceholderSize(placeholder, width, height);
             var offscreen = OffscreenOf(node);
             _offscreenPlaceholders[node] = (this, placeholder);
             return offscreen;
@@ -802,18 +807,41 @@ internal sealed partial class ScriptRuntime
 
     // ---- ImageBitmap and OffscreenCanvas
 
+    // drawFocusIfNeeded: a ring around the path (the current one, or the given one) when the element is focused and in the canvas's subtree. Nothing otherwise.
+    private void InstallFocusRing()
+    {
+        Engine.Evaluate("""
+            (function (global) {
+                var prototype = global.CanvasRenderingContext2D.prototype;
+                var name = function (v) { return Object.prototype.toString.call(v); };
+                Object.defineProperty(prototype, 'drawFocusIfNeeded', { writable: true, configurable: true, enumerable: true, value: function drawFocusIfNeeded(a, b) {
+                    var path = arguments.length > 1 ? a : null, element = arguments.length > 1 ? b : a;
+                    if (arguments.length === 0) throw new TypeError("Failed to execute 'drawFocusIfNeeded' on 'CanvasRenderingContext2D': 1 argument required, but only 0 present.");
+                    if (!(element instanceof Element)) throw new TypeError("Failed to execute 'drawFocusIfNeeded': parameter is not of type 'Element'.");
+                    if (path !== null && !(path instanceof Path2D)) throw new TypeError("Failed to execute 'drawFocusIfNeeded': parameter 1 is not of type 'Path2D'.");
+                    if (!this.canvas.contains(element) || element === this.canvas || element.ownerDocument.activeElement !== element) return;
+                    this.save();
+                    this.strokeStyle = 'rgb(16, 16, 16)'; this.lineWidth = 2; this.setLineDash([]); this.globalAlpha = 1; this.globalCompositeOperation = 'source-over';
+                    this.shadowColor = 'rgba(0, 0, 0, 0)'; this.filter = 'none';
+                    if (path) this.stroke(path); else this.stroke();
+                    this.restore();
+                } });
+            })
+            """).Call(JsValue.Undefined, [Engine.Global]);
+    }
+
     private void InstallBitmaps()
     {
         var native = Js.NewObject(Engine);
         // bitmapFrom(source, crop, options): crop is an array of four numbers or null, options a dictionary or undefined.
         Js.Method(Engine, native, "bitmapFrom", 3, (_, args) =>
             BitmapFrom(Js.Arg(args, 0), Js.Arg(args, 1) is ObjectInstance crop ? Enumerable.Range(0, 4).Select(i => TypeConverter.ToNumber(crop.Get(i.ToString(CultureInfo.InvariantCulture)))).ToArray() : [], Js.Arg(args, 2) as ObjectInstance));
-        Js.Method(Engine, native, "bitmapFromEncoded", 2, (_, args) =>
+        Js.Method(Engine, native, "bitmapFromEncoded", 3, (_, args) =>
         {
             if (Document.DecodeImage(Encoding.Latin1.GetBytes(Js.AsText(Js.Arg(args, 0)))) is not { } image)
                 return JsValue.Null;
 
-            return ApplyBitmapOptions(image, [], Js.Arg(args, 1) as ObjectInstance);
+            return ApplyBitmapOptions(image, Js.Arg(args, 1) is ObjectInstance crop ? Enumerable.Range(0, 4).Select(i => TypeConverter.ToNumber(crop.Get(i.ToString(CultureInfo.InvariantCulture)))).ToArray() : [], Js.Arg(args, 2) as ObjectInstance);
         });
 
         Engine.Evaluate("""
@@ -825,13 +853,14 @@ internal sealed partial class ScriptRuntime
                     else if (count >= 5) { crop = [arguments[1], arguments[2], arguments[3], arguments[4]]; options = arguments[5]; }
                     return new Promise(function (resolve, reject) {
                         if (count === 0 || count === 3 || count === 4) { reject(new TypeError('Not enough arguments')); return; }
+                        if (crop !== null && (Number(crop[2]) === 0 || Number(crop[3]) === 0)) { reject(new RangeError('The crop rectangle has no area.')); return; }
                         if (options !== undefined && options !== null && (typeof options !== 'object' && typeof options !== 'function')) { reject(new TypeError('The options are not a dictionary.')); return; }
                         if (typeof Blob !== 'undefined' && source instanceof Blob) {
                             source.arrayBuffer().then(function (buffer) {
                                 var bytes = new Uint8Array(buffer), s = '';
                                 for (var i = 0; i < bytes.length; i += 8192) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 8192));
                                 try {
-                                    var bitmap = native.bitmapFromEncoded(s, options);
+                                    var bitmap = native.bitmapFromEncoded(s, crop, options);
                                     if (bitmap) resolve(bitmap); else reject(new DOMException('The image could not be decoded.', 'InvalidStateError'));
                                 } catch (e) { reject(e); }
                             }, reject);
@@ -985,6 +1014,8 @@ internal sealed partial class ScriptRuntime
             case BitmapObject bitmap when bitmap.Image is { } existing:
                 image = existing;
                 break;
+            case BitmapObject:
+                throw DomError("InvalidStateError", "The image bitmap is closed.");
             case NodeObject { Node: { Kind: ScriptNodeKind.Element } element } when IsImage(element) || IsSvgImage(element):
                 image = ImageOf(source) ?? RasterizeSvgImage(element) ?? throw DomError("InvalidStateError", "The image is not loaded.");
                 break;

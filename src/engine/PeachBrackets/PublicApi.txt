@@ -989,6 +989,7 @@ PeachBrackets.ScriptHosting.ScriptDocument : sealed class
   method ValueTuple<ScriptBox, ScriptBox>? GetBoundingBoxes(ScriptNode element)
   method ValueTuple<ScriptNode, Int32>? GetCaretAt(Double x, Double y)
   method Void SetCanvasPainting(ScriptNode canvas, ScriptCanvasPainting painting)
+  method Void SetPlaceholderSize(ScriptNode canvas, Double width, Double height)
   method static Boolean TryParseNonNegativeInteger(String text, out UInt32 value)
   property Boolean CanMeasure { get; }
   property Boolean FontFacesLoaded { get; }

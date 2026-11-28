@@ -157,8 +157,20 @@ internal sealed partial class ScriptRuntime
     /// <summary>Whether the video is from another origin than the document and was not asked for with a crossorigin attribute.</summary>
     private bool VideoTainted(ScriptNode video) =>
         video.GetAttribute("crossorigin") is null && _media.TryGetValue(video, out var state) && state.Session is not null
-        && OriginOf(Uri.TryCreate(Document.GetMediaFinalAddress(state.Session) ?? state.CurrentSrc, UriKind.Absolute, out var resource) ? resource : null) is { } resourceOrigin
-        && !string.Equals(resourceOrigin, OriginOf(video.OwnerDocument.BaseUri), StringComparison.Ordinal);
+        && AnyOtherOrigin(video.OwnerDocument.BaseUri, state.CurrentSrc, Document.GetMediaFinalAddress(state.Session));
+
+    // Whether any of the addresses a resource was asked of and read from is of another origin than the document's.
+    private bool AnyOtherOrigin(Uri? documentAddress, params string?[] addresses)
+    {
+        var own = OriginOf(documentAddress);
+        foreach (var address in addresses)
+        {
+            if (address is not null && OriginOf(Uri.TryCreate(address, UriKind.Absolute, out var resource) ? resource : null) is { } origin && !string.Equals(origin, own, StringComparison.Ordinal))
+                return true;
+        }
+
+        return false;
+    }
 
     // Where the live player of a video is, for the copy of the document a picture of an element is made from.
     private TimeSpan? LiveMediaPosition(ScriptNode node) =>

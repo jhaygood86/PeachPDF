@@ -146,6 +146,8 @@ internal sealed partial class ScriptRuntime
         {
             object payload = Js.Arg(args, 0) switch
             {
+                // A picture that may not be read (it is from another origin) may not be handed on either.
+                BitmapObject { OriginClean: false } => throw DomError("DataCloneError", "A bitmap that is not origin-clean could not be cloned."),
                 BitmapObject { Image: { } image } bitmap => new BitmapHandle(image, bitmap.OriginClean),
                 BitmapObject => throw DomError("DataCloneError", "An ImageBitmap is closed and could not be cloned."),
                 ElementImageObject { Closed: false } image => new ElementImageHandle(image),

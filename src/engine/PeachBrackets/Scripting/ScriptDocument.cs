@@ -200,7 +200,9 @@ public sealed class ScriptDocument
 
         if (_renderProbe is null || _renderProbeVersion != Version)
         {
-            var markup = MediaPositionOf is { } positionOf ? ScriptSerializer.SerializeChildren(RootBox, positionOf) : Serialize();
+            var markup = MediaPositionOf is { } positionOf
+                ? ScriptSerializer.SerializeChildren(RootBox, positionOf, box => _placeholderSizes.TryGetValue(Wrap(box), out var size) ? size : null)
+                : Serialize();
             var cached = _renderProbes.FindIndex(p => string.Equals(p.Markup, markup, StringComparison.Ordinal));
             if (cached >= 0)
             {
@@ -1231,5 +1233,25 @@ public sealed class ScriptDocument
     }
 
     // The document as markup: the DOCTYPE that gives its mode, and the tree.
-    internal string Serialize() => ScriptSerializer.SerializeChildren(RootBox);
+    internal string Serialize()
+    {
+        var markup = _placeholderSizes.Count == 0 ? ScriptSerializer.SerializeChildren(RootBox) : ScriptSerializer.SerializeChildren(RootBox, box => _placeholderSizes.TryGetValue(Wrap(box), out var size) ? size : null);
+        return markup;
+    }
+
+    private readonly Dictionary<ScriptNode, (double Width, double Height)> _placeholderSizes = new(ReferenceEqualityComparer.Instance as IEqualityComparer<ScriptNode>);
+
+    /// <summary>
+    /// Says that a <c>canvas</c> element stands in for an OffscreenCanvas of a size (<c>transferControlToOffscreen</c>): a copy of the document laid out for a script's
+    /// questions gives it that size whatever its <c>width</c> and <c>height</c> attributes say.
+    /// </summary>
+    /// <param name="canvas">the placeholder</param>
+    /// <param name="width">its width, in CSS pixels</param>
+    /// <param name="height">its height, in CSS pixels</param>
+    public void SetPlaceholderSize(ScriptNode canvas, double width, double height)
+    {
+        ArgumentNullException.ThrowIfNull(canvas);
+        _placeholderSizes[canvas] = (width, height);
+        NoteChanged();
+    }
 }

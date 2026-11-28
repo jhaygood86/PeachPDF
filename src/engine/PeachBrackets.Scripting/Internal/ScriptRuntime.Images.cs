@@ -207,8 +207,8 @@ internal sealed partial class ScriptRuntime
                 if (image.GetAttribute("crossorigin") is not null || !_images.TryGetValue(image, out var state) || state.Status != 2)
                     return false;
 
-                return OriginOf(Uri.TryCreate(state.FinalSource ?? state.CurrentSource, UriKind.Absolute, out var resource) ? resource : null) is { } resourceOrigin
-                    && !string.Equals(resourceOrigin, OriginOf(image.OwnerDocument.BaseUri), StringComparison.Ordinal);
+                // A hop of the redirect chain from another origin taints it, whichever end that was: asked of another origin and sent back here, or asked of here and sent away.
+                return AnyOtherOrigin(image.OwnerDocument.BaseUri, state.CurrentSource, state.FinalSource);
             case NodeObject { Node: { Kind: ScriptNodeKind.Element } video } when IsVideo(video):
                 return VideoTainted(video);
             default:

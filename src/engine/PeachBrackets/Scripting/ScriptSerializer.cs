@@ -48,6 +48,42 @@ internal static class ScriptSerializer
         }
     }
 
+    /// <summary>
+    /// The children of <paramref name="box"/> as markup in which a <c>canvas</c> that stands in for an OffscreenCanvas has the size <paramref name="sizeOf"/> reports, whatever its
+    /// <c>width</c> and <c>height</c> attributes have come to say (a copy of the document lays it out at the size of its bitmap).
+    /// </summary>
+    public static string SerializeChildren(CssBox box, Func<CssBox, (double Width, double Height)?> sizeOf)
+    {
+        var previous = s_sizeOf;
+        s_sizeOf = sizeOf;
+        try
+        {
+            return SerializeChildren(box);
+        }
+        finally
+        {
+            s_sizeOf = previous;
+        }
+    }
+
+    /// <summary>Both: media elements told where their players are, and placeholder canvases given their size.</summary>
+    public static string SerializeChildren(CssBox box, Func<CssBox, TimeSpan?> positionOf, Func<CssBox, (double Width, double Height)?> sizeOf)
+    {
+        var previous = s_sizeOf;
+        s_sizeOf = sizeOf;
+        try
+        {
+            return SerializeChildren(box, positionOf);
+        }
+        finally
+        {
+            s_sizeOf = previous;
+        }
+    }
+
+    [ThreadStatic]
+    private static Func<CssBox, (double Width, double Height)?>? s_sizeOf;
+
     [ThreadStatic]
     private static Func<CssBox, TimeSpan?>? s_positionOf;
 
@@ -122,7 +158,12 @@ internal static class ScriptSerializer
             foreach (var (name, value) in attributes)
             {
                 text.Append(' ').Append(name).Append("=\"");
-                if (MediaFragment(box, parent, tag.Name, name) is { } fragment)
+                if (s_sizeOf is { } sizeOf && string.Equals(tag.Name, "canvas", StringComparison.OrdinalIgnoreCase) && sizeOf(box) is { } size
+                    && (string.Equals(name, "width", StringComparison.OrdinalIgnoreCase) || string.Equals(name, "height", StringComparison.OrdinalIgnoreCase)))
+                {
+                    text.Append((string.Equals(name, "width", StringComparison.OrdinalIgnoreCase) ? size.Width : size.Height).ToString("0", System.Globalization.CultureInfo.InvariantCulture));
+                }
+                else if (MediaFragment(box, parent, tag.Name, name) is { } fragment)
                 {
                     var hash = value.IndexOf('#', StringComparison.Ordinal);
                     Escape(hash >= 0 ? value[..hash] : value, text, attribute: true);
