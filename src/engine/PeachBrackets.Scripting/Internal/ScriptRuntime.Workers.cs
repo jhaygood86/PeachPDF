@@ -171,7 +171,7 @@ internal sealed partial class ScriptRuntime
             if (payload is ElementImageHandle shared)
             {
                 var source = shared.Image;
-                return new ElementImageObject(Engine, ElementImagePrototype, source.Canvas, source.Element, source.Width, source.Height) { Owner = source.Owner };
+                return new ElementImageObject(Engine, ElementImagePrototype, source.Canvas, source.Element, source.Width, source.Height) { Owner = source.Owner, Picture = source.Picture };
             }
 
             var size = (OffscreenHandle)payload;
@@ -210,7 +210,7 @@ internal sealed partial class ScriptRuntime
         {
             if (Js.Arg(args, 0) is ElementImageObject { Closed: false } element)
             {
-                var carried = new ElementImageObject(Engine, ElementImagePrototype, element.Canvas, element.Element, element.Width, element.Height) { Owner = element.Owner };
+                var carried = new ElementImageObject(Engine, ElementImagePrototype, element.Canvas, element.Element, element.Width, element.Height) { Owner = element.Owner, Picture = element.Picture };
                 element.Closed = true;
                 return carried;
             }

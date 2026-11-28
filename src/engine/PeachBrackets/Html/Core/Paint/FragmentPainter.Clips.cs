@@ -32,7 +32,10 @@ namespace PeachBrackets.Html.Paint
         /// </summary>
         internal static bool InScrolledFrame => _scrollFrames > 0;
 
-        private static Rect ClipForCulling(Canvas g) => _scrollFrames > 0 ? Unbounded : g.GetClip();
+        /// <summary>Set while one element is painted onto a surface of its own size (a picture of an element), where the canvas's clip is in the surface's pixels and the painting is in the page's units: nothing is culled then.</summary>
+        internal static readonly System.Threading.AsyncLocal<bool> UnboundedCulling = new();
+
+        private static Rect ClipForCulling(Canvas g) => _scrollFrames > 0 || UnboundedCulling.Value ? Unbounded : g.GetClip();
 
         /// <summary>One clip held back from the canvas: the box whose padding edge it is, and how to push it.</summary>
         private readonly record struct ClipEntry(CssBox Clipper, Rect Rect, OverflowClipCurve? Curve);

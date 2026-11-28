@@ -68,11 +68,11 @@ namespace PeachBrackets.Svg
         /// <see cref="ApplyTo(Canvas, SvgFilter, RasterSurface, Rect)"/> where the box the filter's region is measured against (<paramref name="bbox"/>) is not all the surface covers
         /// (<paramref name="region"/>), as for an HTML box whose filter region reaches beyond it.
         /// </summary>
-        public static void ApplyTo(Canvas g, SvgFilter filter, RasterSurface surface, Rect bbox, Rect region)
+        public static void ApplyTo(Canvas g, SvgFilter filter, RasterSurface surface, Rect bbox, Rect region, SvgFilterInputs? inputs = null)
         {
             try
             {
-                var result = Evaluate(g, filter, bbox, surface, region, null);
+                var result = Evaluate(g, filter, bbox, surface, region, inputs);
                 if (result is null)
                     return;
 

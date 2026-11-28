@@ -12,12 +12,16 @@ namespace PeachBrackets.Html.Utils
     /// </summary>
     internal sealed class SvgFilterRegistry(HtmlContainerInt container)
     {
-        private Dictionary<string, SvgFilter>? _filters;
+        private Dictionary<string, (SvgFilter Filter, SvgDocument Document)>? _filters;
 
-        public bool TryGet(string id, out SvgFilter? filter)
+        public bool TryGet(string id, out SvgFilter? filter) => TryGet(id, out filter, out _);
+
+        public bool TryGet(string id, out SvgFilter? filter, out SvgDocument? document)
         {
             EnsureBuilt();
-            return _filters!.TryGetValue(id, out filter);
+            var found = _filters!.TryGetValue(id, out var entry);
+            (filter, document) = found ? (entry.Filter, entry.Document) : (null, null);
+            return found;
         }
 
         private void EnsureBuilt()
@@ -38,7 +42,7 @@ namespace PeachBrackets.Html.Utils
                 if (svgBox.Document is { } document)
                 {
                     foreach (var (id, filter) in document.Filters)
-                        _filters!.TryAdd(id, filter);
+                        _filters!.TryAdd(id, (filter, document));
                 }
 
                 return;

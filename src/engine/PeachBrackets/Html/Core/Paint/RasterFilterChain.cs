@@ -64,8 +64,13 @@ namespace PeachBrackets.Html.Paint
 
                     case FilterGrammar.Reference:
                         Flush();
-                        if (g is not null && surfaceArea is { } area && box.HtmlContainer?.SvgFilters.TryGet(function.Arguments[0], out var svgFilter) == true && svgFilter is not null)
-                            SvgRasterFilterEvaluator.ApplyTo(g, svgFilter, surface, boxArea ?? area, area);
+                        if (g is not null && surfaceArea is { } area && box.HtmlContainer?.SvgFilters.TryGet(function.Arguments[0], out var svgFilter, out var svgDocument) == true && svgFilter is not null && svgDocument is not null
+                            && !(box.HtmlContainer.HideCrossOriginImages && System.Linq.Enumerable.Any(svgFilter.Primitives, p => p is FeImage { Image: { Image: null, NestedDocument: null } })))
+                        {
+                            // (A filter whose feImage was left out as being from another origin is ignored whole, as a reference to nothing.)
+                            var reference = boxArea ?? area;
+                            SvgRasterFilterEvaluator.ApplyTo(g, svgFilter, surface, reference, area, SvgRenderer.CreateHtmlFilterInputs(g, svgDocument, reference.Width, reference.Height));
+                        }
 
                         break;
 

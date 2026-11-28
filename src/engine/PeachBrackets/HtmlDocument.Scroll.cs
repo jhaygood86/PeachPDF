@@ -168,6 +168,8 @@ public sealed partial class HtmlDocument
             await RenderSameOriginFramesAsync(documentRoot, found, makeSurface);
 
         _container.ProbeRenderRoot = found;
+        var previousCulling = PeachBrackets.Html.Paint.FragmentPainter.UnboundedCulling.Value;
+        PeachBrackets.Html.Paint.FragmentPainter.UnboundedCulling.Value = true;
 
         // What is above the element is not in its picture: it keeps no background, border or shadow of its own while the picture is drawn.
         var suppressed = new List<(CssBox Box, bool Background, bool Border)>();
@@ -191,13 +193,21 @@ public sealed partial class HtmlDocument
             return null;
 
         var (pixelsWide, pixelsHigh) = ((int)Math.Ceiling(width - 1e-6), (int)Math.Ceiling(height - 1e-6));
-        using var surface = makeSurface(Math.Max(1, pixelsWide), Math.Max(1, pixelsHigh));
+
+        // A raster region nested in a surface is cut to that surface's own grid and takes no account of a transform pushed on it, so an element that is not at the page's corner is painted
+        // where it is, on a surface that reaches from the corner to it, and its part is cut out afterwards.
+        var (cornerX, cornerY) = (rect.X / layoutPerPixel, rect.Y / layoutPerPixel);
+        var wholeWidth = (int)Math.Ceiling(cornerX + width + 1);
+        var wholeHeight = (int)Math.Ceiling(cornerY + height + 1);
+        var cut = (cornerX >= 1 || cornerY >= 1) && wholeWidth <= 8192 && wholeHeight <= 8192;
+        using var surface = makeSurface(Math.Max(1, cut ? wholeWidth : pixelsWide), Math.Max(1, cut ? wholeHeight : pixelsHigh));
         if (surface is null)
             return null;
 
-        // The page's layout units become pixels, and the element's corner the picture's.
+        // The page's layout units become pixels, and (when it is not cut out afterwards) the element's corner the picture's.
         var canvas = surface.Canvas;
-        canvas.PushTransform(System.Numerics.Matrix3x2.CreateTranslation((float)-rect.X, (float)-rect.Y) * System.Numerics.Matrix3x2.CreateScale((float)(1 / layoutPerPixel)));
+        var toPixels = System.Numerics.Matrix3x2.CreateScale((float)(1 / layoutPerPixel));
+        canvas.PushTransform(cut ? toPixels : System.Numerics.Matrix3x2.CreateTranslation((float)-rect.X, (float)-rect.Y) * toPixels);
         try
         {
             var region = new Rect(rect.X / _unitsPerPoint, rect.Y / _unitsPerPoint, rect.Width / _unitsPerPoint, rect.Height / _unitsPerPoint);
@@ -206,6 +216,7 @@ public sealed partial class HtmlDocument
         finally
         {
             canvas.PopTransform();
+            PeachBrackets.Html.Paint.FragmentPainter.UnboundedCulling.Value = previousCulling;
             _container.ProbeRenderRoot = null;
             _container.CanvasPaintings.Clear();
             foreach (var (above, background, border) in suppressed)
@@ -215,7 +226,16 @@ public sealed partial class HtmlDocument
             }
         }
 
-        return (surface.CreateSnapshot(), width, height);
+        if (!cut)
+            return (surface.CreateSnapshot(), width, height);
+
+        using var whole = surface.CreateSnapshot();
+        using var piece = makeSurface(Math.Max(1, pixelsWide), Math.Max(1, pixelsHigh));
+        if (piece is null)
+            return null;
+
+        piece.Canvas.DrawImage(whole, new Rect(0, 0, pixelsWide, pixelsHigh), new Rect(cornerX, cornerY, pixelsWide, pixelsHigh), PeachDrawing.Core.ImageSampling.Nearest);
+        return (piece.CreateSnapshot(), width, height);
     }
 
     // A browsing context is not embedded in a page, but a picture of an element shows an iframe that is of the document's own origin (and is not sandboxed away from it) as the frame's

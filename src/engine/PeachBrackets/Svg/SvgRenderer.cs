@@ -3262,6 +3262,10 @@ namespace PeachBrackets.Svg
         [ThreadStatic]
         private static int s_definitionNesting;
 
+        /// <summary>The painted inputs for a filter an HTML element references (<c>filter: url(#id)</c>): <c>feImage</c> content is drawn with this renderer; there is no SVG element whose paint or backdrop could be asked for.</summary>
+        internal static SvgFilterInputs CreateHtmlFilterInputs(Canvas owner, SvgDocument document, double width, double height) =>
+            new RendererFilterInputs(owner, document, new SvgRectElement { Fill = SvgPaint.None, Stroke = SvgPaint.None }, (width, height));
+
         /// <summary>The painted inputs of one raster filter evaluation, drawn with this renderer's own paint code.</summary>
         private sealed class RendererFilterInputs(Canvas owner, SvgDocument document, SvgElement element, (double Width, double Height) viewport) : SvgFilterInputs
         {

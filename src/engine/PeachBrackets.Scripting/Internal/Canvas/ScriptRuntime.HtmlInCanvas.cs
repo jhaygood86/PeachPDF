@@ -36,6 +36,9 @@ internal sealed class ElementImageObject : ObjectInstance
     /// <summary>The runtime of the page the element is in, which is the one that lays it out and keeps its geometry (an ElementImage a worker holds is still the page's).</summary>
     public ScriptRuntime? Owner { get; init; }
 
+    /// <summary>The element as it looked when the image was captured, so a later change to the element does not change what the image draws; null when the element could not be drawn then.</summary>
+    public ScriptElementPicture? Picture { get; init; }
+
     /// <summary>Whether <c>close()</c> was called: a closed image can no longer be drawn or asked its size.</summary>
     public bool Closed { get; set; }
 }
@@ -280,6 +283,10 @@ internal sealed partial class ScriptRuntime
 
         if (image is not null && !ReferenceEquals(image.Canvas, canvas))
             throw DomError("InvalidStateError", "The ElementImage is of another canvas.");
+
+        // A canvas that is not rendered (display: none, here or above) has no layout to draw into.
+        if (canvas.IsConnected && Document.GetLayoutBox(canvas) is null)
+            throw DomError("InvalidStateError", "The canvas is not laid out.");
 
         if (!element.HasAttribute("drawable") || !IsInside(canvas, element) || !ReferenceEquals(DrawableCanvasOf(element), canvas))
             throw DomError("InvalidStateError", "The element is not a drawable child of the canvas.");
@@ -546,7 +553,7 @@ internal sealed partial class ScriptRuntime
         Define(Engine.Global, "ElementImage", Js.Constructor(Engine, "ElementImage", ElementImagePrototype, 0, (_, _, _) => throw TypeError("Illegal constructor")));
         // structuredClone of an ElementImage: another one of the same element; null for one that is closed.
         Define(Engine.Global, "__cloneElementImage", Js.Function(Engine, "__cloneElementImage", 1, (_, args) =>
-            Js.Arg(args, 0) is ElementImageObject { Closed: false } image ? new ElementImageObject(Engine, ElementImagePrototype, image.Canvas, image.Element, image.Width, image.Height) { Owner = image.Owner } : JsValue.Null));
+            Js.Arg(args, 0) is ElementImageObject { Closed: false } image ? new ElementImageObject(Engine, ElementImagePrototype, image.Canvas, image.Element, image.Width, image.Height) { Owner = image.Owner, Picture = image.Picture } : JsValue.Null));
         Js.StrictMethod(Engine, ElementImagePrototype, "close", 0, (self, _) =>
         {
             (self as ElementImageObject ?? throw TypeError("Illegal invocation")).Closed = true;
@@ -592,7 +599,7 @@ internal sealed partial class ScriptRuntime
             var canvas = Sn(self);
             var (state, element) = RequireDrawableChild(canvas, Js.Arg(args, 0), needsPaint: true);
             var (width, height) = state.Painted[element];
-            return new ElementImageObject(Engine, ElementImagePrototype, canvas, element, width, height) { Owner = this };
+            return new ElementImageObject(Engine, ElementImagePrototype, canvas, element, width, height) { Owner = this, Picture = Document.RenderElement(element) };
         });
         Js.StrictMethod(Engine, canvasElement, "getElementImageDefaultSize", 1, (self, args) =>
         {
@@ -728,7 +735,7 @@ internal sealed partial class ScriptRuntime
                 return JsValue.Undefined;
 
 
-            var picture = owner.Document.RenderElement(element) ?? throw DomError("InvalidStateError", "The element could not be drawn.");
+            var picture = (Js.Arg(args, 0) as ElementImageObject)?.Picture ?? owner.Document.RenderElement(element) ?? throw DomError("InvalidStateError", "The element could not be drawn.");
             context.Bitmap.DrawImage(picture.Image, new Rect(sx / grid.X, sy / grid.Y, sw / grid.X, sh / grid.Y), new Rect(dx, dy, dw, dh));
             return JsValue.Undefined;
         });
