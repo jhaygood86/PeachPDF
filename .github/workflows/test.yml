@@ -395,6 +395,8 @@ jobs:
         # the Linux legs only, so each OS leaves out the code it cannot run. The Windows and Linux gates measure theirs; the Mac providers have their own job (apple.yml).
         if ('${{ matrix.os }}' -ne 'windows-latest') { $patterns += '*PeachBrackets.Media.MediaFoundation/*', '*PeachBrackets.Media.Windows/*' }
         if ('${{ matrix.os }}' -ne 'ubuntu-latest') { $patterns += '*PeachBrackets.Media.GStreamer/*' }
+        # The audio render device (WASAPI) needs an audio endpoint, which a hosted runner does not have; the session code around it is tested.
+        $patterns += '*PeachBrackets.Media.MediaFoundation/Internal/AudioOutput.cs'
         $exclude = @()
         if ($patterns.Count -gt 0) { $exclude = @('--exclude') + $patterns }
 

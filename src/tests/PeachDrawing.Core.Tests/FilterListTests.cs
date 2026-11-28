@@ -29,6 +29,16 @@ public class FilterListTests
     [InlineData("drop-shadow(1px)")]
     [InlineData("drop-shadow(1px 2px 3px 4px)")]
     [InlineData("url(#f)")]
+    [InlineData("blur(1px 2px)")]
+    [InlineData("opacity(1 2)")]
+    [InlineData("hue-rotate(1deg 2deg)")]
+    [InlineData("blur(1px")]
+    [InlineData("drop-shadow(1px 2px -3px)")]
+    [InlineData("drop-shadow(1px 2px nonsense)")]
+    [InlineData("sparkle(1)")]
+    [InlineData("grayscale(abc)")]
+    [InlineData("grayscale(%)")]
+    [InlineData("1blur(2px)")]
     public void ATextThatIsNotAFilterList_IsNotValidAndHasNoEffects(string text)
     {
         Assert.Empty(Parse(text, out var valid));
@@ -97,5 +107,17 @@ public class FilterListTests
         var result = ColorMatrix.LuminanceToAlpha().Apply(new Vector4(1, 0, 0, 1));
 
         Assert.Equal(new Vector4(0, 0, 0, 0.2125f), result);
+    }
+
+    [Fact]
+    public void AFunctionWithNoArgument_TakesItsDefault_AndTheColorMayComeFirstInDropShadow()
+    {
+        var effects = Parse("grayscale() invert(100%) sepia(0.5) drop-shadow(red 1px 2px)", out var valid);
+
+        Assert.True(valid);
+        Assert.Equal(new ColorMatrixEffect(ColorMatrix.Grayscale(1)), effects[0]);
+        Assert.Equal(new ColorMatrixEffect(ColorMatrix.Invert(1)), effects[1]);
+        Assert.Equal(new ColorMatrixEffect(ColorMatrix.Sepia(0.5)), effects[2]);
+        Assert.Equal(new DropShadowEffect(1, 2, 0, 0, PaintColor.FromArgb(255, 255, 0, 0)), effects[3]);
     }
 }
