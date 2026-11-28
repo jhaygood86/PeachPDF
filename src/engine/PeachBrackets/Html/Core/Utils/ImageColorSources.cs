@@ -135,7 +135,7 @@ internal static class ImageColorSources
         {
             using var stream = new MemoryStream(bytes, writable: false);
             var info = PeachImage.Image.Identify(stream);
-            var other = info.IsHdr || (info.ColorSpace is { } space && space.Named != PeachImage.NamedColorSpace.Srgb);
+            var other = info.IsHdr || info.IsYcck || info.IsAdobeInvertedCmyk || (info.ColorSpace is { } space && space.Named != PeachImage.NamedColorSpace.Srgb);
             return (other, info.Orientation);
         }
         catch (Exception ex) when (ex is InvalidDataException or NotSupportedException or InvalidOperationException or IOException or ArgumentException)
@@ -259,6 +259,33 @@ internal static class ImageColorSources
         }
     }
 
+    // A CMYK image as Display P3 floats, by the ICC profile it carries (the generic one when it carries none), or null when that cannot be done.
+    private static PeachImage.Image? CmykToDisplayP3(PeachImage.Image cmyk)
+    {
+        var profile = cmyk.Metadata.GetIccColorProfile();
+        if (profile is null || profile.ChannelCount != 4 || PeachImage.ColorProfiles.Get(PeachImage.NamedColorSpace.DisplayP3) is not { } p3)
+            return null;
+
+        var count = cmyk.Width * cmyk.Height;
+        var bytes = cmyk.PixelMemory.Span;
+        if (bytes.Length < count * 4)
+            return null;
+
+        var rgb = new byte[count * 3];
+        profile.ConvertTo(p3, bytes[..(count * 4)], rgb, count, null, true);
+        var result = PeachImage.Image.Create(cmyk.Width, cmyk.Height, PeachImage.PixelFormat.Rgba32);
+        var pixels = result.PixelMemory.Span;
+        for (var i = 0; i < count; i++)
+        {
+            pixels[i * 4] = rgb[i * 3];
+            pixels[(i * 4) + 1] = rgb[(i * 3) + 1];
+            pixels[(i * 4) + 2] = rgb[(i * 3) + 2];
+            pixels[(i * 4) + 3] = 255;
+        }
+
+        return result;
+    }
+
     /// <summary>Whether the image came from a file that declares a space other than sRGB.</summary>
     public static bool Has(PeachDrawing.Core.Image image) => Sources.TryGetValue(image, out var source) && source.OtherSpace;
 
@@ -293,9 +320,15 @@ internal static class ImageColorSources
         try
         {
             // Decoded as it is stored, then converted from the space the file declares; a float canvas keeps the colors outside the target's gamut, so a later conversion can still use them.
-            using var native = PeachImage.Image.Load(source.Bytes, new PeachImage.DecoderOptions { ApplyOrientation = true });
+            using var decoded = PeachImage.Image.Load(source.Bytes, new PeachImage.DecoderOptions { ApplyOrientation = true });
+
+            // A CMYK picture has no RGB space to convert from: its ink goes through its own profile into Display P3 (wide enough to hold what the profile makes of it), and that is
+            // the picture the conversion below starts from.
+            using var cmykAsP3 = decoded.PixelFormat is PeachImage.PixelFormat.Cmyk32 or PeachImage.PixelFormat.Ycck32 ? CmykToDisplayP3(decoded) : null;
+            var native = cmykAsP3 ?? decoded;
             var conversion = new PeachImage.ColorConversionOptions
             {
+                SourceColorSpace = cmykAsP3 is null ? null : PeachImage.NamedColorSpace.DisplayP3,
                 TargetPixelFormat = wide ? PeachImage.PixelFormat.RgbaF32 : PeachImage.PixelFormat.Rgba32,
                 GamutHandling = wide ? PeachImage.GamutHandling.Preserve : PeachImage.GamutHandling.Clip,
             };

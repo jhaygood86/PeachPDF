@@ -75,6 +75,28 @@ internal static class CanvasColorSpaces
         }
     }
 
+    /// <summary>Converts premultiplied RGBA bytes between two spaces, in place (each pixel is made straight, converted and premultiplied again).</summary>
+    public static void ConvertPremultipliedBytes(Span<byte> pixels, string from, string to)
+    {
+        if (from == to)
+            return;
+
+        var rgb = new double[3];
+        for (var i = 0; i + 3 < pixels.Length; i += 4)
+        {
+            var a = pixels[i + 3];
+            if (a == 0)
+                continue;
+
+            for (var c = 0; c < 3; c++)
+                rgb[c] = Math.Min(1.0, pixels[i + c] / (double)a);
+
+            Convert(rgb, from, to, clip: true);
+            for (var c = 0; c < 3; c++)
+                pixels[i + c] = (byte)Math.Round(Math.Clamp(rgb[c], 0, 1) * a);
+        }
+    }
+
     /// <summary>Converts straight RGBA floats between two spaces, in place; the result is not brought into 0 to 1 unless <paramref name="clip"/> says so.</summary>
     public static void ConvertFloats(float[] pixels, string from, string to, bool clip)
     {

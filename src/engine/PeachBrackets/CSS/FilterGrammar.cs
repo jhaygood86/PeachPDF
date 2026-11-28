@@ -41,6 +41,9 @@ namespace PeachBrackets.Css
         private const string Saturate = "saturate";
         private const string Sepia = "sepia";
 
+        /// <summary>The name a <c>url(#id)</c> reference to an SVG <c>filter</c> element is given among the functions; its one argument is the id.</summary>
+        internal const string Reference = "url";
+
         private static readonly HashSet<string> KnownFunctionNames = [with(StringComparer.OrdinalIgnoreCase),
             Blur, Brightness, Contrast, DropShadow, Grayscale, HueRotate, Invert, Opacity, Saturate, Sepia,
         ];
@@ -80,6 +83,13 @@ namespace PeachBrackets.Css
 
             foreach (var token in significant)
             {
+                // A reference to an SVG filter: url(#id). One that names no filter of the document applies nothing (Filter Effects 1 §3), which is decided at paint time.
+                if (token.Type == TokenType.Url)
+                {
+                    functions.Add(new FilterFunction { Name = Reference, Arguments = [token.Data.ToString().Trim().TrimStart('#')] });
+                    continue;
+                }
+
                 if (token.Type != TokenType.Function) return null;
 
                 var name = token.Data.ToString();

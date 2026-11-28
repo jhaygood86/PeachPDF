@@ -1461,12 +1461,29 @@ internal sealed class CanvasBitmap(ScriptDocument document, double width, double
         var (scaleX, scaleY) = (destination.Width / source.Width, destination.Height / source.Height);
         var viewport = new Rect(destination.X - source.X * scaleX, destination.Y - source.Y * scaleY, imageWidth * scaleX, imageHeight * scaleY);
         var document = Document;
+        var space = ColorSpace;
         Record(canvas =>
         {
             canvas.PushClip(destination);
             try
             {
-                document.DrawSvgImage(canvas, address, viewport);
+                // An SVG image is drawn in sRGB; a canvas of another space gets it as a picture converted from sRGB (where the color is in the sRGB gamut), which the vector draw cannot do.
+                if (space != "srgb" && canvas.BeginRasterSurface(destination) is { } scope)
+                {
+                    using (scope)
+                    {
+                        document.DrawSvgImage(scope.Graphics, address, viewport);
+                        CanvasColorSpaces.ConvertPremultipliedBytes(scope.Surface.Pixels, "srgb", space);
+                        if (scope.Surface.IsWide)
+                            scope.Surface.SyncWideFromBytes(new IntRect(0, 0, scope.Surface.Width, scope.Surface.Height));
+
+                        canvas.DrawRaster(scope.Surface);
+                    }
+                }
+                else
+                {
+                    document.DrawSvgImage(canvas, address, viewport);
+                }
             }
             finally
             {

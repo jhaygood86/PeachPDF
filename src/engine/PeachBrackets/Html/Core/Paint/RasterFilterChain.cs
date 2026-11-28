@@ -4,6 +4,7 @@ using PeachBrackets.Html.Dom;
 using PeachBrackets.Html.Parse;
 using PeachDrawing;
 using PeachDrawing.Filters;
+using PeachBrackets.Svg;
 using System;
 using System.Collections.Generic;
 
@@ -25,7 +26,7 @@ namespace PeachBrackets.Html.Paint
         /// Consecutive colour functions are composed into one matrix and applied in a single pass; a <c>blur()</c>
         /// flushes the pending matrix first so the order the author wrote is the order it runs in.
         /// </remarks>
-        public static void Apply(RasterSurface surface, IReadOnlyList<FilterGrammar.FilterFunction> functions, CssBox box, double groupOpacity)
+        public static void Apply(RasterSurface surface, IReadOnlyList<FilterGrammar.FilterFunction> functions, CssBox box, double groupOpacity, Canvas? g = null, Rect? surfaceArea = null, Rect? boxArea = null)
         {
             // Consecutive colour functions run as one pass over the pixels, each clamped before the next (Filter Effects 1);
             // a blur, or a drop-shadow, in between flushes the pending ones so the written order is the order they run in.
@@ -59,6 +60,13 @@ namespace PeachBrackets.Html.Paint
                     case "drop-shadow":
                         Flush();
                         ApplyDropShadow(surface, function, box);
+                        break;
+
+                    case FilterGrammar.Reference:
+                        Flush();
+                        if (g is not null && surfaceArea is { } area && box.HtmlContainer?.SvgFilters.TryGet(function.Arguments[0], out var svgFilter) == true && svgFilter is not null)
+                            SvgRasterFilterEvaluator.ApplyTo(g, svgFilter, surface, boxArea ?? area, area);
+
                         break;
 
                     default:
@@ -155,11 +163,19 @@ namespace PeachBrackets.Html.Paint
         /// How far, in layout units, a filter list can spread an element's ink beyond its own bounds: three
         /// standard deviations of every <c>blur()</c>, which is where a Gaussian has lost all but 0.3% of its weight.
         /// </summary>
-        public static double InkMargin(IReadOnlyList<FilterGrammar.FilterFunction> functions, CssBox box)
+        public static double InkMargin(IReadOnlyList<FilterGrammar.FilterFunction> functions, CssBox box, Rect? boxArea = null)
         {
             double margin = 0;
             foreach (var function in functions)
             {
+                if (function.Name == FilterGrammar.Reference && boxArea is { } rect && box.HtmlContainer?.SvgFilters.TryGet(function.Arguments[0], out var svgFilter) == true && svgFilter is not null)
+                {
+                    // The filter region (by default 10% beyond the box on every side) is where its result can land.
+                    var (x, y, width, height) = SvgFilterEvaluator.ResolveFilterRect(svgFilter, rect);
+                    margin += Math.Max(Math.Max(rect.X - x, rect.Y - y), Math.Max(x + width - rect.Right, y + height - rect.Bottom));
+                    continue;
+                }
+
                 if (function.Name == "blur" && !FilterEffectResolver.IsZeroLength(function))
                     margin += 3 * Math.Max(0, CssValueParser.ParseLength(function.Arguments[0], 0, box));
             }

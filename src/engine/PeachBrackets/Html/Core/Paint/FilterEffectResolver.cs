@@ -98,6 +98,11 @@ namespace PeachBrackets.Html.Paint
                     case "drop-shadow":
                         requiresRaster = true;
                         break;
+
+                    // A reference to an SVG filter runs over pixels (the document may have no such filter, which RasterFilterChain finds out).
+                    case FilterGrammar.Reference:
+                        requiresRaster = true;
+                        break;
                 }
             }
 

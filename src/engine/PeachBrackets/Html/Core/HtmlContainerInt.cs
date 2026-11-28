@@ -1163,6 +1163,11 @@ namespace PeachBrackets.Html
         /// </summary>
         internal SvgClipPathRegistry SvgClipPaths => _svgClipPathRegistry ??= new SvgClipPathRegistry(this);
 
+        private SvgFilterRegistry? _svgFilterRegistry;
+
+        /// <summary>Every SVG <c>filter</c> of the document by id, for an HTML element's <c>filter: url(#id)</c>.</summary>
+        internal SvgFilterRegistry SvgFilters => _svgFilterRegistry ??= new SvgFilterRegistry(this);
+
         /// <summary>
         /// Decoded image resources resolved by <see cref="Handlers.ImageLoadHandler"/>, keyed by resolved
         /// absolute source URI (<see cref="Uri.AbsoluteUri"/>) - shared by every <c>ImageLoadHandler</c>
