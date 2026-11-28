@@ -338,15 +338,7 @@ namespace PeachBrackets.Html.Handlers
         }
 
         // Whether an address is of another origin than the document's (scheme, host and port). data:, blob: and file: addresses are not.
-        private bool IsCrossOrigin(Uri source)
-        {
-            if (source.Scheme is not ("http" or "https") || _htmlContainer.RenderContext.BaseUri is not { IsAbsoluteUri: true } document || document.Scheme is not ("http" or "https"))
-                return false;
-
-            return !string.Equals(source.Scheme, document.Scheme, StringComparison.OrdinalIgnoreCase)
-                || !string.Equals(source.Host, document.Host, StringComparison.OrdinalIgnoreCase)
-                || source.Port != document.Port;
-        }
+        private bool IsCrossOrigin(Uri source) => _htmlContainer.IsCrossOriginAddress(source);
 
         /// <summary>
         /// Flag image load complete and request refresh for re-layout and invalidate.

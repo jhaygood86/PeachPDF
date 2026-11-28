@@ -179,7 +179,9 @@ internal static class ScriptSerializer
         }
 
         text.Append('>');
-        if (tag.IsSingle || HtmlUtils.IsSingleTag(tag.Name.ToLowerInvariant()))
+
+        // Only an HTML void element has no end tag: in SVG and MathML an element that was written <rect/> still ends, or the next sibling would be parsed as its child.
+        if (!InForeignContent(box) && (tag.IsSingle || HtmlUtils.IsSingleTag(tag.Name.ToLowerInvariant())))
             return;
 
         // A line break straight after <pre>, <textarea> and <listing> is dropped by the parser, so one the text starts with has to be doubled.
@@ -189,6 +191,18 @@ internal static class ScriptSerializer
 
         WriteChildren(box, text);
         text.Append("</").Append(tag.Name).Append('>');
+    }
+
+    // Whether the element is an svg or math element or inside one (the foreign content of the HTML parser).
+    private static bool InForeignContent(CssBox box)
+    {
+        for (var current = box; current is not null; current = current.ParentBox)
+        {
+            if (current.HtmlTag is { } tag && (string.Equals(tag.Name, "svg", StringComparison.OrdinalIgnoreCase) || string.Equals(tag.Name, "math", StringComparison.OrdinalIgnoreCase)))
+                return true;
+        }
+
+        return false;
     }
 
     private static void Escape(string value, StringBuilder text, bool attribute)

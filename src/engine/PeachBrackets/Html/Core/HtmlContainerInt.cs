@@ -1612,6 +1612,17 @@ namespace PeachBrackets.Html
         /// <summary>Whether images of another origin than the document's are not loaded: a picture of an element drawn for a script must not show what the script could not read.</summary>
         internal bool HideCrossOriginImages { get; set; }
 
+        /// <summary>Whether an address is of another origin than the document's (scheme, host and port). data:, blob: and file: addresses are not.</summary>
+        internal bool IsCrossOriginAddress(Uri source)
+        {
+            if (source.Scheme is not ("http" or "https") || RenderContext.BaseUri is not { IsAbsoluteUri: true } document || document.Scheme is not ("http" or "https"))
+                return false;
+
+            return !string.Equals(source.Scheme, document.Scheme, StringComparison.OrdinalIgnoreCase)
+                || !string.Equals(source.Host, document.Host, StringComparison.OrdinalIgnoreCase)
+                || source.Port != document.Port;
+        }
+
         /// <summary>The host that runs the document's scripts, or null when scripting is off.</summary>
         internal IScriptHost? ScriptHost { get; set; }
 
