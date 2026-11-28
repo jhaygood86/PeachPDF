@@ -384,6 +384,9 @@ internal sealed class AppleMediaSession : IMediaSession
         while (_item.Status == AVPlayerItemStatus.Unknown && DateTime.UtcNow < deadline)
             NSRunLoop.Current.RunUntil(NSDate.Now.AddSeconds(0.02));
 
+        if (_item.Status != AVPlayerItemStatus.ReadyToPlay)
+            Console.Error.WriteLine($"PEACH_MEDIA item status {_item.Status}, error {_item.Error?.LocalizedDescription}, player status {_player.Status} {_player.Error?.LocalizedDescription}, reason {_player.ReasonForWaitingToPlay}");
+
         return _item.Status == AVPlayerItemStatus.ReadyToPlay;
     }
 

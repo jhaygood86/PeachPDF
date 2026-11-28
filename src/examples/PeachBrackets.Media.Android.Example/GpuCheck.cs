@@ -225,7 +225,8 @@ internal static partial class GpuCheck
 
             // The right way up: any other orientation is far off.
             var worst = (int)(sums[0] / (64 * 48 * 3));
-            if (sums[1] / (64 * 48 * 3) < 40 || sums[2] / (64 * 48 * 3) < 40)
+            // A picture that is nearly the same turned over (a bar in the middle) cannot say which way up it is; the known buffer above does that. Here a turned copy has to fit better than the upright one.
+            if (sums[1] < sums[0] || sums[2] < sums[0])
                 return "the texture is flipped";
 
             // The same picture read on the CPU (what a raster canvas or a readback gets) agrees too.
