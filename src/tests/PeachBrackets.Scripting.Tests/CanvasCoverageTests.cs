@@ -182,4 +182,29 @@ public class CanvasCoverageTests
 
         Assert.Equal(["1 5 1 true true true true true true true true true IndexSizeError TypeError TypeError TypeError TypeError TypeError"], log);
     }
+
+    [Fact]
+    public async Task AnSvgImage_IsDrawnAtItsNaturalSizeThenScaled_OnSrgbAndWideCanvases()
+    {
+        var log = await LogAsync("""
+            var svg = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="20" height="10"><rect width="10" height="10" fill="rgb(255,0,0)"/><rect x="10" width="10" height="10" fill="rgb(0,0,255)"/></svg>');
+            var img = new Image();
+            img.onload = function () {
+              function px(ctx, x, y) { return Array.from(ctx.getImageData(x, y, 1, 1).data).join(','); }
+              var a = document.createElement('canvas'); a.width = 40; a.height = 20; var ag = a.getContext('2d');
+              ag.drawImage(img, 0, 0, 40, 20);
+              var b = document.createElement('canvas'); b.width = 40; b.height = 20; var bg = b.getContext('2d');
+              bg.drawImage(img, 10, 0, 10, 10, 0, 0, 40, 20);
+              var w = document.createElement('canvas'); w.width = 40; w.height = 20; var wg = w.getContext('2d', { colorSpace: 'display-p3', colorType: 'float16' });
+              wg.drawImage(img, 0, 0, 40, 20);
+              var s = document.createElement('canvas'); s.width = 40; s.height = 20; var sg = s.getContext('2d', { colorSpace: 'display-p3' });
+              sg.drawImage(img, 0, 0, 40, 20);
+              var empty = document.createElement('canvas'); empty.width = 40; empty.height = 20; var eg = empty.getContext('2d'); eg.drawImage(img, 0, 0, 0, 0);
+              Log.info([px(ag, 5, 10), px(ag, 35, 10), px(bg, 5, 10), px(bg, 35, 10), px(wg, 5, 10).split(',')[3], px(sg, 35, 10).split(',')[3], px(eg, 5, 5)].join(' '));
+            };
+            img.src = svg;
+            """);
+
+        Assert.Equal(["255,0,0,255 0,0,255,255 0,0,255,255 0,0,255,255 255 255 0,0,0,0"], log);
+    }
 }
