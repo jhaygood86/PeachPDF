@@ -263,12 +263,29 @@ public sealed class HtmlDocumentOptions
     public PeachBrackets.ScriptHosting.IScriptHost? ScriptHost { get; set; }
 
     /// <summary>
+    /// What plays the document's <c>audio</c> and <c>video</c> elements, or null (the default): PeachBrackets decodes no media itself. With none, a
+    /// <c>video</c> shows its <c>poster</c> and a script's media elements cannot play. With one, a <c>video</c> shows a picture of its media (the
+    /// first, or the one at a <c>#t=</c> fragment, for a paged document; the playing one for a document that <see cref="AnimationsEnabled"/> steps).
+    /// </summary>
+    public PeachBrackets.Media.IMediaProvider? MediaProvider { get; set; }
+
+    /// <summary>
     /// Makes a canvas to measure text on, for the layout a script asks for while it runs (<c>getBoundingClientRect</c>, <c>offsetWidth</c>,
     /// <c>getComputedStyle</c>). Called each time the script needs the document laid out again after it changed. Null (the default) means scripts
     /// get no layout: sizes read as zero and computed styles as what the element's own <c>style</c> attribute says. Only read when
     /// <see cref="ScriptHost"/> is set.
     /// </summary>
     public Func<PeachDrawing.Core.Canvas>? MeasuringCanvasFactory { get; set; }
+
+    /// <summary>
+    /// Whether each <c>canvas</c> a script draws on keeps a bitmap of the backend <see cref="MeasuringCanvasFactory"/> makes canvases for (an
+    /// <see cref="PeachDrawing.Core.OffscreenSurface"/>: on the graphics device where the backend has one), draws into it as the script draws, and is shown
+    /// as that bitmap, instead of playing the whole drawing again each time the page is painted. For a host that shows the page on a screen and may repaint
+    /// a canvas many times a second. The default, <see langword="false"/>, keeps the drawing as a recording that any canvas can play: a PDF or SVG gets
+    /// the shapes and text as vector content. Only read when <see cref="ScriptHost"/> is set and the factory makes canvases that can give a surface; with
+    /// any other (a PDF writer's, say) the recording is kept whatever this says.
+    /// </summary>
+    public bool CanvasSurfaces { get; set; }
 
     /// <summary>
     /// How many times a script host may change a laid-out document and have it laid out again (<see cref="PeachBrackets.ScriptHosting.IScriptHost.LayoutCompletedAsync"/>).
@@ -290,6 +307,15 @@ public sealed class HtmlDocumentOptions
     /// </summary>
     public IList<PeachBrackets.ScriptHosting.ScriptApi> ScriptApis { get; private set; } = [];
 
+    /// <summary>
+    /// Whether a <c>canvas</c> that makes its children drawable (<c>content="drawable"</c>) is laid out as a box that holds them, instead of as a replaced element showing what a script drew.
+    /// The script probe answers where the children are and draws them from such a document; the document a page is shown from does not.
+    /// </summary>
+    internal bool LayoutCanvasSubtrees { get; set; }
+
+    /// <summary>Whether images from another origin than the document's are left out (a picture of an element for a script).</summary>
+    internal bool HideCrossOriginImages { get; set; }
+
     internal HtmlDocumentOptions CloneWithoutScripts()
     {
         var copy = (HtmlDocumentOptions)MemberwiseClone();
@@ -297,6 +323,14 @@ public sealed class HtmlDocumentOptions
         copy.ScriptHost = PeachBrackets.ScriptHosting.IdleScriptHost.Instance;
         copy.MeasuringCanvasFactory = null;
         copy.ScriptApis = [];
+        copy.MediaProvider = null;
+
+        // The probe answers where text is (the rectangles of a range, the character at a point), which the text runs have.
+        copy.RecordTextRuns = true;
+
+        // ... and where the children of a canvas are, which the canvas itself does not lay out.
+        copy.LayoutCanvasSubtrees = true;
+        copy.UserStyleSheet += "\ncanvas[content=drawable] { display: inline-block; background: transparent !important; border-color: transparent !important; box-shadow: none !important; outline: none !important; }\n";
         return copy;
     }
 

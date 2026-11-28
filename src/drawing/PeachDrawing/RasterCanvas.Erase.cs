@@ -59,6 +59,19 @@ public sealed partial class RasterCanvas
                 PixelKernels.MultiplyCoverage(work, mask.AsSpan((y - bounds.Top) * bounds.Width + (start - bounds.Left), count));
 
             PixelKernels.EraseSpan(owner._surface.Row(y).Slice(start * 4, count * 4), work);
+            if (owner._surface.IsWide)
+            {
+                var wideRow = owner._surface.WideRow(y);
+                for (var i = 0; i < count; i++)
+                {
+                    var keep = 1f - work[i] / 255f;
+                    var p = (start + i) * 4;
+                    wideRow[p] *= keep;
+                    wideRow[p + 1] *= keep;
+                    wideRow[p + 2] *= keep;
+                    wideRow[p + 3] *= keep;
+                }
+            }
         }
     }
 }

@@ -143,8 +143,11 @@ PeachDrawing.Core.Canvas : abstract class
   method virtual Boolean PaintRequiresTransparency(Action<Canvas> paint)
   method virtual CanvasLayer BeginLayer(LayerOptions options)
   method virtual IReadOnlyList<InkSpan> GetInkCrossings(String str, Font font, PaintPoint origin, Double bandTop, Double bandBottom, Double letterSpacing = 0, ShapeSettings? features = null)
+  method virtual Image CreateWideImage(Int32 widthPixels, Int32 heightPixels, ReadOnlySpan<Single> straightRgba)
   method virtual Object AddDestinationLink(Rect bounds, String destinationName, IReadOnlyList<PaintPoint> quad = null)
   method virtual Object AddLink(Rect bounds, String uri, IReadOnlyList<PaintPoint> quad = null)
+  method virtual OffscreenSurface CreateOffscreenSurface(Int32 widthPixels, Int32 heightPixels)
+  method virtual OffscreenSurface CreateOffscreenSurface(Int32 widthPixels, Int32 heightPixels, Boolean wide)
   method virtual RasterRegion BeginRasterSurface(Rect layoutBounds, Double? dpiOverride = null)
   method virtual RetainedLayer CreateRetainedLayer(Rect bounds)
   method virtual Void AddCursor(Rect bounds, CursorShape shape, IReadOnlyList<CursorImage> images = null)
@@ -163,6 +166,7 @@ PeachDrawing.Core.Canvas : abstract class
   property Boolean InvisibleText { get; set; }
   property Boolean IsOffscreenTile { get; }
   property Boolean PrefersRasterGroups { get; }
+  property Boolean SupportsCompositeOperators { get; }
   property Double PixelsPerPoint { get; }
   property Double RasterizationDpi { get; }
   property Matrix3x2 CurrentTransform { get; }
@@ -267,6 +271,16 @@ PeachDrawing.Core.ColorMatrix : struct
   field static ColorMatrix Identity
   method ColorMatrix Compose(ColorMatrix appliedAfterThis)
   method Vector4 Apply(Vector4 color)
+  method static ColorMatrix Brightness(Double amount)
+  method static ColorMatrix Contrast(Double amount)
+  method static ColorMatrix FromTable(IReadOnlyList<Double> values)
+  method static ColorMatrix Grayscale(Double amount)
+  method static ColorMatrix HueRotate(Double radians)
+  method static ColorMatrix Invert(Double amount)
+  method static ColorMatrix LuminanceToAlpha()
+  method static ColorMatrix Opacity(Double amount)
+  method static ColorMatrix Saturate(Double amount)
+  method static ColorMatrix Sepia(Double amount)
   property Boolean IsChannelIndependent { get; }
   property Matrix4x4 Linear { get; }
   property Vector4 Offset { get; }
@@ -280,12 +294,44 @@ PeachDrawing.Core.ColorMatrixEffect : sealed class
   method virtual Int32 GetHashCode()
   method virtual String ToString()
   property ColorMatrix Matrix { get; init; }
+PeachDrawing.Core.ComponentTransferEffect : sealed class
+  ctor(Byte[] Red, Byte[] Green, Byte[] Blue, Byte[] Alpha)
+  method Void Deconstruct(out Byte[] Red, out Byte[] Green, out Byte[] Blue, out Byte[] Alpha)
+  method static Byte[] BuildTable(TransferFunctionKind kind, IReadOnlyList<Double> tableValues, Double slope, Double intercept, Double amplitude, Double exponent, Double offset)
+  method virtual Boolean Equals(ComponentTransferEffect other)
+  method virtual Boolean Equals(LayerEffect other)
+  method virtual Boolean Equals(Object obj)
+  method virtual ComponentTransferEffect <Clone>$()
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property Byte[] Alpha { get; init; }
+  property Byte[] Blue { get; init; }
+  property Byte[] Green { get; init; }
+  property Byte[] Red { get; init; }
 PeachDrawing.Core.ConicGradientBrush : sealed class
   ctor(PaintPoint center, Double outerRadius, IReadOnlyList<GradientStop> stops, IReadOnlyList<Double> anglesRadians)
   property Double OuterRadius { get; }
   property IReadOnlyList<Double> AnglesRadians { get; }
   property IReadOnlyList<GradientStop> Stops { get; }
   property PaintPoint Center { get; }
+PeachDrawing.Core.ConvolveMatrixEffect : sealed class
+  ctor(Int32 Columns, Int32 Rows, IReadOnlyList<Double> Kernel, Double Divisor, Double Bias, Int32 TargetX, Int32 TargetY, FilterEdgeMode EdgeMode, Boolean PreserveAlpha)
+  method Void Deconstruct(out Int32 Columns, out Int32 Rows, out IReadOnlyList<Double> Kernel, out Double Divisor, out Double Bias, out Int32 TargetX, out Int32 TargetY, out FilterEdgeMode EdgeMode, out Boolean PreserveAlpha)
+  method virtual Boolean Equals(ConvolveMatrixEffect other)
+  method virtual Boolean Equals(LayerEffect other)
+  method virtual Boolean Equals(Object obj)
+  method virtual ConvolveMatrixEffect <Clone>$()
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property Boolean PreserveAlpha { get; init; }
+  property Double Bias { get; init; }
+  property Double Divisor { get; init; }
+  property FilterEdgeMode EdgeMode { get; init; }
+  property IReadOnlyList<Double> Kernel { get; init; }
+  property Int32 Columns { get; init; }
+  property Int32 Rows { get; init; }
+  property Int32 TargetX { get; init; }
+  property Int32 TargetY { get; init; }
 PeachDrawing.Core.CursorImage : sealed class
   ctor(String Uri, Double? HotspotX, Double? HotspotY)
   method CursorImage <Clone>$()
@@ -384,6 +430,12 @@ PeachDrawing.Core.EllipticalArcCenter : struct
 PeachDrawing.Core.FillMode : enum Int32
   EvenOdd = 1
   Nonzero = 0
+PeachDrawing.Core.FilterEdgeMode : enum Int32
+  Duplicate = 0
+  None = 2
+  Wrap = 1
+PeachDrawing.Core.FilterList : static class
+  method static Boolean TryParse(String text, Func<String, PaintColor?> parseColor, PaintColor currentColor, Double fontSize, out IReadOnlyList<LayerEffect> effects)
 PeachDrawing.Core.Font : abstract class
   method Double? GetAdvanceEm(Rune rune)
   method abstract Boolean HasGlyph(Rune rune)
@@ -624,11 +676,28 @@ PeachDrawing.Core.Matrix3x2Extensions : static class
   method static Boolean TryInvert(Matrix3x2 matrix, out Matrix3x2 inverse)
   method static Matrix3x2 RebaseOrigin(Matrix3x2 matrix, Double px, Double py)
   method static Matrix3x2 Then(Matrix3x2 matrix, Matrix3x2 next)
+PeachDrawing.Core.OffscreenSurface : abstract class
+  method abstract Boolean CanDraw(Canvas target)
+  method abstract Image CreateSnapshot()
+  method abstract PixelBuffer ReadPixels()
+  method abstract Void Clear()
+  method abstract Void Dispose()
+  method virtual Single[] ReadWidePixels()
+  property Boolean IsWide { get; }
+  property Canvas Canvas { get; }
+  property Int32 Height { get; }
+  property Int32 Width { get; }
 PeachDrawing.Core.PaintBlendMode : enum Int32
+  Clear = 26
   Color = 14
   ColorBurn = 7
   ColorDodge = 6
+  Copy = 25
   Darken = 4
+  DestinationAtop = 23
+  DestinationIn = 21
+  DestinationOut = 22
+  DestinationOver = 20
   Difference = 10
   Exclusion = 11
   HardLight = 8
@@ -642,6 +711,10 @@ PeachDrawing.Core.PaintBlendMode : enum Int32
   Saturation = 13
   Screen = 2
   SoftLight = 9
+  SourceAtop = 19
+  SourceIn = 17
+  SourceOut = 18
+  Xor = 24
 PeachDrawing.Core.PaintColor : struct
   field static PaintColor Empty
   method ValueTuple<Byte, Byte, Byte> ToRgb()
@@ -789,6 +862,7 @@ PeachDrawing.Core.RNetworkResponse : class
   method virtual String ToString()
   property Dictionary<String, String[]> ResponseHeaders { get; init; }
   property Stream ResourceStream { get; init; }
+  property Uri FinalAddress { get; init; }
 PeachDrawing.Core.RadialGradientBrush : sealed class
   ctor(PaintPoint center, PaintPoint focus, Double radiusX, Double radiusY, IReadOnlyList<GradientStop> stops, GradientSpread spread, Matrix3x2? transform = null)
   property Double FocusRadius { get; init; }
@@ -806,9 +880,13 @@ PeachDrawing.Core.RasterRegion : sealed class
   property RasterSurface Surface { get; }
 PeachDrawing.Core.RasterSurface : sealed class
   ctor(Int32 width, Int32 height, Int32 gridX, Int32 gridY, Double pixelsPerUnitX, Double pixelsPerUnitY)
+  ctor(Int32 width, Int32 height, Int32 gridX, Int32 gridY, Double pixelsPerUnitX, Double pixelsPerUnitY, Boolean wide)
   method Span<Byte> Row(Int32 y)
+  method Span<Single> WideRow(Int32 y)
   method Void Clear()
+  method Void SyncWideFromBytes(IntRect area)
   method virtual Void Dispose()
+  property Boolean IsWide { get; }
   property Double PixelsPerUnitX { get; }
   property Double PixelsPerUnitY { get; }
   property Int32 GridX { get; }
@@ -820,6 +898,7 @@ PeachDrawing.Core.RasterSurface : sealed class
   property Memory<Byte> PixelMemory { get; }
   property Rect LayoutRect { get; }
   property Span<Byte> Pixels { get; }
+  property Span<Single> WidePixels { get; }
 PeachDrawing.Core.Rect : struct
   ctor(Double x, Double y, Double width, Double height)
   ctor(PaintPoint location, Size size)
@@ -926,7 +1005,14 @@ PeachDrawing.Core.Size : struct
   property Double Width { get; set; }
 PeachDrawing.Core.SolidBrush : sealed class
   ctor(PaintColor color)
+  ctor(WideColor color)
   property PaintColor PaintColor { get; }
+  property WideColor WideColor { get; }
+PeachDrawing.Core.SyntheticCaps : static class
+  field const Double Scale
+  method static Boolean Applies(Font font, ShapeSettings? features)
+  method static IReadOnlyList<ValueTuple<String, Int32, Boolean>> Split(String text, Boolean[] small)
+  method static String Convert(String text, CapsMode caps, out Boolean[] small)
 PeachDrawing.Core.TextDecorations : enum Int32
   LineThrough = 4
   None = 0
@@ -940,6 +1026,58 @@ PeachDrawing.Core.TextMeasurement : static class
   field const Double BoldEmphasis
   field const Double ItalicSkewAngleSinus
   method static Size Measure(String text, Typeface typeface, Double size, SyntheticStyle synthesis, ShapeSettings features)
+PeachDrawing.Core.TextRunCluster : struct
+  ctor(Int32 Start, Int32 End, Double X, Double Width)
+  method Void Deconstruct(out Int32 Start, out Int32 End, out Double X, out Double Width)
+  method virtual Boolean Equals(Object obj)
+  method virtual Boolean Equals(TextRunCluster other)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property Double Width { get; init; }
+  property Double X { get; init; }
+  property Int32 End { get; init; }
+  property Int32 Start { get; init; }
+PeachDrawing.Core.TextRunLayout : sealed class
+  method Boolean TryGetInk(Int32 start, Int32 end, out Double left, out Double right, out Double top, out Double bottom)
+  method Double CaretX(Int32 index)
+  method IReadOnlyList<ValueTuple<Double, Double>> SelectionBoxes(Int32 start, Int32 end)
+  method Int32 IndexFromOffset(Double x)
+  method static TextRunLayout Create(Font font, String text, Boolean rightToLeft = False, Double letterSpacing = 0, Double wordSpacing = 0, ShapeSettings? features = null, Func<Rune, Font> fallback = null)
+  property Double FontAscent { get; }
+  property Double FontDescent { get; }
+  property Double Width { get; }
+  property IReadOnlyList<Int32> Boundaries { get; }
+  property IReadOnlyList<TextRunSegment> Runs { get; }
+  property String Text { get; }
+PeachDrawing.Core.TextRunMeasure : static class
+  method static TextRunMetrics Measure(Font font, String text, Double letterSpacing = 0, Double wordSpacing = 0, ShapeSettings? features = null)
+PeachDrawing.Core.TextRunMetrics : sealed class
+  ctor()
+  property Double EmAscent { get; }
+  property Double EmDescent { get; }
+  property Double FontAscent { get; }
+  property Double FontDescent { get; }
+  property Double FontLineGap { get; }
+  property Double HangingBaseline { get; }
+  property Double IdeographicBaseline { get; }
+  property Double InkAscent { get; }
+  property Double InkDescent { get; }
+  property Double InkLeft { get; }
+  property Double InkRight { get; }
+  property Double Width { get; }
+  property IReadOnlyList<TextRunCluster> Clusters { get; }
+PeachDrawing.Core.TextRunSegment : struct
+  ctor(Int32 Start, Int32 End, Double X, Double Width, Boolean IsRightToLeft)
+  method Void Deconstruct(out Int32 Start, out Int32 End, out Double X, out Double Width, out Boolean IsRightToLeft)
+  method virtual Boolean Equals(Object obj)
+  method virtual Boolean Equals(TextRunSegment other)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property Boolean IsRightToLeft { get; init; }
+  property Double Width { get; init; }
+  property Double X { get; init; }
+  property Int32 End { get; init; }
+  property Int32 Start { get; init; }
 PeachDrawing.Core.TileBrush : sealed class
   ctor(Image tile, Double cellWidth, Double cellHeight)
   ctor(Image tile, Double cellWidth, Double cellHeight, Matrix3x2 transform, ImageSampling sampling = Automatic)
@@ -948,6 +1086,27 @@ PeachDrawing.Core.TileBrush : sealed class
   property Image Tile { get; }
   property ImageSampling Sampling { get; }
   property Matrix3x2 Transform { get; }
+PeachDrawing.Core.TransferFunctionKind : enum Int32
+  Discrete = 2
+  Gamma = 4
+  Identity = 0
+  Linear = 3
+  Table = 1
+PeachDrawing.Core.TurbulenceEffect : sealed class
+  ctor(Double BaseFrequencyX, Double BaseFrequencyY, Int32 Octaves, Int64 Seed, Boolean FractalNoise, Boolean Stitch)
+  method Void Deconstruct(out Double BaseFrequencyX, out Double BaseFrequencyY, out Int32 Octaves, out Int64 Seed, out Boolean FractalNoise, out Boolean Stitch)
+  method virtual Boolean Equals(LayerEffect other)
+  method virtual Boolean Equals(Object obj)
+  method virtual Boolean Equals(TurbulenceEffect other)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  method virtual TurbulenceEffect <Clone>$()
+  property Boolean FractalNoise { get; init; }
+  property Boolean Stitch { get; init; }
+  property Double BaseFrequencyX { get; init; }
+  property Double BaseFrequencyY { get; init; }
+  property Int32 Octaves { get; init; }
+  property Int64 Seed { get; init; }
 PeachDrawing.Core.TypefaceFont : sealed class
   ctor(Typeface typeface, Double size, SyntheticStyle syntheticStyle = None, Double? obliqueSkewSinus = null)
   method virtual Boolean HasGlyph(Rune rune)
@@ -985,3 +1144,16 @@ PeachDrawing.Core.TypefaceFont : sealed class
   property String FaceKey { get; }
   property SyntheticStyle SyntheticStyle { get; }
   property Typeface Typeface { get; }
+PeachDrawing.Core.WideColor : struct
+  ctor(Single Red, Single Green, Single Blue, Single Alpha)
+  method PaintColor ToPaintColor()
+  method Void Deconstruct(out Single Red, out Single Green, out Single Blue, out Single Alpha)
+  method static WideColor FromPaintColor(PaintColor color)
+  method virtual Boolean Equals(Object obj)
+  method virtual Boolean Equals(WideColor other)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property Single Alpha { get; init; }
+  property Single Blue { get; init; }
+  property Single Green { get; init; }
+  property Single Red { get; init; }

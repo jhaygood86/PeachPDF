@@ -1907,6 +1907,10 @@ namespace PeachBrackets.Html.Dom
         /// </summary>
         internal CssLineBox? LastHostingLineBox { get; set; }
 
+        /// <summary>Whether the document being parsed lays out the children of a canvas that makes them drawable (see <see cref="HtmlDocumentOptions.LayoutCanvasSubtrees"/>). Set by the parse around its synchronous box-making.</summary>
+        [System.ThreadStatic]
+        internal static bool CanvasSubtreesWanted;
+
         /// <summary>
         /// Create new css box for the given parent with the given html tag.<br/>
         /// </summary>
@@ -1921,6 +1925,7 @@ namespace PeachBrackets.Html.Dom
             {
                 HtmlConstants.Img => new CssBoxImage(parent, tag),
                 HtmlConstants.Iframe => new CssBoxFrame(parent, tag),
+                "canvas" when CanvasSubtreesWanted && string.Equals(tag.TryGetAttribute("content"), "drawable", System.StringComparison.OrdinalIgnoreCase) => new CssBoxDrawableCanvas(parent, tag),
                 "canvas" => new CssBoxCanvas(parent, tag),
                 HtmlConstants.Svg => new CssBoxSvg(parent, tag),
                 HtmlConstants.Math => new CssBoxMath(parent, tag),

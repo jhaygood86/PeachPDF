@@ -55,10 +55,30 @@ internal sealed partial class ScriptRuntime
         {
             // Requests the scripts have sent are answered before the clock moves on: they take no virtual time, and are delivered as a zero-delay timer.
             await DeliverRequestsAsync();
-            if (_timers.Count == 0 || _callbacks >= _options.MaxCallbacks)
+            var workersMoved = DeliverPortMessages() | await PumpWorkersAsync(NowMs);
+            if (workersMoved)
+                continue;
+
+            // A worker's timer that is due before the page's next one comes first, the clock moving to it.
+            var nextPage = _timers.Count > 0 && _callbacks < _options.MaxCallbacks ? _timers.Min(t => t.Due) : (double?)null;
+            if (NextWorkerWake() is { } wake && wake <= limit && wake > NowMs && (nextPage is null || wake < nextPage))
+            {
+                NowMs = wake;
+                if (await PumpWorkersAsync(NowMs))
+                    continue;
+            }
+
+            if (nextPage is null)
                 break;
 
-            var next = _timers.OrderBy(t => t.Due).ThenBy(t => t.Order).First();
+            // The earliest timer, found by one scan: a page can have thousands waiting, and sorting them for each callback is quadratic.
+            var next = _timers[0];
+            foreach (var candidate in _timers)
+            {
+                if (candidate.Due < next.Due || (candidate.Due == next.Due && candidate.Order < next.Order))
+                    next = candidate;
+            }
+
             if (next.Due > limit)
                 break;
 
@@ -103,6 +123,8 @@ internal sealed partial class ScriptRuntime
             parts.Add($"{_pendingRequests.Count} requests unanswered ({string.Join(", ", _pendingRequests.Take(3).Select(r => r.Url.AbsoluteUri))})");
         if (_pendingImages.Count > 0)
             parts.Add($"{_pendingImages.Count} images not loaded");
+        if (_pendingMedia.Count > 0)
+            parts.Add($"{_pendingMedia.Count} media not opened");
 
         var recent = _recentEvents.Count == 0 ? "no events" : string.Join(", ", _recentEvents);
         var text = (parts.Count == 0 ? "nothing scheduled" : string.Join("; ", parts)) + "; last events: " + recent;

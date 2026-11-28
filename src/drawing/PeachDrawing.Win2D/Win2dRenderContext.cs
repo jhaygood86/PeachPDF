@@ -362,6 +362,21 @@ public class Win2dRenderContext : RenderContext, IDisposable
     }
 
     /// <summary>
+    /// An image over a bitmap that is already on <see cref="Device"/>: a canvas of this backend draws it as it is, with no copy and no read back. For a
+    /// producer that makes pictures on the device itself (a video player copying its frames into a bitmap); its pixels are read back only if something asks.
+    /// </summary>
+    /// <param name="bitmap">a bitmap made on <see cref="Device"/>; its size in pixels is the image's size</param>
+    /// <param name="ownsBitmap">whether disposing the image disposes <paramref name="bitmap"/> (otherwise the caller does, after every canvas that drew it is done)</param>
+    /// <returns>the image, which the caller disposes</returns>
+    /// <exception cref="ObjectDisposedException">the context has been disposed</exception>
+    public PeachDrawing.Core.Image WrapBitmap(CanvasBitmap bitmap, bool ownsBitmap = false)
+    {
+        ArgumentNullException.ThrowIfNull(bitmap);
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return new Win2dBitmapImage(bitmap, ownsBitmap, Counts);
+    }
+
+    /// <summary>
     /// What Windows' own codecs read (PNG, JPEG, GIF, BMP, TIFF, ICO), when <see cref="ImageCodec"/> is <see cref="Win2dImageCodec.Native"/> and
     /// <see cref="FallbackToPeachImage"/> is off; PeachImage's formats otherwise.
     /// </summary>

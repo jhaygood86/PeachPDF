@@ -40,10 +40,29 @@ namespace PeachDrawing.Core
     }
 
     /// <summary>A single fill colour.</summary>
-    public sealed class SolidBrush(PaintColor color) : Brush
+    public sealed class SolidBrush : Brush
     {
-        /// <summary>The fill/stroke colour.</summary>
-        public PaintColor PaintColor { get; } = color;
+        /// <summary>Creates a brush of an eight-bit color.</summary>
+        /// <param name="color">the color</param>
+        public SolidBrush(PaintColor color)
+        {
+            PaintColor = color;
+            WideColor = WideColor.FromPaintColor(color);
+        }
+
+        /// <summary>Creates a brush of a color that is not held to eight bits: a canvas whose pixels are floating point paints it as it is, any other brings it into 0 to 1 and eight bits.</summary>
+        /// <param name="color">the color</param>
+        public SolidBrush(WideColor color)
+        {
+            PaintColor = color.ToPaintColor();
+            WideColor = color;
+        }
+
+        /// <summary>The fill/stroke colour (eight bits; a wide color brought into range).</summary>
+        public PaintColor PaintColor { get; }
+
+        /// <summary>The fill/stroke color as it was given, which a floating-point canvas paints without bringing it into range.</summary>
+        public WideColor WideColor { get; }
     }
 
     /// <summary>One colour/position pair in a gradient's stop list.</summary>

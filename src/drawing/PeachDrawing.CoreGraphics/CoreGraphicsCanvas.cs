@@ -111,6 +111,9 @@ public sealed partial class CoreGraphicsCanvas : Canvas
     public override bool HasNativeLayerEffects => true;
 
     /// <inheritdoc />
+    public override bool SupportsCompositeOperators => true;
+
+    /// <inheritdoc />
     public override Matrix3x2 CurrentTransform => _ctm;
 
     /// <inheritdoc />
@@ -284,6 +287,16 @@ public sealed partial class CoreGraphicsCanvas : Canvas
         PaintBlendMode.Color => CGBlendMode.Color,
         PaintBlendMode.Luminosity => CGBlendMode.Luminosity,
         PaintBlendMode.Plus => CGBlendMode.PlusLighter,
+        PaintBlendMode.SourceIn => CGBlendMode.SourceIn,
+        PaintBlendMode.SourceOut => CGBlendMode.SourceOut,
+        PaintBlendMode.SourceAtop => CGBlendMode.SourceAtop,
+        PaintBlendMode.DestinationOver => CGBlendMode.DestinationOver,
+        PaintBlendMode.DestinationIn => CGBlendMode.DestinationIn,
+        PaintBlendMode.DestinationOut => CGBlendMode.DestinationOut,
+        PaintBlendMode.DestinationAtop => CGBlendMode.DestinationAtop,
+        PaintBlendMode.Xor => CGBlendMode.XOR,
+        PaintBlendMode.Copy => CGBlendMode.Copy,
+        PaintBlendMode.Clear => CGBlendMode.Clear,
         _ => CGBlendMode.Normal,
     };
 

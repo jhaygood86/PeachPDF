@@ -79,6 +79,8 @@ internal static class PopoverScripts
             var doc = global.document;
             var records = new WeakMap();
             var autoStack = [], hintStack = [];
+            // How many beforetoggle events of a hide are being handled: a popover cannot be shown from one (the list is changing under the hide).
+            var hideEvents = 0;
 
             function record(element) {
                 var r = records.get(element);
@@ -179,6 +181,10 @@ internal static class PopoverScripts
 
             function showInternal(element, throwExceptions, source) {
                 if (!checkValidity(element, false, throwExceptions)) return;
+                if (hideEvents > 0) {
+                    if (throwExceptions) throw error("InvalidStateError", "Cannot show a popover while popovers are being hidden.");
+                    return;
+                }
                 if (!fire(element, "beforetoggle", "closed", "open", true, source)) return;
                 if (!checkValidity(element, false, throwExceptions)) return;
                 var type = popoverType(element), r = record(element);
@@ -213,7 +219,8 @@ internal static class PopoverScripts
                     if (!checkValidity(element, true, throwExceptions)) return;
                 }
                 if (fireEvents) {
-                    fire(element, "beforetoggle", "open", "closed", false, source);
+                    hideEvents++;
+                    try { fire(element, "beforetoggle", "open", "closed", false, source); } finally { hideEvents--; }
                     if (!checkValidity(element, true, throwExceptions)) return;
                 }
                 var at = listFor(element).indexOf(element);

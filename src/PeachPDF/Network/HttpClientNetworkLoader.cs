@@ -79,7 +79,11 @@ namespace PeachPDF.Network
 
             var stream = await response.Content.ReadAsStreamAsync();
 
-            return new RNetworkResponse(stream, headers);
+            // HttpClient follows redirects itself; where it ended up is the request message of the response it returns.
+            return new RNetworkResponse(stream, headers) { FinalAddress = FinalAddressOf(response, uri) };
         }
+
+        private static Uri? FinalAddressOf(HttpResponseMessage response, Uri requested) =>
+            response.RequestMessage?.RequestUri is { } final && final != requested ? final : null;
     }
 }

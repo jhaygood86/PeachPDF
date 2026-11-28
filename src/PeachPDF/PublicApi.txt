@@ -373,6 +373,11 @@ PeachPDF.Layout.TextAlignment : enum Int32
   Left = 0
   Right = 2
   Start = 4
+PeachPDF.Network.BlobUriNetworkLoader : class
+  ctor()
+  method virtual Task<RNetworkResponse> GetResourceStream(Uri uri)
+  method virtual Task<String> GetPrimaryContents()
+  property Uri BaseUri { get; }
 PeachPDF.Network.DataUriNetworkLoader : class
   ctor()
   method virtual Task<RNetworkResponse> GetResourceStream(Uri uri)
@@ -564,6 +569,7 @@ PeachPDF.PdfGenerateConfig : sealed class
   property FacturXOptions FacturX { get; set; }
   property ICollection<PdfAttachment> Attachments { get; }
   property ICollection<ScriptApi> ScriptApis { get; }
+  property IMediaProvider MediaProvider { get; set; }
   property IScriptHost ScriptHost { get; set; }
   property ImageCompression ImageCompression { get; set; }
   property Int32 DownscaleQuality { get; set; }

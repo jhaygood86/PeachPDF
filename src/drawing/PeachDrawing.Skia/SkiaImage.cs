@@ -15,16 +15,22 @@ namespace PeachDrawing.Skia;
 /// </summary>
 internal sealed class SkiaImage : PeachDrawing.Core.Image
 {
-    private readonly byte[]? _premultipliedRgba;
+    private byte[]? _premultipliedRgba;
+    private readonly Func<GRContext, SKImage?>? _import;
+    private readonly Func<PixelBuffer?>? _readPixels;
     private readonly SkiaResourceCounts _counts;
     private readonly Lock _gate = new();
     private SKImage? _raster;
     private SKImage? _texture;
     private GRContext? _textureContext;
     private bool _disposed;
+    private GRContext? _importFailedOn;
 
-    private SkiaImage(int width, int height, byte[]? premultipliedRgba, SKImage? raster, SkiaResourceCounts counts, int exifOrientation = 1)
+    private SkiaImage(int width, int height, byte[]? premultipliedRgba, SKImage? raster, SkiaResourceCounts counts, int exifOrientation = 1,
+        Func<GRContext, SKImage?>? import = null, Func<PixelBuffer?>? readPixels = null)
     {
+        _import = import;
+        _readPixels = readPixels;
         Width = width;
         Height = height;
         ExifOrientation = exifOrientation;
@@ -34,6 +40,17 @@ internal sealed class SkiaImage : PeachDrawing.Core.Image
         if (raster is not null)
             counts.Surface(1);
     }
+
+    /// <summary>
+    /// An image whose texture is made when it is first drawn on a GPU context, by <paramref name="import"/> (a decoder's hardware buffer, say), and whose
+    /// pixels, for a raster canvas or a readback, come from <paramref name="readPixels"/> when there is no texture.
+    /// </summary>
+    internal static SkiaImage FromImport(int width, int height, Func<GRContext, SKImage?> import, Func<PixelBuffer?>? readPixels, SkiaResourceCounts counts) =>
+        new(width, height, null, null, counts, 1, import, readPixels);
+
+    /// <summary>An image of a surface's snapshot: the <see cref="SKImage"/> is the image's to dispose.</summary>
+    internal static SkiaImage FromSnapshot(SKImage snapshot, int width, int height, SkiaResourceCounts counts) =>
+        new(width, height, null, snapshot, counts);
 
     public override double Width { get; }
 
@@ -54,6 +71,16 @@ internal sealed class SkiaImage : PeachDrawing.Core.Image
             if (_premultipliedRgba is not null)
                 return new PixelBuffer((int)Width, (int)Height, _premultipliedRgba);
 
+            if (_import is not null)
+            {
+                // Deferred pixels are read on demand and kept, so a raster canvas or a readback does not ask the source twice.
+                if (_readPixels?.Invoke() is not { } read)
+                    return null;
+
+                _premultipliedRgba = read.PremultipliedRgba.ToArray();
+                return read;
+            }
+
             // A natively decoded image reads its pixels back on demand (the raster seam and conversion to another backend ask for them).
             var info = new SKImageInfo((int)Width, (int)Height, SKColorType.Rgba8888, SKAlphaType.Premul);
             using var bitmap = new SKBitmap(info);
@@ -72,8 +99,30 @@ internal sealed class SkiaImage : PeachDrawing.Core.Image
         lock (_gate)
         {
             ObjectDisposedException.ThrowIf(_disposed, this);
+            if (_import is not null && gpu is not null && !gpu.IsAbandoned && !ReferenceEquals(_importFailedOn, gpu))
+            {
+                if (_texture is not null && ReferenceEquals(_textureContext, gpu))
+                    return _texture;
+
+                ReleaseTexture();
+                if (_import(gpu) is { } imported)
+                {
+                    _texture = imported;
+                    _textureContext = gpu;
+                    _counts.Surface(1);
+                    return imported;
+                }
+
+                // It could not be made a texture on this context: the pixels are drawn, and the import is not tried again on every draw.
+                _importFailedOn = gpu;
+            }
+
             if (_raster is null)
             {
+                // An image with no texture and no pixels draws as nothing rather than failing the paint it is in.
+                if (_premultipliedRgba is null && _import is not null && GetPixels() is null)
+                    _premultipliedRgba = new byte[checked((int)Width * (int)Height * 4)];
+
                 var info = new SKImageInfo((int)Width, (int)Height, SKColorType.Rgba8888, SKAlphaType.Premul);
                 _raster = SKImage.FromPixelCopy(info, _premultipliedRgba!, info.RowBytes)
                     ?? throw new InvalidOperationException("The image's pixels could not be handed to Skia.");

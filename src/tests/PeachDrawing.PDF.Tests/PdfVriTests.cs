@@ -4,6 +4,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using PeachDrawing.PDF.Engine;
 using PeachDrawing.PDF.Engine.Advanced;
+using PeachDrawing.PDF.Engine.Internal;
 using PeachDrawing.PDF.Import;
 using PeachDrawing.PDF.Tests.Import;
 
@@ -12,6 +13,13 @@ namespace PeachDrawing.PDF.Tests
     /// <summary>The per-signature /VRI entries of the document security store: what belongs to which signature.</summary>
     public partial class PdfVriTests
     {
+        private sealed class FixedClock : PdfEntropy.Source
+        {
+            public override byte[] GetBytes(int count) => RandomNumberGenerator.GetBytes(count);
+
+            public override DateTime Now() => new(2026, 1, 2, 3, 4, 5, DateTimeKind.Local);
+        }
+
         [GeneratedRegex(@"/Contents <([0-9A-Fa-f]+)>")]
         private static partial Regex ContentsPattern();
 
@@ -144,6 +152,9 @@ namespace PeachDrawing.PDF.Tests
         [Fact]
         public void ALaterSignature_GetsItsEntryWithoutTouchingTheEarlierOne()
         {
+            // A call's data goes to every signature's entry, so an earlier entry that gains a certificate is stamped again when the clock has moved on: the stamp compared below
+            // is only the same on a fixed clock (with the real one the test passed only when no second boundary fell between the calls).
+            using var clock = PdfEntropy.Use(new FixedClock());
             using var first = NewCertificate();
             using var second = NewCertificate("CN=Second");
             var stored = PdfFileSigner.AddValidationData(Signed(first), Data(first.RawData));

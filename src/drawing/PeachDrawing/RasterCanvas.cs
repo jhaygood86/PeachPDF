@@ -39,6 +39,9 @@ public sealed partial class RasterCanvas : Canvas
     private Affine _ctm = Affine.Identity;
     private readonly Stack<Matrix3x2> _layoutTransforms = [];
     private Matrix3x2 _layoutCtm = Matrix3x2.Identity;
+    /// <inheritdoc/>
+    public override bool SupportsCompositeOperators => true;
+
     private PaintBlendMode _blend = PaintBlendMode.Normal;
     private byte[] _coverageScratch;
     private byte[] _pixelScratch;
@@ -74,7 +77,7 @@ public sealed partial class RasterCanvas : Canvas
 
     /// <summary>
     /// Encodes this canvas's pixels into <paramref name="stream"/> in any format PeachImage supports (PNG,
-    /// JPEG, WebP, ...), for a standalone canvas built through <see cref="RasterRenderContext.CreateCanvas"/>.
+    /// JPEG, WebP, ...), for a standalone canvas built through <see cref="RasterRenderContext.CreateCanvas(int, int, double)"/>.
     /// </summary>
     public void Save(System.IO.Stream stream, string formatName, PeachImage.EncoderOptions options) =>
         RasterSurfaceEncoding.Save(_surface, stream, formatName, options);
@@ -254,6 +257,26 @@ public sealed partial class RasterCanvas : Canvas
     {
     }
 
+    // ---- offscreen surfaces -----------------------------------------------------------------------------
+
+    /// <inheritdoc/>
+    public override OffscreenSurface? CreateOffscreenSurface(int widthPixels, int heightPixels) => CreateOffscreenSurface(widthPixels, heightPixels, wide: false);
+
+    /// <inheritdoc/>
+    public override OffscreenSurface? CreateOffscreenSurface(int widthPixels, int heightPixels, bool wide) =>
+        widthPixels <= 0 || heightPixels <= 0 || (long)widthPixels * heightPixels > Math.Min(MaxTilePixels, _renderContext.MaxRasterPixels) / (wide ? 4 : 1)
+            ? null
+            : new RasterOffscreenSurface(_renderContext, widthPixels, heightPixels, wide);
+
+    /// <inheritdoc/>
+    public override Image? CreateWideImage(int widthPixels, int heightPixels, ReadOnlySpan<float> straightRgba)
+    {
+        if (widthPixels <= 0 || heightPixels <= 0 || (long)widthPixels * heightPixels > _renderContext.MaxRasterPixels / 4 || straightRgba.Length < widthPixels * heightPixels * 4)
+            return null;
+
+        return RasterWideImage.FromStraight(widthPixels, heightPixels, straightRgba);
+    }
+
     // ---- tiles ------------------------------------------------------------------------------------------
 
     /// <inheritdoc/>
@@ -304,7 +327,7 @@ public sealed partial class RasterCanvas : Canvas
         if (right <= left || bottom <= top)
             return null;
 
-        var nested = new RasterSurface((int)(right - left), (int)(bottom - top), (int)left, (int)top, ppuX, ppuY);
+        var nested = new RasterSurface((int)(right - left), (int)(bottom - top), (int)left, (int)top, ppuX, ppuY, _surface.IsWide);
         var graphics = new RasterCanvas(_renderContext, nested, _pixelsPerPoint);
         graphics.SeedTransform(_layoutCtm);
         return new RasterRegion(graphics, nested);
@@ -313,7 +336,7 @@ public sealed partial class RasterCanvas : Canvas
         /// <inheritdoc/>
     public override void DrawRaster(RasterSurface surface)
     {
-        var bitmap = new Bitmap(surface.Width, surface.Height, surface.Buffer);
+        var bitmap = new Bitmap(surface.Width, surface.Height, surface.Buffer) { Wide = surface.WideBuffer };
         var rect = surface.LayoutRect;
         // Same pitch, on the same grid: nearest-neighbour is an exact pixel copy, where a bilinear tap could pick up a
         // neighbour through floating-point noise in the inverse mapping.
@@ -389,7 +412,7 @@ public sealed partial class RasterCanvas : Canvas
     /// <inheritdoc/>
     public override void DrawPath(Pen pen, GraphicsPath path)
     {
-        var flat = FlatPath.From(path, 0.1 / DeviceScale);
+        var flat = FlatPath.ForStroke(path, 0.1 / DeviceScale, pen.Width / 2);
         StrokeFlat(flat, pen);
     }
 
@@ -543,6 +566,12 @@ public sealed partial class RasterCanvas : Canvas
             work = scratch;
         }
 
+        if (_surface.IsWide)
+        {
+            CompositeRowWide(y, start, count, work, paint, mode);
+            return;
+        }
+
         var dst = _surface.Row(y).Slice(start * 4, count * 4);
 
         if (mode == PaintBlendMode.Normal)
@@ -654,6 +683,14 @@ public sealed partial class RasterCanvas : Canvas
         // RasterImage already keeps its pixels as a Bitmap (its own tile surface's own backing buffer) -
         // reuse that instance directly rather than round-tripping it through PixelBuffer, so a tile drawn
         // many times (a repeating background) doesn't re-copy its pixels on every draw.
+        if (image is RasterWideImage wideImage)
+        {
+            bitmap = wideImage.Bitmap;
+            naturalWidth = wideImage.Width;
+            naturalHeight = wideImage.Height;
+            return true;
+        }
+
         if (image is RasterImage raster)
         {
             bitmap = raster.GetBitmap();

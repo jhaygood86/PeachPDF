@@ -24,6 +24,9 @@ internal sealed class BitmapObject : ObjectInstance
     }
 
     public Image? Image { get; set; }
+
+    /// <summary>Whether what it shows may be read: false when it came from another origin the page was not allowed to read.</summary>
+    public bool OriginClean { get; set; } = true;
 }
 
 // Reading a canvas back (getImageData, toDataURL), putting pixels on it, and the objects that carry pixels: ImageData, ImageBitmap, OffscreenCanvas.
@@ -50,23 +53,56 @@ internal sealed partial class ScriptRuntime
         Tag(BitmapPrototype, "ImageBitmap");
         Js.Accessor(Engine, BitmapPrototype, "width", self => Js.Num(((BitmapObject)self).Image?.Width ?? 0));
         Js.Accessor(Engine, BitmapPrototype, "height", self => Js.Num(((BitmapObject)self).Image?.Height ?? 0));
-        Js.Method(Engine, BitmapPrototype, "close", 0, (self, _) =>
+        Js.StrictMethod(Engine, BitmapPrototype, "close", 0, (self, _) =>
         {
             ((BitmapObject)self).Image = null;
             return JsValue.Undefined;
         });
+        // structuredClone of an ImageBitmap: a copy of it showing the same picture; null for one that is closed.
+        Define(Engine.Global, "__cloneImageBitmap", Js.Function(Engine, "__cloneImageBitmap", 1, (_, args) =>
+            Js.Arg(args, 0) is BitmapObject { Image: { } picture } original ? new BitmapObject(Engine, BitmapPrototype, picture) { OriginClean = original.OriginClean } : JsValue.Null));
         Define(Engine.Global, "ImageBitmap", Js.Constructor(Engine, "ImageBitmap", BitmapPrototype, 0, (_, _, _) => throw TypeError("Illegal constructor")));
 
         var p = ContextPrototype;
         CanvasBitmap B(JsValue self) => Cx(self).Bitmap;
 
-        Js.Method(Engine, p, "isPointInPath", 2, (self, args) =>
+        Js.StrictMethod(Engine, p, "isPointInPath", 2, (self, args) =>
         {
             var index = 0;
             PathData path = B(self).Path;
             if (Js.Arg(args, 0) is Path2DObject own)
             {
-                path = own.Path.Transformed(B(self).State.Transform);
+                path = own.Path;
+                index = 1;
+            }
+
+            var (x, y) = (Num(args, index), Num(args, index + 1));
+
+            // The fill rule is an enumeration: anything but "nonzero" or "evenodd" (undefined is the default) is a TypeError.
+            var rule = FillMode.Nonzero;
+            if (args.Length > index + 2 && !args[index + 2].IsUndefined())
+            {
+                var name = TypeConverter.ToString(args[index + 2]);
+                if (name == "evenodd")
+                    rule = FillMode.EvenOdd;
+                else if (name != "nonzero")
+                    throw TypeError($"The provided value '{name}' is not a valid enum value of type CanvasFillRule.");
+            }
+
+            if (!double.IsFinite(x) || !double.IsFinite(y) || !B(self).State.Transform.TryInvert(out var inverse))
+                return JsBoolean.False;
+
+            // The point is on the canvas; the path is in the space the transform makes.
+            var (ux, uy) = inverse.Apply(x, y);
+            return Js.Bool(path.Contains(ux, uy, rule));
+        });
+        Js.StrictMethod(Engine, p, "isPointInStroke", 2, (self, args) =>
+        {
+            var index = 0;
+            PathData path = B(self).Path;
+            if (Js.Arg(args, 0) is Path2DObject own)
+            {
+                path = own.Path;
                 index = 1;
             }
 
@@ -74,44 +110,52 @@ internal sealed partial class ScriptRuntime
             if (!double.IsFinite(x) || !double.IsFinite(y))
                 return JsBoolean.False;
 
-            var rule = Js.Arg(args, index + 2) is { } text && text.IsString() && text.AsString() == "evenodd" ? FillMode.EvenOdd : FillMode.Nonzero;
-            return Js.Bool(path.Contains(x, y, rule));
+            return Js.Bool(B(self).StrokeContains(path, x, y));
         });
-        Js.Method(Engine, p, "isPointInStroke", 2, (self, args) =>
+
+        Js.StrictMethod(Engine, p, "createImageData", 1, (self, args) =>
         {
-            var index = 0;
-            PathData path = B(self).Path;
-            if (Js.Arg(args, 0) is Path2DObject own)
+            var context = Cx(self);
+            if (Js.Arg(args, 0) is ObjectInstance source)
             {
-                path = own.Path.Transformed(B(self).State.Transform);
-                index = 1;
-            }
+                if (!IsImageData(source))
+                    throw TypeError("The first argument is not an ImageData.");
 
-            var (x, y) = (Num(args, index), Num(args, index + 1));
-            if (!double.IsFinite(x) || !double.IsFinite(y))
-                return JsBoolean.False;
-
-            var scale = Math.Sqrt(Math.Abs(B(self).State.Transform.GetDeterminant()));
-            return Js.Bool(path.Touches(x, y, B(self).State.LineWidth * scale));
-        });
-
-        Js.Method(Engine, p, "createImageData", 1, (self, args) =>
-        {
-            if (Js.Arg(args, 0) is ObjectInstance source && source.HasProperty("data"))
                 return MakeImageData(TypeConverter.ToInt32(source.Get("width")), TypeConverter.ToInt32(source.Get("height")), null, Js.AsText(source.Get("colorSpace")));
+            }
 
-            var settingsIndex = Js.Arg(args, 0) is ObjectInstance ? 1 : 2;
-            var space = ImageDataSpace(Js.Arg(args, settingsIndex), Cx(self).Settings.ColorSpace);
-            var (w, h) = (Num(args, 0), Num(args, 1));
-            if (!double.IsFinite(w) || !double.IsFinite(h))
-                throw TypeError("The size is not finite.");
+            if (args.Length < 2)
+                throw TypeError("Failed to execute 'createImageData': 2 arguments required, but only 1 present.");
+
+            var space = ImageDataSpace(Js.Arg(args, 2), context.Settings.ColorSpace);
+
+            // [EnforceRange] long: not finite, or too large for a long, is a TypeError; a fraction is cut off before it is asked whether it is zero (0.99 is 0), and a negative size is its magnitude.
+            foreach (var number in new[] { Num(args, 0), Num(args, 1) })
+            {
+                if (!double.IsFinite(number) || Math.Truncate(number) is < int.MinValue or > int.MaxValue)
+                    throw TypeError("Failed to execute 'createImageData': The provided value is outside the range of a long.");
+            }
+
+            var (w, h) = (TypeConverter.ToInt32(Js.Arg(args, 0)), TypeConverter.ToInt32(Js.Arg(args, 1)));
             if (w == 0 || h == 0)
                 throw DomError("IndexSizeError", "The size is zero.");
 
-            return MakeImageData((int)Math.Abs(Math.Truncate(w)), (int)Math.Abs(Math.Truncate(h)), null, space);
+            return MakeImageData(Math.Abs(w), Math.Abs(h), null, space);
         });
-        Js.Method(Engine, p, "getImageData", 4, (self, args) =>
+        Js.StrictMethod(Engine, p, "getImageData", 4, (self, args) =>
         {
+            RequireNoOpenLayers(B(self));
+            if (!B(self).OriginClean)
+                throw DomError("SecurityError", "The canvas has been tainted by cross-origin data.");
+
+            // [EnforceRange] long: a number that is not finite, or that does not fit a long once its fraction is cut off, is a TypeError rather than wrapping round.
+            for (var i = 0; i < 4; i++)
+            {
+                var number = Num(args, i);
+                if (!double.IsFinite(number) || Math.Truncate(number) is < int.MinValue or > int.MaxValue)
+                    throw TypeError("Failed to execute 'getImageData': The provided value is outside the range of a long.");
+            }
+
             if (!Finite(args, 4))
                 throw TypeError("The rectangle is not finite.");
 
@@ -139,30 +183,88 @@ internal sealed partial class ScriptRuntime
             }
 
             var space = ImageDataSpace(Js.Arg(args, 4), Cx(self).Settings.ColorSpace);
-            ConvertColorSpace(pixels, "srgb", space);
+            if (ImageDataFormat(Js.Arg(args, 4)) == "rgba-float16")
+            {
+                // Floats: a floating-point canvas gives its own, outside 0 to 1 too; any other gives its bytes over 255.
+                var floats = new float[PixelBytes(sw, sh)];
+                var wideSource = bitmap.Wide ? bitmap.WidePixels() : null;
+                for (var y = 0; y < sh; y++)
+                {
+                    for (var x = 0; x < sw; x++)
+                    {
+                        int ox = sx + x, oy = sy + y;
+                        if (ox < 0 || oy < 0 || ox >= cw || oy >= ch)
+                            continue;
+
+                        var from = (oy * cw + ox) * 4;
+                        var to = (y * sw + x) * 4;
+                        for (var c = 0; c < 4; c++)
+                            floats[to + c] = wideSource is not null ? wideSource[from + c] : source[from + c] / 255f;
+                    }
+                }
+
+                CanvasColorSpaces.ConvertFloats(floats, bitmap.ColorSpace, space, clip: false);
+                return BuildImageData(sw, sh, Float16Of(floats), space, "rgba-float16");
+            }
+
+            if (bitmap.Wide)
+            {
+                // A floating-point canvas is converted from its floats, and rounded to eight bits once, at the end.
+                var wideSource = bitmap.WidePixels();
+                var rgb = new double[3];
+                for (var y = 0; y < sh; y++)
+                {
+                    for (var x = 0; x < sw; x++)
+                    {
+                        int ox = sx + x, oy = sy + y;
+                        if (ox < 0 || oy < 0 || ox >= cw || oy >= ch)
+                            continue;
+
+                        var from = (oy * cw + ox) * 4;
+                        var to = (y * sw + x) * 4;
+                        for (var c = 0; c < 3; c++)
+                            rgb[c] = wideSource[from + c];
+
+                        CanvasColorSpaces.Convert(rgb, bitmap.ColorSpace, space, clip: true);
+                        for (var c = 0; c < 3; c++)
+                            pixels[to + c] = (byte)Math.Round(rgb[c] * 255);
+
+                        pixels[to + 3] = (byte)Math.Round(Math.Clamp(wideSource[from + 3], 0f, 1f) * 255f);
+                    }
+                }
+
+                return MakeImageData(sw, sh, pixels, space);
+            }
+
+            CanvasColorSpaces.ConvertBytes(pixels, bitmap.ColorSpace, space);
             return MakeImageData(sw, sh, pixels, space);
         });
-        Js.Method(Engine, p, "putImageData", 3, (self, args) =>
+        Js.StrictMethod(Engine, p, "putImageData", 3, (self, args) =>
         {
-            if (Js.Arg(args, 0) is not ObjectInstance data || !data.HasProperty("data"))
+            RequireNoOpenLayers(B(self));
+            if (Js.Arg(args, 0) is not ObjectInstance data || !IsImageData(data))
                 throw TypeError("The first argument is not an ImageData.");
 
             var (dx, dy) = (Num(args, 1), Num(args, 2));
             if (!double.IsFinite(dx) || !double.IsFinite(dy))
                 throw TypeError("The position is not finite.");
 
+            // The position is a long: its fraction is dropped, so the pixels land on whole pixels.
+            (dx, dy) = (Math.Truncate(dx), Math.Truncate(dy));
             var (w, h) = (TypeConverter.ToInt32(data.Get("width")), TypeConverter.ToInt32(data.Get("height")));
             var (rx, ry, rw, rh) = (0, 0, w, h);
             if (args.Length >= 7)
             {
-                if (!Finite(args, 7))
+                // Argument 0 is the ImageData: only the four dirty-rectangle numbers are checked here (the position was above).
+                if (!Enumerable.Range(3, 4).All(i => double.IsFinite(Num(args, i))))
                     throw TypeError("The dirty rectangle is not finite.");
 
                 (rx, ry, rw, rh) = ((int)Num(args, 3), (int)Num(args, 4), (int)Num(args, 5), (int)Num(args, 6));
                 if (rw < 0) { rx += rw; rw = -rw; }
                 if (rh < 0) { ry += rh; rh = -rh; }
-                rx = Math.Max(rx, 0);
-                ry = Math.Max(ry, 0);
+                // The part of it left of or above the image is not in the image: it shortens the rectangle, it does not slide it.
+                if (rx < 0) { rw += rx; rx = 0; }
+                if (ry < 0) { rh += ry; ry = 0; }
                 rw = Math.Min(rw, w - rx);
                 rh = Math.Min(rh, h - ry);
             }
@@ -170,28 +272,40 @@ internal sealed partial class ScriptRuntime
             if (rw <= 0 || rh <= 0)
                 return JsValue.Undefined;
 
-            var array = data.Get("data") as ObjectInstance ?? throw TypeError("The data is not an array.");
-            var bytes = new byte[PixelBytes(w, h)];
-            for (var i = 0; i < bytes.Length; i++)
-                bytes[i] = (byte)TypeConverter.ToInt32(array.Get(i.ToString(CultureInfo.InvariantCulture)));
+            var target = B(self);
+            Image? image;
+            if (target.Wide)
+            {
+                // A floating-point canvas takes the pixels as floats, in its own space, whole.
+                var floats = ImageDataFloats(data, w, h, out var dataSpace);
+                CanvasColorSpaces.ConvertFloats(floats, dataSpace, target.ColorSpace, clip: false);
+                image = Cx(self).Canvas.OwnerDocument.CreateWideImage(w, h, floats);
+            }
+            else
+            {
+                // Any other keeps them as bytes of its own space.
+                var bytes = ImageDataFloats(data, w, h, out var dataSpace) is var straight && dataSpace == target.ColorSpace && !IsFloatData(data)
+                    ? SrgbBytesOf(data, w, h, dataSpace)
+                    : StraightBytes(straight, dataSpace, target.ColorSpace);
+                image = Cx(self).Canvas.OwnerDocument.DecodeImage(PngWriter.Encode(w, h, bytes));
+            }
 
-            ConvertColorSpace(bytes, data.Get("colorSpace") is { } dataSpace && !dataSpace.IsUndefined() ? Js.AsText(dataSpace) : "srgb", "srgb");
-            if (Cx(self).Canvas.OwnerDocument.DecodeImage(PngWriter.Encode(w, h, bytes)) is { } image)
-                B(self).PutPixels(image, new Rect(rx, ry, rw, rh), new Rect(dx + rx, dy + ry, rw, rh));
+            if (image is not null)
+                target.PutPixels(image, new Rect(rx, ry, rw, rh), new Rect(dx + rx, dy + ry, rw, rh));
 
             return JsValue.Undefined;
         });
 
         var element = ElementPrototypeFor("canvas");
-        Js.Method(Engine, element, "toDataURL", 0, (self, _) => Js.Str(DataUrlOf(Sn(self))));
-        Js.Method(Engine, element, "toBlob", 1, (self, args) =>
+        Js.StrictMethod(Engine, element, "toDataURL", 0, (self, args) => Js.Str(DataUrlOf(Sn(self), ImageTypeArg(args, 0), QualityArg(args, 1))));
+        Js.StrictMethod(Engine, element, "toBlob", 1, (self, args) =>
         {
             if (!Js.IsCallable(Js.Arg(args, 0)))
                 throw TypeError("The callback is not a function.");
 
-            var url = DataUrlOf(Sn(self));
+            var url = DataUrlOf(Sn(self), ImageTypeArg(args, 1), QualityArg(args, 2));
             var callback = args[0];
-            var blobMaker = Engine.Evaluate("(function (url) { var s = atob(url.slice(url.indexOf(',') + 1)); var b = new Uint8Array(s.length); for (var i = 0; i < s.length; i++) b[i] = s.charCodeAt(i); return new Blob([b], { type: 'image/png' }); })");
+            var blobMaker = BlobMaker();
             AddTimer(Js.Function(Engine, "toBlob", 0, (_, _) =>
             {
                 Call(callback, JsValue.Undefined, blobMaker.Call(JsValue.Undefined, [Js.Str(url)]));
@@ -202,11 +316,21 @@ internal sealed partial class ScriptRuntime
 
         Define(Engine.Global, "ImageData", Js.Constructor(Engine, "ImageData", ImageDataPrototype(), 2, (_, args, _) =>
         {
-            if (Js.Arg(args, 0) is ObjectInstance { } array && !array.IsArray() && array.HasProperty("length"))
+            if (args.Length < 2)
+                throw TypeError($"Failed to construct 'ImageData': 2 arguments required, but only {args.Length} present.");
+
+            // (data, width [, height [, settings]]) when the first argument is a Uint8ClampedArray or a Float16Array, else (width, height [, settings]): a Uint8Array has the same bytes and is
+            // read as a number, which is no width.
+            var kind = Js.Arg(args, 0) is ObjectInstance { } candidate ? Js.AsText(Engine.Evaluate("(function (a) { return Object.prototype.toString.call(a); })").Call(JsValue.Undefined, [candidate])) : "";
+            if (Js.Arg(args, 0) is ObjectInstance array && kind is "[object Uint8ClampedArray]" or "[object Float16Array]")
             {
+                var wanted = kind == "[object Float16Array]" ? "rgba-float16" : "rgba-unorm8";
                 var length = (int)TypeConverter.ToNumber(array.Get("length"));
-                if (length % 4 != 0)
-                    throw DomError("InvalidStateError", "The data length is not a multiple of 4.");
+                var requested = ImageDataFormat(Js.Arg(args, 3));
+                if (length == 0 || length % 4 != 0)
+                    throw DomError("InvalidStateError", "The data length is zero or not a multiple of 4.");
+                if (requested != wanted)
+                    throw DomError("InvalidStateError", "The data is not of the pixel format asked for.");
 
                 var width = TypeConverter.ToInt32(Js.Arg(args, 1));
                 if (width <= 0)
@@ -219,23 +343,31 @@ internal sealed partial class ScriptRuntime
                 if (height <= 0 || (long)width * height != pixels)
                     throw DomError("IndexSizeError", "The data length does not match the size.");
 
-                return BuildImageData(width, height, array, ImageDataSpace(Js.Arg(args, 3), "srgb"));
+                return BuildImageData(width, height, array, ImageDataSpace(Js.Arg(args, 3), "srgb"), wanted);
             }
+
+            // The third argument is the settings dictionary: an object, or nothing.
+            if (args.Length > 2 && !args[2].IsUndefined() && !args[2].IsNull() && args[2] is not ObjectInstance)
+                throw TypeError("Failed to construct 'ImageData': The settings are not a dictionary.");
 
             var (w, h) = (TypeConverter.ToInt32(Js.Arg(args, 0)), TypeConverter.ToInt32(Js.Arg(args, 1)));
             if (w <= 0 || h <= 0)
                 throw DomError("IndexSizeError", "The size is zero.");
+
+            if (ImageDataFormat(Js.Arg(args, 2)) == "rgba-float16")
+                return BuildImageData(w, h, (ObjectInstance)Engine.Evaluate("(function (n) { return new Float16Array(n); })").Call(JsValue.Undefined, [Js.Num(PixelBytes(w, h))]), ImageDataSpace(Js.Arg(args, 2), "srgb"), "rgba-float16");
 
             return MakeImageData(w, h, null, ImageDataSpace(Js.Arg(args, 2), "srgb"));
         }));
 
         InstallBitmaps();
         InstallOffscreenCanvas();
+        InstallFocusRing();
 
         foreach (var named in Document.QuerySelectorAll("[id]"))
             NameElement(named);
 
-        Js.Method(Engine, ContextPrototype, "getContextAttributes", 0, (self, _) =>
+        Js.StrictMethod(Engine, ContextPrototype, "getContextAttributes", 0, (self, _) =>
         {
             var settings = Cx(self).Settings;
             var attributes = Js.NewObject(Engine);
@@ -257,16 +389,65 @@ internal sealed partial class ScriptRuntime
         OffscreenPrototype = new JsObject(Engine) { Prototype = EventTargetPrototype };
         Tag(OffscreenPrototype, "OffscreenCanvas");
         var element = ElementPrototypeFor("canvas");
-        foreach (var name in new[] { "width", "height", "getContext" })
-            OffscreenPrototype.FastSetProperty(name, element.GetOwnProperty(name));
-
-        Js.Method(Engine, OffscreenPrototype, "transferToImageBitmap", 0, (self, _) =>
-            BitmapFrom(Wrap(Sn(self)), []));
-        Js.Method(Engine, OffscreenPrototype, "convertToBlob", 0, (self, _) =>
+        // OffscreenCanvas takes its sizes as [EnforceRange] unsigned longs: a number that is not one is an error, where a canvas element's attribute wraps it.
+        foreach (var attribute in new[] { "width", "height" })
         {
-            var url = DataUrlOf(Sn(self));
-            return Engine.Evaluate("(function (url) { return new Promise(function (resolve) { var s = atob(url.slice(url.indexOf(',') + 1)); var b = new Uint8Array(s.length); for (var i = 0; i < s.length; i++) b[i] = s.charCodeAt(i); resolve(new Blob([b], { type: 'image/png' })); }); })")
-                .Call(JsValue.Undefined, [Js.Str(url)]);
+            var name = attribute;
+            Js.Accessor(Engine, OffscreenPrototype, name,
+                self => Js.Num(name == "width" ? CanvasSize(Sn(self)).Width : CanvasSize(Sn(self)).Height),
+                (self, value) =>
+                {
+                    var number = TypeConverter.ToNumber(value);
+                    if (!double.IsFinite(number) || Math.Truncate(number) is < 0 or > uint.MaxValue)
+                        throw TypeError($"The value is outside the range of an unsigned long.");
+
+                    Sn(self).SetAttribute(name, Math.Truncate(number).ToString("0", CultureInfo.InvariantCulture));
+                    ResetCanvas(Sn(self));
+                });
+        }
+
+        Js.StrictMethod(Engine, OffscreenPrototype, "getContext", 1, (self, args) => GetContext(Sn(self), args, offscreen: true));
+
+        // OffscreenCanvasRenderingContext2D has its own interface object, whose prototype carries the members CanvasRenderingContext2D's does; InstallOffscreenContext fills it once they all exist.
+        OffscreenContextPrototype = new JsObject(Engine) { Prototype = Engine.Intrinsics.Object.PrototypeObject };
+        Tag(OffscreenContextPrototype, "OffscreenCanvasRenderingContext2D");
+        Define(Engine.Global, "OffscreenCanvasRenderingContext2D", Js.Constructor(Engine, "OffscreenCanvasRenderingContext2D", OffscreenContextPrototype, 0, (_, _, _) => throw TypeError("Illegal constructor")));
+        ((ObjectInstance)Engine.Global.Get("OffscreenCanvasRenderingContext2D")).DefineOwnProperty("prototype", new PropertyDescriptor(OffscreenContextPrototype, PropertyFlag.AllForbidden));
+
+        Js.StrictMethod(Engine, OffscreenPrototype, "transferToImageBitmap", 0, (self, _) =>
+        {
+            // The canvas hands its picture over and starts again blank (its state is kept); with no 2D context there is nothing to hand over.
+            if (!_contexts.TryGetValue(Sn(self), out var context) || context.IsBitmapRenderer)
+                throw DomError("InvalidStateError", "The canvas has no context to transfer from.");
+
+            var made = BitmapFrom(Wrap(Sn(self)), []);
+            context.Bitmap.ClearDrawing();
+            return made;
+        });
+        Js.StrictMethod(Engine, OffscreenPrototype, "convertToBlob", 0, (self, args) =>
+        {
+            // A promise-returning method does not throw: what would have been thrown is what the promise is rejected with.
+            string url;
+            try
+            {
+                // A canvas that was transferred away is detached, and one with no area has nothing to encode.
+                if (_transferred.Contains(Sn(self)))
+                    throw DomError("InvalidStateError", "The OffscreenCanvas is detached.");
+
+                if (CanvasSize(Sn(self)) is var (width, height) && (width == 0 || height == 0))
+                    throw DomError("IndexSizeError", "The OffscreenCanvas has no area to encode.");
+
+                var options = Js.Arg(args, 0) as ObjectInstance;
+                url = DataUrlOf(Sn(self), options?.Get("type") is { } typeValue && !typeValue.IsUndefined() ? Js.AsText(typeValue) : "image/png", options?.Get("quality") is { } qualityValue && qualityValue.IsNumber() ? qualityValue.AsNumber() : null);
+            }
+            catch (JavaScriptException error)
+            {
+                return Engine.Evaluate("(function (reason) { return Promise.reject(reason); })").Call(JsValue.Undefined, [error.Error]);
+            }
+
+            var makeBlob = BlobMaker();
+            return Engine.Evaluate("(function (make, url) { return new Promise(function (resolve) { resolve(make(url)); }); })")
+                .Call(JsValue.Undefined, [makeBlob, Js.Str(url)]);
         });
         Define(Engine.Global, "OffscreenCanvas", Js.Constructor(Engine, "OffscreenCanvas", OffscreenPrototype, 2, (_, args, _) =>
         {
@@ -274,13 +455,58 @@ internal sealed partial class ScriptRuntime
                 throw TypeError("OffscreenCanvas needs a width and a height.");
 
             var node = Document.CreateElement("canvas");
+            // [EnforceRange] unsigned long: null is 0, a negative number, a NaN or an object is a TypeError.
             foreach (var (attribute, value) in new[] { ("width", Num(args, 0)), ("height", Num(args, 1)) })
-                node.SetAttribute(attribute, (double.IsFinite(value) && value >= 0 ? Math.Truncate(value) : 0).ToString("0", CultureInfo.InvariantCulture));
+            {
+                if (!double.IsFinite(value) || Math.Truncate(value) is < 0 or > uint.MaxValue)
+                    throw TypeError("The size is outside the range of an unsigned long.");
 
-            var wrapper = Wrap(node);
-            wrapper.Prototype = OffscreenPrototype;
-            return wrapper;
+                node.SetAttribute(attribute, Math.Truncate(value).ToString("0", CultureInfo.InvariantCulture));
+            }
+
+            return OffscreenOf(node);
         }));
+
+        // transferControlToOffscreen: the canvas becomes a placeholder, which no longer has a context or a size of its own, and an OffscreenCanvas of its size takes its place.
+        Js.StrictMethod(Engine, element, "transferControlToOffscreen", 0, (self, _) =>
+        {
+            var placeholder = Sn(self);
+            if (_contexts.ContainsKey(placeholder) || _transferred.Contains(placeholder))
+                throw DomError("InvalidStateError", "The canvas has a context, or its control has been transferred.");
+
+            var (width, height) = CanvasSize(placeholder);
+            var node = Document.CreateElement("canvas");
+            node.SetAttribute("width", width.ToString("0", CultureInfo.InvariantCulture));
+            node.SetAttribute("height", height.ToString("0", CultureInfo.InvariantCulture));
+            _transferred.Add(placeholder);
+
+            // The placeholder keeps the size its bitmap had: it is a picture of that size (nothing drawn yet) whatever its width and height attributes come to say.
+            Document.SetCanvasPainting(placeholder, new ScriptCanvasPainting(width, height, _ => { }));
+            Document.SetPlaceholderSize(placeholder, width, height);
+            var offscreen = OffscreenOf(node);
+            _offscreenPlaceholders[node] = (this, placeholder);
+            return offscreen;
+        });
+    }
+
+    // The members of the 2D context, as an OffscreenCanvasRenderingContext2D has them: the same functions on a prototype of its own.
+    private void InstallOffscreenContext()
+    {
+        foreach (var key in ContextPrototype.GetOwnPropertyKeys(Types.String))
+        {
+            if (key.ToString() is var name && name != "constructor")
+                OffscreenContextPrototype.FastSetProperty(name, ContextPrototype.GetOwnProperty(key));
+        }
+    }
+
+    private readonly System.Collections.Generic.HashSet<ScriptNode> _transferred = [];
+
+    // An OffscreenCanvas made of a canvas element nothing shows.
+    private ObjectInstance OffscreenOf(ScriptNode node)
+    {
+        var wrapper = Wrap(node);
+        wrapper.Prototype = OffscreenPrototype;
+        return wrapper;
     }
 
     private ObjectInstance? _imageDataPrototype;
@@ -307,7 +533,7 @@ internal sealed partial class ScriptRuntime
         return BuildImageData(width, height, array, colorSpace);
     }
 
-    private JsValue BuildImageData(int width, int height, ObjectInstance data, string colorSpace = "srgb")
+    private JsValue BuildImageData(int width, int height, ObjectInstance data, string colorSpace = "srgb", string pixelFormat = "rgba-unorm8")
     {
         var result = new JsObject(Engine) { Prototype = ImageDataPrototype() };
         void Set(string name, JsValue value) => result.FastSetProperty(name, new PropertyDescriptor(value, PropertyFlag.Configurable | PropertyFlag.Enumerable));
@@ -315,8 +541,21 @@ internal sealed partial class ScriptRuntime
         Set("height", Js.Num(height));
         Set("data", data);
         Set("colorSpace", Js.Str(colorSpace));
-        Set("pixelFormat", Js.Str("rgba-unorm8"));
+        Set("pixelFormat", Js.Str(pixelFormat));
         return result;
+    }
+
+    // Whether the object is an ImageData: made by the constructor or the context, or inheriting from it.
+    private bool IsImageData(ObjectInstance candidate)
+    {
+        var prototype = ImageDataPrototype();
+        for (var p = candidate.Prototype; p is not null; p = p.Prototype)
+        {
+            if (ReferenceEquals(p, prototype))
+                return true;
+        }
+
+        return false;
     }
 
     private static void Visible(ObjectInstance target, string name, JsValue value) =>
@@ -332,87 +571,192 @@ internal sealed partial class ScriptRuntime
         return Array.IndexOf(ColorSpaces, text) >= 0 ? text : throw TypeError($"The provided value '{text}' is not a valid enum value of type PredefinedColorSpace.");
     }
 
-    private static double Decode(double v) => v <= 0.04045 ? v / 12.92 : Math.Pow((v + 0.055) / 1.055, 2.4);
-
-    private static double Encode(double v) => v <= 0.0031308 ? v * 12.92 : (1.055 * Math.Pow(v, 1 / 2.4)) - 0.055;
-
-    private static readonly double[] SrgbToP3 = [0.8224621, 0.1775380, 0.0000000, 0.0331941, 0.9668058, 0.0000000, 0.0170827, 0.0723974, 0.9105199];
-
-    private static readonly double[] P3ToSrgb = [1.2249401, -0.2249404, 0.0000000, -0.0420569, 1.0420571, 0.0000000, -0.0196376, -0.0786361, 1.0982735];
-
-    // Converts straight RGBA bytes between the predefined color spaces (the canvas keeps its pixels as sRGB).
-    private static void ConvertColorSpace(byte[] pixels, string from, string to)
+    // The straight sRGB bytes an ImageData stands for: its own bytes, or its floats clipped to the 8-bit gamut, converted from the color space it is in.
+    // The bytes of an eight-bit ImageData as they are (it is in <paramref name="space"/>, which is where the caller wants them).
+    private byte[] SrgbBytesOf(ObjectInstance data, int width, int height, string space)
     {
-        if (from == to)
-            return;
+        var array = data.Get("data") as ObjectInstance ?? throw TypeError("The data is not an array.");
+        var bytes = new byte[PixelBytes(width, height)];
+        for (var i = 0; i < bytes.Length; i++)
+            bytes[i] = (byte)TypeConverter.ToInt32(array.Get(i.ToString(CultureInfo.InvariantCulture)));
 
-        var fromP3 = from.StartsWith("display-p3", StringComparison.Ordinal);
-        var toP3 = to.StartsWith("display-p3", StringComparison.Ordinal);
-        var fromLinear = from.EndsWith("-linear", StringComparison.Ordinal);
-        var toLinear = to.EndsWith("-linear", StringComparison.Ordinal);
-        var rgb = new double[3];
-        for (var i = 0; i + 3 < pixels.Length; i += 4)
-        {
-            for (var c = 0; c < 3; c++)
-                rgb[c] = fromLinear ? pixels[i + c] / 255.0 : Decode(pixels[i + c] / 255.0);
-
-            if (fromP3 != toP3)
-            {
-                var m = fromP3 ? P3ToSrgb : SrgbToP3;
-                (rgb[0], rgb[1], rgb[2]) = ((m[0] * rgb[0]) + (m[1] * rgb[1]) + (m[2] * rgb[2]), (m[3] * rgb[0]) + (m[4] * rgb[1]) + (m[5] * rgb[2]), (m[6] * rgb[0]) + (m[7] * rgb[1]) + (m[8] * rgb[2]));
-            }
-
-            for (var c = 0; c < 3; c++)
-            {
-                var value = Math.Clamp(rgb[c], 0, 1);
-                pixels[i + c] = (byte)Math.Round((toLinear ? value : Encode(value)) * 255);
-            }
-        }
+        _ = space;
+        return bytes;
     }
 
-    private string DataUrlOf(ScriptNode element)
+    private static bool IsFloatData(ObjectInstance data) =>
+        data.Get("pixelFormat") is { } format && !format.IsUndefined() && Js.AsText(format) == "rgba-float16";
+
+    // The pixels of an ImageData as straight floats (bytes over 255, or its own floats), and the color space they are in.
+    private float[] ImageDataFloats(ObjectInstance data, int width, int height, out string space)
     {
+        space = data.Get("colorSpace") is { } dataSpace && !dataSpace.IsUndefined() ? Js.AsText(dataSpace) : "srgb";
+        var array = data.Get("data") as ObjectInstance ?? throw TypeError("The data is not an array.");
+        var floats = new float[PixelBytes(width, height)];
+        var scale = IsFloatData(data) ? 1.0 : 1 / 255.0;
+        for (var i = 0; i < floats.Length; i++)
+            floats[i] = (float)(TypeConverter.ToNumber(array.Get(i.ToString(CultureInfo.InvariantCulture))) * scale);
+
+        return floats;
+    }
+
+    // Straight floats in one space as eight-bit bytes in another (brought into the gamut).
+    private static byte[] StraightBytes(float[] straight, string from, string to)
+    {
+        var copy = (float[])straight.Clone();
+        CanvasColorSpaces.ConvertFloats(copy, from, to, clip: true);
+        var bytes = new byte[copy.Length];
+        for (var i = 0; i < bytes.Length; i++)
+            bytes[i] = (byte)Math.Round(Math.Clamp(copy[i], 0f, 1f) * 255f);
+
+        return bytes;
+    }
+
+    // A Float16Array of straight RGBA floats.
+    private ObjectInstance Float16Of(float[] straight)
+    {
+        var values = new JsValue[straight.Length];
+        for (var i = 0; i < values.Length; i++)
+            values[i] = Js.Num(straight[i]);
+
+        return (ObjectInstance)Engine.Evaluate("(function (values) { return new Float16Array(values); })").Call(JsValue.Undefined, [Js.Array(Engine, values)]);
+    }
+
+    // The pixel format an ImageData settings dictionary names (unorm8 when it names none).
+    private string ImageDataFormat(JsValue settings)
+    {
+        if (settings is not ObjectInstance dictionary || dictionary.Get("pixelFormat") is not { } value || value.IsUndefined())
+            return "rgba-unorm8";
+
+        var text = Js.AsText(value);
+        return text is "rgba-unorm8" or "rgba-float16" ? text : throw TypeError($"The provided value '{text}' is not a valid enum value of type ImageDataPixelFormat.");
+    }
+
+    // The image type a toBlob/toDataURL call names (anything but a string is no type, and the default image/png is used).
+    private static string ImageTypeArg(JsValue[] args, int index) => Js.Arg(args, index) is { } value && value.IsString() ? value.AsString() : "image/png";
+
+    // The quality of a call: a number from 0 to 1, else the encoder's default.
+    private static double? QualityArg(JsValue[] args, int index) => Js.Arg(args, index) is { } value && value.IsNumber() ? value.AsNumber() : null;
+
+    // A function that makes a Blob of the file a data URL holds, of the type the URL says.
+    private JsValue BlobMaker() => Engine.Evaluate("(function (url) { var type = url.slice(5, url.indexOf(';')); var s = atob(url.slice(url.indexOf(',') + 1)); var b = new Uint8Array(s.length); for (var i = 0; i < s.length; i++) b[i] = s.charCodeAt(i); return new Blob([b], { type: type }); })");
+
+    private string DataUrlOf(ScriptNode element, string type = "image/png", double? quality = null)
+    {
+        if (_contexts.TryGetValue(element, out var tainted) && !tainted.Bitmap.OriginClean)
+            throw DomError("SecurityError", "The canvas has been tainted by cross-origin data.");
+
         if (!_contexts.TryGetValue(element, out var context))
         {
             var (w, h) = CanvasSize(element);
-            return w == 0 || h == 0 ? "data:," : "data:image/png;base64," + Convert.ToBase64String(PngWriter.Encode((int)w, (int)h, new byte[(int)w * (int)h * 4]));
+            if (w == 0 || h == 0)
+                return "data:,";
+
+            var blank = Document.EncodeImage((int)w, (int)h, new byte[(int)w * (int)h * 4], null, "srgb", type, quality, out var blankType)
+                ?? PngWriter.Encode((int)w, (int)h, new byte[(int)w * (int)h * 4]);
+            return $"data:{blankType};base64," + Convert.ToBase64String(blank);
         }
 
         var bitmap = context.Bitmap;
         if (bitmap.Width <= 0 || bitmap.Height <= 0)
             return "data:,";
 
-        var pixels = bitmap.Pixels();
-        return pixels.Length == 0 ? "data:," : "data:image/png;base64," + Convert.ToBase64String(PngWriter.Encode((int)bitmap.Width, (int)bitmap.Height, pixels));
+        RequireNoOpenLayers(bitmap);
+        var wide = bitmap.Wide;
+        var pixels = wide ? [] : bitmap.Pixels();
+        var floats = wide ? bitmap.WidePixels() : null;
+        if (wide ? floats!.Length == 0 : pixels.Length == 0)
+            return "data:,";
+
+        var encoded = Document.EncodeImage((int)bitmap.Width, (int)bitmap.Height, wide ? null : pixels, floats, bitmap.ColorSpace, type, quality, out var writtenType);
+        if (encoded is null)
+        {
+            // Not something the encoders took: a PNG with no color profile, which is read as sRGB.
+            var bytes = wide ? SrgbBytesOfFloats(floats!, bitmap.ColorSpace) : (byte[])pixels.Clone();
+            if (!wide && bitmap.ColorSpace != "srgb")
+                CanvasColorSpaces.ConvertBytes(bytes, bitmap.ColorSpace, "srgb");
+
+            encoded = PngWriter.Encode((int)bitmap.Width, (int)bitmap.Height, bytes);
+            writtenType = "image/png";
+        }
+
+        return $"data:{writtenType};base64," + Convert.ToBase64String(encoded);
+    }
+
+    private static byte[] SrgbBytesOfFloats(float[] floats, string space)
+    {
+        var copy = (float[])floats.Clone();
+        CanvasColorSpaces.ConvertFloats(copy, space, "srgb", clip: true);
+        var bytes = new byte[copy.Length];
+        for (var i = 0; i < bytes.Length; i++)
+            bytes[i] = (byte)Math.Round(Math.Clamp(copy[i], 0f, 1f) * 255f);
+
+        return bytes;
     }
 
     // ---- ImageBitmap and OffscreenCanvas
 
+    // drawFocusIfNeeded: a ring around the path (the current one, or the given one) when the element is focused and in the canvas's subtree. Nothing otherwise.
+    private void InstallFocusRing()
+    {
+        Engine.Evaluate("""
+            (function (global) {
+                var prototype = global.CanvasRenderingContext2D.prototype;
+                var name = function (v) { return Object.prototype.toString.call(v); };
+                Object.defineProperty(prototype, 'drawFocusIfNeeded', { writable: true, configurable: true, enumerable: true, value: function drawFocusIfNeeded(a, b) {
+                    var path = arguments.length > 1 ? a : null, element = arguments.length > 1 ? b : a;
+                    if (arguments.length === 0) throw new TypeError("Failed to execute 'drawFocusIfNeeded' on 'CanvasRenderingContext2D': 1 argument required, but only 0 present.");
+                    if (!(element instanceof Element)) throw new TypeError("Failed to execute 'drawFocusIfNeeded': parameter is not of type 'Element'.");
+                    if (path !== null && !(path instanceof Path2D)) throw new TypeError("Failed to execute 'drawFocusIfNeeded': parameter 1 is not of type 'Path2D'.");
+                    if (!this.canvas.contains(element) || element === this.canvas || element.ownerDocument.activeElement !== element) return;
+                    this.save();
+                    this.strokeStyle = 'rgb(16, 16, 16)'; this.lineWidth = 2; this.setLineDash([]); this.globalAlpha = 1; this.globalCompositeOperation = 'source-over';
+                    this.shadowColor = 'rgba(0, 0, 0, 0)'; this.filter = 'none';
+                    if (path) this.stroke(path); else this.stroke();
+                    this.restore();
+                } });
+            })
+            """).Call(JsValue.Undefined, [Engine.Global]);
+    }
+
     private void InstallBitmaps()
     {
         var native = Js.NewObject(Engine);
-        Js.Method(Engine, native, "bitmapFrom", 5, (_, args) => BitmapFrom(Js.Arg(args, 0), args.Skip(1).Select(TypeConverter.ToNumber).ToArray()));
-        Js.Method(Engine, native, "bitmapFromEncoded", 1, (_, args) =>
-            Document.DecodeImage(Encoding.Latin1.GetBytes(Js.AsText(Js.Arg(args, 0)))) is { } image ? new BitmapObject(Engine, BitmapPrototype, image) : JsValue.Null);
+        // bitmapFrom(source, crop, options): crop is an array of four numbers or null, options a dictionary or undefined.
+        Js.Method(Engine, native, "bitmapFrom", 3, (_, args) =>
+            BitmapFrom(Js.Arg(args, 0), Js.Arg(args, 1) is ObjectInstance crop ? Enumerable.Range(0, 4).Select(i => TypeConverter.ToNumber(crop.Get(i.ToString(CultureInfo.InvariantCulture)))).ToArray() : [], Js.Arg(args, 2) as ObjectInstance));
+        Js.Method(Engine, native, "bitmapFromEncoded", 3, (_, args) =>
+        {
+            if (Document.DecodeImage(Encoding.Latin1.GetBytes(Js.AsText(Js.Arg(args, 0)))) is not { } image)
+                return JsValue.Null;
+
+            return ApplyBitmapOptions(image, Js.Arg(args, 1) is ObjectInstance crop ? Enumerable.Range(0, 4).Select(i => TypeConverter.ToNumber(crop.Get(i.ToString(CultureInfo.InvariantCulture)))).ToArray() : [], Js.Arg(args, 2) as ObjectInstance);
+        });
 
         Engine.Evaluate("""
             (function (native, global) {
                 var define = function (name, value) { Object.defineProperty(global, name, { value: value, writable: true, configurable: true }); };
                 define('createImageBitmap', function createImageBitmap(source) {
-                    var crop = Array.prototype.slice.call(arguments, 1);
+                    var count = arguments.length, crop = null, options;
+                    if (count === 2) options = arguments[1];
+                    else if (count >= 5) { crop = [arguments[1], arguments[2], arguments[3], arguments[4]]; options = arguments[5]; }
                     return new Promise(function (resolve, reject) {
-                        if (arguments.length === 0) { reject(new TypeError('Not enough arguments')); return; }
+                        if (count === 0 || count === 3 || count === 4) { reject(new TypeError('Not enough arguments')); return; }
+                        if (crop !== null && (Number(crop[2]) === 0 || Number(crop[3]) === 0)) { reject(new RangeError('The crop rectangle has no area.')); return; }
+                        if (options !== undefined && options !== null && (typeof options !== 'object' && typeof options !== 'function')) { reject(new TypeError('The options are not a dictionary.')); return; }
                         if (typeof Blob !== 'undefined' && source instanceof Blob) {
                             source.arrayBuffer().then(function (buffer) {
                                 var bytes = new Uint8Array(buffer), s = '';
                                 for (var i = 0; i < bytes.length; i += 8192) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 8192));
-                                var bitmap = native.bitmapFromEncoded(s);
-                                if (bitmap) resolve(bitmap); else reject(new DOMException('The image could not be decoded.', 'InvalidStateError'));
+                                try {
+                                    var bitmap = native.bitmapFromEncoded(s, crop, options);
+                                    if (bitmap) resolve(bitmap); else reject(new DOMException('The image could not be decoded.', 'InvalidStateError'));
+                                } catch (e) { reject(e); }
                             }, reject);
                             return;
                         }
                         try {
-                            var made = native.bitmapFrom.apply(native, [source].concat(crop));
+                            var made = native.bitmapFrom(source, crop, options);
                             if (made) resolve(made); else reject(new DOMException('The source cannot be decoded.', 'InvalidStateError'));
                         } catch (e) { reject(e); }
                     });
@@ -421,8 +765,137 @@ internal sealed partial class ScriptRuntime
             """).Call(JsValue.Undefined, [native, Engine.Global]);
     }
 
+    private JavaScriptException RangeErrorOf(string message) => new JavaScriptException(Engine.Construct(Engine.Evaluate("RangeError"), [Js.Str(message)]));
+
+    // The crop, flip and resize createImageBitmap's arguments ask for, made of the decoded image: a picture of the part, in the size asked for.
+    private JsValue ApplyBitmapOptions(Image image, double[] crop, ObjectInstance? options)
+    {
+        string Choice(string name, string[] allowed, string fallback)
+        {
+            if (options is null || options.Get(name) is not { } value || value.IsUndefined())
+                return fallback;
+
+            var text = Js.AsText(value);
+            return Array.IndexOf(allowed, text) >= 0 ? text : throw TypeError($"The provided value '{text}' is not a valid enum value of type {name}.");
+        }
+
+        var orientation = Choice("imageOrientation", ["from-image", "flipY", "none"], "from-image");
+        Choice("premultiplyAlpha", ["none", "premultiply", "default"], "default");
+        Choice("colorSpaceConversion", ["none", "default"], "default");
+        var quality = Choice("resizeQuality", ["pixelated", "low", "medium", "high"], "low");
+
+        // [EnforceRange] unsigned long: a number that is not finite or does not fit is a TypeError; a size that comes to nothing is an InvalidStateError.
+        double? Size(string name)
+        {
+            if (options is null || options.Get(name) is not { } value || value.IsUndefined())
+                return null;
+
+            var number = TypeConverter.ToNumber(value);
+            if (!double.IsFinite(number) || Math.Truncate(number) is < 0 or > uint.MaxValue)
+                throw TypeError($"The value of {name} is outside the range of an unsigned long.");
+
+            return Math.Truncate(number);
+        }
+
+        var (resizeWidth, resizeHeight) = (Size("resizeWidth"), Size("resizeHeight"));
+
+        // The orientation the file records is applied (from-image, flipY) or left alone (none).
+        image = orientation == "none" ? Document.UnorientedImage(image) : Document.UprightImage(image);
+
+        double cx = 0, cy = 0, cw = image.Width, ch = image.Height;
+        if (crop.Length >= 4)
+        {
+            // The rectangle is four longs: a number wraps modulo 2^32 (a NaN is 0), and a width or height of 0 is a RangeError.
+            crop = [.. crop.Take(4).Select(v => (double)(double.IsFinite(v) ? (int)(uint)(long)(Math.Truncate(v) % 4294967296.0) : 0))];
+            if (crop[2] == 0 || crop[3] == 0)
+                throw RangeErrorOf("The crop rectangle has no width or height.");
+
+            (cx, cy, cw, ch) = (crop[0], crop[1], Math.Abs(crop[2]), Math.Abs(crop[3]));
+            if (crop[2] < 0) cx += crop[2];
+            if (crop[3] < 0) cy += crop[3];
+        }
+
+        var (outWidth, outHeight) = (cw, ch);
+        if (resizeWidth is not null || resizeHeight is not null)
+        {
+            outWidth = resizeWidth ?? Math.Round(cw * resizeHeight!.Value / ch);
+            outHeight = resizeHeight ?? Math.Round(ch * resizeWidth!.Value / cw);
+        }
+
+        if (outWidth < 1 || outHeight < 1 || outWidth * outHeight > (1 << 28) || cw * ch > (1L << 40))
+            throw DomError("InvalidStateError", "The bitmap cannot be made at that size.");
+
+        var plain = crop.Length < 4 && resizeWidth is null && resizeHeight is null && orientation != "flipY";
+        if (plain)
+            return new BitmapObject(Engine, BitmapPrototype, image);
+
+        // The part of the crop that lies in the image is drawn where it falls in the result; what lies outside it stays transparent.
+        var pictureSpace = CanvasColorSpaces.SpaceOf(image);
+        var pieceIsWide = CanvasColorSpaces.FloatsOf(image) is not null;
+        if (pictureSpace == "srgb" && !pieceIsWide && Document.DeclaresColorSpace(image))
+        {
+            // The file's colors may lie outside the sRGB gamut: they are kept as floats in Display P3 (outside that too, when it comes to it) until they land on a canvas.
+            pictureSpace = "display-p3";
+            pieceIsWide = true;
+        }
+
+        var piece = new CanvasBitmap(Document, outWidth, outHeight);
+        piece.ConfigureColor(pictureSpace, pieceIsWide);
+        piece.State.ImageSmoothing = quality != "pixelated";
+        if (orientation == "flipY")
+            piece.SetTransform(new Affine2D(1, 0, 0, -1, 0, outHeight));
+
+        var (scaleX, scaleY) = (outWidth / cw, outHeight / ch);
+        var (x0, y0, x1, y1) = (Math.Max(cx, 0), Math.Max(cy, 0), Math.Min(cx + cw, image.Width), Math.Min(cy + ch, image.Height));
+        if (x1 > x0 && y1 > y0)
+            piece.DrawImage(image, new Rect(x0, y0, x1 - x0, y1 - y0), new Rect((x0 - cx) * scaleX, (y0 - cy) * scaleY, (x1 - x0) * scaleX, (y1 - y0) * scaleY));
+
+        Image? made;
+        if (pieceIsWide)
+        {
+            var floats = (float[])piece.WidePixels().Clone();
+            made = Document.CreateWideImage((int)outWidth, (int)outHeight, floats);
+            if (made is not null)
+                CanvasColorSpaces.Tag(made, pictureSpace, floats);
+        }
+        else
+        {
+            var pixels = piece.Pixels();
+            made = pixels.Length == 0 ? null : Document.DecodeImage(PngWriter.Encode((int)outWidth, (int)outHeight, pixels));
+            if (made is not null)
+                CanvasColorSpaces.Tag(made, pictureSpace);
+        }
+
+        return made is null ? throw DomError("InvalidStateError", "The bitmap cannot be made.") : new BitmapObject(Engine, BitmapPrototype, made);
+    }
+
+    // A loaded SVG image drawn at its natural size, as the picture a bitmap is made of; null when the element is not one, or has no size.
+    private Image? RasterizeSvgImage(ScriptNode element)
+    {
+        if (!_images.TryGetValue(element, out var state) || state.Status != 2 || ImageAddressOf(element) is not { } address || !Document.IsSvgImage(address))
+            return null;
+
+        var (width, height) = (Math.Round(state.Width), Math.Round(state.Height));
+        if (!(width >= 1) || !(height >= 1) || width * height > (1 << 26))
+            return null;
+
+        var piece = new CanvasBitmap(Document, width, height);
+        piece.DrawSvg(address, state.Width, state.Height, new Rect(0, 0, state.Width, state.Height), new Rect(0, 0, width, height));
+        var pixels = piece.Pixels();
+        return pixels.Length == 0 ? null : Document.DecodeImage(PngWriter.Encode((int)width, (int)height, pixels));
+    }
+
     // A bitmap of an image element, a canvas, an ImageData or another bitmap (the last four numbers crop it).
-    private JsValue BitmapFrom(JsValue source, double[] crop)
+    private JsValue BitmapFrom(JsValue source, double[] crop, ObjectInstance? options = null)
+    {
+        var made = BitmapFromSource(source, crop, options);
+        if (made is BitmapObject bitmap && SourceTainted(source))
+            bitmap.OriginClean = false;
+
+        return made;
+    }
+
+    private JsValue BitmapFromSource(JsValue source, double[] crop, ObjectInstance? options)
     {
         Image? image = null;
         switch (source)
@@ -430,26 +903,49 @@ internal sealed partial class ScriptRuntime
             case BitmapObject bitmap when bitmap.Image is { } existing:
                 image = existing;
                 break;
-            case NodeObject { Node: { Kind: ScriptNodeKind.Element } element } when IsImage(element):
-                image = ImageOf(source) ?? throw DomError("InvalidStateError", "The image is not loaded.");
+            case BitmapObject:
+                throw DomError("InvalidStateError", "The image bitmap is closed.");
+            case NodeObject { Node: { Kind: ScriptNodeKind.Element } element } when IsImage(element) || IsSvgImage(element):
+                image = ImageOf(source) ?? RasterizeSvgImage(element) ?? throw DomError("InvalidStateError", "The image is not loaded.");
                 break;
+            case NodeObject { Node: { Kind: ScriptNodeKind.Element } video } when IsVideo(video):
+                image = VideoFrameImage(video) ?? throw DomError("InvalidStateError", "The video has no picture to take yet.");
+                break;
+            case NodeObject { Node: { Kind: ScriptNodeKind.Element } bare } when string.Equals(bare.TagName, "canvas", StringComparison.OrdinalIgnoreCase) && !_contexts.ContainsKey(bare):
+            {
+                // A canvas nothing was drawn on is a transparent picture of its size, if it has a size and that is one that can be held.
+                var (bareWidth, bareHeight) = CanvasSize(bare);
+                if (bareWidth <= 0 || bareHeight <= 0 || bareWidth * bareHeight > (1 << 26))
+                    throw DomError("InvalidStateError", "The canvas is empty or too large.");
+
+                image = bare.OwnerDocument.DecodeImage(PngWriter.Encode((int)bareWidth, (int)bareHeight, new byte[(int)bareWidth * (int)bareHeight * 4]));
+                break;
+            }
+
             case NodeObject { Node: { Kind: ScriptNodeKind.Element } canvas } when _contexts.TryGetValue(canvas, out var context):
-                if (context.Bitmap.Width <= 0 || context.Bitmap.Height <= 0)
+                if (context.Bitmap.Width <= 0 || context.Bitmap.Height <= 0 || context.Bitmap.Width * context.Bitmap.Height > (1 << 26))
                     throw DomError("InvalidStateError", "The canvas is empty.");
+                RequireNoOpenLayers(context.Bitmap);
                 var read = context.Bitmap.Pixels();
                 if (read.Length == 0)
                     throw DomError("InvalidStateError", "The canvas is too large.");
-                image = canvas.OwnerDocument.DecodeImage(PngWriter.Encode((int)context.Bitmap.Width, (int)context.Bitmap.Height, read));
+                image = SnapshotOf(canvas);
                 break;
             case ObjectInstance data when data.HasProperty("data") && data.HasProperty("width"):
             {
                 var (w, h) = (TypeConverter.ToInt32(data.Get("width")), TypeConverter.ToInt32(data.Get("height")));
-                var array = data.Get("data") as ObjectInstance ?? throw TypeError("The data is not an array.");
-                var bytes = new byte[PixelBytes(w, h)];
-                for (var i = 0; i < bytes.Length; i++)
-                    bytes[i] = (byte)TypeConverter.ToInt32(array.Get(i.ToString(CultureInfo.InvariantCulture)));
-
-                image = Document.DecodeImage(PngWriter.Encode(w, h, bytes));
+                var floats = ImageDataFloats(data, w, h, out var dataSpace);
+                if (IsFloatData(data) && Document.CreateWideImage(w, h, floats) is { } wideImage)
+                {
+                    CanvasColorSpaces.Tag(wideImage, dataSpace, floats);
+                    image = wideImage;
+                }
+                else
+                {
+                    image = Document.DecodeImage(PngWriter.Encode(w, h, SrgbBytesOf(data, w, h, dataSpace)));
+                    if (image is not null)
+                        CanvasColorSpaces.Tag(image, dataSpace);
+                }
                 break;
             }
 
@@ -460,15 +956,6 @@ internal sealed partial class ScriptRuntime
         if (image is null)
             return JsValue.Null;
 
-        if (crop.Length >= 4 && crop.Take(4).All(double.IsFinite) && (crop[2] != 0 && crop[3] != 0) && (crop[0] != 0 || crop[1] != 0 || Math.Abs(crop[2]) != image.Width || Math.Abs(crop[3]) != image.Height))
-        {
-            // A cropped bitmap is a picture of the part: the part is drawn onto a canvas and read back.
-            var (cx, cy, cw, ch) = (crop[0], crop[1], Math.Abs(crop[2]), Math.Abs(crop[3]));
-            var piece = new CanvasBitmap(Document, cw, ch);
-            piece.DrawImage(image, new Rect(cx, cy, cw, ch), new Rect(0, 0, cw, ch));
-            image = piece.Pixels() is { Length: > 0 } cropped ? Document.DecodeImage(PngWriter.Encode((int)cw, (int)ch, cropped)) ?? image : image;
-        }
-
-        return new BitmapObject(Engine, BitmapPrototype, image);
+        return ApplyBitmapOptions(image, crop, options);
     }
 }

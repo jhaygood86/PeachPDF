@@ -729,7 +729,9 @@ namespace PeachBrackets.Css
                         return NumberFraction();
                     }
 
-                    Back();
+                    // A point belongs to a number only when a digit follows it (CSS Syntax 4.3.12): "1." is the number 1 and a delim, so give back the character
+                    // after the point and the point itself.
+                    Back(2);
                     return NewNumber(EndContent());
                 case 'e':
                 case 'E':

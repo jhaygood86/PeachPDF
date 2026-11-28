@@ -1,0 +1,50 @@
+<Project Sdk="Microsoft.NET.Sdk">
+	<Import Project="..\..\Version.props" />
+	<Import Project="..\..\ApiReference.props" />
+	<PropertyGroup>
+		<!-- Android-only: .NET for Android (not MAUI). -->
+		<TargetFrameworks>net10.0-android;net11.0-android</TargetFrameworks>
+		<SupportedOSPlatformVersion>24</SupportedOSPlatformVersion>
+		<AndroidGenerateResourceDesigner>false</AndroidGenerateResourceDesigner>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<AssemblyName>PeachBrackets.Media.Android</AssemblyName>
+		<RootNamespace>PeachBrackets.Media.Android</RootNamespace>
+		<PackageId>PeachBrackets.Media.Android</PackageId>
+		<Description>An Android media provider for PeachBrackets: the audio and video of an HTML document play through the platform MediaPlayer and MediaCodec, with a video's pictures read from an ImageReader (playing) or MediaMetadataRetriever (by the document's clock), for the .NET for Android HtmlView and any other Android host.</Description>
+		<PackageTags>html;video;audio;media;android</PackageTags>
+		<PackageIcon>peach.png</PackageIcon>
+		<PackageReadmeFile>README.md</PackageReadmeFile>
+		<PackageProjectUrl>https://peachpdf.net/</PackageProjectUrl>
+		<RepositoryUrl>https://github.com/jhaygood86/PeachPDF.git</RepositoryUrl>
+		<PackageLicenseExpression>BSD-3-Clause</PackageLicenseExpression>
+		<IncludeSymbols>true</IncludeSymbols>
+		<GenerateDocumentationFile>true</GenerateDocumentationFile>
+		<WarningsAsErrors>$(WarningsAsErrors);CS1591</WarningsAsErrors>
+		<GeneratePackageOnBuild>True</GeneratePackageOnBuild>
+		<GenerateAssemblyConfigurationAttribute>false</GenerateAssemblyConfigurationAttribute>
+		<GenerateAssemblyCompanyAttribute>false</GenerateAssemblyCompanyAttribute>
+		<GenerateAssemblyProductAttribute>false</GenerateAssemblyProductAttribute>
+		<GenerateAssemblyInformationalVersionAttribute>false</GenerateAssemblyInformationalVersionAttribute>
+		<GenerateAssemblyFileVersionAttribute>false</GenerateAssemblyFileVersionAttribute>
+		<GenerateAssemblyTitleVersionAttribute>false</GenerateAssemblyTitleVersionAttribute>
+		<GenerateAssemblyTitleAttribute>false</GenerateAssemblyTitleAttribute>
+		<GenerateAssemblyVersionAttribute>false</GenerateAssemblyVersionAttribute>
+		<RunCodeAnalysis>false</RunCodeAnalysis>
+		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+		
+	</PropertyGroup>
+	<ItemGroup>
+		<ProjectReference Include="..\PeachBrackets\PeachBrackets.csproj" />
+		<ProjectReference Include="..\..\drawing\PeachDrawing.Core\PeachDrawing.Core.csproj" />
+		<ProjectReference Include="..\..\drawing\PeachDrawing.Skia\PeachDrawing.Skia.csproj" />
+	</ItemGroup>
+	<ItemGroup>
+		<InternalsVisibleTo Include="PeachBrackets.Media.Android.Tests" />
+		<InternalsVisibleTo Include="PeachBrackets.Media.Android.Example" />
+	</ItemGroup>
+	<ItemGroup>
+		<None Include="..\..\..\LICENSE" Pack="true" PackagePath="\" />
+		<None Include="..\..\..\docs\assets\img\peach.png" Pack="true" PackagePath="\" />
+		<None Include="README.md" Pack="true" PackagePath="\" />
+	</ItemGroup>
+</Project>

@@ -16,6 +16,9 @@ internal static class WebPlatformScripts
     /// <summary>Where <see cref="MessagingScripts.Source"/> goes in <see cref="Bundle"/>.</summary>
     public const string MessagingMarker = "/*MESSAGING*/";
 
+    /// <summary>Where <see cref="WorkerScripts.Source"/> goes in <see cref="Bundle"/>.</summary>
+    public const string WorkersMarker = "/*WORKERS*/";
+
     public const string Bundle = """
         (function (net, global) {
             "use strict";
@@ -603,9 +606,10 @@ internal static class WebPlatformScripts
                 var origin = originOf(basicParse(net.documentUrl()) || newRecord("about"));
                 var id = "blob:" + (origin === "null" ? "null" : origin) + "/" + net.utf8Encode("") + Math.random().toString(16).slice(2) + Date.now().toString(16);
                 blobUrls[id] = blob;
+                net.blobUrlCreated(id);
                 return id;
             });
-            method(URL, "revokeObjectURL", function revokeObjectURL(url) { delete blobUrls[String(url)]; });
+            method(URL, "revokeObjectURL", function revokeObjectURL(url) { delete blobUrls[String(url)]; net.blobUrlRevoked(String(url)); });
             tag(URL, "URL");
 
             // ---------------------------------------------------------------- URLSearchParams
@@ -765,6 +769,7 @@ internal static class WebPlatformScripts
             /*STREAMS*/
             /*XMLSERIALIZER*/
             /*MESSAGING*/
+            /*WORKERS*/
             // ---------------------------------------------------------------- Blob, File, FormData
             var blobState = new WeakMap();
             function Blob(parts, options) {
@@ -1303,6 +1308,8 @@ internal static class WebPlatformScripts
                 var bytes = blobOf(blob).bytes;
                 return [200, "OK", [["content-type", blobOf(blob).type], ["content-length", String(bytes.length)]], bytesToBinary(bytes), url, false];
             }
+
+            net.registerBlobReader(blobAnswer);
 
             function abortReason(signal) { return signal.reason !== undefined ? signal.reason : new DOMException("The operation was aborted.", "AbortError"); }
 

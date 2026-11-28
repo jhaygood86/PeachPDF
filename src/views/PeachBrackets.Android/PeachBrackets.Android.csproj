@@ -32,6 +32,7 @@
 		<ProjectReference Include="..\..\engine\PeachBrackets\PeachBrackets.csproj" />
 		<ProjectReference Include="..\..\drawing\PeachDrawing.Core\PeachDrawing.Core.csproj" />
 		<ProjectReference Include="..\..\drawing\PeachDrawing.Skia\PeachDrawing.Skia.csproj" />
+		<ProjectReference Include="..\..\engine\PeachBrackets.Media.Android\PeachBrackets.Media.Android.csproj" />
 		<PackageReference Include="SkiaSharp.Views" />
 	</ItemGroup>
 	<ItemGroup>

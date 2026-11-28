@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The tests of the GStreamer media provider. Those that play a clip need GStreamer and its command-line tools on the machine (the clips are made
+    with gst-launch-1.0 from videotestsrc) and skip when they are missing, so a machine without GStreamer still passes the rest.
+  -->
+  <PropertyGroup>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.MTP" />
+    <PackageReference Include="xunit.v3" />
+    <PackageReference Include="Microsoft.Testing.Extensions.TrxReport" />
+    <PackageReference Include="xunit.analyzers">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\engine\PeachBrackets.Media.GStreamer\PeachBrackets.Media.GStreamer.csproj" />
+    <ProjectReference Include="..\..\engine\PeachBrackets.Scripting\PeachBrackets.Scripting.csproj" />
+    <ProjectReference Include="..\..\drawing\PeachDrawing\PeachDrawing.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="Assets\*.mp4" CopyToOutputDirectory="PreserveNewest" LinkBase="Assets" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+</Project>

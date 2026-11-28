@@ -18,7 +18,10 @@ internal sealed partial class ScriptRuntime
         "keydown", "keyup", "keypress", "input", "change", "submit", "reset", "focus", "blur", "focusin", "focusout", "select",
         "load", "error", "abort", "scroll", "resize", "pointerdown", "pointerup", "pointermove", "touchstart", "touchend", "touchmove",
         "transitionend", "transitionstart", "transitionrun", "transitioncancel", "animationstart", "animationend", "animationiteration", "animationcancel",
-        "readystatechange", "complete", "visibilitychange", "hashchange", "popstate", "pageshow", "pagehide", "unload", "beforeunload", "message", "toggle",
+        "readystatechange", "complete", "paint", "elementgeometryupdate", "visibilitychange", "hashchange", "popstate", "pageshow", "pagehide", "unload", "beforeunload", "message", "toggle",
+        // The media events GlobalEventHandlers names, which a media element's script listens for with the attribute as often as with addEventListener.
+        "loadstart", "progress", "suspend", "emptied", "stalled", "loadedmetadata", "loadeddata", "canplay", "canplaythrough", "playing", "waiting", "seeking", "seeked",
+        "ended", "durationchange", "timeupdate", "play", "pause", "ratechange", "volumechange",
     ];
 
     // Events that go to the window when written as attributes of the body.

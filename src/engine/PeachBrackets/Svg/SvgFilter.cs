@@ -234,7 +234,6 @@ namespace PeachBrackets.Svg
         public override bool RequiresRaster => true;
     }
 
-    internal enum FilterEdgeMode { Duplicate, Wrap, None }
 
     /// <summary><c>feConvolveMatrix</c>.</summary>
     internal sealed class FeConvolveMatrix : FilterPrimitive

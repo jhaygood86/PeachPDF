@@ -50,9 +50,8 @@ internal sealed partial class TestharnessEvaluator(string wptRoot) : IWptEvaluat
     public static string? SkipReason(string wptPath)
     {
         var name = wptPath[(wptPath.LastIndexOf('/') + 1)..];
-        if (name.Contains(".sub.", StringComparison.Ordinal))
-            return "needs server-side substitution";
-        if (name.Contains(".worker.", StringComparison.Ordinal) || name.Contains(".serviceworker.", StringComparison.Ordinal) || name.Contains(".sharedworker.", StringComparison.Ordinal))
+        // A .worker.js file runs in a dedicated worker the generated page starts; the other worker kinds have no model here.
+        if (name.Contains(".serviceworker.", StringComparison.Ordinal) || name.Contains(".sharedworker.", StringComparison.Ordinal))
             return "worker global";
         return null;
     }
@@ -60,7 +59,7 @@ internal sealed partial class TestharnessEvaluator(string wptRoot) : IWptEvaluat
     /// <summary>Whether <paramref name="wptPath"/> is a test this evaluator runs: a page that loads testharness.js, or a <c>.any.js</c>/<c>.window.js</c> file.</summary>
     public static bool IsTest(string wptPath, Func<string> read)
     {
-        if (wptPath.EndsWith(".any.js", StringComparison.Ordinal) || wptPath.EndsWith(".window.js", StringComparison.Ordinal))
+        if (wptPath.EndsWith(".any.js", StringComparison.Ordinal) || wptPath.EndsWith(".window.js", StringComparison.Ordinal) || wptPath.EndsWith(".worker.js", StringComparison.Ordinal))
             return true;
         return Path.GetExtension(wptPath).ToLowerInvariant() is ".html" or ".htm" or ".xht" or ".xhtml" or ".svg"
             && read().Contains("testharness.js", StringComparison.Ordinal);
@@ -72,13 +71,14 @@ internal sealed partial class TestharnessEvaluator(string wptRoot) : IWptEvaluat
             return new TestResult(Outcome.Skipped, skip);
 
         var server = new WptServer(wptRoot);
+        server.PageOrigin = WptServer.OriginFor(wptPath);
         server.Override("resources/testharnessreport.js", ReportScript);
         // The vendor file wires testdriver.js to a browser's automation; here the actions dispatch the events in the page (see TestdriverVendor).
         server.Override("resources/testdriver-vendor.js", TestdriverVendor.Script);
 
         // A .any.js or .window.js file stands for the page the server generates; any other test is the page itself, with .sub. substitution done.
         var served = wptPath.EndsWith(".js", StringComparison.Ordinal) ? wptPath[..^3] + ".html" : wptPath;
-        var page = server.Handle(new ServerRequest("GET", new Uri(WptServer.Origin + "/" + served)));
+        var page = server.Handle(new ServerRequest("GET", new Uri(server.PageOrigin + "/" + served)));
         if (page.Status != 200)
             return wptPath.EndsWith(".js", StringComparison.Ordinal)
                 ? new TestResult(Outcome.Skipped, "no window global")
@@ -90,12 +90,13 @@ internal sealed partial class TestharnessEvaluator(string wptRoot) : IWptEvaluat
 
         // The page's address is the document's own (a <base> the page declares is then the first one in it, as in a browser), not a base element put in front.
         var source = text;
-        var pageAddress = new Uri(WptServer.Origin + "/" + served);
+        var pageAddress = new Uri(server.PageOrigin + "/" + served);
 
         var lines = new List<string>();
         var errors = new List<string>();
         var diagnostics = new List<string>();
         var context = new RasterRenderContext { DocumentAddress = pageAddress, ResourceLoader = uri => LoadAsync(server, uri) };
+        await WptRenderer.InstallFontsAsync(context, wptRoot);
         var options = new HtmlDocumentOptions
         {
             MediaType = MediaType.Screen,
@@ -105,13 +106,14 @@ internal sealed partial class TestharnessEvaluator(string wptRoot) : IWptEvaluat
             ScriptHost = new JintScriptHost(new JintScriptOptions
             {
                 ScriptTimeout = TimeSpan.FromSeconds(20),
-                MemoryLimitBytes = 1L << 30,
+                MemoryLimitBytes = 4L << 30,
                 MaxVirtualTime = TimeSpan.FromSeconds(60),
                 MaxCallbacks = 100_000,
                 Logger = new CollectingLogger(lines, errors, diagnostics),
             }),
             MeasuringCanvasFactory = () => context.CreateCanvas(1, 1),
             ScriptNetwork = new ServerNetwork(server),
+            MediaProvider = WptRenderer.CreateMediaProvider(),
         };
         options.SetMargins(0);
 
@@ -198,7 +200,7 @@ internal sealed partial class TestharnessEvaluator(string wptRoot) : IWptEvaluat
     private static string Trim(string text)
     {
         text = text.ReplaceLineEndings(" ");
-        return text.Length > 220 ? text[..220] : text;
+        return text.Length > 900 ? text[..900] : text;
     }
 
     /// <summary>The page the WPT server generates for the window global of a <c>.any.js</c> / <c>.window.js</c> file; null when the file asks for no window.</summary>
@@ -207,11 +209,15 @@ internal sealed partial class TestharnessEvaluator(string wptRoot) : IWptEvaluat
     [GeneratedRegex(@"[\w./-]+\.py\b", RegexOptions.CultureInvariant)]
     private static partial Regex PythonReference();
 
+    [GeneratedRegex(@"<!--.*?-->", RegexOptions.CultureInvariant | RegexOptions.Singleline)]
+    private static partial Regex HtmlComment();
+
     // The first .py file a test names that exists in the checkout but that the server has no handler for, or null.
     private string? UnportedHandler(string wptPath, string text)
     {
         var directory = ReftestParser.DirectoryOf(wptPath);
-        foreach (Match match in PythonReference().Matches(text))
+        // A comment only names the generator that wrote the checked-in page ("DO NOT EDIT! ... generated by gentest.py"); the page is not a request for it.
+        foreach (Match match in PythonReference().Matches(HtmlComment().Replace(text, "")))
         {
             var resolved = ReftestParser.Resolve(directory, match.Value);
             if (File.Exists(Full(resolved)) && WptHandlers.Find(resolved) is null)
@@ -225,7 +231,7 @@ internal sealed partial class TestharnessEvaluator(string wptRoot) : IWptEvaluat
 
     private static async ValueTask<RNetworkResponse?> LoadAsync(WptServer server, Uri uri)
     {
-        if (uri.IsAbsoluteUri && uri.Scheme == "data")
+        if (uri.IsAbsoluteUri && uri.Scheme is "data" or "blob")
             return await HostResourceLoader.LoadAsync(uri);
 
         return await server.LoadAsync(uri);

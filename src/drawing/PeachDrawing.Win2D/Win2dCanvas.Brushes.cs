@@ -46,6 +46,23 @@ public sealed partial class Win2dCanvas
                     if (solid.PaintColor.A == 0)
                         break;
 
+                    // A color the eight-bit one would lose (outside 0 to 1) is a one-pixel picture of half floats, stretched over everything by clamping its edge.
+                    var wide = solid.WideColor;
+                    if (wide.Red is < 0f or > 1f || wide.Green is < 0f or > 1f || wide.Blue is < 0f or > 1f)
+                    {
+                        var a = Math.Clamp(wide.Alpha, 0f, 1f);
+                        Half[] pixel = [(Half)(wide.Red * a), (Half)(wide.Green * a), (Half)(wide.Blue * a), (Half)a];
+                        var bitmap = Owned(lease, CanvasBitmap.CreateFromBytes(_session, System.Runtime.InteropServices.MemoryMarshal.AsBytes(pixel.AsSpan()).ToArray(), 1, 1,
+                            Windows.Graphics.DirectX.DirectXPixelFormat.R16G16B16A16Float, 96f, CanvasAlphaMode.Premultiplied));
+                        lease.Brush = Owned(lease, new CanvasImageBrush(_session, bitmap)
+                        {
+                            ExtendX = CanvasEdgeBehavior.Clamp,
+                            ExtendY = CanvasEdgeBehavior.Clamp,
+                            SourceRectangle = new Windows.Foundation.Rect(0, 0, 1, 1),
+                        });
+                        break;
+                    }
+
                     lease.Brush = Owned(lease, new CanvasSolidColorBrush(_session, ToColor(solid.PaintColor)));
                     break;
 
@@ -129,6 +146,9 @@ public sealed partial class Win2dCanvas
         {
             case Win2dTileImage vector:
                 source = vector.Content;
+                break;
+            case Win2dBitmapImage bitmap:
+                source = bitmap.Bitmap;
                 break;
             default:
                 source = ImageFor(tile.Tile).GetBitmap(_session);

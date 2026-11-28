@@ -25,7 +25,9 @@ internal sealed partial class ScriptRuntime
     public ScriptRuntime(ScriptDocument document, JintScriptOptions options, CancellationToken cancellationToken)
     {
         Document = document;
+        document.LiveMediaPosition = LiveMediaPosition;
         _options = options;
+        _cancellation = cancellationToken;
 
         Engine = new Engine(engine =>
         {
@@ -37,6 +39,10 @@ internal sealed partial class ScriptRuntime
 
         InstallPrototypes();
         Window = InstallWindow();
+
+        // Extends the CSS object the window just defined, so it comes after it.
+        Engine.Execute(ColorScripts.Source);
+        Engine.Execute(AtomicsScripts.Source);
         InstallHostApis();
     }
 
@@ -102,7 +108,9 @@ internal sealed partial class ScriptRuntime
             _ => error.GetType().Name + ": " + error.Message,
         };
 
-        WriteLog(LogLevel.Error, ScriptLogEvents.ScriptFailed, text);
+        // A worker's error is the page's to hear of as an error event on the Worker object; the log gets it as information.
+        WriteLog(IsWorker ? LogLevel.Information : LogLevel.Error, IsWorker ? ScriptLogEvents.WorkerFailed : ScriptLogEvents.ScriptFailed, text);
+        ForwardErrorToParent(text, error is JavaScriptException thrownError ? thrownError.Error : JsValue.Undefined);
         if (_reporting)
             return;
 
@@ -181,6 +189,9 @@ internal sealed partial class ScriptRuntime
         FireEvent(DocumentObject, "DOMContentLoaded", bubbles: true, cancelable: false);
         RunMicrotasks();
 
+        await Document.LoadFontFacesAsync();
+        await RunFontLoadsAsync();
+
         await LoadInitialImagesAsync();
         RunMicrotasks();
         LoadInitialFrames();
@@ -191,6 +202,9 @@ internal sealed partial class ScriptRuntime
         FireEvent(Window, "load", bubbles: false, cancelable: false);
         RunMicrotasks();
 
+        // The canvases that make their children drawable paint once the page has loaded.
+        StartInitialCanvasPaints();
+        StartInitialMedia();
         await PlayTimersAsync();
         ReportPendingWork();
     }

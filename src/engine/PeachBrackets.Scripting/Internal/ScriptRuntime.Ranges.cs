@@ -665,6 +665,53 @@ internal sealed partial class ScriptRuntime
             RangePrototype.FastSetProperty(name, new PropertyDescriptor(Js.Num(value), PropertyFlag.AllForbidden));
         }
 
+        // The rectangles a range covers, from the layout: for text in one text node, one for each stretch of a line; otherwise the box of the element holding it.
+        IReadOnlyList<(double X, double Y, double Width, double Height)> RangeRects(RangeObject range)
+        {
+            if (ReferenceEquals(range.StartNode, range.EndNode) && range.StartNode.Kind == ScriptNodeKind.Text && range.StartNode.Parent is { } parent)
+            {
+                // The offsets are in the text node; the layout's are in all the text of the element, which may have several nodes.
+                var before = parent.Children.TakeWhile(c => !ReferenceEquals(c, range.StartNode)).Where(c => c.Kind == ScriptNodeKind.Text).Sum(c => c.Data!.Length);
+                return [.. Document.GetTextRects(parent, before + range.StartOffset, before + range.EndOffset).Select(b => (b.X, b.Y, b.Width, b.Height))];
+            }
+
+            var holder = range.StartNode.Kind == ScriptNodeKind.Element ? range.StartNode : range.StartNode.Parent;
+            return holder is null ? [] : [LayoutOf(holder)];
+        }
+
+        Js.Method(Engine, p, "getClientRects", 0, (self, _) => Js.Array(Engine, [.. RangeRects(Rg(self)).Select(r => RectObject(r))]));
+        Js.Method(Engine, p, "getBoundingClientRect", 0, (self, _) =>
+        {
+            var rects = RangeRects(Rg(self));
+            if (rects.Count == 0)
+                return RectObject((0, 0, 0, 0));
+
+            var (left, top) = (rects.Min(r => r.X), rects.Min(r => r.Y));
+            return RectObject((left, top, rects.Max(r => r.X + r.Width) - left, rects.Max(r => r.Y + r.Height) - top));
+        });
+        Js.Method(Engine, DocumentPrototype, "caretPositionFromPoint", 2, (self, args) =>
+        {
+            var (x, y) = (Num(args, 0), Num(args, 1));
+            if (!double.IsFinite(x) || !double.IsFinite(y) || Document.GetCaretAt(x, y) is not { } caret)
+                return JsValue.Null;
+
+            // The text node of the element the offset falls in.
+            var offset = caret.Offset;
+            ScriptNode? node = null;
+            foreach (var child in caret.Element.Children.Where(c => c.Kind == ScriptNodeKind.Text))
+            {
+                node = child;
+                if (offset <= child.Data!.Length)
+                    break;
+
+                offset -= child.Data!.Length;
+            }
+
+            var result = Js.NewObject(Engine);
+            Js.Value(result, "offsetNode", node is null ? Wrap(caret.Element) : Wrap(node));
+            Js.Value(result, "offset", Js.Num(node is null ? 0 : Math.Min(offset, node.Data!.Length)));
+            return result;
+        });
         Define(Engine.Global, "Range", constructor);
         Define(Engine.Global, "AbstractRange", Js.Constructor(Engine, "AbstractRange", AbstractRangePrototype, 0, (_, _, _) => throw TypeError("Illegal constructor")));
         Js.Method(Engine, DocumentPrototype, "createRange", 0, (self, _) => MakeRange(D(self).Root));

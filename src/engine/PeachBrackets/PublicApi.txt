@@ -345,6 +345,22 @@ PeachBrackets.Annotations.PagePosition : struct
   property Double Top { get; init; }
   property Int32 PageIndex { get; init; }
   property StructureNode? Target { get; init; }
+PeachBrackets.BlobContent : sealed class
+  ctor(Byte[] Bytes, String ContentType)
+  method BlobContent <Clone>$()
+  method Void Deconstruct(out Byte[] Bytes, out String ContentType)
+  method virtual Boolean Equals(BlobContent other)
+  method virtual Boolean Equals(Object obj)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property Byte[] Bytes { get; init; }
+  property String ContentType { get; init; }
+PeachBrackets.BlobUrlStore : static class
+  method static BlobContent TryRead(String url)
+  method static RNetworkResponse Load(Uri uri)
+  method static ValueTask<RNetworkResponse> LoadAsync(Uri uri)
+  method static Void Register(String url, Object owner, Func<Object, String, BlobContent> read)
+  method static Void Revoke(String url)
 PeachBrackets.Building.DeclarativePage : sealed class
   method Void AddMarginBox(String marginBox, String content)
   property DocumentNode Root { get; }
@@ -655,6 +671,7 @@ PeachBrackets.HtmlDocumentOptions : sealed class
   ctor()
   method Void SetMargins(Double points)
   property Boolean AnimationsEnabled { get; set; }
+  property Boolean CanvasSurfaces { get; set; }
   property Boolean CollectFormFields { get; set; }
   property Boolean EnableIncrementalUpdates { get; set; }
   property Boolean EnableSelectionStyling { get; set; }
@@ -682,6 +699,7 @@ PeachBrackets.HtmlDocumentOptions : sealed class
   property Double? ViewportHeightPoints { get; set; }
   property Func<Canvas> MeasuringCanvasFactory { get; set; }
   property IList<ScriptApi> ScriptApis { get; }
+  property IMediaProvider MediaProvider { get; set; }
   property IScriptHost ScriptHost { get; set; }
   property IScriptNetwork ScriptNetwork { get; set; }
   property ImageSelectionOptions ImageSelection { get; set; }
@@ -738,6 +756,85 @@ PeachBrackets.InputCapabilities : sealed class
   property static InputCapabilities Mouse { get; }
   property static InputCapabilities None { get; }
   property static InputCapabilities Touch { get; }
+PeachBrackets.Media.IMediaProvider : interface
+  method abstract String CanPlayType(String mimeType)
+  method abstract ValueTask<IMediaSession> OpenAsync(MediaRequest request, CancellationToken cancellationToken = null)
+PeachBrackets.Media.IMediaSession : interface
+  method abstract MediaFrame AcquireFrame()
+  method abstract ValueTask<MediaFrame> AcquireFrameAtAsync(TimeSpan position, CancellationToken cancellationToken = null)
+  method abstract Void Pause()
+  method abstract Void Play()
+  method abstract Void Seek(TimeSpan position)
+  method abstract Void Update(TimeSpan documentTime)
+  property Boolean Ended { get; }
+  property Boolean HasVideo { get; }
+  property Boolean IsPlaying { get; }
+  property Boolean Loop { get; set; }
+  property Boolean Muted { get; set; }
+  property Double PlaybackRate { get; set; }
+  property Double Volume { get; set; }
+  property Int32 VideoHeight { get; }
+  property Int32 VideoWidth { get; }
+  property MediaErrorCode Error { get; }
+  property MediaKind Kind { get; }
+  property MediaReadyState ReadyState { get; }
+  property TimeSpan Position { get; }
+  property TimeSpan? Duration { get; }
+PeachBrackets.Media.MediaChange : enum Int32
+  Data = 2
+  Ended = 32
+  Error = 64
+  Frame = 16
+  Metadata = 1
+  None = 0
+  Position = 8
+  State = 4
+PeachBrackets.Media.MediaChangedEventArgs : sealed class
+  ctor(MediaChange changes)
+  property MediaChange Changes { get; }
+PeachBrackets.Media.MediaColorSpace : enum Int32
+  DisplayP3 = 1
+  Rec2020 = 2
+  Srgb = 0
+PeachBrackets.Media.MediaErrorCode : enum Int32
+  Aborted = 1
+  Decode = 3
+  Network = 2
+  None = 0
+  SourceNotSupported = 4
+PeachBrackets.Media.MediaFrame : sealed class
+  ctor(Image image, TimeSpan time, Action release = null)
+  method virtual Void Dispose()
+  property Image Image { get; }
+  property MediaColorSpace ColorSpace { get; init; }
+  property TimeSpan Time { get; }
+PeachBrackets.Media.MediaKind : enum Int32
+  Audio = 0
+  Video = 1
+PeachBrackets.Media.MediaPreload : enum Int32
+  Auto = 2
+  Metadata = 1
+  None = 0
+PeachBrackets.Media.MediaProviderOptions : sealed class
+  ctor()
+  property Boolean DeterministicClock { get; init; }
+PeachBrackets.Media.MediaReadyState : enum Int32
+  CurrentData = 2
+  EnoughData = 4
+  FutureData = 3
+  Metadata = 1
+  Nothing = 0
+PeachBrackets.Media.MediaRequest : sealed class
+  ctor(Uri address, MediaKind kind, RenderContext renderContext, Func<CancellationToken, ValueTask<RNetworkResponse>> load)
+  method ValueTask<RNetworkResponse> LoadAsync(CancellationToken cancellationToken = null)
+  property Boolean Loop { get; init; }
+  property Boolean Muted { get; init; }
+  property MediaKind Kind { get; }
+  property MediaPreload Preload { get; init; }
+  property RenderContext RenderContext { get; }
+  property String ContentType { get; init; }
+  property String CrossOrigin { get; init; }
+  property Uri Address { get; }
 PeachBrackets.MediaType : enum Int32
   Print = 0
   Screen = 1
@@ -827,9 +924,9 @@ PeachBrackets.ScriptHosting.ScriptCallback : sealed class
   ctor(Func<IReadOnlyList<ScriptValue>, ScriptValue> invoke)
   method ScriptValue Invoke(ScriptValue[] arguments)
 PeachBrackets.ScriptHosting.ScriptCanvasPainting : sealed class
-  ctor(Double Width, Double Height, Action<Canvas> Paint)
+  ctor(Double Width, Double Height, Action<Canvas> Paint, IDisposable Owner = null)
   method ScriptCanvasPainting <Clone>$()
-  method Void Deconstruct(out Double Width, out Double Height, out Action<Canvas> Paint)
+  method Void Deconstruct(out Double Width, out Double Height, out Action<Canvas> Paint, out IDisposable Owner)
   method virtual Boolean Equals(Object obj)
   method virtual Boolean Equals(ScriptCanvasPainting other)
   method virtual Int32 GetHashCode()
@@ -837,19 +934,36 @@ PeachBrackets.ScriptHosting.ScriptCanvasPainting : sealed class
   property Action<Canvas> Paint { get; init; }
   property Double Height { get; init; }
   property Double Width { get; init; }
+  property IDisposable Owner { get; init; }
 PeachBrackets.ScriptHosting.ScriptDocument : sealed class
+  method Boolean DeclaresColorSpace(Image image)
+  method Boolean DrawSvgImage(Canvas canvas, String address, Rect viewport)
+  method Boolean IsFontSource(String source)
+  method Boolean IsSvgImage(String address)
+  method Boolean TryParseColor(String css, ScriptNode element, out PaintColor color)
+  method Boolean TryParseColor(String css, ScriptNode element, out PaintColor color, out String serialized)
   method Boolean TryParseColor(String css, out PaintColor color)
+  method Byte[] EncodeImage(Int32 width, Int32 height, Byte[] straightBytes, Single[] straightFloats, String colorSpace, String mimeType, Double? quality, out String writtenType)
   method Canvas CreateMeasuringCanvas()
+  method Font GetFallbackFont(Rune rune, Double sizePixels, PaintFontStyle style, Double weight)
   method Font GetFont(String family, Double sizePixels, PaintFontStyle style, Double weight)
+  method IReadOnlyList<ScriptBox> GetTextRects(ScriptNode element, Int32 from, Int32 to)
   method IReadOnlyList<ScriptNode> GetElementsByClassName(String classNames)
   method IReadOnlyList<ScriptNode> GetElementsByTagName(String tagName)
   method IReadOnlyList<ScriptNode> QuerySelectorAll(String selector)
+  method Image CreateWideImage(Int32 widthPixels, Int32 heightPixels, ReadOnlySpan<Single> straightRgba)
   method Image DecodeImage(Byte[] bytes)
   method Image GetLoadedImage(String address)
+  method Image UnorientedImage(Image image)
+  method Image UprightImage(Image image)
   method Int32 OrdinalOf(ScriptNode element)
+  method List<ValueTuple<Double, PaintColor>> InterpolateGradientStops(IReadOnlyList<ValueTuple<Double, PaintColor>> stops)
+  method OffscreenSurface CreateCanvasSurface(Int32 widthPixels, Int32 heightPixels)
+  method OffscreenSurface CreateCanvasSurface(Int32 widthPixels, Int32 heightPixels, Boolean wide)
   method ScriptBox? GetLayoutBox(ScriptNode element)
   method ScriptDocument CreateDocument(Boolean html, Boolean withDocumentType, String contentType = null)
   method ScriptDocument ParseDocument(String html)
+  method ScriptElementPicture RenderElement(ScriptNode element)
   method ScriptNode AdoptNode(ScriptNode node)
   method ScriptNode CreateCDataSection(String data)
   method ScriptNode CreateComment(String data)
@@ -861,14 +975,29 @@ PeachBrackets.ScriptHosting.ScriptDocument : sealed class
   method ScriptNode CreateTextNode(String text)
   method ScriptNode GetElementById(String id)
   method ScriptNode QuerySelector(String selector)
+  method ScriptSvgFilter GetSvgFilter(String id)
+  method Single[] ConvertMediaPixelsToDisplayP3(Byte[] straightRgba, Int32 widthPixels, Int32 heightPixels, MediaColorSpace from)
+  method String CanPlayMediaType(String mimeType)
   method String GetComputedValue(ScriptNode element, String property)
+  method String GetMediaFinalAddress(IMediaSession session)
+  method ValueTask LoadFontFacesAsync()
+  method ValueTask<Boolean> LoadFontFaceAsync(String family, String source, Byte[] data, String weight, String style, String stretch, String unicodeRange)
+  method ValueTask<IMediaSession> OpenMediaAsync(String address, MediaKind kind, String contentType, String crossOrigin, Boolean muted, Boolean loop, MediaPreload preload)
   method ValueTask<ScriptImageInfo> LoadImageAsync(String address)
   method ValueTask<ScriptNetworkResponse> SendAsync(ScriptNetworkRequest request, CancellationToken cancellationToken = null)
   method ValueTask<String> LoadTextAsync(String address)
+  method ValueTuple<Int32, Int32, Byte[], Single[]>? ConvertImageToColorSpace(Image image, String colorSpace, Boolean wide)
+  method ValueTuple<ScriptBox, ScriptBox>? GetBoundingBoxes(ScriptNode element)
+  method ValueTuple<ScriptNode, Int32>? GetCaretAt(Double x, Double y)
   method Void SetCanvasPainting(ScriptNode canvas, ScriptCanvasPainting painting)
+  method Void SetPlaceholderSize(ScriptNode canvas, Double width, Double height)
+  method static Boolean TryParseNonNegativeInteger(String text, out UInt32 value)
   property Boolean CanMeasure { get; }
+  property Boolean FontFacesLoaded { get; }
+  property Boolean HasMediaProvider { get; }
   property Boolean IsHtml { get; }
   property Boolean KeepAlive { get; set; }
+  property Func<ScriptNode, TimeSpan?> LiveMediaPosition { get; set; }
   property IReadOnlyList<ScriptApi> Apis { get; }
   property IReadOnlyList<ScriptNode> Scripts { get; }
   property Int32 Version { get; }
@@ -883,10 +1012,21 @@ PeachBrackets.ScriptHosting.ScriptDocument : sealed class
   property String Title { get; }
   property Uri BaseAddress { get; }
   property Uri BaseUri { get; }
+PeachBrackets.ScriptHosting.ScriptElementPicture : sealed class
+  ctor(Image Image, Double Width, Double Height)
+  method ScriptElementPicture <Clone>$()
+  method Void Deconstruct(out Image Image, out Double Width, out Double Height)
+  method virtual Boolean Equals(Object obj)
+  method virtual Boolean Equals(ScriptElementPicture other)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property Double Height { get; init; }
+  property Double Width { get; init; }
+  property Image Image { get; init; }
 PeachBrackets.ScriptHosting.ScriptImageInfo : sealed class
-  ctor(Double Width, Double Height, String Address)
+  ctor(Double Width, Double Height, String Address, String ResponseAddress = null)
   method ScriptImageInfo <Clone>$()
-  method Void Deconstruct(out Double Width, out Double Height, out String Address)
+  method Void Deconstruct(out Double Width, out Double Height, out String Address, out String ResponseAddress)
   method virtual Boolean Equals(Object obj)
   method virtual Boolean Equals(ScriptImageInfo other)
   method virtual Int32 GetHashCode()
@@ -894,6 +1034,7 @@ PeachBrackets.ScriptHosting.ScriptImageInfo : sealed class
   property Double Height { get; init; }
   property Double Width { get; init; }
   property String Address { get; init; }
+  property String ResponseAddress { get; init; }
 PeachBrackets.ScriptHosting.ScriptLayout : sealed class
   method IReadOnlyList<BoxReport> GetBoxes(ScriptNode element)
   property IReadOnlyList<BoxReport> Pages { get; }
@@ -996,6 +1137,8 @@ PeachBrackets.ScriptHosting.ScriptNodeKind : enum Int32
   Fragment = 3
   ProcessingInstruction = 5
   Text = 2
+PeachBrackets.ScriptHosting.ScriptSvgFilter : sealed class
+  method Void Apply(Canvas canvas, RasterSurface surface, Rect region)
 PeachBrackets.ScriptHosting.ScriptValue : struct
   method Boolean AsBoolean()
   method Double AsNumber()

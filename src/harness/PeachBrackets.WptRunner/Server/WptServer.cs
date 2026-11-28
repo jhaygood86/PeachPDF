@@ -20,6 +20,15 @@ internal sealed partial class WptServer(string root)
     /// <summary>The origin a test page is loaded from.</summary>
     public const string Origin = "http://web-platform.test:8000";
 
+    /// <summary>The origin a secure test page (<c>.https.</c> in its name) is loaded from.</summary>
+    public const string SecureOrigin = "https://web-platform.test:8443";
+
+    /// <summary>The origin of the test page this server is serving, which a request the page makes names as its <c>Origin</c>; <see cref="Origin"/> unless a test says otherwise.</summary>
+    public string PageOrigin { get; set; } = Origin;
+
+    /// <summary>The origin a test is loaded from: WPT serves a file with <c>.https.</c> in its name over TLS.</summary>
+    public static string OriginFor(string wptPath) => System.IO.Path.GetFileName(wptPath).Contains(".https.", StringComparison.Ordinal) ? SecureOrigin : Origin;
+
     private static readonly string[] Subdomains = ["www", "www1", "www2", "xn--n8j6ds53lwwkrqhv28a", "xn--lve-6lad"];
 
     private readonly string _root = Path.GetFullPath(root);
@@ -158,7 +167,7 @@ internal sealed partial class WptServer(string root)
             var responseHeaders = response.Headers
                 .GroupBy(h => h.Key, StringComparer.OrdinalIgnoreCase)
                 .ToDictionary(g => g.Key, g => g.Select(h => h.Value).ToArray(), StringComparer.OrdinalIgnoreCase);
-            return ValueTask.FromResult<RNetworkResponse?>(new RNetworkResponse(new MemoryStream(response.Body), responseHeaders));
+            return ValueTask.FromResult<RNetworkResponse?>(new RNetworkResponse(new MemoryStream(response.Body), responseHeaders) { FinalAddress = uri });
         }
 
         return ValueTask.FromResult<RNetworkResponse?>(null);
@@ -191,8 +200,8 @@ internal sealed partial class WptServer(string root)
                 sent["Referer"] = referer;
 
             // A browser names the page's origin on a request that is not a plain same-origin GET or HEAD.
-            if (!sent.ContainsKey("Origin") && (method is not ("GET" or "HEAD") || !string.Equals(uri.GetLeftPart(UriPartial.Authority), Origin, StringComparison.OrdinalIgnoreCase)))
-                sent["Origin"] = Origin;
+            if (!sent.ContainsKey("Origin") && (method is not ("GET" or "HEAD") || !string.Equals(uri.GetLeftPart(UriPartial.Authority), PageOrigin, StringComparison.OrdinalIgnoreCase)))
+                sent["Origin"] = PageOrigin;
 
             var response = Handle(new ServerRequest(method, uri, sent, body));
             foreach (var (_, value) in response.Headers.Where(h => h.Key.Equals("Set-Cookie", StringComparison.OrdinalIgnoreCase)))
@@ -401,6 +410,17 @@ internal sealed partial class WptServer(string root)
     // `x.any.html` and `x.window.html` stand for the page of `x.any.js` / `x.window.js`; null for any other path.
     private string? GeneratedPage(string path)
     {
+        // `x.worker.html` is the page that runs `x.worker.js` as a dedicated worker and takes its results.
+        var worker = Regex.Match(path, @"^(.*\.worker)\.html$", RegexOptions.CultureInvariant);
+        if (worker.Success)
+        {
+            if (ReadFile(worker.Groups[1].Value + ".js") is null)
+                return null;
+
+            var file = path[(path.LastIndexOf('/') + 1)..^5] + ".js";
+            return "<!doctype html>\n<meta charset=utf-8>\n<title>" + System.Net.WebUtility.HtmlEncode(file) + "</title>\n<script src=\"/resources/testharness.js\"></script>\n<script src=\"/resources/testharnessreport.js\"></script>\n<div id=log></div>\n<script>fetch_tests_from_worker(new Worker(\"" + file + "\"));</script>\n";
+        }
+
         var match = Regex.Match(path, @"^(.*\.(?:any|window))\.html$", RegexOptions.CultureInvariant);
         if (!match.Success)
             return null;

@@ -1,0 +1,49 @@
+<Project Sdk="Microsoft.NET.Sdk">
+	<Import Project="..\..\Version.props" />
+	<Import Project="..\..\ApiReference.props" />
+	<PropertyGroup>
+		<!-- Windows-only: the MediaPlayer frame server and Win2D are. -->
+		<TargetFrameworks>net10.0-windows10.0.19041.0;net11.0-windows10.0.19041.0</TargetFrameworks>
+		<AssemblyName>PeachBrackets.Media.Windows</AssemblyName>
+		<RootNamespace>PeachBrackets.Media.Windows</RootNamespace>
+		<PackageId>PeachBrackets.Media.Windows</PackageId>
+		<Description>A Windows media provider for PeachBrackets: the audio and video of an HTML document play through Windows Media Foundation (the MediaPlayer frame server), and each video frame is copied into a Win2D bitmap on the device the document draws with, so drawing it needs no read back.</Description>
+		<PackageTags>html;video;audio;media;windows;mediafoundation;win2d</PackageTags>
+		<PackageIcon>peach.png</PackageIcon>
+		<PackageReadmeFile>README.md</PackageReadmeFile>
+		<PackageProjectUrl>https://peachpdf.net/</PackageProjectUrl>
+		<RepositoryUrl>https://github.com/jhaygood86/PeachPDF.git</RepositoryUrl>
+		<PackageLicenseExpression>BSD-3-Clause</PackageLicenseExpression>
+		<IncludeSymbols>true</IncludeSymbols>
+		<GenerateDocumentationFile>true</GenerateDocumentationFile>
+		<WarningsAsErrors>$(WarningsAsErrors);CS1591</WarningsAsErrors>
+		<GeneratePackageOnBuild>True</GeneratePackageOnBuild>
+		<GenerateAssemblyConfigurationAttribute>false</GenerateAssemblyConfigurationAttribute>
+		<GenerateAssemblyCompanyAttribute>false</GenerateAssemblyCompanyAttribute>
+		<GenerateAssemblyProductAttribute>false</GenerateAssemblyProductAttribute>
+		<GenerateAssemblyInformationalVersionAttribute>false</GenerateAssemblyInformationalVersionAttribute>
+		<GenerateAssemblyFileVersionAttribute>false</GenerateAssemblyFileVersionAttribute>
+		<GenerateAssemblyTitleVersionAttribute>false</GenerateAssemblyTitleVersionAttribute>
+		<GenerateAssemblyTitleAttribute>false</GenerateAssemblyTitleAttribute>
+		<GenerateAssemblyVersionAttribute>false</GenerateAssemblyVersionAttribute>
+		<RunCodeAnalysis>false</RunCodeAnalysis>
+		
+		<IsTrimmable>true</IsTrimmable>
+		<EnableTrimAnalyzer>true</EnableTrimAnalyzer>
+		<IsAotCompatible>true</IsAotCompatible>
+		<SupportedOSPlatformVersion>10.0.17763.0</SupportedOSPlatformVersion>
+		<Win2DWarnNoPlatform>false</Win2DWarnNoPlatform>
+	</PropertyGroup>
+	<ItemGroup>
+		<ProjectReference Include="..\PeachBrackets\PeachBrackets.csproj" />
+		<ProjectReference Include="..\..\drawing\PeachDrawing.Win2D\PeachDrawing.Win2D.csproj" />
+	</ItemGroup>
+	<ItemGroup>
+		<InternalsVisibleTo Include="PeachBrackets.Media.Windows.Tests" />
+	</ItemGroup>
+	<ItemGroup>
+		<None Include="..\..\..\LICENSE" Pack="true" PackagePath="\" />
+		<None Include="..\..\..\docs\assets\img\peach.png" Pack="true" PackagePath="\" />
+		<None Include="README.md" Pack="true" PackagePath="\" />
+	</ItemGroup>
+</Project>

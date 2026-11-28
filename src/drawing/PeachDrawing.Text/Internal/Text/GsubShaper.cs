@@ -147,7 +147,7 @@ namespace PeachDrawing.Text.Internal.Text
 
             if (features.JoiningForms is { Count: > 0 } joiningForms)
             {
-                var languageTag = features.LanguageSystemTag ?? OpenTypeLanguageTags.Resolve(features.Language);
+                var languageTag = features.LanguageSystemTag ?? OpenTypeLanguageTags.ResolveSystemTag(features.Language);
                 var scriptPreference = ResolveScriptPreference(features.ScriptTag);
 
                 // Captured by ClusterStart BEFORE the ccmp/locl pre-stage runs just below - that stage
@@ -195,14 +195,14 @@ namespace PeachDrawing.Text.Internal.Text
 
             if (features.UseCategories is { Count: > 0 } useCategories)
             {
-                var languageTag = features.LanguageSystemTag ?? OpenTypeLanguageTags.Resolve(features.Language);
+                var languageTag = features.LanguageSystemTag ?? OpenTypeLanguageTags.ResolveSystemTag(features.Language);
                 var scriptPreference = ResolveScriptPreference(features.ScriptTag);
                 ApplyUseShaping(gsub, glyphs, useCategories, languageTag, scriptPreference, gdef);
             }
 
             if (features.KhmerCategories is { Count: > 0 } khmerCategories)
             {
-                var languageTag = features.LanguageSystemTag ?? OpenTypeLanguageTags.Resolve(features.Language);
+                var languageTag = features.LanguageSystemTag ?? OpenTypeLanguageTags.ResolveSystemTag(features.Language);
                 var scriptPreference = ResolveScriptPreference(features.ScriptTag);
                 ApplyKhmerShaping(gsub, glyphs, khmerCategories, languageTag, scriptPreference, gdef);
             }
@@ -338,7 +338,9 @@ namespace PeachDrawing.Text.Internal.Text
                 // A variation selector never contributes an independent glyph advance, even when a font
                 // maps it in its ordinary cmap. Other default ignorables are hidden when unmapped; a real
                 // mapped glyph remains available to GSUB (notably for ZWJ-driven emoji composition).
+                // A bidi control is hidden whatever the font maps it to: it takes no part in substitution and a font's glyph for it is blank, but would take its advance and letter spacing.
                 var hiddenIgnorable = UnicodeDefaultIgnorables.IsVariationSelector(rune.Value)
+                    || UnicodeDefaultIgnorables.IsBidiControl(rune.Value)
                     || glyphIndex == 0 && UnicodeDefaultIgnorables.IsDefaultIgnorable(rune.Value);
 
                 // Any other variation selector after a base the font gives a dedicated glyph for (a
@@ -461,7 +463,7 @@ namespace PeachDrawing.Text.Internal.Text
                     }
                 }
 
-                string? languageTag = key.LanguageSystemTag ?? OpenTypeLanguageTags.Resolve(key.Language);
+                string? languageTag = key.LanguageSystemTag ?? OpenTypeLanguageTags.ResolveSystemTag(key.Language);
                 IReadOnlyList<string> scriptPreference = ResolveScriptPreference(key.ScriptTag);
 
                 var result = new SortedDictionary<int, int>();

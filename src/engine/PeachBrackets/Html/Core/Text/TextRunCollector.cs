@@ -348,6 +348,11 @@ namespace PeachBrackets.Html.TextGeometry
 
                     var first = Math.Clamp(glyph.ClusterStart, 0, widths.Length - 1);
                     var last = Math.Min(widths.Length, glyph.ClusterStart + glyph.ClusterLength);
+
+                    // Characters that are not drawn (bidi controls, zero-width joiners and the like) take no room, whatever glyph the font has for them.
+                    if (AllDefaultIgnorable(visual, first, last))
+                        continue;
+
                     var count = Math.Max(1, last - first);
                     for (var i = first; i < first + count && i < widths.Length; i++)
                         widths[i] += advance / count;
@@ -358,11 +363,16 @@ namespace PeachBrackets.Html.TextGeometry
             foreach (var unit in widths)
                 total += unit;
 
-            if (total <= 1e-9)
+            // Nothing to share the width out by: equally, unless the word has no width at all (a bidi control, say), which every character shares.
+            if (total <= 1e-9 && width > 0)
             {
                 for (var i = 0; i < widths.Length; i++)
                     widths[i] = 1;
                 total = widths.Length;
+            }
+            else if (total <= 1e-9)
+            {
+                total = 1;
             }
 
             var factor = width > 0 ? width / total : 1;
@@ -387,6 +397,25 @@ namespace PeachBrackets.Html.TextGeometry
             }
 
             return xs;
+        }
+
+        private static bool AllDefaultIgnorable(string text, int from, int to)
+        {
+            if (to <= from)
+                return false;
+
+            for (var i = from; i < to && i < text.Length; i++)
+            {
+                var rune = char.IsHighSurrogate(text[i]) && i + 1 < text.Length && char.IsLowSurrogate(text[i + 1]) ? char.ConvertToUtf32(text[i], text[i + 1]) : text[i];
+                // Soft hyphen and the Hangul fillers are default ignorable but have an advance of their own in a font that maps them.
+                if (!PeachDrawing.Text.Unicode.DefaultIgnorables.Contains(rune) || rune is 0x00AD or 0x115F or 0x1160 or 0x3164 or 0xFFA0)
+                    return false;
+
+                if (rune > 0xFFFF)
+                    i++;
+            }
+
+            return true;
         }
 
         private static string ReverseRunes(string text)

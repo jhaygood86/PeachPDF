@@ -223,6 +223,10 @@ internal sealed class CoreGraphicsImage : PeachDrawing.Core.Image
         return true;
     }
 
+    /// <summary>An image over a <see cref="CGImage"/> that is the image's to dispose (a snapshot of a bitmap context).</summary>
+    internal static CoreGraphicsImage FromCgImage(CGImage image, int width, int height, CoreGraphicsResourceCounts counts) =>
+        new(width, height, null, null, image, counts);
+
     public static CoreGraphicsImage FromPixels(PixelBuffer pixels, CoreGraphicsResourceCounts counts) =>
         new(pixels.Width, pixels.Height, pixels.PremultipliedRgba.ToArray(), null, null, counts);
 

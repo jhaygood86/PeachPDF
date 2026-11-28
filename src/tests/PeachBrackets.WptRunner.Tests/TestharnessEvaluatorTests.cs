@@ -122,9 +122,21 @@ public sealed class TestharnessEvaluatorTests : IDisposable
         Assert.Equal(Outcome.Pass, (await RunAsync("dom/driver.html")).Outcome);
     }
 
+    [Fact]
+    public void AWorkerJsFile_HasAGeneratedPageThatStartsItAsADedicatedWorker()
+    {
+        Write("dom/w.worker.js", "test(function () {}, 'in a worker');");
+
+        var server = new Server.WptServer(_root);
+        var page = server.Handle(new Server.ServerRequest("GET", new Uri(server.PageOrigin + "/dom/w.worker.html")));
+
+        Assert.Equal(200, page.Status);
+        Assert.Contains("fetch_tests_from_worker(new Worker(\"w.worker.js\"))", page.Text, StringComparison.Ordinal);
+        Assert.True(TestharnessEvaluator.IsTest("dom/w.worker.js", () => string.Empty));
+        Assert.Null(TestharnessEvaluator.SkipReason("dom/w.worker.js"));
+    }
+
     [Theory]
-    [InlineData("dom/a.sub.html", "needs server-side substitution")]
-    [InlineData("dom/a.worker.js", "worker global")]
     [InlineData("dom/a.serviceworker.js", "worker global")]
     public async Task WhatNeedsAServerOrAWorker_IsSkippedWithItsReason(string path, string reason)
     {
@@ -133,6 +145,31 @@ public sealed class TestharnessEvaluatorTests : IDisposable
         Assert.Equal(Outcome.Skipped, result.Outcome);
         Assert.Equal(reason, result.Reason);
     }
+
+    [Fact]
+    public async Task ASubstitutionPage_IsRun_WithItsVariablesFilledIn()
+    {
+        Write("dom/s.sub.html", Page + "<script>test(function () { if ('{{location[scheme]}}:{{ports[https][0]}}' !== 'http:8443') throw new Error('substitution'); }, 'a'); done();</script>");
+
+        var result = await RunAsync("dom/s.sub.html");
+        Assert.True(result.Outcome == Outcome.Pass, result.Reason);
+    }
+
+    [Fact]
+    public async Task APageWithHttpsInItsName_IsLoadedOverHttps()
+    {
+        Write("dom/s.https.sub.html", Page + "<script>test(function () { if ('{{location[scheme]}}:{{location[port]}}' !== 'https:8443') throw new Error('origin'); }, 'a'); done();</script>");
+
+        var result = await RunAsync("dom/s.https.sub.html");
+        Assert.True(result.Outcome == Outcome.Pass, result.Reason);
+    }
+
+    [Theory]
+    [InlineData("dom/a.html", "http://web-platform.test:8000")]
+    [InlineData("dom/a.https.html", "https://web-platform.test:8443")]
+    [InlineData("dom/a.https.sub.html", "https://web-platform.test:8443")]
+    public void TheOriginATestIsLoadedFrom_FollowsItsName(string path, string origin) =>
+        Assert.Equal(origin, PeachBrackets.WptRunner.Server.WptServer.OriginFor(path));
 
     [Fact]
     public async Task AnAnyJsFileForWorkersOnly_IsSkipped()

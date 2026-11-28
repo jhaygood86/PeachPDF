@@ -52,7 +52,7 @@ namespace PeachBrackets.Html.Paint
             if (extent is not { } ink)
                 return false;
 
-            var margin = RasterFilterChain.InkMargin(filter.Functions, box);
+            var margin = RasterFilterChain.InkMargin(filter.Functions, box, ink);
             var bleed = SubtreeBleed(fragment);
             var bounds = Inflate(ink, margin + bleed);
 
@@ -63,7 +63,8 @@ namespace PeachBrackets.Html.Paint
 
             // A canvas that applies layer effects on the graphics hardware takes the filter list as effects of a layer, which saves
             // rendering the subtree into a CPU bitmap, filtering it there and uploading it again.
-            if (g.HasNativeLayerEffects && PaintRasterizedNative(g, fragment, filter, bounds))
+            // A reference to an SVG filter is run over the pixels; a layer's native effects have no such thing.
+            if (g.HasNativeLayerEffects && !System.Linq.Enumerable.Any(filter.Functions, f => f.Name == FilterGrammar.Reference) && PaintRasterizedNative(g, fragment, filter, bounds))
                 return true;
 
             using var scope = g.BeginRasterSurface(bounds);
@@ -85,7 +86,7 @@ namespace PeachBrackets.Html.Paint
                 _dropShadowsInRaster.Remove(box);
             }
 
-            RasterFilterChain.Apply(scope.Surface, filter.Functions, box, box.ActualOpacity);
+            RasterFilterChain.Apply(scope.Surface, filter.Functions, box, box.ActualOpacity, scope.Graphics, bounds, ink);
 
             // The bitmap is presentation, not content: tagged output marks it an artifact and the text pass below supplies the content.
             var builder = _taggingSuppressed ? null : box.HtmlContainer?.StructureTagBuilder;

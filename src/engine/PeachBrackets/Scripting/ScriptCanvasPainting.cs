@@ -7,4 +7,5 @@ namespace PeachBrackets.ScriptHosting;
 /// <param name="Width">the bitmap's width in CSS pixels</param>
 /// <param name="Height">the bitmap's height in CSS pixels</param>
 /// <param name="Paint">draws the content with the canvas's top left at the origin and one unit a CSS pixel; it may be called any number of times</param>
-public sealed record ScriptCanvasPainting(double Width, double Height, Action<Canvas> Paint);
+/// <param name="Owner">what the drawing holds on to (a bitmap on the graphics device), which the document releases when it replaces or drops the drawing; null for a plain recording</param>
+public sealed record ScriptCanvasPainting(double Width, double Height, Action<Canvas> Paint, IDisposable? Owner = null);

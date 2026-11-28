@@ -86,6 +86,9 @@ namespace PeachBrackets.Html.Handlers
         /// <summary>
         /// the image instance of the loaded image
         /// </summary>
+        /// <summary>The address the image was finally read from when its request was redirected, as the resource loader reported it.</summary>
+        public Uri? FinalAddress { get; private set; }
+
         public Image? Image { get; private set; }
 
         /// <summary>
@@ -178,7 +181,16 @@ namespace PeachBrackets.Html.Handlers
 
             try
             {
-                Image = _htmlContainer.RenderContext.ImageFromStream(stream);
+                if (stream is MemoryStream { Position: 0 } whole && whole.TryGetBuffer(out var buffer) && buffer.Offset == 0 && buffer.Count == buffer.Array!.Length)
+                {
+                    Image = ImageColorSources.Decode(_htmlContainer.RenderContext, buffer.Array);
+                }
+                else
+                {
+                    using var copy = new MemoryStream();
+                    await stream.CopyToAsync(copy);
+                    Image = ImageColorSources.Decode(_htmlContainer.RenderContext, copy.ToArray());
+                }
             }
             catch (InvalidOperationException)
             {
@@ -285,6 +297,7 @@ namespace PeachBrackets.Html.Handlers
             {
                 Image = cached.Image;
                 SvgDocument = cached.SvgDocument;
+                FinalAddress = _htmlContainer.GetResolvedImageFinalAddress(cacheKey);
                 ImageLoadComplete();
                 return;
             }
@@ -297,6 +310,7 @@ namespace PeachBrackets.Html.Handlers
                 if (Image is null && SvgDocument is null) ReleaseObjects();
 
                 _imageStream = networkResponse.ResourceStream;
+                FinalAddress = networkResponse.FinalAddress;
 
                 var contentTypeHintsSvg = networkResponse.ResponseHeaders?.TryGetValue("Content-Type", out var contentTypeValues) == true
                     && contentTypeValues.Select(ContentType.Parse).Any(ct => ct.IsMimeType("image", "svg+xml"));
@@ -305,15 +319,26 @@ namespace PeachBrackets.Html.Handlers
                 {
                     await LoadImageFromStream(_imageStream, _srcHintsSvg || contentTypeHintsSvg, source);
 
+                    // A picture drawn for a script may not show what the script could not read: an image of another origin keeps its size and shows nothing.
+                    if ((Image is not null || SvgDocument is not null) && _htmlContainer.HideCrossOriginImages && IsCrossOrigin(FinalAddress ?? source))
+                    {
+                        var (blankWidth, blankHeight) = Image is not null ? ((int)Image.Width, (int)Image.Height) : ((int)(SvgDocument?.Width ?? SvgDocument?.ViewBox?.Width ?? 150), (int)(SvgDocument?.Height ?? SvgDocument?.ViewBox?.Height ?? 150));
+                        SvgDocument = null;
+                        Image = _htmlContainer.RenderContext.ImageFromStream(new MemoryStream(BlankPng.Create(blankWidth, blankHeight)));
+                    }
+
                     if (Image is not null || SvgDocument is not null)
                     {
-                        _htmlContainer.CacheResolvedImageResource(cacheKey, Image, SvgDocument);
+                        _htmlContainer.CacheResolvedImageResource(cacheKey, Image, SvgDocument, FinalAddress);
                     }
                 }
             }
 
             ImageLoadComplete();
         }
+
+        // Whether an address is of another origin than the document's (scheme, host and port). data:, blob: and file: addresses are not.
+        private bool IsCrossOrigin(Uri source) => _htmlContainer.IsCrossOriginAddress(source);
 
         /// <summary>
         /// Flag image load complete and request refresh for re-layout and invalidate.

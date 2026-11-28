@@ -34,6 +34,16 @@ internal static class Js
     public static void Method(Engine engine, ObjectInstance target, string name, int length, Func<JsValue, JsValue[], JsValue> body) =>
         target.FastSetProperty(name, new PropertyDescriptor(Function(engine, name, length, body), PropertyFlag.Writable | PropertyFlag.Configurable));
 
+    /// <summary>
+    /// <see cref="Method"/> for an operation WebIDL gives required arguments: <paramref name="length"/> is the number of them, and a call with fewer is a <c>TypeError</c>
+    /// before the body runs.
+    /// </summary>
+    public static void StrictMethod(Engine engine, ObjectInstance target, string name, int length, Func<JsValue, JsValue[], JsValue> body) =>
+        Method(engine, target, name, length, (self, args) =>
+            args.Length < length
+                ? throw new JavaScriptException(engine.Intrinsics.TypeError, $"Failed to execute '{name}': {length} argument{(length == 1 ? "" : "s")} required, but only {args.Length} present.")
+                : body(self, args));
+
     /// <summary>Defines an accessor property; a null setter makes it read-only.</summary>
     public static void Accessor(Engine engine, ObjectInstance target, string name, Func<JsValue, JsValue> get, Action<JsValue, JsValue>? set = null)
     {

@@ -28,7 +28,7 @@ internal sealed class BitmapPaint : PaintSource
 
         // A strong minification aliases under bilinear sampling, so pre-average by an integer factor first.
         var scale = Math.Sqrt(Math.Abs(deviceToBitmap.Determinant));
-        if (smooth && scale >= 2)
+        if (smooth && scale >= 2 && bitmap.Wide is null)
         {
             var factor = (int)Math.Floor(scale);
             _bitmap = Downsample(bitmap, factor);
@@ -51,6 +51,42 @@ internal sealed class BitmapPaint : PaintSource
 
     private readonly bool _wholePixelShift;
     private readonly int _shiftX, _shiftY;
+
+    /// <summary>The floats of a floating-point bitmap, nearest or bilinear as the paint is; a bitmap of eight bits gives its bytes over 255.</summary>
+    public override void FillSpanWide(int x0, int y, int count, Span<float> destination)
+    {
+        if (_bitmap.Wide is not { } wide)
+        {
+            base.FillSpanWide(x0, y, count, destination);
+            return;
+        }
+
+        int w = _bitmap.Width, h = _bitmap.Height;
+        for (var i = 0; i < count; i++)
+        {
+            var (u, v) = _deviceToBitmap.Apply(x0 + i + 0.5, y + 0.5);
+            var d = i * 4;
+            if (!_smooth)
+            {
+                var p = (Math.Clamp((int)Math.Floor(v), 0, h - 1) * w + Math.Clamp((int)Math.Floor(u), 0, w - 1)) * 4;
+                for (var c = 0; c < 4; c++)
+                    destination[d + c] = wide[p + c];
+
+                continue;
+            }
+
+            var fu = u - 0.5;
+            var fv = v - 0.5;
+            var xi = (int)Math.Floor(fu);
+            var yi = (int)Math.Floor(fv);
+            var (wx, wy) = ((float)(fu - xi), (float)(fv - yi));
+            var (xa, xb) = (Math.Clamp(xi, 0, w - 1), Math.Clamp(xi + 1, 0, w - 1));
+            var (ya, yb) = (Math.Clamp(yi, 0, h - 1), Math.Clamp(yi + 1, 0, h - 1));
+            var (p00, p10, p01, p11) = ((ya * w + xa) * 4, (ya * w + xb) * 4, (yb * w + xa) * 4, (yb * w + xb) * 4);
+            for (var c = 0; c < 4; c++)
+                destination[d + c] = wide[p00 + c] * (1 - wx) * (1 - wy) + wide[p10 + c] * wx * (1 - wy) + wide[p01 + c] * (1 - wx) * wy + wide[p11 + c] * wx * wy;
+        }
+    }
 
     public override void FillSpan(int x0, int y, int count, Span<byte> destination)
     {

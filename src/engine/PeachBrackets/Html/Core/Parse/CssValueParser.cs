@@ -844,7 +844,7 @@ namespace PeachBrackets.Html.Parse
                         || !HasOnlyIntegerRgbComponents(str.AsSpan(idx, length)));
                     return length switch
                     {
-                        > 1 when str[idx] == '#' => GetColorByHex(str, idx, length, out color),
+                        4 or 7 when str[idx] == '#' => GetColorByHex(str, idx, length, out color),
                         > 10 when !hasNone && CommonUtils.SubStringEquals(str, idx, 4, "rgb(") && str[length - 1] == ')' =>
                             GetColorByRgb(str, idx, length, out color),
                         > 13 when !hasNone && CommonUtils.SubStringEquals(str, idx, 5, "rgba(") && str[length - 1] == ')' =>
@@ -860,51 +860,81 @@ namespace PeachBrackets.Html.Parse
         }
 
         /// <summary>
-        /// Whether an <c>rgb()</c>/<c>rgba()</c> value (anything else answers true) has whole numbers for its three colour components - the one shape the
-        /// quick readers understand. A percentage or a decimal component needs the token reader, which keeps its fraction and rounds it.
+        /// Whether an <c>rgb()</c>/<c>rgba()</c> value (anything else answers true) is written in the one plain shape the quick readers understand: whole numbers from
+        /// 0 to 255 for the three components, in the comma form (<c>rgb(1, 2, 3)</c>, <c>rgba(1,2,3,0.5)</c>, at most one space after a comma) or the space form
+        /// (<c>rgb(1 2 3)</c>), and for the comma form an alpha of plain digits. Anything else is the token reader's, which is the CSS grammar: a percentage or a decimal
+        /// component, a sign, padding inside the parentheses, a trailing comma, the slash form with an alpha, a mix of the two forms, <c>none</c> and relative colors.
+        /// The quick readers are an optimization for the common spelling and must never accept what the grammar rejects, so they take only what they can check.
         /// </summary>
         private static bool HasOnlyIntegerRgbComponents(ReadOnlySpan<char> value)
         {
             if (!value.StartsWith("rgb", StringComparison.OrdinalIgnoreCase)) return true;
 
             var open = value.IndexOf('(');
-            if (open < 0) return true;
+            if (open < 0 || value[^1] != ')') return false;
 
-            var component = 0;
-            var inNumber = false;
-            var number = 0;
-            for (var i = open + 1; i < value.Length; i++)
+            var name = value[..open];
+            if (!name.Equals("rgb", StringComparison.OrdinalIgnoreCase) && !name.Equals("rgba", StringComparison.OrdinalIgnoreCase)) return false;
+
+            var inner = value[(open + 1)..^1];
+            if (inner.IsEmpty || inner[0] == ' ' || inner[^1] == ' ') return false;
+
+            // The space form: three whole numbers and nothing else.
+            if (inner.IndexOf(',') < 0)
             {
-                var c = value[i];
-                if (char.IsDigit(c))
+                var count = 0;
+                foreach (var range in inner.Split(' '))
                 {
-                    inNumber = true;
-                    number = Math.Min(number * 10 + (c - '0'), 1000);
-                    if (component < 3 && number > 255) return false;
+                    if (!IsByte(inner[range])) return false;
+                    count++;
                 }
-                else if (c is '+' or '-')
-                {
-                    // A sign on a colour component is out of range or redundant: the token reader clamps it.
-                    if (component < 3) return false;
-                    inNumber = true;
-                }
-                else if (c is '%')
-                {
-                    return false;
-                }
-                else if (c is '.' && component < 3)
-                {
-                    return false;
-                }
-                else if (c is ',' or ' ' or '/' or ')')
-                {
-                    if (inNumber) component++;
-                    inNumber = false;
-                    number = 0;
-                }
+
+                return count == 3;
             }
 
-            return true;
+            // The comma form: three whole numbers and an optional alpha, each after a comma and at most one space.
+            var parts = 0;
+            var rest = inner;
+            while (true)
+            {
+                var comma = rest.IndexOf(',');
+                var part = comma < 0 ? rest : rest[..comma];
+                if (part.Length > 0 && part[0] == ' ') part = part[1..];
+                parts++;
+                if (parts <= 3 ? !IsByte(part) : !IsPlainAlpha(part)) return false;
+                if (comma < 0) break;
+                rest = rest[(comma + 1)..];
+            }
+
+            return parts is 3 or 4;
+        }
+
+        private static bool IsByte(ReadOnlySpan<char> text)
+        {
+            if (text.Length is 0 or > 3) return false;
+            var number = 0;
+            foreach (var c in text)
+            {
+                if (c is < '0' or > '9') return false;
+                number = number * 10 + (c - '0');
+            }
+
+            return number <= 255;
+        }
+
+        // Digits with at most one point and a value of at most 1: what the quick reader reads as an alpha.
+        private static bool IsPlainAlpha(ReadOnlySpan<char> text)
+        {
+            if (text.IsEmpty) return false;
+            var points = 0;
+            foreach (var c in text)
+            {
+                if (c == '.') points++;
+                else if (c is < '0' or > '9') return false;
+            }
+
+            return points <= 1 && text.Length > points && text[^1] != '.'
+                && double.TryParse(text, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var alpha) && alpha is >= 0 and <= 1;
         }
 
         /// <summary>
@@ -919,6 +949,20 @@ namespace PeachBrackets.Html.Parse
             using var pooledTokens = GetCssTokensPooled(str, inValueContext: true);
             List<Token> tokens = pooledTokens;
             return tokens.TryResolveOklab(out oklab);
+        }
+
+        /// <summary>
+        /// A color that is not one of the legacy sRGB forms, as it was written and in the space it was written in (see <see cref="PeachBrackets.Css.AuthoredColor"/>): what a
+        /// canvas reads back for <c>color(display-p3 ...)</c>, <c>lab()</c>, a <c>color-mix()</c> or a relative color. False for any other color.
+        /// </summary>
+        internal bool TryGetAuthoredColor(string str, out PeachBrackets.Css.AuthoredColor authored)
+        {
+            authored = default;
+            if (string.IsNullOrEmpty(str) || str.IndexOf('(') < 0) return false;
+
+            using var pooledTokens = GetCssTokensPooled(str, inValueContext: true);
+            List<Token> tokens = pooledTokens;
+            return tokens.TryResolveAuthored(out authored);
         }
 
         /// <summary>
@@ -1791,11 +1835,14 @@ namespace PeachBrackets.Html.Parse
         /// <paramref name="colorText"/> read as a colour with every <c>currentcolor</c> in it standing for <paramref name="currentColor"/> (CSS Color 4: it is
         /// the element's own <c>color</c> wherever a <c>&lt;color&gt;</c> is accepted).
         /// </summary>
-        internal PaintColor GetActualColor(string colorText, PaintColor currentColor)
+        internal PaintColor GetActualColor(string colorText, PaintColor currentColor) => GetActualColor(SubstituteCurrentColor(colorText, currentColor));
+
+        /// <summary>The text with every <c>currentcolor</c> in it replaced by <paramref name="currentColor"/>, written as a color.</summary>
+        internal static string SubstituteCurrentColor(string colorText, PaintColor currentColor)
         {
             var substitute = string.Create(System.Globalization.CultureInfo.InvariantCulture,
                 $"rgb({currentColor.R} {currentColor.G} {currentColor.B} / {currentColor.A / 255.0:0.####})");
-            return GetActualColor(CurrentColorIdent.Replace(colorText, substitute));
+            return CurrentColorIdent.Replace(colorText, substitute);
         }
 
         private ParsedLinearGradient? ParseLinearGradient(string value)

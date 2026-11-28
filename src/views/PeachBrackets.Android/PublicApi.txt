@@ -62,6 +62,7 @@ PeachBrackets.Android.HtmlView : sealed class
   property Boolean AnimationsEnabled { get; set; }
   property Double Zoom { get; }
   property HtmlDocument Document { get; }
+  property IMediaProvider MediaProvider { get; set; }
   property InputCapabilities Input { get; set; }
   property SKColor PageBackground { get; set; }
   property String Html { get; set; }

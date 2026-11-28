@@ -235,11 +235,19 @@ public sealed class PdfCanvas : Canvas
         _g.Restore();
     }
 
+    /// <summary>
+    /// The PDF blend mode name of a <see cref="PaintBlendMode"/>. PDF knows the sixteen separable and non-separable modes by their names and nothing else: the additive
+    /// <see cref="PaintBlendMode.Plus"/> and the Porter-Duff operators (<see cref="PaintBlendMode.SourceIn"/> through <see cref="PaintBlendMode.Clear"/>) have no
+    /// form in a PDF, so they paint as <c>Normal</c>. A caller that needs one draws it through <see cref="BeginRasterSurface"/> onto a canvas that composites
+    /// (<see cref="Canvas.SupportsCompositeOperators"/>), which this canvas, being a document writer, is not.
+    /// </summary>
+    internal static string BlendName(PaintBlendMode mode) => mode is PaintBlendMode.Plus or >= PaintBlendMode.SourceIn ? "Normal" : mode.ToString();
+
     /// <inheritdoc />
     public override void PushBlendMode(PaintBlendMode mode)
     {
         _g.Save();
-        _g.SetBlendMode(mode.ToString());
+        _g.SetBlendMode(BlendName(mode));
     }
 
     /// <inheritdoc />
@@ -539,7 +547,7 @@ public sealed class PdfCanvas : Canvas
     public override void DrawImageWithOpacity(Image image, Rect destRect, double opacity, PaintBlendMode blendMode = PaintBlendMode.Normal)
     {
         if (((PdfCanvasImage)image).Image is PdfForm imageForm)
-            _g.DrawImageWithOpacity(imageForm, Units.ToPoints(destRect, PixelsPerPoint), opacity, blendMode.ToString());
+            _g.DrawImageWithOpacity(imageForm, Units.ToPoints(destRect, PixelsPerPoint), opacity, BlendName(blendMode));
     }
 
     /// <inheritdoc />
@@ -560,7 +568,7 @@ public sealed class PdfCanvas : Canvas
     public override void DrawImageBlendedOver(Image top, Image bottom, Rect destRect, PaintBlendMode blendMode)
     {
         if (((PdfCanvasImage)top).Image is PdfForm topForm && ((PdfCanvasImage)bottom).Image is PdfForm bottomForm)
-            _g.DrawImageBlendedOver(topForm, bottomForm, Units.ToPoints(destRect, PixelsPerPoint), blendMode.ToString());
+            _g.DrawImageBlendedOver(topForm, bottomForm, Units.ToPoints(destRect, PixelsPerPoint), BlendName(blendMode));
     }
 
     /// <inheritdoc />

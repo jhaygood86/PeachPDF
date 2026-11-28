@@ -1,6 +1,7 @@
 using Microsoft.Graphics.Canvas;
 using Microsoft.Graphics.Canvas.Effects;
 using W2dColorMatrixEffect = Microsoft.Graphics.Canvas.Effects.ColorMatrixEffect;
+using W2dConvolveMatrixEffect = Microsoft.Graphics.Canvas.Effects.ConvolveMatrixEffect;
 using PeachDrawing.Core;
 using System;
 using System.Collections.Generic;
@@ -117,14 +118,17 @@ public sealed partial class Win2dCanvas
                 if (options.Effects is { } effects)
                 {
                     foreach (var effect in effects)
-                        image = Apply(made, image, effect);
+                        image = Apply(made, image, effect, options.Bounds);
                 }
 
                 if (options.Opacity < 1)
                     image = Track(made, new OpacityEffect { Source = image, Opacity = (float)Math.Clamp(options.Opacity, 0, 1) });
 
-                _session.Transform = placement;
                 FlushText();
+                if (IsCompositeOperator(options.BlendMode) && TryDrawComposited(image, placement, options.BlendMode, options.Bounds, made))
+                    return;
+
+                _session.Transform = placement;
                 if (options.BlendMode != PaintBlendMode.Normal)
                     _session.Blend = SessionBlendFor(options.BlendMode);
 
@@ -173,7 +177,7 @@ public sealed partial class Win2dCanvas
         return image;
     }
 
-    private static ICanvasImage Apply(List<IDisposable> made, ICanvasImage image, LayerEffect effect)
+    private static ICanvasImage Apply(List<IDisposable> made, ICanvasImage image, LayerEffect effect, Rect? bounds)
     {
         switch (effect)
         {
@@ -197,6 +201,45 @@ public sealed partial class Win2dCanvas
 
             case PeachDrawing.Core.ColorMatrixEffect colorMatrix:
                 return Track(made, ColorMatrixFor(image, colorMatrix.Matrix));
+
+            case ComponentTransferEffect transfer:
+            {
+                float[]? Table(byte[]? values) => values is null ? null : System.Linq.Enumerable.ToArray(System.Linq.Enumerable.Select(values, v => v / 255f));
+                var table = new TableTransferEffect { Source = image, ClampOutput = true };
+                if (Table(transfer.Red) is { } red) table.RedTable = red; else table.RedDisable = true;
+                if (Table(transfer.Green) is { } green) table.GreenTable = green; else table.GreenDisable = true;
+                if (Table(transfer.Blue) is { } blue) table.BlueTable = blue; else table.BlueDisable = true;
+                if (Table(transfer.Alpha) is { } alpha) table.AlphaTable = alpha; else table.AlphaDisable = true;
+                return Track(made, table);
+            }
+
+            case PeachDrawing.Core.ConvolveMatrixEffect convolve:
+            {
+                var kernel = new float[convolve.Kernel.Count];
+                for (var i = 0; i < kernel.Length; i++)
+                    kernel[i] = (float)convolve.Kernel[i];
+
+                ICanvasImage result = Track(made, new W2dConvolveMatrixEffect
+                {
+                    Source = image,
+                    KernelMatrix = kernel,
+                    KernelWidth = convolve.Columns,
+                    KernelHeight = convolve.Rows,
+                    Divisor = (float)convolve.Divisor,
+                    PreserveAlpha = convolve.PreserveAlpha,
+                    ClampOutput = true,
+                    BorderMode = convolve.EdgeMode == FilterEdgeMode.None ? EffectBorderMode.Soft : EffectBorderMode.Hard,
+                });
+
+                // The effect keeps the middle of the kernel over the pixel; the target is moved there by shifting the result.
+                var (shiftX, shiftY) = (convolve.TargetX - convolve.Columns / 2, convolve.TargetY - convolve.Rows / 2);
+                if (shiftX != 0 || shiftY != 0)
+                    result = Track(made, new Transform2DEffect { Source = result, TransformMatrix = Matrix3x2.CreateTranslation(shiftX, shiftY) });
+
+                return result;
+            }
+
+            // Win2D's turbulence effect takes no seed, so it cannot draw the noise the specification fixes: that effect is left to a canvas that can.
 
             default:
                 return image;

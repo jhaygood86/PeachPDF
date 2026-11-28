@@ -4,6 +4,8 @@ using Avalonia.Input.Platform;
 using Avalonia.Media;
 using Avalonia.Styling;
 using Avalonia.Threading;
+using PeachBrackets.Media;
+using PeachBrackets.Media.Platform;
 using PeachBrackets.Updates;
 using PeachDrawing.Core;
 using PeachDrawing.Skia;
@@ -235,6 +237,37 @@ public sealed partial class HtmlView : Control
     public double ContentHeight => _publishedContentHeight;
 
     private InputCapabilities? _input;
+
+    private IMediaProvider? _mediaProvider;
+    private bool _mediaProviderSet;
+    private bool _mediaProviderDefaulted;
+
+    /// <summary>
+    /// What plays the document's <c>audio</c> and <c>video</c>. The default is what <see cref="PlatformMediaProvider.Create"/> picks for the system: Media
+    /// Foundation on Windows (when the app targets Windows), AVFoundation on macOS and iOS and the platform player on Android where the app was built with those
+    /// providers, and GStreamer on Linux (and wherever else it is installed). <see langword="null"/> when the system has none: a video then shows its poster.
+    /// Assign a provider to play through it, or <see langword="null"/> for no media. It applies to documents loaded after it is set.
+    /// </summary>
+    public IMediaProvider? MediaProvider
+    {
+        get
+        {
+            if (!_mediaProviderSet && !_mediaProviderDefaulted)
+            {
+                _mediaProviderDefaulted = true;
+                _mediaProvider = PlatformMediaProvider.Create();
+            }
+
+            return _mediaProvider;
+        }
+
+        set
+        {
+            _mediaProvider = value;
+            _mediaProviderSet = true;
+            OnOptionsChanged();
+        }
+    }
 
     /// <summary>
     /// The pointing devices the document's <c>hover</c> and <c>pointer</c> media queries report. <see langword="null"/> (the default) reports a mouse on a desktop
@@ -817,6 +850,7 @@ public sealed partial class HtmlView : Control
             DevicePixelRatio = ImageScale.DevicePixelRatio(_dpi),
             AnimationsEnabled = plays,
             Preferences = plays ? new UserPreferences { ReducedMotion = false } : null,
+            MediaProvider = MediaProvider,
         };
     }
 

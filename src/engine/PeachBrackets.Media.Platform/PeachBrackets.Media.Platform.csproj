@@ -1,0 +1,60 @@
+<Project Sdk="Microsoft.NET.Sdk">
+	<Import Project="..\..\Version.props" />
+	<Import Project="..\..\ApiReference.props" />
+	<PropertyGroup>
+		<!-- The Windows legs add the Windows provider; a program targeting plain net10.0 is served by GStreamer alone, and an app that targets Windows
+		     gets the Windows assembly of this package at run time whatever the library that references it was built for. -->
+		<TargetFrameworks>net10.0;net11.0</TargetFrameworks>
+		<TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('Windows'))">$(TargetFrameworks);net10.0-windows10.0.19041.0;net11.0-windows10.0.19041.0</TargetFrameworks>
+		<!-- The Android legs need the android workload, which a build of the solution does not assume; the release build passes PeachIncludeAndroid=true. -->
+		<TargetFrameworks Condition="'$(PeachIncludeAndroid)' == 'true'">$(TargetFrameworks);net10.0-android;net11.0-android</TargetFrameworks>
+		<AssemblyName>PeachBrackets.Media.Platform</AssemblyName>
+		<RootNamespace>PeachBrackets.Media.Platform</RootNamespace>
+		<PackageId>PeachBrackets.Media.Platform</PackageId>
+		<Description>The media provider for the platform PeachBrackets runs on: one call picks the decoder the operating system offers (GStreamer today; Media Foundation, AVFoundation and Android providers as they land), for hosts that play the audio and video of a document and for the test runners.</Description>
+		<PackageTags>html;video;audio;media;platform</PackageTags>
+		<PackageIcon>peach.png</PackageIcon>
+		<PackageReadmeFile>README.md</PackageReadmeFile>
+		<PackageProjectUrl>https://peachpdf.net/</PackageProjectUrl>
+		<RepositoryUrl>https://github.com/jhaygood86/PeachPDF.git</RepositoryUrl>
+		<PackageLicenseExpression>BSD-3-Clause</PackageLicenseExpression>
+		<IncludeSymbols>true</IncludeSymbols>
+		<GenerateDocumentationFile>true</GenerateDocumentationFile>
+		<WarningsAsErrors>$(WarningsAsErrors);CS1591</WarningsAsErrors>
+		<GeneratePackageOnBuild>True</GeneratePackageOnBuild>
+		<GenerateAssemblyConfigurationAttribute>false</GenerateAssemblyConfigurationAttribute>
+		<GenerateAssemblyCompanyAttribute>false</GenerateAssemblyCompanyAttribute>
+		<GenerateAssemblyProductAttribute>false</GenerateAssemblyProductAttribute>
+		<GenerateAssemblyInformationalVersionAttribute>false</GenerateAssemblyInformationalVersionAttribute>
+		<GenerateAssemblyFileVersionAttribute>false</GenerateAssemblyFileVersionAttribute>
+		<GenerateAssemblyTitleVersionAttribute>false</GenerateAssemblyTitleVersionAttribute>
+		<GenerateAssemblyTitleAttribute>false</GenerateAssemblyTitleAttribute>
+		<GenerateAssemblyVersionAttribute>false</GenerateAssemblyVersionAttribute>
+		<RunCodeAnalysis>false</RunCodeAnalysis>
+		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+		<IsTrimmable>true</IsTrimmable>
+		<EnableTrimAnalyzer>true</EnableTrimAnalyzer>
+		<IsAotCompatible>true</IsAotCompatible>
+		<!-- The Windows legs reference Win2D through the Windows provider; the application supplies its native binary. -->
+		<Win2DWarnNoPlatform>false</Win2DWarnNoPlatform>
+	</PropertyGroup>
+	<ItemGroup>
+		<ProjectReference Include="..\PeachBrackets\PeachBrackets.csproj" />
+		<ProjectReference Include="..\PeachBrackets.Media.GStreamer\PeachBrackets.Media.GStreamer.csproj" />
+		<ProjectReference Include="..\PeachBrackets.Media.MediaFoundation\PeachBrackets.Media.MediaFoundation.csproj" />
+	</ItemGroup>
+	<ItemGroup Condition="$(TargetFramework.Contains('-android'))">
+		<ProjectReference Include="..\PeachBrackets.Media.Android\PeachBrackets.Media.Android.csproj" />
+	</ItemGroup>
+	<ItemGroup Condition="$(TargetFramework.Contains('-windows'))">
+		<ProjectReference Include="..\PeachBrackets.Media.Windows\PeachBrackets.Media.Windows.csproj" />
+	</ItemGroup>
+	<ItemGroup>
+		<InternalsVisibleTo Include="PeachBrackets.Media.Platform.Tests" />
+	</ItemGroup>
+	<ItemGroup>
+		<None Include="..\..\..\LICENSE" Pack="true" PackagePath="\" />
+		<None Include="..\..\..\docs\assets\img\peach.png" Pack="true" PackagePath="\" />
+		<None Include="README.md" Pack="true" PackagePath="\" />
+	</ItemGroup>
+</Project>

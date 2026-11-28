@@ -266,6 +266,24 @@ public class SkiaRenderContext : RenderContext, IDisposable
         "image/x-icon", "image/vnd.microsoft.icon", "image/svg+xml"
     ];
 
+    /// <summary>
+    /// An image made on the GPU rather than decoded, such as a video decoder's picture left in a hardware buffer. <paramref name="import"/> is called on first use
+    /// by a canvas drawing on <see cref="GpuContext"/>, on the thread that holds that context, and returns the texture as an image the returned image owns
+    /// (null when it cannot, which falls back to the pixels). <paramref name="readPixels"/>, when given, makes the pixels for a canvas with no GPU context and for
+    /// <see cref="Core.Image.GetPixels"/>. Dispose the image on the thread that holds the context, which releases the texture.
+    /// </summary>
+    /// <param name="width">The picture's width in pixels.</param>
+    /// <param name="height">The picture's height in pixels.</param>
+    /// <param name="import">Makes the image on a GPU context.</param>
+    /// <param name="readPixels">Reads the picture as premultiplied RGBA, or null when there is no way to.</param>
+    public Core.Image CreateGpuImage(int width, int height, Func<GRContext, SKImage?> import, Func<PixelBuffer?>? readPixels = null)
+    {
+        ArgumentNullException.ThrowIfNull(import);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(width);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(height);
+        return SkiaImage.FromImport(width, height, import, readPixels, Counts);
+    }
+
     /// <inheritdoc />
     protected override Core.Image ImageFromStreamInt(Stream memoryStream) =>
         DecodeImage(memoryStream) ?? throw new InvalidDataException("The stream is not a recognised image format.");

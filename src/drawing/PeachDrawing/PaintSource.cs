@@ -21,6 +21,23 @@ internal abstract partial class PaintSource
     /// <summary>Writes <paramref name="count"/> premultiplied RGBA pixels for device pixels (<paramref name="x0"/>, <paramref name="y"/>) onwards.</summary>
     public abstract void FillSpan(int x0, int y, int count, Span<byte> destination);
 
+    /// <summary>True when the paint is one color given as floats (which need not lie in 0 to 1), valid for <see cref="WideSolid"/>.</summary>
+    public virtual bool IsWideSolid => false;
+
+    /// <summary>The constant premultiplied color as floats; valid only when <see cref="IsWideSolid"/>.</summary>
+    public virtual (float R, float G, float B, float A) WideSolid => default;
+
+    /// <summary>
+    /// <see cref="FillSpan"/> as premultiplied floats (four per pixel). A paint of eight bits gives its bytes over 255; a floating-point bitmap gives its floats as they are.
+    /// </summary>
+    public virtual void FillSpanWide(int x0, int y, int count, Span<float> destination)
+    {
+        var bytes = new byte[count * 4];
+        FillSpan(x0, y, count, bytes);
+        for (var i = 0; i < count * 4; i++)
+            destination[i] = bytes[i] / 255f;
+    }
+
     /// <summary>
     /// Builds the paint for <paramref name="brush"/> - a self-describing <see cref="Brush"/>, read directly
     /// (no PDF-specific type involved, unlike this method before the brush redesign). <paramref name="deviceToUser"/>
@@ -32,7 +49,7 @@ internal abstract partial class PaintSource
         switch (brush)
         {
             case SolidBrush solid:
-                return new SolidPaint(solid.PaintColor);
+                return new SolidPaint(solid.PaintColor, solid.WideColor);
             case LinearGradientBrush linear:
                 return LinearPaint.Create(linear, deviceToUser);
             case RadialGradientBrush radial:
@@ -61,6 +78,20 @@ internal abstract partial class PaintSource
     private sealed class SolidPaint : PaintSource
     {
         private readonly uint _color;
+        private readonly (float R, float G, float B, float A) _wide;
+        private readonly bool _hasWide;
+
+        public SolidPaint(PaintColor color, WideColor wide) : this(color)
+        {
+            // The color as it was given, premultiplied, for a surface that keeps floats.
+            var a = Math.Clamp(float.IsNaN(wide.Alpha) ? 0f : wide.Alpha, 0f, 1f);
+            _wide = (wide.Red * a, wide.Green * a, wide.Blue * a, a);
+            _hasWide = true;
+        }
+
+        public override bool IsWideSolid => _hasWide;
+
+        public override (float R, float G, float B, float A) WideSolid => _wide;
 
         public SolidPaint(PaintColor color)
         {

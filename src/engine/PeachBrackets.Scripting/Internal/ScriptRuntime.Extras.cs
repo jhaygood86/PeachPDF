@@ -83,9 +83,12 @@ internal sealed partial class ScriptRuntime
         InstallRanges();
         InstallSelection();
         InstallImages();
+        InstallMedia();
         InstallHyperlinks();
         InstallCanvas();
         InstallCanvasPixels();
+        InstallOffscreenContext();
+        InstallHtmlInCanvas();
         InstallNodeOrdering();
         InstallParsingMethods();
         InstallPseudoAttributes();

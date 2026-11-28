@@ -47,6 +47,7 @@ PeachBrackets.Apple.HtmlView : sealed class
   property CGColor PageBackground { get; set; }
   property Double Zoom { get; }
   property HtmlDocument Document { get; }
+  property IMediaProvider MediaProvider { get; set; }
   property InputCapabilities Input { get; set; }
   property String Html { get; set; }
   property String SelectedText { get; }

@@ -110,8 +110,17 @@ canvas.PopTransform();
   `PushClipExclude` (subtract a rectangle from the current clip),
   `PushTransform`/`PopTransform` (a `System.Numerics.Matrix3x2`, composed before/with the current
   transform), and `PushBlendMode`/`PopBlendMode` (`PaintBlendMode`, the 16 PDF 32000-1 §11.3.5 separable
-  and non-separable modes, the same set CSS Compositing and Blending Level 1's `mix-blend-mode` uses) are
-  all stack-shaped: what you push, you pop, in order. `SuspendClipping`/`ResumeClipping` temporarily
+  and non-separable modes, the same set CSS Compositing and Blending Level 1's `mix-blend-mode` uses, plus
+  `Plus` and the ten Porter-Duff operators `SourceIn`, `SourceOut`, `SourceAtop`, `DestinationOver`,
+  `DestinationIn`, `DestinationOut`, `DestinationAtop`, `Xor`, `Copy` and `Clear`) are
+  all stack-shaped: what you push, you pop, in order. A Porter-Duff operator drawn directly reaches only as far as the
+  shape does; most of them (`SourceIn`, `DestinationIn`, `Copy`...) also change the backdrop where the source is
+  *absent*, so to have one reach a whole region, draw the shape in a layer whose `LayerOptions.Bounds` cover
+  the region and give the layer the operator as its `BlendMode`: the layer replaces the backdrop across all of it, as a 2D
+  canvas expects, natively on Raster, Skia and CoreGraphics and by an effect on a Win2D composer's canvas, all on the GPU where there is one.
+  `DestinationOut` is the eraser and `Copy` replaces pixels. `Canvas.SupportsCompositeOperators` says whether a canvas
+  composites this way; a PDF or SVG writer does not (neither format has the operators) and paints them as `Normal`, so a caller that needs the
+  result draws through `BeginRasterSurface` onto a canvas that does and places it with `DrawRaster`. `SuspendClipping`/`ResumeClipping` temporarily
   restore the clip stack to its initial (construction-time) state and put it back - what a `position: fixed`
   element's paint needs to reach its containing block regardless of ancestor clips.
 - **Drawing.** `DrawRectangle`, `DrawPolygon`, `DrawPath`, `DrawLine` (each with a `Brush` fill or `Pen`
@@ -278,7 +287,29 @@ canvas that can apply effects overrides `SupportsLayerEffects` and `ApplyLayerEf
 package's `RasterLayerEffects.Apply` does the work on a `RasterSurface`). A canvas whose layers apply their effects itself, on the
 graphics hardware, says so with `HasNativeLayerEffects` (`Win2dCanvas`, `SkiaCanvas` and `CoreGraphicsCanvas` do), and a caller that can express a blurred
 shadow, a filter or a blurred backdrop either way draws it as a layer with effects when that is true instead of rendering it into a bitmap.
+`ComponentTransferEffect` (a 256-entry table per channel; `ComponentTransferEffect.BuildTable` makes one from an `feComponentTransfer`
+function), `ConvolveMatrixEffect` and `TurbulenceEffect` (the specification's Perlin noise, replacing the layer) are the SVG filter
+primitives of the same name. The raster canvas applies all three; Skia applies all three itself; Win2D applies the first two (its
+turbulence effect takes no seed); the SVG canvas writes the primitives; the CoreGraphics canvas does not apply them yet.
 `BlurEffect.ClampEdges` asks for the layer's edge pixels to be held rather than faded, for content that continues past the layer's bounds.
+
+### CSS filter lists
+
+`FilterList.TryParse` reads the text of a CSS filter list (`blur(5px) grayscale(50%) drop-shadow(2px 2px 4px red)`) into the
+effects above, in the order written, so a host that takes a filter as text (a canvas's `filter`, a view's styling) does not
+write its own grammar. A text that is not valid, or is a `url()` reference to an SVG filter, gives `false` and no effects; `none`
+is valid and gives none. The color of a `drop-shadow()` is read by a function the caller supplies, which keeps the package free of
+a CSS color parser. The matrices behind the color functions are public too: `ColorMatrix.Brightness`, `Contrast`, `Invert`,
+`Opacity`, `Grayscale`, `Sepia`, `Saturate`, `HueRotate`, `LuminanceToAlpha`, and `FromTable` for the 20 numbers of an
+`feColorMatrix`.
+
+```csharp
+if (FilterList.TryParse("blur(3px) sepia(80%)", parseColor: null, PaintColor.Black, fontSize: 16, out var effects))
+{
+    using var layer = canvas.BeginLayer(new LayerOptions(Bounds: bounds, Effects: effects));
+    layer?.Canvas.DrawImage(picture, bounds);
+}
+```
 
 ### Retained layers
 
@@ -308,6 +339,30 @@ The content is still recorded once, so an animation of a blur radius or a shadow
 (`HasNativeLayerEffects`) the effect runs there on the kept texture. The effect needs room to spread into, so the layer is composited from a region larger than `Bounds` by the effects'
 ink margin (three standard deviations of each blur and shadow, plus a shadow's offset). A canvas that cannot make an effect layer draws the layer without the effects. The default is built
 on `BeginLayer`, so it works on every canvas; a `RetainedLayer` subclass with a better way can override it.
+
+### Offscreen surfaces
+
+A layer is composited once and gone; a `RetainedLayer` is recorded once and sealed. An `OffscreenSurface` is a drawing surface that stays open: `Canvas.CreateOffscreenSurface(width, height)`
+gives a bitmap of the canvas's own backend (a render target on the device where there is one) that you draw into with its `Canvas` (one unit a pixel, top left at the origin), whenever you like,
+and put on another canvas of the same backend without reading it back. It is what a 2D canvas element or an off-screen bitmap needs: draw a little each frame, show the whole thing.
+
+```csharp
+using var surface = canvas.CreateOffscreenSurface(256, 256)!;
+surface.Canvas.DrawRectangle(brush, 0, 0, 64, 64);        // drawn into the bitmap, as many times as you like
+if (surface.CanDraw(canvas))
+{
+    using var snapshot = surface.CreateSnapshot();         // the content now; later drawing does not change it
+    canvas.DrawImage(snapshot, new Rect(10, 10, 256, 256));
+}
+PixelBuffer pixels = surface.ReadPixels();                 // the one call that brings pixels to the CPU
+surface.Clear();                                           // every pixel transparent
+```
+
+`CanDraw(target)` says whether a snapshot can be drawn on `target` without a conversion (a canvas of the same backend and device). The surface's canvas composites with the Porter-Duff operators
+(`SupportsCompositeOperators`). `CreateOffscreenSurface` returns `null` when the backend has no bitmap to give: a PDF or SVG writer, a measuring canvas, a size that is not positive, or one
+larger than `RenderContext.MaxRasterPixels`; keep a recording to play again instead. Raster keeps a pixel buffer. Win2D keeps a `CanvasRenderTarget` on the device and a snapshot is a copy made there.
+CoreGraphics keeps a bitmap context. Skia keeps a raster `SKSurface`: a surface on the graphics hardware may only be drawn on the thread that owns its GL context, which is not the thread a caller draws on, so
+the snapshot is uploaded as a texture when it is drawn on a canvas that has a `SkiaRenderContext.GpuContext`.
 
 
 ## Links and destinations
@@ -448,6 +503,14 @@ shaped, so an implementation gets it by implementing `DrawGlyphs` and the path/c
   that draws them itself, and `PathText.GetGlyphFrame` is the one placement step (a distance along the path, the side, a
   perpendicular offset and an extra rotation in, a transform out). `PathTextOptions` has the start offset, anchor
   (start, middle, end), side and letter spacing.
+- `WideColor` is a color that is not held to eight bits or to 0 to 1 (`SolidBrush(WideColor)`; `PaintColor` is its eight-bit self). A `RasterSurface` made `wide: true`
+  (`RasterRenderContext.CreateCanvas(w, h, dpi, wide: true)`, `Canvas.CreateOffscreenSurface(w, h, wide: true)`) keeps premultiplied floats beside its bytes: such a color and an image from
+  `Canvas.CreateWideImage` (straight RGBA floats) are painted and composited as floats, `RasterSurface.WidePixels` and `OffscreenSurface.ReadWidePixels` give them back, and the bytes stay the view of the same picture.
+  Layer effects work on the bytes and write their result back into the floats; the other backends have no wide surface and answer null.
+- `SyntheticCaps` is small capitals for a font that has no `smcp`/`pcap` of its own: `Applies` says when it is needed (the shaping asks
+  for small or petite caps and the font lacks the feature), `Convert` upper-cases the lower-case letters and flags the ones that are
+  drawn small (0.72 of the size), and `Split` gives the pieces to draw at one size each. `TextRunMeasure` measures a run this way, so
+  what a host measures is what it draws.
 - `InkCrossings.Measure` finds where a run of text puts ink inside a horizontal band, one stretch per glyph: what a
   `text-decoration-skip-ink` underline needs to break around descenders. It is what `Canvas.GetInkCrossings` answers.
 - `ColorGlyphs.ColorGlyphPainter` walks one glyph's COLR v0 layers or v1 paint graph - palette and

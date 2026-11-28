@@ -58,7 +58,7 @@ internal sealed partial class ScriptRuntime
         "URL", "URLSearchParams", "Headers", "Request", "Response", "fetch", "XMLHttpRequest", "XMLHttpRequestEventTarget", "XMLHttpRequestUpload",
         "Blob", "File", "FormData", "TextEncoder", "TextDecoder", "FileReader",
         "ReadableStream", "ReadableStreamDefaultReader", "ReadableStreamDefaultController", "WritableStream", "WritableStreamDefaultWriter", "WritableStreamDefaultController",
-        "TransformStream", "TransformStreamDefaultController", "TextEncoderStream", "TextDecoderStream", "CountQueuingStrategy", "ByteLengthQueuingStrategy", "XMLSerializer", "structuredClone", "ReadableStreamBYOBReader", "ReadableStreamBYOBRequest", "ReadableByteStreamController", "MessageChannel", "MessagePort", "BroadcastChannel", "postMessage",
+        "TransformStream", "TransformStreamDefaultController", "TextEncoderStream", "TextDecoderStream", "CountQueuingStrategy", "ByteLengthQueuingStrategy", "XMLSerializer", "structuredClone", "ReadableStreamBYOBReader", "ReadableStreamBYOBRequest", "ReadableByteStreamController", "MessageChannel", "MessagePort", "BroadcastChannel", "postMessage", "Worker",
     ];
 
     private void InstallLazyWebGlobals()
@@ -101,7 +101,7 @@ internal sealed partial class ScriptRuntime
             // The bundle is defined and run in one script: the engine runs the promise jobs that are waiting when a script ends, and one of them can name a
             // global this bundle is still making (a test's first promise_test callback does).
             Engine.Global.FastSetProperty("__peachNet", new PropertyDescriptor(NetObject(), PropertyFlag.Writable | PropertyFlag.Configurable));
-            var bundle = WebPlatformScripts.Bundle.Replace(WebPlatformScripts.StreamsMarker, WebStreamsScripts.Source, StringComparison.Ordinal).Replace(WebPlatformScripts.XmlSerializerMarker, XmlSerializerScripts.Source, StringComparison.Ordinal).Replace(WebPlatformScripts.MessagingMarker, MessagingScripts.Source, StringComparison.Ordinal);
+            var bundle = WebPlatformScripts.Bundle.Replace(WebPlatformScripts.StreamsMarker, WebStreamsScripts.Source, StringComparison.Ordinal).Replace(WebPlatformScripts.XmlSerializerMarker, XmlSerializerScripts.Source, StringComparison.Ordinal).Replace(WebPlatformScripts.MessagingMarker, MessagingScripts.Source, StringComparison.Ordinal).Replace(WebPlatformScripts.WorkersMarker, WorkerScripts.Source, StringComparison.Ordinal);
             Engine.Execute(bundle + "(globalThis.__peachNet, globalThis); delete globalThis.__peachNet;");
         }
         catch (Exception error) when (IsScriptFailure(error))
@@ -168,6 +168,23 @@ internal sealed partial class ScriptRuntime
             return Result(response, url);
         });
 
+        Js.Method(Engine, net, "registerBlobReader", 1, (_, args) =>
+        {
+            _blobReader = Js.Arg(args, 0) as ObjectInstance;
+            return JsValue.Undefined;
+        });
+        Js.Method(Engine, net, "blobUrlCreated", 1, (_, args) =>
+        {
+            // The address resolves for every loader (an image, a style sheet, a font...), with the bytes read from the script's own Blob when something asks.
+            BlobUrlStore.Register(Js.AsText(Js.Arg(args, 0)), this, static (owner, url) => ((ScriptRuntime)owner).ReadBlob(url));
+            return JsValue.Undefined;
+        });
+        Js.Method(Engine, net, "blobUrlRevoked", 1, (_, args) =>
+        {
+            BlobUrlStore.Revoke(Js.AsText(Js.Arg(args, 0)));
+            return JsValue.Undefined;
+        });
+        InstallWorkerNet(net);
         return net;
     }
 
@@ -265,9 +282,14 @@ internal sealed partial class ScriptRuntime
     private async ValueTask DeliverRequestsAsync()
     {
         StartInitialImages();
-        while (_pendingRequests.Count > 0 || _pendingImages.Count > 0)
+        while (_pendingRequests.Count > 0 || _pendingImages.Count > 0 || _pendingFonts.Count > 0 || _pendingMedia.Count > 0)
         {
+            // Fonts a script asked to load after the page loaded are waited for as images and requests are.
+            if (_pendingFonts.Count > 0)
+                await RunFontLoadsAsync();
+
             await DeliverImagesAsync();
+            await DeliverMediaAsync();
             if (_pendingRequests.Count == 0)
                 continue;
 

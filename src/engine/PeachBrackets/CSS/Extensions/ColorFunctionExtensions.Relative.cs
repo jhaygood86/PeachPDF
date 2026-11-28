@@ -26,23 +26,35 @@ namespace PeachBrackets.Css
         private static Color? ParseRelative(string name, IEnumerable<Token> args, bool wantOklab, out double[] oklab)
         {
             oklab = null;
+            if (!TryEvaluateRelative(name, args, out var spec, out var values, out var alpha)) return null;
+
+            return Relative.Build(spec, values, alpha, wantOklab, out oklab);
+        }
+
+        // Reads a relative color's function, its origin and its components and works out the numbers they stand for, in the scale the function writes them in
+        // (0 to 255 for rgb()), and the alpha. The spec says which space they are in.
+        private static bool TryEvaluateRelative(string name, IEnumerable<Token> args, out RelativeSpec spec, out double[] values, out float alpha)
+        {
+            spec = default;
+            values = null;
+            alpha = 1f;
 
             var tokens = args.Where(t => t.Type != TokenType.Whitespace).ToList();
             // from <color> <components> [/ alpha]: no commas, and the origin is a single token (a nested function arrives as one).
-            if (tokens.Count < 5 || tokens.Any(t => t.Type == TokenType.Comma)) return null;
+            if (tokens.Count < 5 || tokens.Any(t => t.Type == TokenType.Comma)) return false;
 
-            if (!Relative.TryGetSpec(name.ToLowerInvariant(), tokens, out var spec)) return null;
+            if (!Relative.TryGetSpec(name.ToLowerInvariant(), tokens, out spec)) return false;
 
             // Exactly the components, then optionally a slash and one alpha.
             var rest = tokens.Skip(2).ToList();
             var slash = rest.FindIndex(t => t.Type == TokenType.Delim && t.Data.Is("/"));
-            if (slash < 0 ? rest.Count != spec.ComponentCount : slash != spec.ComponentCount || rest.Count != spec.ComponentCount + 2) return null;
+            if (slash < 0 ? rest.Count != spec.ComponentCount : slash != spec.ComponentCount || rest.Count != spec.ComponentCount + 2) return false;
 
-            if (!Extract(rest, spec.ComponentCount, out var comps, out var alphaTok, allowImplicitAlpha: false)) return null;
-            if (spec.SpaceToken && !Relative.TryReadSpace(comps[0], out spec)) return null;
+            if (!Extract(rest, spec.ComponentCount, out var comps, out var alphaTok, allowImplicitAlpha: false)) return false;
+            if (spec.SpaceToken && !Relative.TryReadSpace(comps[0], out spec)) return false;
 
             // color-mix() operands and relative origins nest without bound in the grammar; they share one depth limit.
-            if (_colorMixDepth >= MaxColorMixDepth) return null;
+            if (_colorMixDepth >= MaxColorMixDepth) return false;
             Color? origin;
             double[] originOklab;
             _colorMixDepth++;
@@ -55,36 +67,37 @@ namespace PeachBrackets.Css
                 _colorMixDepth--;
             }
 
-            if (origin is not { } originColor || originColor.IsDeviceCmyk) return null;
+            if (origin is not { } originColor || originColor.IsDeviceCmyk) return false;
 
             var coords = Relative.OriginCoordinates(originColor, originOklab, spec.Space);
             var variables = new Dictionary<string, double>(4);
             for (var i = 0; i < 3; i++) variables[spec.Keywords[i]] = coords[i] * spec.Scale;
-            variables["alpha"] = originColor.A / 255.0;
+            // The origin's alpha as it was written where it can be read so (0.5, not the 128/255 an 8-bit color holds).
+            var originAlpha = new[] { tokens[1] }.TryResolveAuthored(out var authoredOrigin) ? authoredOrigin.Alpha : originColor.A / 255.0;
+            variables["alpha"] = originAlpha;
 
             var offset = spec.SpaceToken ? 1 : 0;
-            var values = new double[3];
+            values = new double[3];
             for (var i = 0; i < 3; i++)
             {
                 var token = comps[offset + i];
                 var value = spec.IsHue(i) ? Relative.EvaluateHue(token, variables) : Relative.Evaluate(token, spec.References[i], variables);
-                if (value is null) return null;
+                if (value is null) return false;
                 values[i] = value.Value;
             }
 
-            var alpha = 1f;
             if (alphaTok is { } alphaToken)
             {
                 var a = Relative.Evaluate(alphaToken, 1.0, variables);
-                if (a is null) return null;
+                if (a is null) return false;
                 alpha = (float)Math.Clamp(a.Value, 0, 1);
             }
             else
             {
-                alpha = originColor.A / 255f;
+                alpha = (float)originAlpha;
             }
 
-            return Relative.Build(spec, values, alpha, wantOklab, out oklab);
+            return true;
         }
 
         // What each function says about its components: the space its result is in, the channel keywords, what 100% of each component is, which one is a hue.

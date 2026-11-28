@@ -1,0 +1,23 @@
+# Canvas host size and drawImage rules (Phase 3, first part)
+
+**Load-bearing idea.** The HTML "rules for parsing non-negative integers" are one function (`HtmlIntegerParser.TryParseNonNegative`), used by the canvas box, the script runtime and, through the public `ScriptDocument.TryParseNonNegativeInteger`, hosts: skip ASCII white space, an optional `+`, the leading digits, ignore the rest (`"100.999"`, `"100em"`, `"100%"` are 100, `"0x100"` is 0, `"1e2"` is 1), error otherwise or above 2^31-1 (the default 300x150 then). The `width`/`height` IDL setters are `unsigned long`: `ToUint32` (modulo 2^32, `"400x"` is 0), and the default when above 2^31-1.
+
+**Traps found by running it.**
+- Two places read the attribute: the runtime's `CanvasSize` and the engine's `CssBoxCanvas.Attribute`. A third, the generic `width`/`height` presentational hint in `DomParser` (dimension-value rules: `100%` became a percentage width, `getComputedStyle` echoed `1e2px`), had to skip canvas and apply the integer rules instead.
+- A canvas as the source of `drawImage` with no context is a valid transparent source (it used to be a `TypeError`); one with no width or height is an `InvalidStateError`, with or without a context.
+- An image that is not loaded yet, or has nothing to load, is silently not drawn; only a broken one (status 3) is an `InvalidStateError`. A closed `ImageBitmap` is an `InvalidStateError`, not a `TypeError`.
+- A rectangle with a negative width or height is the same rectangle with its origin moved (`Normalized`), it does not flip the picture; passing it straight to a backend drew a mirrored image.
+- An SVG `img` has no `Core.Image`: `ScriptDocument` keeps the loaded `SvgDocument` and `DrawSvgImage` renders it into the destination (clipped), as vector content.
+- A page whose only content is an empty 0x0 canvas has no pages: a test helper that paints indexes `Pages[0]` and fails. The host tests load without painting.
+
+**Verified.** html-canvas 1,667 files / 2,811 subtests (+43 files, +89 subtests); every non-manual `canvas-host` and `drawing-images-to-the-canvas` file passes except the detached-`OffscreenCanvas` one (Phase 7). Engine, PDF and PeachBrackets suites pass; zero warnings.
+
+**Second part: the Web IDL surface.**
+- Required arguments: `Js.StrictMethod` throws `TypeError` before the body when a call has fewer arguments than the method's declared `length` (the WebIDL required count). Every context, Path2D and gradient method uses it. The internal `native` helpers the script shims call must stay `Js.Method`: some are declared with a length the shims do not pass (`bitmapFrom` took 5, the shim passes fewer, and four `createImageBitmap` files regressed until they were put back). `setTransform` is overloaded (six numbers, or an optional matrix), so it checks for itself.
+- `getImageData` and `createImageData` take `[EnforceRange] long`: not finite, or out of the long range after the fraction is cut, is a `TypeError`; a fraction is cut before it is asked whether it is zero (`0.99` is `IndexSizeError`); `createImageData` checks its receiver before anything else.
+- `ImageData`: the constructor has two overloads told apart by whether the first argument is a `Uint8ClampedArray` (a `Uint8Array` is a number, not a width, so `new ImageData(new Uint8Array(100), 25)` is an `IndexSizeError` and a third argument that is not a dictionary a `TypeError`); a data length of 0 or not a multiple of 4 is `InvalidStateError`. `putImageData` takes only a real `ImageData` (`IsImageData`: its prototype chain), and **replaces** what is under it: the `Copy` operator from the compositing work, bounded to the rectangle, where it used to be drawn over it. A dirty rectangle reaching left of or above the image is shortened by that much, not slid.
+- `CanvasRenderingContext2D.prototype` is neither writable nor configurable: in Jint `PropertyFlag.None` means "leave the attributes alone"; the explicit false is `PropertyFlag.AllForbidden`.
+
+**Verified.** html-canvas 1,687 files / 2,831 subtests; `html-img-canvas-elements` 1,505 subtests (floor 1,495) and `html-dom` above their floors. 28 new tests (host size, drawImage rules, the API surface). One pinned scene (`put-image-data`) changed on purpose.
+
+**Not done in Phase 3.** `put.unchanged` (a straight RGBA to premultiplied 8-bit and back is lossy at low alpha); `ImageData` with `pixelFormat: 'rgba-float16'` and the float16 `createImageBitmap` round trips (Phase 7); text state in `reset()` (Phase 6); source rectangles reaching outside the image (the manual `drawimage_*` scenarios); detached `OffscreenCanvas` as a source (Phase 7).

@@ -1169,6 +1169,11 @@ namespace PeachBrackets.Html
         /// </summary>
         internal SvgClipPathRegistry SvgClipPaths => _svgClipPathRegistry ??= new SvgClipPathRegistry(this);
 
+        private SvgFilterRegistry? _svgFilterRegistry;
+
+        /// <summary>Every SVG <c>filter</c> of the document by id, for an HTML element's <c>filter: url(#id)</c>.</summary>
+        internal SvgFilterRegistry SvgFilters => _svgFilterRegistry ??= new SvgFilterRegistry(this);
+
         /// <summary>
         /// Decoded image resources resolved by <see cref="Handlers.ImageLoadHandler"/>, keyed by resolved
         /// absolute source URI (<see cref="Uri.AbsoluteUri"/>) - shared by every <c>ImageLoadHandler</c>
@@ -1181,6 +1186,13 @@ namespace PeachBrackets.Html
         /// only in <see cref="Dispose(bool)"/>, once, at the true end of this render.
         /// </summary>
         private readonly Dictionary<string, (Image? Image, SvgDocument? SvgDocument)> _resolvedImageResources = [];
+
+        // Where a resolved resource was finally read from when its request was redirected, by the same key: a cached image still taints by it.
+        private readonly Dictionary<string, Uri> _resolvedImageFinalAddresses = [];
+
+        /// <summary>The address a cached image was finally read from when its request was redirected, or null.</summary>
+        internal Uri? GetResolvedImageFinalAddress(string absoluteUri)
+            => _resolvedImageFinalAddresses.TryGetValue(absoluteUri, out var address) ? address : null;
 
         /// <summary>
         /// Looks up a previously resolved image/SVG resource by its resolved absolute source URI.
@@ -1195,8 +1207,11 @@ namespace PeachBrackets.Html
         /// reaches here on a hit, so this never actually overwrites a live entry today - but disposes one
         /// if it ever does, rather than silently orphaning it undisposed until this render's teardown.
         /// </summary>
-        internal void CacheResolvedImageResource(string absoluteUri, Image? image, SvgDocument? svgDocument)
+        internal void CacheResolvedImageResource(string absoluteUri, Image? image, SvgDocument? svgDocument, Uri? finalAddress = null)
         {
+            if (finalAddress is not null)
+                _resolvedImageFinalAddresses[absoluteUri] = finalAddress;
+
             if (_resolvedImageResources.TryGetValue(absoluteUri, out var existing) && !ReferenceEquals(existing.Image, image))
             {
                 existing.Image?.Dispose();
@@ -1597,8 +1612,28 @@ namespace PeachBrackets.Html
         /// <summary>Loads and lays out a copy of the document as it is, for the layout a script reads; null when the host gave no way to measure.</summary>
         internal Func<string, ValueTask<HtmlDocument>>? ScriptProbe { get; set; }
 
+        /// <summary>The probe a picture of an element is drawn from (see <see cref="HideCrossOriginImages"/>).</summary>
+        internal Func<string, ValueTask<HtmlDocument>>? ScriptRenderProbe { get; set; }
+
+        /// <summary>Whether images of another origin than the document's are not loaded: a picture of an element drawn for a script must not show what the script could not read.</summary>
+        internal bool HideCrossOriginImages { get; set; }
+
+        /// <summary>Whether an address is of another origin than the document's (scheme, host and port). data:, blob: and file: addresses are not.</summary>
+        internal bool IsCrossOriginAddress(Uri source)
+        {
+            if (source.Scheme is not ("http" or "https") || RenderContext.BaseUri is not { IsAbsoluteUri: true } document || document.Scheme is not ("http" or "https"))
+                return false;
+
+            return !string.Equals(source.Scheme, document.Scheme, StringComparison.OrdinalIgnoreCase)
+                || !string.Equals(source.Host, document.Host, StringComparison.OrdinalIgnoreCase)
+                || source.Port != document.Port;
+        }
+
         /// <summary>The host that runs the document's scripts, or null when scripting is off.</summary>
         internal IScriptHost? ScriptHost { get; set; }
+
+        /// <summary>What plays the document's media elements, or null (<see cref="HtmlDocumentOptions.MediaProvider"/>).</summary>
+        internal PeachBrackets.Media.IMediaProvider? MediaProvider { get; set; }
 
         // The markup the scripts left, once they have run: SetHtml recognizes it and does not run them again.
         private string? _scriptedSource;
@@ -1611,6 +1646,15 @@ namespace PeachBrackets.Html
 
         /// <summary>Makes the canvas scripts measure text on, when the host gave one.</summary>
         internal System.Func<PeachDrawing.Core.Canvas>? MeasuringCanvasFactory { get; set; }
+
+        /// <summary>Whether a script's canvas keeps a bitmap of the host's backend (<see cref="HtmlDocumentOptions.CanvasSurfaces"/>).</summary>
+        internal bool CanvasSurfaces { get; set; }
+
+        /// <summary>Whether a canvas whose children are drawable is a box that holds them (see <see cref="HtmlDocumentOptions.LayoutCanvasSubtrees"/>).</summary>
+        internal bool LayoutCanvasSubtrees { get; set; }
+
+        /// <summary>The box a picture is being drawn of (see <c>HtmlDocument.ProbeRenderAsync</c>), or null.</summary>
+        internal CssBox? ProbeRenderRoot { get; set; }
 
         /// <summary>What scripts drew on <c>canvas</c> elements, by the element's source ordinal.</summary>
         internal System.Collections.Generic.Dictionary<int, ScriptHosting.ScriptCanvasPainting> CanvasPaintings { get; } = [];
@@ -1671,6 +1715,7 @@ namespace PeachBrackets.Html
             var root = HtmlParser.ParseDocument(htmlSource, out var mode, document: true, scripting: true);
             var document = new ScriptDocument(this, root, DocumentModeOverride ?? mode);
             document.Probe = ScriptProbe;
+            document.RenderProbeFactory = ScriptRenderProbe;
             document.Apis = ScriptApis;
 
             EndScriptSession();
@@ -6292,6 +6337,10 @@ namespace PeachBrackets.Html
             try
             {
                 EndScriptSession();
+                foreach (var painting in CanvasPaintings.Values)
+                    painting.Owner?.Dispose();
+
+                CanvasPaintings.Clear();
                 AnimationClock?.Dispose();
                 AnimationClock = null;
                 _shadowLayers?.Dispose();

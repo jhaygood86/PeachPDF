@@ -12,7 +12,7 @@ internal static class MessagingScripts
     public const string Source = """
             // ---------------------------------------------------------------- MessageChannel, MessagePort, window.postMessage
             var portState = new WeakMap(), channelState = new WeakMap(), portToken = {};
-            function newPortRecord() { return { wrapper: null, peer: null, queue: [], started: false, closed: false, scheduled: false }; }
+            function newPortRecord() { return { wrapper: null, peer: null, queue: [], started: false, closed: false, scheduled: false, remote: undefined }; }
             function MessagePort(token) {
                 if (token !== portToken) throw new TypeError("Illegal constructor");
                 return Reflect.construct(EventTarget, [], MessagePort);
@@ -62,6 +62,8 @@ internal static class MessagingScripts
                 });
                 var serialized = serializeWithTransfer(message, list);
                 if (record.closed || !record.peer) return;
+                // The other end is in another engine (a worker's): the message goes there as text.
+                if (record.peer.remote !== undefined) { net.portSend(record.peer.remote, encodeTree(serialized.value)); return; }
                 record.peer.queue.push({ data: serialized.value, ports: portsOf(serialized, list) });
                 schedulePort(record.peer);
             });
@@ -73,6 +75,7 @@ internal static class MessagingScripts
             method(MessagePort.prototype, "close", function close() {
                 var record = portRecord(this);
                 record.closed = true; record.queue = [];
+                if (record.peer && record.peer.remote !== undefined) net.portSend(record.peer.remote, "\u0000close");
                 if (record.peer) { record.peer.peer = null; record.peer = null; }
             });
             handlerAttribute(MessagePort.prototype, "message");

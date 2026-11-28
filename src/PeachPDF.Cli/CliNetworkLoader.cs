@@ -47,7 +47,9 @@ internal sealed class CliNetworkLoader(Uri? baseUri, HttpClient? httpClient) : R
                     .ToDictionary(header => header.Key, header => header.Value.ToArray());
                 var stream = await response.Content.ReadAsStreamAsync();
 
-                return new RNetworkResponse(stream, headers);
+                // HttpClient follows redirects itself; where it ended up is the request message of the response it returns.
+                var final = response.RequestMessage?.RequestUri;
+                return new RNetworkResponse(stream, headers) { FinalAddress = final is not null && final != uri ? final : null };
             }
             catch (HttpRequestException)
             {

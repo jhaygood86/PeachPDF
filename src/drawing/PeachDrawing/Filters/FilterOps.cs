@@ -377,8 +377,7 @@ public static partial class FilterOps
 
     // ---- component transfer -----------------------------------------------------------------------------
     //
-    // BuildTransferLut moved to PeachBrackets.Svg.SvgFilterOps: it takes an SVG-parsed TransferFunction
-    // descriptor directly, which is genuinely SVG-specific (this package has no SVG concept at all).
+    // The table of a transfer function is ComponentTransferEffect.BuildTable in PeachDrawing.Core.
 
     /// <summary>Applies four per-channel lookup tables (R, G, B, A) to the straight colour of every pixel.</summary>
     public static void ComponentTransfer(RasterSurface source, RasterSurface destination, byte[] r, byte[] g, byte[] b, byte[] a)
@@ -499,6 +498,81 @@ public static partial class FilterOps
                     continue;
 
                 ps.Slice((sy * w + sx) * 4, 4).CopyTo(pd.Slice(pixel * 4, 4));
+            }
+        }
+    }
+
+    // ---- convolution ------------------------------------------------------------------------------------
+
+    /// <summary>Convolves <paramref name="source"/> with the kernel of <paramref name="p"/> into <paramref name="destination"/> (SVG's <c>feConvolveMatrix</c>).</summary>
+    public static void ConvolveMatrix(RasterSurface source, RasterSurface destination, ConvolveMatrixEffect p)
+    {
+        var w = source.Width;
+        var h = source.Height;
+        var ps = source.Pixels;
+
+        // Straight colour when alpha is preserved (the colour is convolved and premultiplied by the original alpha), premultiplied otherwise.
+        var values = new float[w * h * 4];
+        for (var i = 0; i < w * h; i++)
+        {
+            float a = ps[i * 4 + 3] / 255f;
+            for (var c = 0; c < 3; c++)
+            {
+                var v = ps[i * 4 + c] / 255f;
+                values[i * 4 + c] = p.PreserveAlpha ? (a > 0 ? Math.Min(v / a, 1f) : 0f) : v;
+            }
+
+            values[i * 4 + 3] = a;
+        }
+
+        var pd = destination.Pixels;
+        var sum = new double[4];
+        for (var y = 0; y < h; y++)
+        {
+            for (var x = 0; x < w; x++)
+            {
+                Array.Clear(sum);
+                for (var i = 0; i < p.Rows; i++)
+                {
+                    for (var j = 0; j < p.Columns; j++)
+                    {
+                        var sx = x - p.TargetX + j;
+                        var sy = y - p.TargetY + i;
+                        if (sx < 0 || sx >= w || sy < 0 || sy >= h)
+                        {
+                            switch (p.EdgeMode)
+                            {
+                                case FilterEdgeMode.None:
+                                    continue;
+                                case FilterEdgeMode.Wrap:
+                                    sx = PositiveModulo(sx, w);
+                                    sy = PositiveModulo(sy, h);
+                                    break;
+                                default:
+                                    sx = Math.Clamp(sx, 0, w - 1);
+                                    sy = Math.Clamp(sy, 0, h - 1);
+                                    break;
+                            }
+                        }
+
+                        var k = p.Kernel[p.Columns - j - 1 + (p.Rows - i - 1) * p.Columns];
+                        var o = (sy * w + sx) * 4;
+                        sum[0] += values[o] * k;
+                        sum[1] += values[o + 1] * k;
+                        sum[2] += values[o + 2] * k;
+                        sum[3] += values[o + 3] * k;
+                    }
+                }
+
+                var centre = (y * w + x) * 4;
+                var alpha = p.PreserveAlpha ? values[centre + 3] : Math.Clamp(sum[3] / p.Divisor + p.Bias, 0.0, 1.0);
+                for (var c = 0; c < 3; c++)
+                {
+                    var v = Math.Clamp(sum[c] / p.Divisor + p.Bias * alpha, 0.0, 1.0);
+                    pd[centre + c] = (byte)Math.Round((p.PreserveAlpha ? v * alpha : Math.Min(v, alpha)) * 255.0);
+                }
+
+                pd[centre + 3] = (byte)Math.Round(alpha * 255.0);
             }
         }
     }

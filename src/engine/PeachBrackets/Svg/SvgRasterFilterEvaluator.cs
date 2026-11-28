@@ -58,6 +58,32 @@ namespace PeachBrackets.Svg
             g.DrawRaster(scope.Surface);
         }
 
+        /// <summary>
+        /// Filters the pixels of <paramref name="surface"/> in place, taking <paramref name="region"/> (what the surface covers) as the box the filter's region is measured against.
+        /// A primitive that needs more than the surface (a painted input) works on what it can, and a filter that fails leaves the surface as it was.
+        /// </summary>
+        public static void ApplyTo(Canvas g, SvgFilter filter, RasterSurface surface, Rect region) => ApplyTo(g, filter, surface, region, region);
+
+        /// <summary>
+        /// <see cref="ApplyTo(Canvas, SvgFilter, RasterSurface, Rect)"/> where the box the filter's region is measured against (<paramref name="bbox"/>) is not all the surface covers
+        /// (<paramref name="region"/>), as for an HTML box whose filter region reaches beyond it.
+        /// </summary>
+        public static void ApplyTo(Canvas g, SvgFilter filter, RasterSurface surface, Rect bbox, Rect region, SvgFilterInputs? inputs = null)
+        {
+            try
+            {
+                var result = Evaluate(g, filter, bbox, surface, region, inputs);
+                if (result is null)
+                    return;
+
+                result.Pixels.CopyTo(surface.Pixels);
+                result.Dispose();
+            }
+            catch (Exception ex) when (ex is NullReferenceException or InvalidOperationException or ArgumentException)
+            {
+            }
+        }
+
         /// <summary>Runs the primitive graph and returns the final result in sRGB, or null when the graph produced nothing. The caller owns the returned surface.</summary>
         private static RasterSurface? Evaluate(Canvas g, SvgFilter filter, Rect? bbox, RasterSurface sourcePixels, Rect region, SvgFilterInputs? inputs)
         {

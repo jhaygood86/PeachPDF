@@ -413,6 +413,38 @@ namespace PeachBrackets.Html.Paint
             }
         }
 
+        private static bool IsPartOfPicture(CssBox box, CssBox pictured)
+        {
+            for (var current = box; current is not null; current = current.ParentBox)
+            {
+                if (ReferenceEquals(current, pictured))
+                    return !IsInsideAnotherCanvas(box, pictured);
+            }
+
+            for (var current = pictured; current is not null; current = current.ParentBox)
+            {
+                if (ReferenceEquals(current, box))
+                    return true;
+            }
+
+            return false;
+        }
+
+        // What a canvas nested in the picture holds is not painted with it (the canvas is, as what a script drew): not its children, and not what they positioned out into the stacking context around.
+        private static bool IsInsideAnotherCanvas(CssBox box, CssBox pictured)
+        {
+            if (ReferenceEquals(box, pictured))
+                return false;
+
+            for (var current = box.ParentBox; current is not null && !ReferenceEquals(current, pictured); current = current.ParentBox)
+            {
+                if (current is CssBoxDrawableCanvas)
+                    return true;
+            }
+
+            return false;
+        }
+
         /// <summary>
         /// Paints one box fragment — the portion of a box that lives in a single fragmentainer (CSS
         /// Fragmentation Level 3 §2) — establishing the whole-element effects (<c>transform</c>,
@@ -444,6 +476,10 @@ namespace PeachBrackets.Html.Paint
 
             // Another plane of the 3D rendering context being painted: the context composes it, this plane's own painting must not.
             if (_contextMembers is not null && _contextMembers.Contains(fragment))
+                return;
+
+            // A picture of one element holds that element and what is inside it: the boxes that are neither it, nor inside it, nor above it (which stay only to hold it) are not painted.
+            if (container.ProbeRenderRoot is { } pictured && !IsPartOfPicture(box, pictured))
                 return;
 
             // A box the viewport holds in place is drawn by its own layer: the scrolled surface leaves it out, so it is never drawn into content

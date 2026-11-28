@@ -52,6 +52,9 @@ namespace PeachBrackets.Html.TextGeometry
             var chosen = 0;
             var chosenDistance = double.MaxValue;
 
+            if (caret && NearestInWordUnder(found, x) is { } inWord)
+                return new TextPosition(best, inWord);
+
             if (caret)
             {
                 foreach (var boundary in boundaries)
@@ -84,6 +87,51 @@ namespace PeachBrackets.Html.TextGeometry
             }
 
             return new TextPosition(best, chosen);
+        }
+
+        // The boundary nearest a point that is over a word of the run, among that word's own edges. A run keeps one x for each index, which is not enough where words of
+        // different direction meet (the end of one and the start of the next are one index and two places), so the word the point is over decides.
+        private static int? NearestInWordUnder(TextRun run, double x)
+        {
+            foreach (var slice in run.Slices)
+            {
+                var offsets = run.CharacterOffsets;
+                if (slice.TextStart >= offsets.Count || slice.Edges.Length < 2)
+                    continue;
+
+                var wordLeft = offsets[slice.TextStart] - slice.Edges[0];
+                double lo = double.MaxValue, hi = double.MinValue;
+                foreach (var edge in slice.Edges)
+                {
+                    lo = Math.Min(lo, wordLeft + edge);
+                    hi = Math.Max(hi, wordLeft + edge);
+                }
+
+                if (x < lo || x > hi)
+                    continue;
+
+                var chosen = -1;
+                var chosenDistance = double.MaxValue;
+                var boundaries = new HashSet<int>(run.CharacterBoundaries);
+                for (var i = 0; i < slice.Edges.Length; i++)
+                {
+                    var index = slice.TextStart + i;
+                    if (i != 0 && i != slice.Length && !boundaries.Contains(index))
+                        continue;
+
+                    var distance = Math.Abs(wordLeft + slice.Edges[i] - x);
+                    if (distance < chosenDistance)
+                    {
+                        chosen = index;
+                        chosenDistance = distance;
+                    }
+                }
+
+                if (chosen >= 0)
+                    return chosen;
+            }
+
+            return null;
         }
 
         /// <summary>The rectangles that cover the text from <paramref name="from"/> to <paramref name="to"/>, one per line, in points.</summary>

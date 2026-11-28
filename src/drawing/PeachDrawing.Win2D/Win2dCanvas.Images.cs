@@ -52,7 +52,13 @@ public sealed partial class Win2dCanvas
 
     /// <summary>The Win2D image for <paramref name="image"/>: not owned by the caller, which must not dispose it.</summary>
     private ICanvasImage Source(PeachDrawing.Core.Image image) =>
-        image is Win2dTileImage tile ? tile.Content : ImageFor(image).GetBitmap(_session);
+        image switch
+        {
+            Win2dTileImage tile => tile.Content,
+            Win2dBitmapImage bitmap => bitmap.Bitmap,
+            Win2dWideImage wide => wide.Bitmap,
+            _ => ImageFor(image).GetBitmap(_session),
+        };
 
     /// <summary>
     /// Draws <paramref name="source"/> so that its <paramref name="part"/> (the whole <paramref name="width"/> x <paramref name="height"/>

@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The tests of the Media Foundation provider. Deliberately a plain net10.0 project (no Windows target framework): the provider's whole point is that it works from
+    one. The tests play small H.264 clips through the real Windows media stack, so they only run on Windows.
+  -->
+  <PropertyGroup>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.MTP" />
+    <PackageReference Include="xunit.v3" />
+    <PackageReference Include="Microsoft.Testing.Extensions.TrxReport" />
+    <PackageReference Include="xunit.analyzers">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\engine\PeachBrackets.Media.MediaFoundation\PeachBrackets.Media.MediaFoundation.csproj" />
+    <ProjectReference Include="..\..\drawing\PeachDrawing\PeachDrawing.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="Assets\*.mp4" CopyToOutputDirectory="PreserveNewest" LinkBase="Assets" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+</Project>

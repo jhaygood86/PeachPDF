@@ -132,9 +132,13 @@ public sealed partial class HtmlDocument : IDisposable
             container.DocumentModeOverride = options.DocumentMode;
             container.DocumentSyntax = options.Syntax;
             container.ScriptHost = options.ScriptHost;
+            container.MediaProvider = options.MediaProvider;
             container.ScriptApis = [.. options.ScriptApis];
             container.ScriptNetwork = options.ScriptNetwork;
             container.MeasuringCanvasFactory = options.MeasuringCanvasFactory;
+            container.CanvasSurfaces = options.CanvasSurfaces;
+            container.LayoutCanvasSubtrees = options.LayoutCanvasSubtrees;
+            container.HideCrossOriginImages = options.HideCrossOriginImages;
             container.MaxLayoutPasses = options.MaxLayoutPasses;
             if (options.ScriptHost is not null && options.MeasuringCanvasFactory is { } canvasFactory)
             {
@@ -143,6 +147,19 @@ public sealed partial class HtmlDocument : IDisposable
                 container.ScriptProbe = async markup =>
                 {
                     var probe = await LoadAsync(markup, renderContext, probeOptions);
+                    using var canvas = canvasFactory();
+                    await probe.LayoutAsync(canvas);
+                    return probe;
+                };
+                var renderOptions = probeOptions.CloneWithoutScripts();
+                renderOptions.HideCrossOriginImages = true;
+
+                // A picture of an element shows its videos too: the copy plays them from where the live element is (the markup says where), paused.
+                renderOptions.MediaProvider = options.MediaProvider;
+                renderOptions.AnimationsEnabled = false;
+                container.ScriptRenderProbe = async markup =>
+                {
+                    var probe = await LoadAsync(markup, renderContext, renderOptions);
                     using var canvas = canvasFactory();
                     await probe.LayoutAsync(canvas);
                     return probe;

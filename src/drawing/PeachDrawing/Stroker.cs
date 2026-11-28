@@ -60,7 +60,7 @@ internal static class Stroker
             }
             else
             {
-                context.StrokePolyline(points, closed && points.Count > 2, default);
+                context.StrokePolyline(points, closed && points.Count > 1, default);
             }
         }
     }
@@ -257,6 +257,15 @@ internal static class Stroker
             if (Math.Abs(cross) < 1e-12 && dot > 0)
                 return;
 
+            // A turn straight back on itself has no outside side to choose by the cross product: a round join is the half disc the path was heading into, a miter has no
+            // tip (it is past any limit) and a bevel nothing to fill.
+            if (Math.Abs(cross) < 1e-12 && dot < 0)
+            {
+                if (_style.Join == StrokeJoin.Round)
+                    AddSemicircle(p, d0);
+                return;
+            }
+
             var n0 = (X: -d0.Y * halfWidth, Y: d0.X * halfWidth);
             var n1 = (X: -d1.Y * halfWidth, Y: d1.X * halfWidth);
             var sgn = cross > 0 ? -1.0 : 1.0;
@@ -273,7 +282,8 @@ internal static class Stroker
                     // cos(turn angle); the miter tip sits at halfWidth / cos(turn / 2) from the vertex.
                     var cosTurn = dot;
                     var cosHalf = Math.Sqrt(Math.Max(0, (1 + cosTurn) / 2));
-                    var limit = _style.MiterLimit >= 1 ? _style.MiterLimit : 10;
+                    // A limit under 1 is below any miter's ratio, so every join is a bevel; 0 is a pen that never set one.
+                    var limit = _style.MiterLimit > 0 ? _style.MiterLimit : 10;
                     if (cosHalf > 1e-9 && 1 / cosHalf <= limit)
                     {
                         var k = 1 / (1 + cosTurn);

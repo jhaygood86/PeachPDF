@@ -1,3 +1,4 @@
+using System.Linq;
 using PeachBrackets.Text;
 using System;
 using System.Collections.Generic;
@@ -103,6 +104,339 @@ public sealed partial class HtmlDocument
         var points = PeachBrackets.Utilities.Utils.ToPoints(rect, _unitsPerPoint);
         const double pointsPerPixel = 0.75;
         return (points.X / pointsPerPixel, points.Y / pointsPerPixel, points.Width / pointsPerPixel, points.Height / pointsPerPixel);
+    }
+
+    /// <summary>
+    /// The box of the <paramref name="ordinal"/>-th element as a whole (the union of what it takes on each line, when it breaks) in CSS pixels from the top left of the page, and the same with the element's
+    /// own CSS transform applied (its bounding box).
+    /// </summary>
+    internal ((double X, double Y, double Width, double Height) Box, (double X, double Y, double Width, double Height) Transformed)? ProbeBoxes(int ordinal)
+    {
+        _ = Pages;
+        if (FindByOrdinal(_container.Root, ordinal) is not { } found)
+            return null;
+
+        var box = PeachBrackets.Html.Utils.DomUtils.ResolveGeometryBox(found);
+        Rect rect = box.Bounds;
+        if (box.Rectangles.Count > 0)
+        {
+            double left = double.MaxValue, top = double.MaxValue, right = double.MinValue, bottom = double.MinValue;
+            foreach (var part in box.Rectangles.Values)
+            {
+                left = Math.Min(left, part.Left);
+                top = Math.Min(top, part.Top);
+                right = Math.Max(right, part.Right);
+                bottom = Math.Max(bottom, part.Bottom);
+            }
+
+            rect = new Rect(left, top, right - left, bottom - top);
+        }
+
+        var moved = rect;
+        if (box.HasTransform)
+        {
+            var matrix = PeachDrawing.Core.Matrix3x2Extensions.RebaseOrigin(box.ActualTransformMatrix, rect.X, rect.Y);
+            var corners = new[] { (rect.Left, rect.Top), (rect.Right, rect.Top), (rect.Right, rect.Bottom), (rect.Left, rect.Bottom) }
+                .Select(c => System.Numerics.Vector2.Transform(new System.Numerics.Vector2((float)c.Item1, (float)c.Item2), matrix)).ToArray();
+            var minX = corners.Min(c => c.X);
+            var minY = corners.Min(c => c.Y);
+            moved = new Rect(minX, minY, corners.Max(c => c.X) - minX, corners.Max(c => c.Y) - minY);
+        }
+
+        const double pointsPerPixel = 0.75;
+        (double X, double Y, double Width, double Height) InPixels(Rect r)
+        {
+            var points = PeachBrackets.Utilities.Utils.ToPoints(r, _unitsPerPoint);
+            return (points.X / pointsPerPixel, points.Y / pointsPerPixel, points.Width / pointsPerPixel, points.Height / pointsPerPixel);
+        }
+
+        return (InPixels(rect), InPixels(moved));
+    }
+
+    /// <summary>
+    /// Draws the element that is the <paramref name="ordinal"/>-th element of the source, as it is laid out here, onto a new surface of its own size (one device pixel to a CSS pixel) and gives
+    /// the picture. What overlaps the element on the page is drawn with it. Null when there is no such element or it has no area to draw.
+    /// </summary>
+    internal async System.Threading.Tasks.ValueTask<(PeachDrawing.Core.Image Image, double Width, double Height)?> ProbeRenderAsync(int ordinal, Func<int, int, PeachDrawing.Core.OffscreenSurface?> makeSurface, IReadOnlyDictionary<int, PeachBrackets.ScriptHosting.ScriptCanvasPainting>? canvasPaintings = null)
+    {
+        _ = Pages;
+        if (FindByOrdinal(_container.Root, ordinal) is not { } found)
+            return null;
+
+        var box = PeachBrackets.Html.Utils.DomUtils.ResolveGeometryBox(found);
+        if (_container.HideCrossOriginImages && _container.Root is { } documentRoot)
+            await RenderSameOriginFramesAsync(documentRoot, found, makeSurface);
+
+        var rect = PeachBrackets.Html.Utils.CommonUtils.GetFirstValueOrDefault(box.Rectangles, box.Bounds);
+        var layoutPerPixel = _unitsPerPoint * 0.75;
+        var (width, height) = (rect.Width / layoutPerPixel, rect.Height / layoutPerPixel);
+        if (!(width > 0) || !(height > 0) || width > 16384 || height > 16384)
+            return null;
+
+        var (pixelsWide, pixelsHigh) = ((int)Math.Ceiling(width - 1e-6), (int)Math.Ceiling(height - 1e-6));
+
+        // A raster region nested in a surface is cut to that surface's own grid and takes no account of a transform pushed on it, so an element that is not at the page's corner is painted
+        // where it is, on a surface that reaches from the corner to it, and its part is cut out afterwards.
+        var (cornerX, cornerY) = (rect.X / layoutPerPixel, rect.Y / layoutPerPixel);
+        var wholeWidth = (int)Math.Ceiling(cornerX + width + 1);
+        var wholeHeight = (int)Math.Ceiling(cornerY + height + 1);
+        var cut = (cornerX >= 1 || cornerY >= 1) && wholeWidth <= 8192 && wholeHeight <= 8192;
+        using var surface = makeSurface(Math.Max(1, cut ? wholeWidth : pixelsWide), Math.Max(1, cut ? wholeHeight : pixelsHigh));
+        if (surface is null)
+            return null;
+
+        _container.ProbeRenderRoot = found;
+        var previousCulling = PeachBrackets.Html.Paint.FragmentPainter.UnboundedCulling.Value;
+        PeachBrackets.Html.Paint.FragmentPainter.UnboundedCulling.Value = true;
+
+        // What is above the element is not in its picture: it keeps no background, border or shadow of its own while the picture is drawn.
+        var suppressed = new List<(CssBox Box, bool Background, bool Border)>();
+        for (var above = found.ParentBox; above is not null; above = above.ParentBox)
+        {
+            suppressed.Add((above, above.SuppressOwnBackgroundPaint, above.SuppressOwnBorderPaint));
+            above.SuppressOwnBackgroundPaint = true;
+            above.SuppressOwnBorderPaint = true;
+        }
+        _container.CanvasPaintings.Clear();
+        if (canvasPaintings is not null)
+        {
+            foreach (var (key, painting) in canvasPaintings)
+                _container.CanvasPaintings[key] = painting;
+        }
+
+        // The page's layout units become pixels, and (when it is not cut out afterwards) the element's corner the picture's.
+        var canvas = surface.Canvas;
+        var toPixels = System.Numerics.Matrix3x2.CreateScale((float)(1 / layoutPerPixel));
+        canvas.PushTransform(cut ? toPixels : System.Numerics.Matrix3x2.CreateTranslation((float)-rect.X, (float)-rect.Y) * toPixels);
+        try
+        {
+            var region = new Rect(rect.X / _unitsPerPoint, rect.Y / _unitsPerPoint, rect.Width / _unitsPerPoint, rect.Height / _unitsPerPoint);
+            await PaintPageRegionAsync(0, canvas, region);
+        }
+        finally
+        {
+            canvas.PopTransform();
+            PeachBrackets.Html.Paint.FragmentPainter.UnboundedCulling.Value = previousCulling;
+            _container.ProbeRenderRoot = null;
+            _container.CanvasPaintings.Clear();
+            foreach (var (above, background, border) in suppressed)
+            {
+                above.SuppressOwnBackgroundPaint = background;
+                above.SuppressOwnBorderPaint = border;
+            }
+        }
+
+        if (!cut)
+            return (surface.CreateSnapshot(), width, height);
+
+        using var whole = surface.CreateSnapshot();
+        using var piece = makeSurface(Math.Max(1, pixelsWide), Math.Max(1, pixelsHigh));
+        if (piece is null)
+            return null;
+
+        piece.Canvas.DrawImage(whole, new Rect(0, 0, pixelsWide, pixelsHigh), new Rect(cornerX, cornerY, pixelsWide, pixelsHigh), PeachDrawing.Core.ImageSampling.Nearest);
+        return (piece.CreateSnapshot(), width, height);
+    }
+
+    // A browsing context is not embedded in a page, but a picture of an element shows an iframe that is of the document's own origin (and is not sandboxed away from it) as the frame's
+    // page drawn at the frame's size: what is inside is then as readable to the script as the element it is in.
+    private async System.Threading.Tasks.ValueTask RenderSameOriginFramesAsync(CssBox box, CssBox within, Func<int, int, PeachDrawing.Core.OffscreenSurface?> makeSurface)
+    {
+        if (box is CssBoxFrame { HtmlTag: { } tag } frame && IsInside(frame, within)
+            && tag.TryGetAttribute("src") is { Length: > 0 } src && !tag.HasAttribute("sandbox")
+            && PeachBrackets.Html.Utils.CommonUtils.ResolveAgainstDocumentBase(_container, src) is { IsAbsoluteUri: true } address
+            && _container.RenderContext.BaseUri is { IsAbsoluteUri: true } documentAddress
+            && address.Scheme is "http" or "https" && string.Equals(address.Scheme, documentAddress.Scheme, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(address.Host, documentAddress.Host, StringComparison.OrdinalIgnoreCase) && address.Port == documentAddress.Port)
+        {
+            try
+            {
+                var response = await _container.RenderContext.GetResourceStream(address);
+                var sandboxed = response?.ResponseHeaders is { } headers && headers.Any(h => h.Key.Equals("Content-Security-Policy", StringComparison.OrdinalIgnoreCase) && h.Value.Any(v => v.Contains("sandbox", StringComparison.OrdinalIgnoreCase)));
+                if (response?.ResourceStream is { } stream && !sandboxed)
+                {
+                    string html;
+                    using (var reader = new System.IO.StreamReader(stream))
+                        html = await reader.ReadToEndAsync();
+
+                    var rect = frame.Bounds;
+                    var (width, height) = (rect.Width / _unitsPerPoint / 0.75, rect.Height / _unitsPerPoint / 0.75);
+                    if (width >= 1 && height >= 1 && _options is { } options)
+                    {
+                        var frameOptions = options.CloneWithoutScripts();
+                        frameOptions.PageWidthPoints = width * 0.75;
+                        frameOptions.ViewportHeightPoints = height * 0.75;
+                        frameOptions.HideCrossOriginImages = true;
+                        using var inner = await LoadAsync("<base href=\"" + System.Net.WebUtility.HtmlEncode(address.AbsoluteUri) + "\"><style>html { min-height: 100vh }</style>" + html, _container.RenderContext, frameOptions);
+                        using var measuring = makeSurface(1, 1);
+                        if (measuring is not null)
+                        {
+                            await inner.LayoutAsync(measuring.Canvas);
+                            using var surface = makeSurface(Math.Max(1, (int)Math.Ceiling(width)), Math.Max(1, (int)Math.Ceiling(height)));
+                            if (surface is not null)
+                            {
+                                surface.Canvas.PushTransform(System.Numerics.Matrix3x2.CreateScale(1f / 0.75f));
+                                // The page's own background (what the body's propagates to) is part of what the frame shows, so the page is painted whole, clipped to the frame.
+                                surface.Canvas.PushClip(new Rect(0, 0, width * 0.75, height * 0.75));
+                                await inner.PaintPageAsync(0, surface.Canvas);
+                                surface.Canvas.PopClip();
+                                surface.Canvas.PopTransform();
+                                frame.ImageWord.Image = surface.CreateSnapshot();
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception ex) when (ex is not OutOfMemoryException and not PeachBrackets.Html.Utils.SynchronousOnlyViolationException)
+            {
+                // A frame that cannot be read is a frame that is not drawn.
+            }
+        }
+
+        foreach (var child in box.Boxes)
+            await RenderSameOriginFramesAsync(child, within, makeSurface);
+    }
+
+    private static bool IsInside(CssBox box, CssBox ancestor)
+    {
+        for (var current = box; current is not null; current = current.ParentBox)
+        {
+            if (ReferenceEquals(current, ancestor))
+                return true;
+        }
+
+        return false;
+    }
+
+    // The text runs that lie in the element that is the ordinal-th of the source, in the order they are in the document.
+    private List<TextRun> RunsIn(int ordinal)
+    {
+        var result = new List<TextRun>();
+        if (FindByOrdinal(_container.Root, ordinal) is not { } element)
+            return result;
+
+        foreach (var run in TextRuns)
+        {
+            for (var owner = run.Owner; owner is not null; owner = owner.ParentBox)
+            {
+                if (ReferenceEquals(owner, element))
+                {
+                    result.Add(run);
+                    break;
+                }
+            }
+        }
+
+        return result;
+    }
+
+    // Where a character index of a run is along it: the offset of the boundary at or after it.
+    private static double XAt(TextRun run, int index)
+    {
+        var boundaries = run.CharacterBoundaries;
+        // The offsets are by UTF-16 index, the boundaries a list of the indices that are positions (fewer, where a surrogate pair or a cluster is).
+        for (var k = 0; k < boundaries.Count; k++)
+        {
+            if (boundaries[k] >= index && boundaries[k] < run.CharacterOffsets.Count)
+                return run.CharacterOffsets[boundaries[k]];
+        }
+
+        return run.CharacterOffsets[^1];
+    }
+
+    /// <summary>The rectangles the characters from <paramref name="from"/> to <paramref name="to"/> of the text of the <paramref name="ordinal"/>-th element take, one for each stretch of a line, in CSS pixels.</summary>
+    internal IReadOnlyList<(double X, double Y, double Width, double Height)> ProbeTextRects(int ordinal, int from, int to)
+    {
+        _ = Pages;
+        var rects = new List<(double X, double Y, double Right, double Bottom)>();
+        foreach (var run in RunsIn(ordinal))
+        {
+            if (run.CharacterOffsets.Count == 0)
+                continue;
+
+            // Each word of the run knows where its characters are in the text they came from.
+            foreach (var slice in run.Slices)
+            {
+                var source = slice.Word.SourceStart;
+                if (source < 0)
+                    continue;
+
+                var (start, end) = (Math.Max(from, source), Math.Min(to, source + slice.Length));
+                if (end <= start)
+                    continue;
+
+                // The word's left edge is the run's first offset of the word less where that edge is from the word's left.
+                var first = XAt(run, slice.TextStart);
+                var wordLeft = first - slice.Edges[0];
+                var (a, b) = (wordLeft + slice.Edges[start - source], wordLeft + slice.Edges[end - source]);
+                var (left, right) = (Math.Min(a, b), Math.Max(a, b));
+                var (top, bottom) = (run.Bounds.Y, run.Bounds.Y + run.Bounds.Height);
+
+                rects.Add((left, top, right, bottom));
+
+                // The space before the word is covered when the range includes it.
+                if (slice.HasGap && from <= source - 1 && source - 1 < to)
+                    rects.Add((Math.Min(wordLeft + slice.GapStart, wordLeft + slice.GapEnd), top, Math.Max(wordLeft + slice.GapStart, wordLeft + slice.GapEnd), bottom));
+            }
+        }
+
+        // An empty range is a box with no width where the place is.
+        if (rects.Count == 0 && from >= to)
+        {
+            foreach (var run in RunsIn(ordinal))
+            {
+                foreach (var slice in run.Slices)
+                {
+                    var source = slice.Word.SourceStart;
+                    if (source < 0 || to < source || to > source + slice.Length)
+                        continue;
+
+                    var x = XAt(run, slice.TextStart) - slice.Edges[0] + slice.Edges[to - source];
+                    rects.Add((x, run.Bounds.Y, x, run.Bounds.Y + run.Bounds.Height));
+                    break;
+                }
+
+                if (rects.Count > 0)
+                    break;
+            }
+        }
+
+        // The stretches that touch on one line are one rectangle, left to right.
+        rects.Sort((p, q) => Math.Abs(p.Y - q.Y) < 0.5 ? p.X.CompareTo(q.X) : p.Y.CompareTo(q.Y));
+        var merged = new List<(double X, double Y, double Right, double Bottom)>();
+        foreach (var rect in rects)
+        {
+            if (merged.Count > 0 && Math.Abs(merged[^1].Y - rect.Y) < 0.5 && rect.X <= merged[^1].Right + 0.5)
+                merged[^1] = (merged[^1].X, merged[^1].Y, Math.Max(merged[^1].Right, rect.Right), Math.Max(merged[^1].Bottom, rect.Bottom));
+            else
+                merged.Add(rect);
+        }
+
+        rects = merged;
+
+        const double pointsPerPixel = 0.75;
+        return [.. rects.Select(r => (r.X / pointsPerPixel, r.Y / pointsPerPixel, (r.Right - r.X) / pointsPerPixel, (r.Bottom - r.Y) / pointsPerPixel))];
+    }
+
+    /// <summary>The place between two characters nearest a point (in CSS pixels): the ordinal of the element that holds the text, and how many characters of that text come before the place.</summary>
+    internal (int Ordinal, int Offset)? ProbeCaretAt(double x, double y)
+    {
+        _ = Pages;
+        if (Pages.Count == 0 || GetCaretPosition(0, x * 0.75, y * 0.75) is not { } position || position.RunIndex < 0 || position.RunIndex >= TextRuns.Count)
+            return null;
+
+        var run = TextRuns[position.RunIndex];
+        for (var owner = run.Owner; owner is not null; owner = owner.ParentBox)
+        {
+            if (owner.HtmlTag is not { } tag)
+                continue;
+
+            // The word the place is in names where it is in the source text.
+            var slice = run.Slices.FirstOrDefault(s => s.Word.SourceStart >= 0 && position.CharIndex >= s.TextStart && position.CharIndex <= s.TextStart + s.Length);
+            return slice is null ? null : (tag.SourceOrdinal, slice.Word.SourceStart + position.CharIndex - slice.TextStart);
+        }
+
+        return null;
     }
 
     /// <summary>The computed value of a property of the element that is the <paramref name="ordinal"/>-th element of the source, or null.</summary>

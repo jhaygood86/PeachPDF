@@ -380,11 +380,21 @@ namespace PeachBrackets.Svg
             if (uri is not { IsAbsoluteUri: true })
                 return null;
 
+            // A picture of an element may not show what the page may not read: an image of another origin is left out.
+            if (container.HideCrossOriginImages && container.IsCrossOriginAddress(uri))
+                return null;
+
             try
             {
                 var response = await AsyncGuard.Require(container.RenderContext.GetResourceStream(uri), container.SynchronousOnly, "load the SVG image", uri.AbsoluteUri);
                 if (response?.ResourceStream is not { } stream)
                     return null;
+
+                if (container.HideCrossOriginImages && response.FinalAddress is { } finalAddress && container.IsCrossOriginAddress(finalAddress))
+                {
+                    await stream.DisposeAsync();
+                    return null;
+                }
 
                 byte[] bytes;
                 await using (stream)

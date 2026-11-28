@@ -57,6 +57,7 @@ public sealed class JintScriptHost(JintScriptOptions? options = null) : IScriptH
     public void DocumentClosed(ScriptDocument document)
     {
         (document.HostState as ScriptRuntime)?.DetachApis();
+        (document.HostState as ScriptRuntime)?.DisposeMedia();
         document.HostState = null;
     }
 }

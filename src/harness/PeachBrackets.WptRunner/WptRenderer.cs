@@ -26,10 +26,51 @@ internal sealed partial class WptRenderer(string wptRoot) : IReftestRenderer
     [GeneratedRegex(@"^\s*(<!--.*?-->\s*)*<!DOCTYPE[^>]*>", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Singleline)]
     private static partial Regex Doctype();
 
-    private string? AhemPath()
+    /// <summary>
+    /// The fonts a page is drawn with whatever the machine has: each generic family resolved as a browser's platform would, the serif, sans-serif and monospace families pinned
+    /// to the bundled Liberation faces (so the floors do not depend on the fonts of the runner image: they differed between Windows and Linux by dozens of reftests), and the
+    /// WPT harness's own Ahem (every glyph an em square, metrics known exactly), which a test that sets <c>font-family: Ahem</c> without an @font-face rule relies on.
+    /// </summary>
+    private static readonly object s_mediaGate = new();
+    private static bool s_mediaReported;
+
+    /// <summary>
+    /// The decoder the pages' audio and video play through: the platform's (GStreamer here), on the document's clock so that a page behaves the same on
+    /// a slow machine as on a fast one. Null, with one line saying so, when the machine has none: the media tests then fail as they do with no provider.
+    /// </summary>
+    internal static PeachBrackets.Media.IMediaProvider? CreateMediaProvider()
     {
-        var path = Path.Combine(wptRoot, "fonts", "Ahem.ttf");
-        return File.Exists(path) ? path : null;
+        // PEACHBRACKETS_WPT_NO_MEDIA=1 runs without a decoder, to measure what the media tests gain from one.
+        var provider = Environment.GetEnvironmentVariable("PEACHBRACKETS_WPT_NO_MEDIA") == "1" ? null : PeachBrackets.Media.Platform.PlatformMediaProvider.Create(new PeachBrackets.Media.MediaProviderOptions { DeterministicClock = true });
+        lock (s_mediaGate)
+        {
+            if (!s_mediaReported)
+            {
+                s_mediaReported = true;
+                Console.Error.WriteLine(provider is null
+                    ? "No media decoder is installed (GStreamer): the audio and video tests will fail."
+                    : "Media decoder: " + provider.GetType().Name + " (webm: '" + provider.CanPlayType("video/webm; codecs=\"vp9, opus\"") + "', mp4: '" + provider.CanPlayType("video/mp4; codecs=\"avc1.42E01E\"") + "').");
+            }
+        }
+
+        return provider;
+    }
+
+    internal static async Task InstallFontsAsync(RasterRenderContext context, string wptRoot)
+    {
+        var fontSet = new FontSet();
+        foreach (var (keyword, generic) in FontDefaults.GenericFamilies)
+            if (fontSet.ResolveGeneric(generic, context.IsFontExists) is { } family)
+                context.AddFontFamilyMapping(keyword, family);
+
+        await PinGenericFontsAsync(context);
+
+        var ahem = Path.Combine(wptRoot, "fonts", "Ahem.ttf");
+        if (File.Exists(ahem))
+        {
+            await using var stream = File.OpenRead(ahem);
+            await context.AddFont(stream, "Ahem");
+        }
     }
 
     private static readonly string[] LiberationFaces =
@@ -87,22 +128,7 @@ internal sealed partial class WptRenderer(string wptRoot) : IReftestRenderer
 
         // A browser resolves each generic family (`monospace`...) to its platform's real family; without this the raster context falls back to
         // whatever the font set finds first, and a reftest written with `font: 24px monospace` measures a different font than the browser's.
-        var fontSet = new FontSet();
-        foreach (var (keyword, generic) in FontDefaults.GenericFamilies)
-            if (fontSet.ResolveGeneric(generic, context.IsFontExists) is { } family)
-                context.AddFontFamilyMapping(keyword, family);
-
-        // Pinned: the serif, sans-serif and monospace families are the bundled Liberation faces whatever the machine has installed, so the
-        // floors do not depend on the fonts of the runner image (they differed between Windows and Linux by dozens of reftests).
-        await PinGenericFontsAsync(context);
-
-        // The WPT harness installs the Ahem font (every glyph an em square, metrics known exactly) on the machine, and a test that sets
-        // `font-family: Ahem` without an @font-face rule relies on that.
-        if (AhemPath() is { } ahem)
-        {
-            await using var stream = File.OpenRead(ahem);
-            await context.AddFont(stream, "Ahem");
-        }
+        await InstallFontsAsync(context, wptRoot);
 
         var options = new HtmlDocumentOptions
         {
@@ -128,6 +154,7 @@ internal sealed partial class WptRenderer(string wptRoot) : IReftestRenderer
             });
             options.MeasuringCanvasFactory = () => context.CreateCanvas(1, 1);
             options.ScriptNetwork = new ServerNetwork(server);
+            options.MediaProvider = CreateMediaProvider();
         }
 
         using var document = await HtmlDocument.LoadAsync(source, context, options);
@@ -182,7 +209,7 @@ internal sealed partial class WptRenderer(string wptRoot) : IReftestRenderer
     // The server answers; a data: address carries its own content.
     private static async ValueTask<RNetworkResponse?> LoadAsync(WptServer server, Uri uri)
     {
-        if (uri.IsAbsoluteUri && uri.Scheme == "data")
+        if (uri.IsAbsoluteUri && uri.Scheme is "data" or "blob")
             return await HostResourceLoader.LoadAsync(uri);
 
         return await server.LoadAsync(uri);

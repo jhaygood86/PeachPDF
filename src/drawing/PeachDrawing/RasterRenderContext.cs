@@ -10,7 +10,7 @@ namespace PeachDrawing;
 
 /// <summary>
 /// A <see cref="RenderContext"/> for drawing directly onto a <see cref="RasterCanvas"/> canvas with no
-/// HTML, CSS, layout, or PDF document involved. <see cref="CreateCanvas"/> is the entry point:
+/// HTML, CSS, layout, or PDF document involved. <see cref="CreateCanvas(int, int, double)"/> is the entry point:
 /// <code>
 /// using var ctx = new RasterRenderContext();
 /// using var canvas = ctx.CreateCanvas(width: 800, height: 600);
@@ -47,17 +47,28 @@ public sealed class RasterRenderContext : RenderContext
     /// accepted for forward compatibility (a future encoder that tags physical resolution on save) but does
     /// not otherwise affect drawing today.
     /// </summary>
-    public RasterCanvas CreateCanvas(int widthPx, int heightPx, double dpi = 96)
+    public RasterCanvas CreateCanvas(int widthPx, int heightPx, double dpi = 96) => CreateCanvas(widthPx, heightPx, dpi, wide: false);
+
+    /// <summary>
+    /// <see cref="CreateCanvas(int, int, double)"/> for a canvas whose surface also keeps its pixels as floating point (<paramref name="wide"/>): a color given to a
+    /// <see cref="SolidBrush"/> as a <see cref="WideColor"/>, and the pixels of an image made by <see cref="Canvas.CreateWideImage"/>, are kept as they are, outside 0 to 1 too, and the
+    /// canvas's <see cref="RasterCanvas.Surface"/> gives them back through <see cref="RasterSurface.WidePixels"/>.
+    /// </summary>
+    /// <param name="widthPx">the width, in device pixels</param>
+    /// <param name="heightPx">the height, in device pixels</param>
+    /// <param name="dpi">accepted for forward compatibility</param>
+    /// <param name="wide">whether the surface keeps floating-point pixels</param>
+    public RasterCanvas CreateCanvas(int widthPx, int heightPx, double dpi, bool wide)
     {
         _ = dpi;
-        var surface = new RasterSurface(widthPx, heightPx, gridX: 0, gridY: 0, pixelsPerUnitX: 1, pixelsPerUnitY: 1);
+        var surface = new RasterSurface(widthPx, heightPx, gridX: 0, gridY: 0, pixelsPerUnitX: 1, pixelsPerUnitY: 1, wide);
         return new RasterCanvas(this, surface, pixelsPerPoint: PixelsPerPoint);
     }
 
     /// <summary>
     /// Layout units per point, as <see cref="RenderContext.LayoutUnitsPerPoint"/> reports it: <c>1</c> (the default) means a layout unit is a point, which
-    /// a canvas from <see cref="CreateCanvas"/> then draws as one device pixel. A document laid out against this context at <c>96.0 / 72.0</c> has CSS
-    /// pixels as its layout unit, so a canvas from <see cref="CreateCanvas"/> shows it at one CSS pixel per device pixel with no transform in between, and
+    /// a canvas from <see cref="CreateCanvas(int, int, double)"/> then draws as one device pixel. A document laid out against this context at <c>96.0 / 72.0</c> has CSS
+    /// pixels as its layout unit, so a canvas from <see cref="CreateCanvas(int, int, double)"/> shows it at one CSS pixel per device pixel with no transform in between, and
     /// the engine's snapping of boxes and borders to whole CSS pixels lands on whole device pixels. Set it before the document is loaded.
     /// </summary>
     public double PixelsPerPoint { get; set; } = 1.0;

@@ -64,6 +64,9 @@ public static class HostResourceLoader
 
                 return new ValueTask<RNetworkResponse?>(new RNetworkResponse(new MemoryStream(bytes), new Dictionary<string, string[]> { ["Content-Type"] = [mimeType] }));
 
+            case "blob":
+                return BlobUrlStore.LoadAsync(uri);
+
             case "file" when allowLocalFiles:
                 try
                 {
@@ -155,7 +158,7 @@ public static class HostResourceLoader
         }
     }
 
-    private sealed record CachedResponse(byte[] Content, Dictionary<string, string[]> Headers, DateTime Expires);
+    private sealed record CachedResponse(byte[] Content, Dictionary<string, string[]> Headers, DateTime Expires, Uri? FinalAddress);
 
     private static bool TryGetCached(string address, out RNetworkResponse? response)
     {
@@ -165,7 +168,7 @@ public static class HostResourceLoader
             {
                 if (hit.Expires > DateTime.UtcNow)
                 {
-                    response = new RNetworkResponse(new MemoryStream(hit.Content, writable: false), [with(hit.Headers)]);
+                    response = new RNetworkResponse(new MemoryStream(hit.Content, writable: false), [with(hit.Headers)]) { FinalAddress = hit.FinalAddress };
                     return true;
                 }
 
@@ -178,7 +181,7 @@ public static class HostResourceLoader
         return false;
     }
 
-    private static void Remember(string address, byte[] content, Dictionary<string, string[]> headers)
+    private static void Remember(string address, byte[] content, Dictionary<string, string[]> headers, Uri? finalAddress)
     {
         lock (CacheGate)
         {
@@ -192,7 +195,7 @@ public static class HostResourceLoader
                 _cachedBytes = 0;
             }
 
-            Cache[address] = new CachedResponse(content, headers, DateTime.UtcNow + _cacheLifetime);
+            Cache[address] = new CachedResponse(content, headers, DateTime.UtcNow + _cacheLifetime, finalAddress);
             _cachedBytes += content.LongLength;
         }
     }
@@ -222,6 +225,8 @@ public static class HostResourceLoader
             if (!response.IsSuccessStatusCode)
                 return null;
 
+            // HttpClient follows redirects itself; where it ended up is the request message of the response it returns.
+            var finalAddress = response.RequestMessage?.RequestUri is { } final && final != uri ? final : null;
             var headers = new Dictionary<string, string[]>();
             foreach (var header in response.Content.Headers)
                 headers[header.Key] = [.. header.Value];
@@ -233,19 +238,19 @@ public static class HostResourceLoader
             // A response that declares more than the limit is not worth reading ahead. One that declares nothing (chunked, or decompressed - a
             // decoded response no longer has a length) is read up to the limit and kept if it fits, because most of what a page loads is like that.
             if (!cacheable || response.Content.Headers.ContentLength is > MaxCachedBytes)
-                return new RNetworkResponse(stream, headers);
+                return new RNetworkResponse(stream, headers) { FinalAddress = finalAddress };
 
             var content = await ReadUpToAsync(stream, MaxCachedBytes);
             if (content.Complete)
             {
                 activity?.SetTag("bytes", content.Bytes.Length);
                 await stream.DisposeAsync();
-                Remember(uri.AbsoluteUri, content.Bytes, headers);
-                return new RNetworkResponse(new MemoryStream(content.Bytes, writable: false), [with(headers)]);
+                Remember(uri.AbsoluteUri, content.Bytes, headers, finalAddress);
+                return new RNetworkResponse(new MemoryStream(content.Bytes, writable: false), [with(headers)]) { FinalAddress = finalAddress };
             }
 
             // Bigger than the limit: hand back what was read followed by the rest, uncached.
-            return new RNetworkResponse(new PrefixedStream(content.Bytes, stream), headers);
+            return new RNetworkResponse(new PrefixedStream(content.Bytes, stream), headers) { FinalAddress = finalAddress };
         }
         catch (HttpRequestException)
         {

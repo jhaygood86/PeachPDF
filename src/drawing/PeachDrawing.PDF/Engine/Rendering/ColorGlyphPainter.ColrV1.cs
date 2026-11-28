@@ -123,7 +123,7 @@ internal sealed partial class ColorGlyphPainter
             }
 
             _blends.Push(owner._gfx.Save());
-            owner._renderer.SetBlendMode(mode.ToString());
+            owner._renderer.SetBlendMode(PeachDrawing.PDF.PdfCanvas.BlendName(mode));
         }
 
         public void PopBlendMode()

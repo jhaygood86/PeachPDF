@@ -15,6 +15,22 @@ namespace PeachBrackets.Scripting.Internal;
 // request (before the virtual clock moves on), with load and error events and the properties that report the result.
 internal sealed partial class ScriptRuntime
 {
+    private ObjectInstance? _blobReader;
+
+    // The bytes a blob: address a script made stands for, read from the script's own Blob (what BlobUrlStore answers a loader with).
+    private BlobContent? ReadBlob(string address)
+    {
+        if (_blobReader is null)
+            return null;
+
+        var absolute = Document.BaseUri is { } baseUri && Uri.TryCreate(baseUri, address, out var made) ? made.OriginalString : address;
+        if (_blobReader.Call(JsValue.Undefined, [Js.Str(absolute)]) is not ObjectInstance answer || !answer.Get("0").IsNumber() || answer.Get("0").AsNumber() != 200)
+            return null;
+
+        var type = answer.Get("2") is ObjectInstance headers && headers.Get("0") is ObjectInstance first && first.Get("1").IsString() ? first.Get("1").AsString() : string.Empty;
+        return new BlobContent(System.Text.Encoding.Latin1.GetBytes(Js.AsText(answer.Get("3"))), type);
+    }
+
     private sealed class ImageState
     {
         /// <summary>0: nothing to load, 1: loading, 2: loaded, 3: broken.</summary>
@@ -25,6 +41,9 @@ internal sealed partial class ScriptRuntime
         public double Height { get; set; }
 
         public string CurrentSource { get; set; } = string.Empty;
+
+        /// <summary>Where the image was finally read from, when its request was redirected.</summary>
+        public string? FinalSource { get; set; }
 
         public int Token { get; set; }
 
@@ -109,6 +128,9 @@ internal sealed partial class ScriptRuntime
     // change of state while it has a source; a picture's sources before it; the img entering or leaving a picture.
     private void HandleImageMutation(ScriptMutation mutation)
     {
+        HandleMediaMutation(mutation);
+        HandleSvgImageMutation(mutation);
+        HandleCanvasSubtreeMutation(mutation);
         var target = mutation.Target;
         if (mutation.Kind == ScriptMutationKind.Attributes && mutation.AttributeName is { } name)
         {
@@ -157,6 +179,72 @@ internal sealed partial class ScriptRuntime
             else if (IsPicture(removed))
                 foreach (var inside in removed.ChildElements.Where(IsImage)) QueueImageUpdate(inside);
         }
+    }
+
+    // An SVG image element (<image> inside an svg): it loads the picture its href names when it is in the document, and says so with a load or an error event.
+    private static bool IsSvgImage(ScriptNode node) =>
+        node.Kind == ScriptNodeKind.Element && string.Equals(node.TagName, "image", StringComparison.OrdinalIgnoreCase);
+
+    // The address an image element loads: an img's src, an SVG image's href (plain or in the xlink namespace).
+    private static string? ImageAddressOf(ScriptNode node) =>
+        IsSvgImage(node) ? node.GetAttribute("href") ?? node.GetAttribute("xlink:href") : node.GetAttribute("src");
+
+    // The scheme, host and port a script's page or a resource is of, or null for an address with no origin of its own (data:, blob:, a file).
+    private static string? OriginOf(Uri? address) =>
+        address is { IsAbsoluteUri: true } && address.Scheme is "http" or "https" ? address.GetLeftPart(UriPartial.Authority).ToLowerInvariant() : null;
+
+    // Whether reading what a source shows is not allowed: it is from another origin and was not asked for with a crossorigin attribute (which the server must then have allowed),
+    // or it is a canvas or a bitmap that has been tainted already.
+    private bool SourceTainted(JsValue source)
+    {
+        switch (source)
+        {
+            case BitmapObject bitmap:
+                return !bitmap.OriginClean;
+            case NodeObject { Node: { Kind: ScriptNodeKind.Element } element } when string.Equals(element.TagName, "canvas", StringComparison.OrdinalIgnoreCase):
+                return _contexts.TryGetValue(element, out var context) && !context.Bitmap.OriginClean;
+            case NodeObject { Node: { Kind: ScriptNodeKind.Element } image } when IsImage(image) || IsSvgImage(image):
+                if (image.GetAttribute("crossorigin") is not null || !_images.TryGetValue(image, out var state) || state.Status != 2)
+                    return false;
+
+                // A hop of the redirect chain from another origin taints it, whichever end that was: asked of another origin and sent back here, or asked of here and sent away.
+                return AnyOtherOrigin(image.OwnerDocument.BaseUri, state.CurrentSource, state.FinalSource);
+            case NodeObject { Node: { Kind: ScriptNodeKind.Element } video } when IsVideo(video):
+                return VideoTainted(video);
+            default:
+                return false;
+        }
+    }
+
+    private void HandleSvgImageMutation(ScriptMutation mutation)
+    {
+        if (mutation.Kind == ScriptMutationKind.Attributes && mutation.AttributeName is { } name && name.EndsWith("href", StringComparison.OrdinalIgnoreCase) && IsSvgImage(mutation.Target))
+        {
+            StartSvgImageLoad(mutation.Target);
+        }
+        else if (mutation.Kind == ScriptMutationKind.ChildList)
+        {
+            foreach (var added in mutation.Added ?? [])
+            {
+                foreach (var image in added.Kind == ScriptNodeKind.Element ? new[] { added }.Concat(added.QuerySelectorAll("image")).Where(IsSvgImage) : [])
+                    StartSvgImageLoad(image);
+            }
+        }
+    }
+
+    private void StartSvgImageLoad(ScriptNode image)
+    {
+        if (!image.IsConnected || string.IsNullOrEmpty(ImageAddressOf(image)))
+            return;
+
+        if (!_images.TryGetValue(image, out var state))
+            _images[image] = state = new ImageState();
+
+        state.Token++;
+        state.Status = 1;
+        state.Width = state.Height = 0;
+        state.CurrentSource = ResolveAddress(image, ImageAddressOf(image)!);
+        _pendingImages.Add((image.OwnerDocument.LoadImageAsync(ImageAddressOf(image)!).AsTask(), image, state.Token));
     }
 
     private readonly HashSet<ScriptNode> _updateQueue = [];
@@ -234,6 +322,9 @@ internal sealed partial class ScriptRuntime
         _initialImagesStarted = true;
         foreach (var image in Document.GetElementsByTagName("img").Where(i => !string.IsNullOrEmpty(i.GetAttribute("src"))))
             StartImageLoad(image);
+
+        foreach (var image in Document.GetElementsByTagName("image").Where(IsSvgImage))
+            StartSvgImageLoad(image);
     }
 
     // Waits for the images the scripts asked for and queues each result as a zero-delay timer, like a network answer.
@@ -264,6 +355,7 @@ internal sealed partial class ScriptRuntime
                 state.Width = info?.Width ?? 0;
                 state.Height = info?.Height ?? 0;
                 state.CurrentSource = info?.Address ?? ResolveAddress(node, source);
+                state.FinalSource = info?.ResponseAddress;
                 var waiters = state.Waiters.ToArray();
                 state.Waiters.Clear();
                 foreach (var (resolve, reject) in waiters)

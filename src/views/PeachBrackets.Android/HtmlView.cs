@@ -8,6 +8,8 @@ using Android.Views;
 using Android.Views.Accessibility;
 using Android.Widget;
 using PeachBrackets.Android.Logic;
+using PeachBrackets.Media;
+using PeachBrackets.Media.Android;
 using PeachDrawing.Core;
 using PeachDrawing.Skia;
 using SkiaSharp;
@@ -128,6 +130,24 @@ public sealed partial class HtmlView : FrameLayout
     /// system which are attached.
     /// </summary>
     public InputCapabilities? Input { get; set; }
+
+    private IMediaProvider? _mediaProvider;
+    private bool _mediaProviderSet;
+
+    /// <summary>
+    /// What plays the document's <c>audio</c> and <c>video</c>. The default is <see cref="AndroidMediaProvider"/>: the platform's <c>MediaPlayer</c>, with a
+    /// video's pictures read from the surface it renders into. Assign another provider to play through it, or <see langword="null"/> for no media (a video then
+    /// shows its poster). It applies to documents loaded after it is set.
+    /// </summary>
+    public IMediaProvider? MediaProvider
+    {
+        get => _mediaProviderSet ? _mediaProvider : _mediaProvider ??= new AndroidMediaProvider();
+        set
+        {
+            _mediaProvider = value;
+            _mediaProviderSet = true;
+        }
+    }
 
     /// <summary>The loaded document, or <see langword="null"/> before one has loaded. It is replaced when the view reloads.</summary>
     public HtmlDocument? Document => _document;
@@ -412,6 +432,7 @@ public sealed partial class HtmlView : FrameLayout
         DevicePixelRatio = ImageScale.DevicePixelRatio(_density),
         AnimationsEnabled = PlaysAnimations,
         Preferences = PlaysAnimations ? new UserPreferences { ReducedMotion = false } : null,
+        MediaProvider = MediaProvider,
     };
 
     private bool IsNightMode() =>

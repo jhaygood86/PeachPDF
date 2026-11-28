@@ -17,14 +17,19 @@ public class PublicSurfaceTests
     private const string SnapshotFile = "PublicApi.txt";
 
     [Fact]
-    public void PublicSurface_MatchesTheCheckedInSnapshot()
+    public void PublicSurface_MatchesTheCheckedInSnapshot() => Check("PeachBrackets.Android", "views");
+
+    [Fact]
+    public void TheMediaProvidersPublicSurface_MatchesTheCheckedInSnapshot() => Check("PeachBrackets.Media.Android", "engine");
+
+    private static void Check(string package, string group)
     {
-        var source = FindProjectDirectory();
+        var source = FindProjectDirectory(group, package);
         var bin = Path.Combine(source, "bin");
         var assembly = Directory.Exists(bin)
-            ? Directory.EnumerateFiles(bin, "PeachBrackets.Android.dll", SearchOption.AllDirectories).OrderByDescending(File.GetLastWriteTimeUtc).FirstOrDefault()
+            ? Directory.EnumerateFiles(bin, package + ".dll", SearchOption.AllDirectories).OrderByDescending(File.GetLastWriteTimeUtc).FirstOrDefault()
             : null;
-        Assert.SkipWhen(assembly is null, "PeachBrackets.Android has not been built (it needs the android workload).");
+        Assert.SkipWhen(assembly is null, package + " has not been built (it needs the android workload).");
 
         var actual = Describe(assembly!);
         var snapshot = Path.Combine(source, SnapshotFile);
@@ -36,7 +41,7 @@ public class PublicSurfaceTests
 
         var expected = File.ReadAllText(snapshot).Replace("\r\n", "\n");
         Assert.True(expected == actual,
-            "The public surface of PeachBrackets.Android changed. If that is intended, review the difference and rerun with UPDATE_PUBLIC_API=1 to rewrite "
+            "The public surface of " + package + " changed. If that is intended, review the difference and rerun with UPDATE_PUBLIC_API=1 to rewrite "
             + SnapshotFile + ".\n--- actual ---\n" + actual);
     }
 
@@ -160,15 +165,15 @@ public class PublicSurfaceTests
         return Convert.ToInt64(reader.GetBlobReader(constant.Value).ReadConstant(constant.TypeCode)).ToString();
     }
 
-    private static string FindProjectDirectory()
+    private static string FindProjectDirectory(string group, string package)
     {
         for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir is not null; dir = dir.Parent)
         {
-            var candidate = Path.Combine(dir.FullName, "views", "PeachBrackets.Android");
+            var candidate = Path.Combine(dir.FullName, group, package);
             if (Directory.Exists(candidate)) return candidate;
         }
 
-        throw new DirectoryNotFoundException("Could not find views/PeachBrackets.Android above " + AppContext.BaseDirectory);
+        throw new DirectoryNotFoundException("Could not find " + group + "/" + package + " above " + AppContext.BaseDirectory);
     }
 
     // Writes the types a signature mentions by name; nothing is resolved, which is what lets Android types appear in a plain test.

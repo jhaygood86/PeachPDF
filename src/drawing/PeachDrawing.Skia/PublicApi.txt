@@ -11,10 +11,13 @@ PeachDrawing.Skia.SkiaCanvas : sealed class
   method virtual GraphicsPath GetGraphicsPath()
   method virtual GraphicsPath GetTextOutline(String str, Font font, PaintPoint baselineOrigin, Double letterSpacing = 0, ShapeSettings? features = null)
   method virtual IReadOnlyList<InkSpan> GetInkCrossings(String str, Font font, PaintPoint origin, Double bandTop, Double bandBottom, Double letterSpacing = 0, ShapeSettings? features = null)
+  method virtual Image CreateWideImage(Int32 widthPixels, Int32 heightPixels, ReadOnlySpan<Single> straightRgba)
   method virtual Int32 CountShapedGlyphs(String str, Font font, ShapeSettings? features = null)
   method virtual Object AddDestinationLink(Rect bounds, String destinationName, IReadOnlyList<PaintPoint> quad = null)
   method virtual Object AddLink(Rect bounds, String uri, IReadOnlyList<PaintPoint> quad = null)
   method virtual Object SetAntiAliasSmoothingMode()
+  method virtual OffscreenSurface CreateOffscreenSurface(Int32 widthPixels, Int32 heightPixels)
+  method virtual OffscreenSurface CreateOffscreenSurface(Int32 widthPixels, Int32 heightPixels, Boolean wide)
   method virtual RasterRegion BeginRasterSurface(Rect layoutBounds, Double? dpiOverride = null)
   method virtual RetainedLayer CreateRetainedLayer(Rect bounds)
   method virtual Size MeasureString(String str, Font font, ShapeSettings? features = null)
@@ -61,6 +64,7 @@ PeachDrawing.Skia.SkiaCanvas : sealed class
   property Boolean HasNativeLayerEffects { get; }
   property Boolean IsOffscreenTile { get; }
   property Boolean OpaqueBackdrop { get; set; }
+  property Boolean SupportsCompositeOperators { get; }
   property Double PixelsPerPoint { get; }
   property Matrix3x2 CurrentTransform { get; }
   property SkiaLinkMap Links { get; }
@@ -137,6 +141,7 @@ PeachDrawing.Skia.SkiaLinkOptions : sealed class
   property ISkiaLinkLauncher Launcher { get; init; }
 PeachDrawing.Skia.SkiaRenderContext : class
   ctor(SkiaTextEngine textEngine = PeachDrawing, SkiaImageCodec imageCodec = Auto, ISkiaTextShaper textShaper = null, FontSet fontSet = null)
+  method Image CreateGpuImage(Int32 width, Int32 height, Func<GRContext, SKImage> import, Func<PixelBuffer?> readPixels = null)
   method ValueTask AddFont(Stream stream, String fontFamilyName)
   method ValueTask AddFont(Stream stream, String fontFamilyName, FontFaceDescriptors descriptors, IReadOnlyList<RuneInterval> unicodeRanges = null)
   method Void SyncFonts()

@@ -98,6 +98,11 @@ namespace PeachBrackets.Html.Paint
                     case "drop-shadow":
                         requiresRaster = true;
                         break;
+
+                    // A reference to an SVG filter runs over pixels (the document may have no such filter, which RasterFilterChain finds out).
+                    case FilterGrammar.Reference:
+                        requiresRaster = true;
+                        break;
                 }
             }
 
@@ -151,12 +156,7 @@ namespace PeachBrackets.Html.Paint
         };
 
         /// <summary>A matrix that multiplies alpha by <paramref name="amount"/> (Filter Effects 1 §3.1, <c>opacity()</c>).</summary>
-        internal static ColorMatrix OpacityMatrix(double amount)
-        {
-            var matrix = Matrix4x4.Identity;
-            matrix.M44 = (float)Math.Clamp(amount, 0.0, 1.0);
-            return new ColorMatrix(matrix, Vector4.Zero);
-        }
+        internal static ColorMatrix OpacityMatrix(double amount) => ColorMatrix.Opacity(amount);
 
         private static double HueRotateRadians(FilterGrammar.FilterFunction function)
         {
@@ -166,93 +166,23 @@ namespace PeachBrackets.Html.Paint
             return Angle.TryParse(function.Arguments[0], out var angle) ? angle.ToRadian() : 0;
         }
 
-        /// <summary>
-        /// Builds a <see cref="ColorMatrix"/> from the 3x3 table Filter Effects 1 gives (row = output channel,
-        /// column = input channel). <see cref="ColorMatrix"/> is the transpose - row = input - so each entry is
-        /// placed accordingly; alpha passes through.
-        /// </summary>
-        private static ColorMatrix FromSpecRows(
-            float r0, float r1, float r2,
-            float g0, float g1, float g2,
-            float b0, float b1, float b2) =>
-            new(new Matrix4x4(
-                    r0, g0, b0, 0,
-                    r1, g1, b1, 0,
-                    r2, g2, b2, 0,
-                    0, 0, 0, 1),
-                Vector4.Zero);
+        private static ColorMatrix GrayscaleMatrix(double amount) => ColorMatrix.Grayscale(amount);
 
-        /// <summary>Filter Effects 1 §3.6.</summary>
-        private static ColorMatrix GrayscaleMatrix(double amount)
-        {
-            var i = (float)(1 - amount);
-            return FromSpecRows(
-                0.2126f + 0.7874f * i, 0.7152f - 0.7152f * i, 0.0722f - 0.0722f * i,
-                0.2126f - 0.2126f * i, 0.7152f + 0.2848f * i, 0.0722f - 0.0722f * i,
-                0.2126f - 0.2126f * i, 0.7152f - 0.7152f * i, 0.0722f + 0.9278f * i);
-        }
+        private static ColorMatrix SepiaMatrix(double amount) => ColorMatrix.Sepia(amount);
 
-        /// <summary>Filter Effects 1 §3.10.</summary>
-        private static ColorMatrix SepiaMatrix(double amount)
-        {
-            var i = (float)(1 - amount);
-            return FromSpecRows(
-                0.393f + 0.607f * i, 0.769f - 0.769f * i, 0.189f - 0.189f * i,
-                0.349f - 0.349f * i, 0.686f + 0.314f * i, 0.168f - 0.168f * i,
-                0.272f - 0.272f * i, 0.534f - 0.534f * i, 0.131f + 0.869f * i);
-        }
+        internal static ColorMatrix SaturateMatrix(double amount) => ColorMatrix.Saturate(amount);
 
-        /// <summary>Filter Effects 1 §3.9.</summary>
-        internal static ColorMatrix SaturateMatrix(double amount)
-        {
-            var s = (float)amount;
-            return FromSpecRows(
-                0.213f + 0.787f * s, 0.715f - 0.715f * s, 0.072f - 0.072f * s,
-                0.213f - 0.213f * s, 0.715f + 0.285f * s, 0.072f - 0.072f * s,
-                0.213f - 0.213f * s, 0.715f - 0.715f * s, 0.072f + 0.928f * s);
-        }
-
-        /// <summary>Filter Effects 1 §3.7 (the <c>feColorMatrix type="hueRotate"</c> matrix).</summary>
-        internal static ColorMatrix HueRotateMatrix(double radians)
-        {
-            var c = (float)Math.Cos(radians);
-            var n = (float)Math.Sin(radians);
-            return FromSpecRows(
-                0.213f + c * 0.787f - n * 0.213f, 0.715f - c * 0.715f - n * 0.715f, 0.072f - c * 0.072f + n * 0.928f,
-                0.213f - c * 0.213f + n * 0.143f, 0.715f + c * 0.285f + n * 0.140f, 0.072f - c * 0.072f - n * 0.283f,
-                0.213f - c * 0.213f - n * 0.787f, 0.715f - c * 0.715f + n * 0.715f, 0.072f + c * 0.928f + n * 0.072f);
-        }
+        internal static ColorMatrix HueRotateMatrix(double radians) => ColorMatrix.HueRotate(radians);
 
         /// <summary>A single-argument filter function's amount, defaulting to 1 (100%) - Filter Effects 1
         /// §3's own default for every function in this switch - when the author omitted the argument.</summary>
         internal static double Amount(FilterGrammar.FilterFunction function) =>
             function.Arguments.Count == 0 ? 1.0 : CssValueParser.ParseNumber(function.Arguments[0], 1.0);
 
-        /// <summary>Filter Effects 1 §3.2: equivalent to <c>feComponentTransfer type="linear"</c> with
-        /// <c>slope = amount</c>, <c>intercept = 0</c>, applied to each of R/G/B (never A).</summary>
-        internal static ColorMatrix BrightnessMatrix(double amount)
-        {
-            var a = (float)amount;
-            return new ColorMatrix(Matrix4x4.CreateScale(a, a, a), Vector4.Zero);
-        }
+        internal static ColorMatrix BrightnessMatrix(double amount) => ColorMatrix.Brightness(amount);
 
-        /// <summary>Filter Effects 1 §3.3: equivalent to <c>feComponentTransfer type="linear"</c> with
-        /// <c>slope = amount</c>, <c>intercept = -(0.5 * amount) + 0.5</c>, applied to each of R/G/B.</summary>
-        internal static ColorMatrix ContrastMatrix(double amount)
-        {
-            var a = (float)amount;
-            var intercept = 0.5f - 0.5f * a;
-            return new ColorMatrix(Matrix4x4.CreateScale(a, a, a), new Vector4(intercept, intercept, intercept, 0f));
-        }
+        internal static ColorMatrix ContrastMatrix(double amount) => ColorMatrix.Contrast(amount);
 
-        /// <summary>Filter Effects 1 §3.7: equivalent to <c>feComponentTransfer type="table"</c> with
-        /// <c>tableValues = "amount 1-amount"</c>, which is the linear function <c>slope = 1 - 2*amount</c>,
-        /// <c>intercept = amount</c>, applied to each of R/G/B.</summary>
-        internal static ColorMatrix InvertMatrix(double amount)
-        {
-            var a = (float)amount;
-            var slope = 1f - 2f * a;
-            return new ColorMatrix(Matrix4x4.CreateScale(slope, slope, slope), new Vector4(a, a, a, 0f));
-        }
+        internal static ColorMatrix InvertMatrix(double amount) => ColorMatrix.Invert(amount);
     }
 }
