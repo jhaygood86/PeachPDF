@@ -355,6 +355,9 @@ public class GStreamerProviderTests : IDisposable
     public async Task DisposingASession_DeletesTheCopyOfTheResource()
     {
         RequireGStreamer();
+        // A session an earlier test left undisposed deletes its copy when it is finalized; let that happen first, or it lands between the counts.
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
         var before = Directory.GetFiles(Path.GetTempPath(), "peachbrackets-media-*").Length;
         var session = await Deterministic().OpenAsync(Request(BallClip()), TestContext.Current.CancellationToken);
         Assert.NotNull(session);

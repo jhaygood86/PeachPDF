@@ -282,6 +282,9 @@ public class MediaFoundationProviderTests
     public async Task DisposingASession_DeletesTheCopyOfTheResource()
     {
         RequireWindows();
+        // A session an earlier test left undisposed deletes its copy when it is finalized; let that happen first, or it lands between the counts.
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
         var before = Directory.GetFiles(Path.GetTempPath(), "peachbrackets-media-*").Length;
         var session = await Deterministic().OpenAsync(Request("red.mp4"), TestContext.Current.CancellationToken);
         Assert.NotNull(session);
